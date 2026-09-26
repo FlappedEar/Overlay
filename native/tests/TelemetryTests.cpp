@@ -6400,19 +6400,19 @@ void TelemetryTests::sharesComparisonCacheAndRevalidatesSources()
     auto revised = a; auto reference = a.value("reference").toMap();
     reference.insert("derivationKey", QString(64, 'b')); revised.insert("reference", reference);
     const auto token = std::make_shared<std::atomic_bool>(false);
-    const auto changedRevision = AppController::readOutingLapDetail(source, {}, revised, 1, token, controller.m_analysisSourceCache);
+    const auto changedRevision = FlappedEar::loadOutingLapDetail(source, {}, revised, 1, token, controller.m_analysisSourceCache);
     QVERIFY2(changedRevision.session != nullptr, qPrintable(changedRevision.error));
     QVERIFY(changedRevision.session != session);
     // Even a cached source must still exist and match its full content digest.
     QVERIFY(QFile::remove(path));
-    const auto missing = AppController::readOutingLapDetail(source, {}, a, 2, token, controller.m_analysisSourceCache);
+    const auto missing = FlappedEar::loadOutingLapDetail(source, {}, a, 2, token, controller.m_analysisSourceCache);
     QVERIFY(!missing.session); QVERIFY(missing.track.isEmpty()); QVERIFY(!missing.error.isEmpty());
     QVERIFY(writeBytes(path, bytes));
-    const auto restored = AppController::readOutingLapDetail(source, {}, a, 3, token, controller.m_analysisSourceCache);
+    const auto restored = FlappedEar::loadOutingLapDetail(source, {}, a, 3, token, controller.m_analysisSourceCache);
     QCOMPARE(restored.session, session);
     auto changed = bytes; changed.replace("coordinate units = degrees", "coordinate units = degreeS");
     QCOMPARE(changed.size(), bytes.size()); QVERIFY(changed != bytes); QVERIFY(writeBytes(path, changed));
-    const auto stale = AppController::readOutingLapDetail(source, {}, a, 4, token, controller.m_analysisSourceCache);
+    const auto stale = FlappedEar::loadOutingLapDetail(source, {}, a, 4, token, controller.m_analysisSourceCache);
     QVERIFY(!stale.session); QVERIFY(stale.track.isEmpty()); QVERIFY(stale.staleReference);
     QCOMPARE(controller.m_comparisonSlots[0].session, session); // Read-only worker cannot mutate GUI state.
 }

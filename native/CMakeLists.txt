@@ -92,6 +92,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/DayReport.h
     src/telemetry/FocusAreas.cpp
     src/telemetry/FocusAreas.h
+    src/telemetry/OutingLapLoader.cpp
+    src/telemetry/OutingLapLoader.h
     src/telemetry/DrivingVariability.cpp
     src/telemetry/DrivingVariability.h
     src/telemetry/CornerSpeeds.cpp

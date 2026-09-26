@@ -21,6 +21,7 @@
 #include "telemetry/ExitMetrics.h"
 #include "telemetry/TelemetryImportPlan.h"
 #include "telemetry/OutingLaps.h"
+#include "telemetry/OutingLapLoader.h"
 #include "telemetry/TrackInference.h"
 #include "export/MediaProbe.h"
 #include "export/ExportDiagnostics.h"
@@ -674,27 +675,7 @@ private:
     [[nodiscard]] static QString syncCandidateLevelName(double confidence);
 
     QSettings m_settings;
-    struct OutingLapDetailResult {
-        quint64 request = 0;
-        bool staleReference = false;
-        std::shared_ptr<const TelemetrySession> session;
-        TrackGeometry geometry;
-        QVariantList track;
-        // Only populated when readOutingLapDetail's deriveReferenceGate is
-        // true (the comparison path): the ingredients buildProgressAxis needs
-        // to build the shared cross-lap alignment axis. Deriving the full
-        // LapSession (a whole-file GPS scan) is not cheap enough to redo on
-        // every comparison-slot load synchronously on the UI thread, so it
-        // happens once here, in the same background worker that already
-        // loads/verifies the source.
-        FlappedEar::LapTrace referenceTrace;
-        FlappedEar::TimingGate referenceGate;
-        bool hasReferenceGate = false;
-        QString error;
-    };
-    static OutingLapDetailResult readOutingLapDetail(const QJsonObject &source, const QString &projectPath,
-        const QVariantMap &row, quint64 request, const std::shared_ptr<std::atomic_bool> &cancellation,
-        const std::shared_ptr<TelemetrySessionCache> &cache, bool deriveReferenceGate = false);
+    using OutingLapDetailResult = FlappedEar::OutingLapDetail;
     struct ComparisonSlot {
         QVariantMap row;
         QJsonObject source;

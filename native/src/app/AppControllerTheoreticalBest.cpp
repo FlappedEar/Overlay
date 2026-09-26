@@ -583,7 +583,7 @@ AppController::TheoreticalBestResult AppController::computeOutingTheoreticalBest
             if (canonical == population.cend() || it->end - it->start < canonical->end - canonical->start) canonical = it;
         }
         if (canonical == population.cend()) throw std::runtime_error("The canonical run has no eligible lap in this population.");
-        const auto axisSource = readOutingLapDetail(sourcesByRunId.value(canonicalRunId), projectPath,
+        const auto axisSource = FlappedEar::loadOutingLapDetail(sourcesByRunId.value(canonicalRunId), projectPath,
             rowVariant(*canonical), request, cancellation, cache, /*deriveReferenceGate=*/true);
         if (!axisSource.session || !axisSource.hasReferenceGate)
             throw std::runtime_error(axisSource.error.isEmpty()
@@ -608,7 +608,7 @@ AppController::TheoreticalBestResult AppController::computeOutingTheoreticalBest
         for (const auto &row : population) {
             throwIfCancelled(cancelled);
             if (row.runId != currentRunId || !currentSession) {
-                const auto detail = readOutingLapDetail(
+                const auto detail = FlappedEar::loadOutingLapDetail(
                     sourcesByRunId.value(row.runId), projectPath, rowVariant(row), request, cancellation, cache,
                     /*deriveReferenceGate=*/false);
                 currentSession = detail.session;

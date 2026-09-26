@@ -55,9 +55,12 @@ Both are empty when the run has no loaded video or the time falls outside
 it. `AppController` implements it for the combined app. The Telemetry app
 will have no link, and then the KAN-39 lap video is simply unavailable.
 Analysis and import guards use `documentBusy()` (today: an export is
-running) instead of the overlay's `exporting()`. The Document, Analysis and
-Overlay controllers are extracted behind the same QML-facing API in later
-steps.
+running) instead of the overlay's `exporting()`. `loadOutingLapDetail`
+(`telemetry/OutingLapLoader`) moved into telemetry core. It loads and
+verifies one recorded section for the lap view, the comparison, the
+theoretical best and the channel summaries, so both apps share it. The
+Document, Analysis and Overlay controllers are extracted behind the same
+QML-facing API in later steps.
 
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
