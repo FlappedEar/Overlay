@@ -1425,6 +1425,17 @@ Telemetry app will. It derives the laps of two recordings with
 The run sources are built the way the project provides them: reference and
 fingerprint, derivation digest, and the import's timing-gate revision.
 
+**Refactor check on real data.** With `FLAPPEDEAR_REPORT_DUMP=/path/report.json`,
+`analyzesPrivateTrackDayCorners` writes the day report with sorted keys.
+Dump before and after a refactor, then normalise the per-import identities:
+- UUIDs;
+- 64-hex keys;
+- `compatibility-v1:` ids;
+- the time-loss revision, which hashes segment ids.
+
+Diff the results. For KAN-124 step 6 (report assembly moved to core) the
+1,400-line reports were identical apart from those identities.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings

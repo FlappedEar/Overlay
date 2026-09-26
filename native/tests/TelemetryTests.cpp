@@ -6047,6 +6047,11 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
             qInfo().noquote() << "  focus" << area.toMap().value("kind").toString() << "|" << area.toMap().value("observation").toString()
                               << "|" << area.toMap().value("hypothesis").toString();
     }
+    if (const auto dump = qEnvironmentVariable("FLAPPEDEAR_REPORT_DUMP"); !dump.isEmpty()) {
+        QFile file(dump); // compare refactors byte for byte (keys are sorted)
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QJsonDocument(QJsonObject::fromVariantMap(dayReport)).toJson(QJsonDocument::Indented));
+    }
     qInfo().noquote() << "  report size" << QJsonDocument(QJsonObject::fromVariantMap(dayReport)).toJson(QJsonDocument::Compact).size() << "bytes";
     // KAN-74: save and reopen the real day; the same decisions give the same report.
     {
