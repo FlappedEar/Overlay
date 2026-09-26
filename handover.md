@@ -45,21 +45,45 @@ Merged 26 September 2026:
 | KAN-66 | A/B G-G scatter with peaks in the comparison view | #74 |
 | KAN-121 plan | `docs/product-split-plan.md` | #73 |
 
-In flight when this was written (check `gh pr list`): #75 KAN-123 (split
-phase 1: `flappedear_telemetry_core` vs `flappedear_overlay_core`), #76
-KAN-67 (temperature summaries), #77 KAN-69 (heart-rate summaries). Each is
-stacked on the previous one and merges in that order.
+Merged later on 26 September 2026, which completes **M4**:
+
+| Ticket | What | PR |
+| --- | --- | --- |
+| KAN-123 | Split phase 1: `flappedear_telemetry_core` (Qt Core + zlib) vs `flappedear_overlay_core` | #75 |
+| KAN-67 | Recorded temperature summaries (`ChannelSummary.h`) | #76 |
+| KAN-69 | Heart-rate summaries per run, section and A/B interval | #77 |
+| KAN-68 | Progression → **Car & driver**: temperature trends per session, recorded cooling | #79 |
+| KAN-70 | Heart rate in Car & driver and in the Corner Analyzer (A/B, across start/finish) | #80 |
+| KAN-71 | Computed day-report model with provenance (`DayReport.h`) | #81 |
+| KAN-72 | Day results → **Day report…** with evidence navigation | #82 |
+| KAN-73 | "Where to look next": observations apart from hypotheses (`FocusAreas.h`) | #83 |
+| KAN-74 | M4 acceptance `docs/kan74-m4-acceptance.md`, plus a fix: Save As no longer discards computed results | #84 |
+
+In flight (check `gh pr list`): #85, KAN-124 step 1. The analysis side reaches
+video only through `VideoLink`, and its guards use `documentBusy()`.
 
 KAN-116–120 came from the **owner testing the real Jastrząb day**
 (`jastrzab/`, git-ignored). That testing exposed problems synthetic fixtures
-never showed, so develop against real data from now on. See "Real data"
-below.
+never showed, so develop against real data. See "Real data" below.
 
-Next M4 tickets: KAN-68 (thermal trends UI) and KAN-70 (heart-rate UI), then
-KAN-71 to KAN-74 (day report). Design these UIs for the phone/tablet app
-(split phase 4) rather than more desktop windows.
-`docs/kan58-m3-acceptance.md` still needs its real-track section
-filled in from the owner's day at the track (27 September 2026).
+**Owner track day, 27 September 2026.** Things to ask about afterwards:
+- the Day report's "Where to look next", and whether the three areas match
+  the driver's own view;
+- whether the Day report should open by itself after an import (KAN-72 left
+  this to the owner);
+- the real-track sections of `docs/kan58-m3-acceptance.md` and
+  `docs/kan74-m4-acceptance.md`, which are still to be filled in.
+
+Next: continue KAN-124 (split phase 2) in behaviour-preserving steps.
+- Extract `AnalysisController`, which owns outing laps, comparison, segment
+  review, theoretical best, report and channel summaries and holds a
+  nullable `VideoLink *`.
+- Extract `DocumentController`.
+- Extract `OverlayController`.
+- Split `TelemetryTests.cpp` to match.
+
+Before and after each step, run the private real-day check. Its report
+key values must stay identical.
 
 ## The product split (owner direction, 26 September 2026)
 
@@ -95,10 +119,7 @@ Split rules already in force after KAN-123:
   Lead with the best lap and where time is, on the track map. Say "Session 3 ·
   LAP 2", not filenames. Times of a minute or more are `m:ss.mmm`
   (`AppController::formatElapsedTime`).
-- **Two apps:** the owner is considering splitting the product into a desktop
-  video-overlay app and a (tablet-capable) analysis app. I recommended two
-  apps on the shared `flappedear_core` library, as the milestone after M4.
-  No epic has been created yet; wait for the owner's go-ahead.
+- **Two apps:** decided. See "The product split" above (epic KAN-121).
 - One focused PR per ticket; the owner creates or asks for Jira tickets for
   feedback-driven work (KAN-116–120 were created this way).
 
@@ -110,12 +131,25 @@ FLAPPEDEAR_REAL_DAY="$PWD/jastrzab" FLAPPEDEAR_CORNER_REVIEW_DIR=/some/scratch/d
 ```
 
 It imports the six recordings, approves every proposal on the best lap's
-run (without a manual split, as a driver would), prints proposals,
-theoretical best, ranked losses and per-segment metrics, and saves
-screenshots of the real Analysis window, the Corner Analyzer and the
-theoretical-best window. **Look at the screenshots** before claiming UI
-work is done. Last result: 1:49.898 best → 1:47.905 theoretical, 1.993 s
-available.
+run (without a manual split, as a driver would), and prints:
+- proposals, theoretical best, ranked losses and per-segment metrics;
+- temperatures with cooling, and heart rate;
+- the day report with its focus areas.
+
+It also saves and reopens the day and requires an identical report. With
+the review directory set, it saves screenshots of:
+- the Analysis window and the Corner Analyzer;
+- G-G and the theoretical best;
+- the By section and Car & driver tabs;
+- the day report.
+
+**Look at the screenshots** before claiming UI work is done. Last result:
+- 1:49.898 best against 1:47.905 theoretical, 1.993 s available;
+- focus areas: Corners 9–16 (+0.619 s against Session 6 · LAP 3), Corners
+  2–3 lost in 5 of 5 session bests, and the braking point for Corners 5–6
+  spread over 20.6 m;
+- oil up to 128;
+- heart rate 119–136 bpm per session.
 
 Facts learned from the owner's car (RaceChrono Pro VBO/RCZ with OBD):
 `accelerator_pos-obd` is the pedal (0–100 %); `throttle_pos-obd` is the
@@ -142,8 +176,19 @@ rev-match blips on downshifts with the pedal at 0). Speed is `velocity`
 - QML: under `pragma ComponentBehavior: Bound`, qualify child reads through
   an explicit `id`. `Dialog.result` is a FINAL property, so don't name a
   property `result`. `slots` is a Qt macro in C++ tests. ListView delegates
-  are not reachable with `findChild`; use `itemAtIndex`. Register every new
-  QML file in `native/CMakeLists.txt`'s `QML_FILES`, or startup smoke fails.
+  are not reachable with `findChild`; use `itemAtIndex`. Repeater delegates
+  inside Flickables and Popups are not either; search the visual tree
+  (`childItems()` from `window->contentItem()`). `focus` is also FINAL (use
+  `focusResult`), and so is `Item.data`. An `ItemDelegate`'s `text` is not
+  its content; read the property you set. Register every new QML file in
+  `native/CMakeLists.txt`'s `QML_FILES`, **and every new `AppController*.cpp`
+  in `native/tests/CMakeLists.txt`'s source list**, or startup smoke or the
+  test link fails.
+- Hosted runners lay out later than this Mac. Measure QML geometry with
+  `QTRY_VERIFY`, not `QVERIFY` (a KAN-68 test flaked on CI this way).
+- Save As changes the project path and re-derives the laps. Results
+  invalidated on `outingLapsChanged` must wait until `!outingLapsLoading()`
+  and then compare their input key (KAN-74 fix).
 
 ## Working conventions (still in force)
 
@@ -151,7 +196,7 @@ rev-match blips on downshifts with the pedal at 0). Speed is `velocity`
   what landed, evidence and gaps; "Gotowe" (`41`) after merge with the final
   SHA and green main CI. All Jira content in English.
 - Build/test gate every time: `cmake --build build-native --parallel` and
-  `ctest --test-dir build-native --output-on-failure` (20 suites). Reconfigure
+  `ctest --test-dir build-native --output-on-failure` (27 suites). Reconfigure
   with `cmake -S . -B build-native -DCMAKE_BUILD_TYPE=Debug
   -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt` after adding source files.
 - Cloud CI: macOS Debug + Release on every PR push and on push to `main`
