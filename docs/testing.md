@@ -1090,8 +1090,7 @@ three artifacts are excluded, the coverage, and that section means rise.
 On the private Jastrząb day: 6 sessions × 4 channels (coolant, oil, gearbox,
 intake). Oil peaks at 108 °C in Session 1 and 128 °C in Sessions 5–6, and
 gearbox at 113 °C. OBD dropouts in Sessions 3–4 (up to 582 zero samples)
-are excluded with coverage 0.95–0.98. There is no UI yet; KAN-68 shows the
-trends.
+are excluded with coverage 0.95–0.98. KAN-68 shows the trends.
 
 ## Heart-rate summaries (KAN-69)
 
@@ -1121,6 +1120,56 @@ artifact, coverage, section summaries, the absence of a summary for the
 third run, and both laps' means over half a lap. On the private Jastrząb
 day, session means rise from about 119–123 bpm in the morning to 133–136 bpm
 in the afternoon, with a maximum of 158 bpm and complete coverage.
+
+## Thermal trends and cooling (KAN-68)
+
+`findCoolingIntervals` (`ChannelSummary.h/.cpp`) finds stretches where a
+recorded temperature falls continuously:
+
+- The channel is split into continuous stretches. A stretch breaks at a gap
+  longer than the channel's gap threshold or at an excluded artifact sample,
+  so a cooling interval never spans missing data and nothing is inferred
+  across a break.
+- Each stretch is smoothed with a centred 5 s moving average, then walked
+  from peak to trough. An interval closes when the value rises at least
+  1° above the trough, or when the stretch ends. The trough is the first
+  point of a flat bottom: holding a temperature does not lengthen the
+  cooling.
+- An interval is reported when it drops at least 5° over at least 30 s
+  (`CoolingOptions`), with start/end time and value.
+
+`outingChannelSummaries` adds, per run and temperature channel, a `trace` of
+120 bins, each summarized on its own (`null` for a bin with no valid samples),
+and a `cooling` list naming the recorded section each interval started in.
+The heart-rate entry has the same trace, for KAN-70.
+
+Progression → **Car & driver** (`CarDriverView.qml`) requests the summaries
+when shown. It draws one chart per recorded channel: every session is its own
+slot on a shared scale, the line breaks at `null` bins, and cooling intervals
+are shaded blue. Below the chart is a per-session table of mean,
+minimum–maximum, coverage and cooling (for example "−10 in 3:48 (lap 5)"). Undeclared units are
+labelled as such, and no °C is assumed. A session without the sensor reads
+"Not recorded". Cooling intervals are continuous by construction (full coverage),
+so each shows its actual duration.
+
+Tests:
+- `ChannelSummaryTests::findsContinuouslyRecordedCoolingOnly`: one interval
+  of about −20° over about 120 s, starting near the peak, with a flat tail
+  that does not extend it. A 60 s recording gap is never spanned, and ±0.5°
+  noise is not cooling.
+- `TelemetryTests::summarizesRecordedTemperaturesPerRunAndSection`: the trace
+  has 120 bins in recording order, and a rising coolant has no cooling.
+- `TelemetryTests::showsRecordedTemperaturesThroughTheDayInQml`: one chart
+  for the one recorded channel, and table cells matching the controller,
+  including "Not recorded" for the run without a sensor. There are no QML
+  warnings.
+
+On the private Jastrząb day (screenshot from `analyzesPrivateTrackDayCorners`):
+- Oil climbs to 124–128 in Sessions 3–6.
+- The cool-down laps show as oil cooling of about 10° over 2–4 minutes in
+  Sessions 4–6 (lap 5, lap 5, lap 3).
+- Intake air falls 20–35° on the out lap as heat soak clears.
+- Coolant holds 90–103 with small recorded dips.
 
 ## Video-free day-result states (KAN-27)
 

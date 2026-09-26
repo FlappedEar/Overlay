@@ -49,6 +49,7 @@ private slots:
     void neverBridgesAGap();
     void excludesPlaceholdersAndImplausibleValues();
     void reportsMissingSensorsAndListsTemperatures();
+    void findsContinuouslyRecordedCoolingOnly();
 };
 
 void ChannelSummaryTests::computesTimeWeightedMeanAndExtrema()
@@ -118,6 +119,35 @@ void ChannelSummaryTests::reportsMissingSensorsAndListsTemperatures()
     const auto outside = summarizeChannel(session, "coolant_temp-obd", 5, 6, temperatureSummaryPolicy());
     QVERIFY(!outside.valid);
     QCOMPARE(outside.unavailableReason, QString(channelSummaryNoSamples));
+}
+
+void ChannelSummaryTests::findsContinuouslyRecordedCoolingOnly()
+{
+    // Oil rises 80 -> 110 °C over 60 s, then cools to 90 °C over 120 s.
+    const auto profile = [](double t) { return t <= 60 ? 80 + t / 2 : std::max(90.0, 110 - (t - 60) / 6); };
+    const auto session = sessionWith(channel("engine_oil_temp", "C", clock(0, 200, 0.5), profile));
+    auto intervals = findCoolingIntervals(session, "engine_oil_temp", temperatureSummaryPolicy());
+    QCOMPARE(intervals.size(), 1);
+    QVERIFY2(std::abs(intervals[0].drop() - 20.0) < 1.0, qPrintable(QString::number(intervals[0].drop())));
+    QVERIFY(std::abs(intervals[0].seconds() - 120.0) < 6.0);
+    QVERIFY(std::abs(intervals[0].startTime - 60.0) < 3.0);
+
+    // The same cooling interrupted by a 60 s recording gap: nothing may span
+    // the break, and no cooling is invented across it.
+    QVector<double> times = clock(0, 100, 0.5);
+    times += clock(160, 260, 0.5);
+    const auto gapped = sessionWith(channel("engine_oil_temp", "C", times, [](double t) {
+        return t <= 30 ? 80 + t : 110 - (t - 30) / 8; }));
+    intervals = findCoolingIntervals(gapped, "engine_oil_temp", temperatureSummaryPolicy());
+    QVERIFY(!intervals.isEmpty());
+    for (const auto &interval : intervals)
+        QVERIFY(interval.endTime <= 100.0 + 1e-6 || interval.startTime >= 160.0 - 1e-6);
+
+    // Sensor noise of ±0.5 °C around a steady 95 °C is not cooling.
+    const auto steady = sessionWith(channel("coolant_temp", "C", clock(0, 300, 0.5),
+        [](double t) { return 95 + 0.5 * std::sin(t); }));
+    QVERIFY(findCoolingIntervals(steady, "coolant_temp", temperatureSummaryPolicy()).isEmpty());
+    QVERIFY(findCoolingIntervals(steady, "missing", temperatureSummaryPolicy()).isEmpty());
 }
 
 QTEST_GUILESS_MAIN(ChannelSummaryTests)

@@ -164,6 +164,7 @@ private slots:
     void showsSectionProgressionBetweenSessions();
     void showsAbGgScatterWithPeaks();
     void summarizesRecordedTemperaturesPerRunAndSection();
+    void showsRecordedTemperaturesThroughTheDayInQml();
     void summarizesHeartRatePerRunSectionAndInterval();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
@@ -5094,6 +5095,71 @@ void TelemetryTests::summarizesRecordedTemperaturesPerRunAndSection()
         QVERIFY(section.value("mean").toDouble() > previousMean); // the temperature only rises
         previousMean = section.value("mean").toDouble();
     }
+    // KAN-68: a bounded trend for the day view, in recording order, and no
+    // cooling found in a temperature that only rises.
+    const auto trace = coolant.value("trace").toList();
+    QCOMPARE(trace.size(), 120);
+    double previousTime = -1.0, previousValue = 0.0;
+    int drawn = 0;
+    for (const auto &value : trace) {
+        if (!value.isValid()) continue;
+        const auto point = value.toList();
+        QVERIFY(point.at(0).toDouble() > previousTime && point.at(1).toDouble() >= previousValue);
+        previousTime = point.at(0).toDouble(); previousValue = point.at(1).toDouble();
+        ++drawn;
+    }
+    QVERIFY(drawn > 100);
+    QVERIFY(coolant.value("cooling").toList().isEmpty());
+}
+
+void TelemetryTests::showsRecordedTemperaturesThroughTheDayInQml()
+{
+    // KAN-68: the Car & driver view requests the summaries itself, draws one
+    // trend per recorded channel and lists every session, including the one
+    // whose recording has no temperature sensor ("Not recorded").
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto first = directory.filePath("hot.vbo"), second = directory.filePath("plain.vbo");
+    QVERIFY(writeBytes(first, routeVboWithCoolant()));
+    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo()));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Car and driver", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    QTRY_VERIFY(!controller.outingLapsLoading());
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick\nWindow { width: 900; height: 600; visible: true; CarDriverView { anchors.fill: parent } }",
+        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 30000);
+    const auto findVisual = [](auto &&self, QQuickItem *item, const QString &name) -> QQuickItem * {
+        if (item->objectName() == name) return item;
+        for (auto *child : item->childItems()) if (auto *found = self(self, child, name)) return found;
+        return nullptr;
+    };
+    QQuickItem *trend = nullptr;
+    QTRY_VERIFY((trend = findVisual(findVisual, window->contentItem(), "carDriverTrend0")));
+    QVERIFY(trend->width() > 400);
+    QVERIFY(!findVisual(findVisual, window->contentItem(), "carDriverTrend1")); // one recorded channel, none invented
+    int hotIndex = -1;
+    const auto runs = controller.outingChannelSummaries().value("runs").toList();
+    for (int index = 0; index < runs.size(); ++index)
+        if (!runs[index].toMap().value("channels").toList().isEmpty()) hotIndex = index;
+    QVERIFY(hotIndex >= 0);
+    const auto cell = [&](const int run, const int column) {
+        auto *label = findVisual(findVisual, window->contentItem(), QString("carDriverCell0-%1-%2").arg(run).arg(column));
+        return label ? label->property("text").toString() : QString("<missing>");
+    };
+    QTRY_VERIFY(cell(hotIndex, 0).contains("Session"));
+    const auto hot = runs[hotIndex].toMap().value("channels").toList().first().toMap().value("run").toMap();
+    QCOMPARE(cell(hotIndex, 2), QString("%1 – %2").arg(std::round(hot.value("minimum").toDouble())).arg(std::round(hot.value("maximum").toDouble()))); // undeclared unit: no °C invented
+    QCOMPARE(cell(hotIndex, 4), QString("none recorded"));
+    QCOMPARE(cell(1 - hotIndex, 1), QString("Not recorded"));
+    QCOMPARE(warnings.size(), 0);
 }
 
 void TelemetryTests::summarizesHeartRatePerRunSectionAndInterval()
@@ -5258,6 +5324,13 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
                 .arg(channel.value("channel").toString(), -20).arg(summary.value("minimum").toDouble(), 6, 'f', 1)
                 .arg(summary.value("mean").toDouble(), 6, 'f', 1).arg(summary.value("maximum").toDouble(), 6, 'f', 1)
                 .arg(summary.value("coverage").toDouble(), 5, 'f', 3).arg(summary.value("excludedArtifacts").toInt());
+            for (const auto &coolingValue : channel.value("cooling").toList()) {
+                const auto cooling = coolingValue.toMap();
+                qInfo().noquote() << QString("      cooling %1 -> %2 over %3 s from t=%4 (%5 %6)")
+                    .arg(cooling.value("startValue").toDouble(), 0, 'f', 1).arg(cooling.value("endValue").toDouble(), 0, 'f', 1)
+                    .arg(cooling.value("seconds").toDouble(), 0, 'f', 0).arg(cooling.value("startTime").toDouble(), 0, 'f', 0)
+                    .arg(cooling.value("type").toString()).arg(cooling.value("lapNumber").toInt());
+            }
         }
     }
     for (const auto &value : controller.outingChannelSummaries().value("runs").toList()) {
@@ -5373,6 +5446,10 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         progressionTabs->setProperty("currentIndex", 1);
         QTest::qWait(1200);
         QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("section-progression.png")));
+        progressionTabs->setProperty("currentIndex", 2);
+        QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 180000);
+        QTest::qWait(500);
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("car-driver.png")));
     }
     for (const auto &warning : warnings) qInfo() << "QML warning" << warning;
 }

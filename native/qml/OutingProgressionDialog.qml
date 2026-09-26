@@ -42,18 +42,19 @@ Dialog {
                 textFormat: Text.PlainText
                 color: "#dce4ee"
             }
-            // KAN-64: lap times per session, or each section per session.
+            // KAN-64: lap times per session, or each section per session; KAN-68:
+            // the car's recorded temperatures through the day.
             TabBar {
                 id: progressionTabs
                 objectName: "progressionTabs"
                 Layout.fillWidth: true
                 Repeater {
-                    model: [qsTr("Laps"), qsTr("By section")]
+                    model: [qsTr("Laps"), qsTr("By section"), qsTr("Car & driver")]
                     TabButton {
                         id: progressionTab
                         required property string modelData
                         required property int index
-                        objectName: progressionTab.index === 1 ? "progressionBySectionTab" : "progressionLapsTab"
+                        objectName: ["progressionLapsTab", "progressionBySectionTab", "progressionCarDriverTab"][progressionTab.index]
                         text: progressionTab.modelData
                         contentItem: Label {
                             text: progressionTab.text
@@ -215,6 +216,10 @@ Dialog {
                 SectionProgressionView {
                     objectName: "sectionProgression"
                     onLapChosen: reference => { root.close(); appController.selectOutingLapReference(reference); }
+                }
+                // KAN-68: recorded vehicle temperatures through the day.
+                CarDriverView {
+                    objectName: "carDriverView"
                 }
             }
         }

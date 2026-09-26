@@ -22,6 +22,43 @@ QVariantMap summaryMap(const ChannelSummary &summary)
     map.insert("minimumTime", *summary.minimumTime); map.insert("maximumTime", *summary.maximumTime);
     return map;
 }
+
+// KAN-68: a bounded trend of one run's channel for the day view. Each bin is
+// summarized on its own, so a bin inside a recording gap is null (never
+// interpolated) and the drawn curve breaks there.
+QVariantList trendTrace(const TelemetrySession &session, const QString &name, const double start, const double end,
+    const ChannelSummaryPolicy &policy, const int bins = 120)
+{
+    QVariantList trace;
+    if (end <= start) return trace;
+    const double width = (end - start) / bins;
+    for (int bin = 0; bin < bins; ++bin) {
+        const double from = start + bin * width;
+        const auto summary = summarizeChannel(session, name, from, from + width, policy);
+        trace.append(summary.valid ? QVariant(QVariantList{from + width / 2, *summary.mean}) : QVariant());
+    }
+    return trace;
+}
+
+QVariantList coolingList(const TelemetrySession &session, const QString &name, const QVector<OutingLapRow> &runRows,
+    const ChannelSummaryPolicy &policy)
+{
+    QVariantList list;
+    for (const auto &interval : findCoolingIntervals(session, name, policy)) {
+        QVariantMap map{{"startTime", interval.startTime}, {"endTime", interval.endTime},
+            {"startValue", interval.startValue}, {"endValue", interval.endValue},
+            {"drop", interval.drop()}, {"seconds", interval.seconds()}};
+        // The recorded section the cooling started in (a cool-down lap, the pit lane).
+        for (const auto &row : runRows)
+            if (interval.startTime >= row.start && interval.startTime < row.end) {
+                map.insert("type", lapSectionName(row.type));
+                map.insert("lapNumber", row.lapNumber);
+                break;
+            }
+        list.append(map);
+    }
+    return list;
+}
 }
 
 void AppController::initializeOutingChannelSummaries()
@@ -119,10 +156,13 @@ AppController::ChannelSummariesResult AppController::computeOutingChannelSummari
                     section.insert("reference", row.reference.toVariantMap());
                     sections.append(section);
                 }
-                const double start = session.channels.value(name).timestamps.isEmpty() ? 0.0 : session.channels.value(name).timestamps.first();
+                const auto &times = session.channels.value(name).timestamps;
+                const double start = times.isEmpty() ? 0.0 : times.first();
+                const double end = times.isEmpty() ? 0.0 : times.last();
                 channels.append(QVariantMap{{"channel", name}, {"unit", session.channels.value(name).unit},
                     {"run", summaryMap(summarizeChannel(session, name, start, session.duration + start, policy))},
-                    {"sections", sections}});
+                    {"sections", sections}, {"trace", trendTrace(session, name, start, end, policy)},
+                    {"cooling", coolingList(session, name, runRows, policy)}});
             }
             run.insert("channels", channels);
             // KAN-69: heart rate from the recording's own heart-rate channel
@@ -140,9 +180,10 @@ AppController::ChannelSummariesResult AppController::computeOutingChannelSummari
                 }
                 const auto &times = session.channels.value(heartRate).timestamps;
                 const double start = times.isEmpty() ? 0.0 : times.first();
+                const double end = times.isEmpty() ? 0.0 : times.last();
                 run.insert("heartRate", QVariantMap{{"channel", heartRate}, {"unit", session.channels.value(heartRate).unit},
                     {"run", summaryMap(summarizeChannel(session, heartRate, start, session.duration + start, policy))},
-                    {"sections", sections}});
+                    {"sections", sections}, {"trace", trendTrace(session, heartRate, start, end, policy)}});
             }
             result.runs.append(run);
         }
