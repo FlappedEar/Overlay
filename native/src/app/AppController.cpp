@@ -2,6 +2,7 @@
 #include "app/PreviewPlayback.h"
 #include "export/ExportFormat.h"
 #include "export/ExportEngine.h"
+#include "export/VideoFingerprint.h"
 #include "export/ExportCancellation.h"
 #include "export/ExportMediaProfile.h"
 #include "app/AppLog.h"
@@ -941,8 +942,7 @@ void AppController::startVideoProbe(
         try {
             result.mediaInfo = MediaProbe::probe(
                 path, {}, false, -1, {}, [cancellation] { return cancellation->load(); });
-            result.fingerprint = ProjectSourceReferenceCodec::videoFingerprint(
-                path, result.mediaInfo);
+            result.fingerprint = videoSourceFingerprint(path, result.mediaInfo);
             result.success = !cancellation->load();
             if (!result.success) {
                 result.cancelled = true;

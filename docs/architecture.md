@@ -18,6 +18,28 @@ flowchart TD
   F --> H["QRhi → FFV1 overlay → HEVC/AAC export"]
 ```
 
+## Libraries (KAN-123)
+
+The code builds as two static libraries. This is the first step of the
+product split (`docs/product-split-plan.md`, epic KAN-121):
+
+- **`flappedear_telemetry_core`** holds `src/telemetry` and `src/project`:
+  parsers, lap timing, compatibility, segments, sector timing, theoretical
+  best, time loss, consistency, variability, G-G pairs, the event document
+  and recovery. It links **Qt Core and zlib only**, so it can be built for
+  iOS and Android. The `flappedear_telemetry_core_boundary` test fails if a
+  file there includes overlay, video, export, app or Gui headers. Video
+  fingerprints are built on the overlay side (`export/VideoFingerprint`)
+  from the document layer's video-free helpers. An event (v3) document may
+  omit the overlay `scene` (an analysis-only day); a scene that is present
+  must still be valid.
+- **`flappedear_overlay_core`** holds export (FFmpeg, the QRhi frame
+  renderer), GoPro, synchronization, widgets and the editor's app support.
+  It links the telemetry core plus Qt Gui, Qml, Quick and GuiPrivate.
+- `flappedear_core` is an interface target over both, used by the current
+  combined application and its app-level tests. Pure test targets link only
+  `flappedear_telemetry_core`.
+
 ## Application
 
 `AppController` is the QML-facing application boundary. It exposes source state, playback time, synchronization, live values, project dirty state, loading state, export state, analysis state, and the `WidgetModel`. It also owns the preview `TelemetryRenderContext`, so QML reads telemetry through one time transform rather than parsing files itself.

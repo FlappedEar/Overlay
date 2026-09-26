@@ -26,6 +26,7 @@
 #include "sync/TelemetrySyncEngine.h"
 #include "telemetry/TelemetrySession.h"
 #include "telemetry/GgPairs.h"
+#include "export/VideoFingerprint.h"
 #include "telemetry/TelemetrySource.h"
 #include "telemetry/LapTiming.h"
 #include "telemetry/TelemetryRenderContext.h"
@@ -9780,30 +9781,30 @@ void TelemetryTests::fingerprintsSourcesDeterministically()
     info.videoSize = QSize(1920, 1080);
     info.averageFrameRate = {30000, 1001};
     info.videoCodec = QStringLiteral("h264");
-    const QJsonObject expected = ProjectSourceReferenceCodec::videoFingerprint(first, info);
+    const QJsonObject expected = videoSourceFingerprint(first, info);
     MediaInfo enriched = info;
     enriched.bitDepth = 10;
     enriched.pixelFormat = QStringLiteral("yuv420p10le");
     enriched.colorTransfer = QStringLiteral("bt709");
     enriched.colorPrimaries = QStringLiteral("bt709");
     enriched.sourceColorClass = SourceColorClass::Sdr;
-    QCOMPARE(ProjectSourceReferenceCodec::videoFingerprint(first, enriched), expected);
+    QCOMPARE(videoSourceFingerprint(first, enriched), expected);
     QCOMPARE(ProjectSourceReferenceCodec::compareFingerprints(
-                 expected, ProjectSourceReferenceCodec::videoFingerprint(second, info)),
+                 expected, videoSourceFingerprint(second, info)),
              SourceFingerprintMatch::Match);
     bytes[bytes.size() / 2] = 'b';
     QVERIFY(writeBytes(second, bytes));
     QCOMPARE(ProjectSourceReferenceCodec::compareFingerprints(
-                 expected, ProjectSourceReferenceCodec::videoFingerprint(second, info)),
+                 expected, videoSourceFingerprint(second, info)),
              SourceFingerprintMatch::Mismatch);
     info.videoSize = QSize(1280, 720);
     QCOMPARE(ProjectSourceReferenceCodec::compareFingerprints(
-                 expected, ProjectSourceReferenceCodec::videoFingerprint(first, info)),
+                 expected, videoSourceFingerprint(first, info)),
              SourceFingerprintMatch::Mismatch);
     QVERIFY(writeBytes(second, QByteArrayLiteral("different size")));
     info.videoSize = QSize(1920, 1080);
     QCOMPARE(ProjectSourceReferenceCodec::compareFingerprints(
-                 expected, ProjectSourceReferenceCodec::videoFingerprint(second, info)),
+                 expected, videoSourceFingerprint(second, info)),
              SourceFingerprintMatch::Mismatch);
 
     TelemetrySession sessionA;

@@ -28,11 +28,6 @@ QString projectDirectoryPath(const QString &projectPath)
     return QDir::cleanPath(canonical.isEmpty() ? directoryInfo.absoluteFilePath() : canonical);
 }
 
-qint64 roundedMicroseconds(const double seconds)
-{
-    return std::isfinite(seconds) ? std::llround(seconds * 1'000'000.0) : 0;
-}
-
 } // namespace
 
 bool ProjectSourceReference::isEmpty() const
@@ -150,22 +145,9 @@ QString ProjectSourceReferenceCodec::sampledDigest(const QString &path)
     return QString::fromLatin1(hash.result().toHex());
 }
 
-QJsonObject ProjectSourceReferenceCodec::videoFingerprint(
-    const QString &path, const MediaInfo &mediaInfo)
+qint64 ProjectSourceReferenceCodec::roundedMicroseconds(const double seconds)
 {
-    const MediaRational rate = mediaInfo.averageFrameRate.isValid()
-        ? mediaInfo.averageFrameRate : mediaInfo.frameRate;
-    return {
-        {QStringLiteral("kind"), QStringLiteral("video-v1")},
-        {QStringLiteral("size"), QFileInfo(path).size()},
-        {QStringLiteral("sampledSha256"), sampledDigest(path)},
-        {QStringLiteral("durationUs"), roundedMicroseconds(mediaInfo.duration)},
-        {QStringLiteral("width"), mediaInfo.videoSize.width()},
-        {QStringLiteral("height"), mediaInfo.videoSize.height()},
-        {QStringLiteral("frameRateNumerator"), rate.numerator},
-        {QStringLiteral("frameRateDenominator"), rate.denominator},
-        {QStringLiteral("codec"), mediaInfo.videoCodec},
-    };
+    return std::isfinite(seconds) ? std::llround(seconds * 1'000'000.0) : 0;
 }
 
 QJsonObject ProjectSourceReferenceCodec::telemetryFingerprint(

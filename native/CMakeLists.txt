@@ -30,56 +30,12 @@ FetchContent_Declare(flappedear_zlib
 )
 FetchContent_MakeAvailable(flappedear_zlib)
 
-qt_add_library(flappedear_core STATIC
-    src/app/ApplicationIdentity.h
-    src/app/GuiSessionLock.cpp
-    src/app/GuiSessionLock.h
-    src/app/AppLog.cpp
-    src/app/AppLog.h
-    src/app/PreviewPlayback.cpp
-    src/app/PreviewPlayback.h
-    src/export/EncoderDetector.cpp
-    src/export/EncoderDetector.h
-    src/export/BoundedProcessOutput.cpp
-    src/export/BoundedProcessOutput.h
-    src/export/ExportDiagnostics.cpp
-    src/export/ExportDiagnostics.h
-    src/export/ExportArtifactManifest.cpp
-    src/export/ExportArtifactManifest.h
-    src/export/ExportCancellation.cpp
-    src/export/ExportCancellation.h
-    src/export/ExportEngine.cpp
-    src/export/FinalOutputValidation.cpp
-    src/export/FinalOutputValidation.h
-    src/export/ExportMediaProfile.cpp
-    src/export/ExportMediaProfile.h
-    src/export/ExportFormat.cpp
-    src/export/ExportEngine.h
-    src/export/ExportOutputTransaction.cpp
-    src/export/ExportOutputTransaction.h
-    src/export/ExportProgress.cpp
-    src/export/ExportProgress.h
-    src/export/ExportProcessSupervisor.cpp
-    src/export/ExportProcessSupervisor.h
-    src/export/ExportStoragePolicy.cpp
-    src/export/ExportStoragePolicy.h
-    src/export/ExportTargetIdentity.cpp
-    src/export/ExportTargetIdentity.h
-    src/export/FfmpegTools.cpp
-    src/export/FfmpegTools.h
-    src/export/MediaProbe.cpp
-    src/export/MediaProbe.h
-    src/app/PreviewPlayback.h
-    src/export/PersistentExportLog.cpp
-    src/export/PersistentExportLog.h
-    src/export/RawFrameTransport.cpp
-    src/export/RawFrameTransport.h
-    src/export/TelemetryFrameRenderer.cpp
-    src/export/TelemetryFrameRenderer.h
-    src/export/TemporaryOverlayValidation.cpp
-    src/export/TemporaryOverlayValidation.h
-    src/gopro/GoProTelemetrySource.cpp
-    src/gopro/GoProTelemetrySource.h
+# KAN-123: two libraries. flappedear_telemetry_core is everything the
+# telemetry analysis needs -- parsers, laps, segments, metrics and the event
+# document -- on Qt Core and zlib only, so it can be built for iOS and Android.
+# It must never include overlay, video, export, Gui, Quick or QProcess code;
+# linking only Qt6::Core enforces that at compile time.
+qt_add_library(flappedear_telemetry_core STATIC
     src/project/ProjectWriter.cpp
     src/project/ProjectWriter.h
     src/project/BoundedJsonLoader.cpp
@@ -94,8 +50,6 @@ qt_add_library(flappedear_core STATIC
     src/project/ProjectSourceReference.h
     src/project/EventProjectCodec.cpp
     src/project/EventProjectCodec.h
-    src/sync/TelemetrySyncEngine.cpp
-    src/sync/TelemetrySyncEngine.h
     src/telemetry/TelemetrySession.cpp
     src/telemetry/TelemetrySession.h
     src/telemetry/TelemetryGeometry.cpp
@@ -154,22 +108,88 @@ qt_add_library(flappedear_core STATIC
     src/telemetry/TelemetryImportPlan.h
     src/telemetry/VboParser.cpp
     src/telemetry/VboParser.h
+)
+target_compile_features(flappedear_telemetry_core PUBLIC cxx_std_20)
+target_include_directories(flappedear_telemetry_core PUBLIC src)
+target_link_libraries(flappedear_telemetry_core PUBLIC Qt6::Core PRIVATE ZLIB::ZLIBSTATIC)
+flappedear_enable_warnings(flappedear_telemetry_core)
+
+# The desktop overlay side: FFmpeg export, the QRhi frame renderer, GoPro,
+# synchronization, widgets and the app support used by the editor.
+qt_add_library(flappedear_overlay_core STATIC
+    src/app/ApplicationIdentity.h
+    src/app/GuiSessionLock.cpp
+    src/app/GuiSessionLock.h
+    src/app/AppLog.cpp
+    src/app/AppLog.h
+    src/app/PreviewPlayback.cpp
+    src/app/PreviewPlayback.h
+    src/export/EncoderDetector.cpp
+    src/export/EncoderDetector.h
+    src/export/BoundedProcessOutput.cpp
+    src/export/BoundedProcessOutput.h
+    src/export/ExportDiagnostics.cpp
+    src/export/ExportDiagnostics.h
+    src/export/ExportArtifactManifest.cpp
+    src/export/ExportArtifactManifest.h
+    src/export/ExportCancellation.cpp
+    src/export/ExportCancellation.h
+    src/export/ExportEngine.cpp
+    src/export/FinalOutputValidation.cpp
+    src/export/FinalOutputValidation.h
+    src/export/ExportMediaProfile.cpp
+    src/export/ExportMediaProfile.h
+    src/export/ExportFormat.cpp
+    src/export/ExportEngine.h
+    src/export/ExportOutputTransaction.cpp
+    src/export/ExportOutputTransaction.h
+    src/export/ExportProgress.cpp
+    src/export/ExportProgress.h
+    src/export/ExportProcessSupervisor.cpp
+    src/export/ExportProcessSupervisor.h
+    src/export/ExportStoragePolicy.cpp
+    src/export/ExportStoragePolicy.h
+    src/export/ExportTargetIdentity.cpp
+    src/export/ExportTargetIdentity.h
+    src/export/FfmpegTools.cpp
+    src/export/FfmpegTools.h
+    src/export/MediaProbe.cpp
+    src/export/VideoFingerprint.cpp
+    src/export/VideoFingerprint.h
+    src/export/MediaProbe.h
+    src/app/PreviewPlayback.h
+    src/export/PersistentExportLog.cpp
+    src/export/PersistentExportLog.h
+    src/export/RawFrameTransport.cpp
+    src/export/RawFrameTransport.h
+    src/export/TelemetryFrameRenderer.cpp
+    src/export/TelemetryFrameRenderer.h
+    src/export/TemporaryOverlayValidation.cpp
+    src/export/TemporaryOverlayValidation.h
+    src/gopro/GoProTelemetrySource.cpp
+    src/gopro/GoProTelemetrySource.h
+    src/sync/TelemetrySyncEngine.cpp
+    src/sync/TelemetrySyncEngine.h
     src/widgets/WidgetModel.cpp
     src/widgets/WidgetModel.h
 )
-target_compile_features(flappedear_core PUBLIC cxx_std_20)
-target_include_directories(flappedear_core PUBLIC src)
-target_link_libraries(flappedear_core PUBLIC Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick)
+target_compile_features(flappedear_overlay_core PUBLIC cxx_std_20)
+target_include_directories(flappedear_overlay_core PUBLIC src)
+target_link_libraries(flappedear_overlay_core PUBLIC flappedear_telemetry_core Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick)
 # QRhi is a Qt Gui private API. Keep it implementation-only: no public headers
-# in flappedear_core expose QRhi types.
-target_link_libraries(flappedear_core PRIVATE Qt6::GuiPrivate ZLIB::ZLIBSTATIC)
-flappedear_enable_warnings(flappedear_core)
+# in flappedear_overlay_core expose QRhi types.
+target_link_libraries(flappedear_overlay_core PRIVATE Qt6::GuiPrivate)
+flappedear_enable_warnings(flappedear_overlay_core)
 
-qt_add_resources(flappedear_core "flappedear_templates"
+qt_add_resources(flappedear_overlay_core "flappedear_templates"
     PREFIX "/flappedear"
     FILES
         resources/widget-templates.json
 )
+
+# Both halves, for the combined desktop application and its tests.
+add_library(flappedear_core INTERFACE)
+target_link_libraries(flappedear_core INTERFACE flappedear_overlay_core flappedear_telemetry_core)
 
 set(FLAPPEDEAR_PLATFORM_ICON)
 if(APPLE)
