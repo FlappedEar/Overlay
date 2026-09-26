@@ -59,6 +59,9 @@ running) instead of the overlay's `exporting()`. `loadOutingLapDetail`
 (`telemetry/OutingLapLoader`) moved into telemetry core. It loads and
 verifies one recorded section for the lap view, the comparison, the
 theoretical best and the channel summaries, so both apps share it. The
+channel-summary worker (`summarizeOutingChannels`, `channelSummaryMap` in
+`telemetry/OutingChannelSummaries`) is also in core. It computes
+temperatures, trends, cooling and heart rate per run and section. The
 Document, Analysis and Overlay controllers are extracted behind the same
 QML-facing API in later steps.
 
