@@ -96,4 +96,75 @@ QStringList recordedTemperatureChannels(const TelemetrySession &session)
     return names;
 }
 
+QVector<CoolingInterval> findCoolingIntervals(const TelemetrySession &session, const QString &channelOrAlias,
+    const ChannelSummaryPolicy &policy, const CoolingOptions &options)
+{
+    QVector<CoolingInterval> intervals;
+    const auto found = session.channels.constFind(session.aliases.value(channelOrAlias, channelOrAlias));
+    if (found == session.channels.cend() || found->timestamps.size() != found->values.size()) return intervals;
+    const auto &channel = *found;
+    bool zeroPlaceholder = false;
+    if (policy.zeroIsPlaceholder) {
+        QVector<float> finite;
+        for (const float value : channel.values) if (std::isfinite(value)) finite.append(value);
+        if (!finite.isEmpty()) {
+            std::nth_element(finite.begin(), finite.begin() + finite.size() / 2, finite.end());
+            zeroPlaceholder = std::abs(finite[finite.size() / 2]) > policy.placeholderTypicalAbove;
+        }
+    }
+    const double gapLimit = telemetryGapThreshold(channel);
+    // Split into continuously recorded stretches of valid samples.
+    QVector<QVector<std::pair<double, double>>> stretches(1);
+    double previousTime = -std::numeric_limits<double>::infinity();
+    for (qsizetype i = 0; i < channel.timestamps.size(); ++i) {
+        const double time = channel.timestamps[i];
+        const double value = channel.values[i];
+        const bool valid = std::isfinite(value) && value >= policy.minimumPlausible && value <= policy.maximumPlausible
+            && !(zeroPlaceholder && value == 0.0);
+        if (!valid || time - previousTime > gapLimit) {
+            if (!stretches.last().isEmpty()) stretches.append(QVector<std::pair<double, double>>{});
+        }
+        if (!valid) continue;
+        stretches.last().append({time, value});
+        previousTime = time;
+    }
+    for (const auto &stretch : stretches) {
+        if (stretch.size() < 3) continue;
+        // Centred moving average over the smoothing window (two pointers).
+        QVector<double> smooth(stretch.size());
+        qsizetype lo = 0, hi = 0;
+        double sum = 0.0;
+        const double half = options.smoothingSeconds / 2.0;
+        for (qsizetype i = 0; i < stretch.size(); ++i) {
+            while (hi < stretch.size() && stretch[hi].first <= stretch[i].first + half) sum += stretch[hi++].second;
+            while (stretch[lo].first < stretch[i].first - half) sum -= stretch[lo++].second;
+            smooth[i] = sum / static_cast<double>(hi - lo);
+        }
+        // Peak -> following trough, walking the smoothed series once.
+        qsizetype peak = 0, trough = 0;
+        bool falling = false;
+        const auto close = [&] {
+            const CoolingInterval interval{stretch[peak].first, stretch[trough].first, smooth[peak], smooth[trough]};
+            if (interval.drop() >= options.minimumDrop && interval.seconds() >= options.minimumSeconds) intervals.append(interval);
+        };
+        for (qsizetype i = 1; i < stretch.size(); ++i) {
+            if (!falling) {
+                if (smooth[i] >= smooth[peak]) { peak = i; continue; }
+                if (smooth[peak] - smooth[i] > 0.0) { falling = true; trough = i; }
+            } else {
+                if (smooth[i] < smooth[trough] - 1e-9) { trough = i; continue; }
+                if (smooth[i] <= smooth[trough] + 1e-9) continue; // a flat bottom does not extend the cooling
+                // Rising again: close this cooling when the rise is real, not noise.
+                if (smooth[i] - smooth[trough] >= 1.0) {
+                    close();
+                    falling = false;
+                    peak = i;
+                }
+            }
+        }
+        if (falling) close();
+    }
+    return intervals;
+}
+
 } // namespace FlappedEar

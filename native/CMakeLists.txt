@@ -248,6 +248,7 @@ qt_add_qml_module(flappedear_native
         qml/TheoreticalBestDialog.qml
         qml/TimeLossDialog.qml
         qml/SectionProgressionView.qml
+        qml/CarDriverView.qml
         qml/RunDetailsDialog.qml
         qml/OutingLapPanel.qml
         qml/OutingLapDetailPanel.qml

@@ -60,4 +60,28 @@ struct ChannelSummary {
 // order. Never invented: an absent sensor is simply not listed.
 [[nodiscard]] QStringList recordedTemperatureChannels(const TelemetrySession &session);
 
+// A continuously recorded cooling interval (KAN-68): from a local peak to the
+// following trough within one stretch of recording without a gap, dropping by
+// at least `minimumDrop` over at least `minimumSeconds`. Values are smoothed
+// with a centred moving average over `smoothingSeconds` first, so sensor
+// quantization does not split one cooling into many. A gap (or an excluded
+// artifact) ends the stretch, so no interval ever spans an unrecorded break.
+struct CoolingInterval {
+    double startTime = 0.0;
+    double endTime = 0.0;
+    double startValue = 0.0; // smoothed
+    double endValue = 0.0;
+    [[nodiscard]] double drop() const { return startValue - endValue; }
+    [[nodiscard]] double seconds() const { return endTime - startTime; }
+};
+
+struct CoolingOptions {
+    double minimumDrop = 5.0;
+    double minimumSeconds = 30.0;
+    double smoothingSeconds = 5.0;
+};
+
+[[nodiscard]] QVector<CoolingInterval> findCoolingIntervals(const TelemetrySession &session,
+    const QString &channelOrAlias, const ChannelSummaryPolicy &policy, const CoolingOptions &options = {});
+
 } // namespace FlappedEar
