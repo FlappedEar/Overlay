@@ -119,6 +119,7 @@ QVariantMap AppController::computeOutingDayReport() const
                 const auto best = run.value("bestLap").toMap();
                 if (!best.isEmpty()) {
                     row.insert("bestSeconds", best.value("durationSeconds").toDouble());
+                    row.insert("evidenceIndex", result.evidence.size());
                     result.evidence.append(lapEvidence(best.value("reference"),
                         QStringLiteral("%1 · LAP %2").arg(run.value("runName").toString()).arg(best.value("lapNumber").toInt())));
                 }
