@@ -71,9 +71,9 @@ QVariantMap AppController::computeOutingDayReport() const
         sources.eligibleLaps = {};
     }
     // KAN-73: focus inputs need the actual best timed on the canonical axis.
-    if (m_theoreticalBestState == "ready" && m_theoreticalBestActual) {
+    if (m_theoreticalBestState == "ready" && m_theoreticalBest.actualBest) {
         FocusInputs focus;
-        focus.referenceLap = m_theoreticalBestActual->lapReference;
+        focus.referenceLap = m_theoreticalBest.actualBest->lapReference;
         focus.referenceLabel = outingLapLabel(focus.referenceLap);
         for (const auto &value : sources.theoretical.value("sectors").toList()) {
             const auto sector = value.toMap();
@@ -88,13 +88,13 @@ QVariantMap AppController::computeOutingDayReport() const
             for (const auto &loss : ranking.losses)
                 focus.losses.append({loss.window.segmentId, loss.window.name, loss.lossSeconds, loss.lapReference});
         }
-        QStringList cornerIds = m_theoreticalBestCornerObservations.keys();
+        QStringList cornerIds = m_theoreticalBest.cornerObservations.keys();
         cornerIds.sort();
         for (const auto &segmentId : cornerIds) {
             QString name = segmentId;
-            for (const auto &sector : m_theoreticalBestBest.sectors)
+            for (const auto &sector : m_theoreticalBest.best.sectors)
                 if (sector.segmentId == segmentId) name = sector.name;
-            focus.corners.append({segmentId, name, m_theoreticalBestCornerObservations.value(segmentId)});
+            focus.corners.append({segmentId, name, m_theoreticalBest.cornerObservations.value(segmentId)});
         }
         sources.focus = std::move(focus);
     }

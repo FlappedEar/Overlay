@@ -784,14 +784,8 @@ private:
     quint64 m_theoreticalBestRequest = 0;
     QString m_theoreticalBestState = QStringLiteral("idle");
     QString m_theoreticalBestMessage;
-    FlappedEar::TheoreticalBestLap m_theoreticalBestBest;
-    std::optional<FlappedEar::LapSectorTimes> m_theoreticalBestActual;
-    QString m_theoreticalBestCanonicalRunId;
-    QVector<FlappedEar::TimedLapSectors> m_theoreticalBestPopulation;
-    FlappedEar::ApprovedSegmentation m_theoreticalBestApproved;
-    double m_theoreticalBestAxisLength = 0.0;
-    FlappedEar::ProgressAxis m_theoreticalBestAxis;
-    QHash<QString, QVector<FlappedEar::CornerLapObservation>> m_theoreticalBestCornerObservations;
+    // The committed worker result (valid while the state is "ready").
+    FlappedEar::OutingTheoreticalBest m_theoreticalBest;
     // Losses of each session's fastest lap (or every eligible lap) against the
     // actual best; requires a ready theoretical best with a timed actual best.
     [[nodiscard]] FlappedEar::TimeLossRanking computeTimeLossRanking(bool allLaps, qsizetype maximumResults) const;
