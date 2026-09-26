@@ -196,6 +196,29 @@ attributed to a difference. A segment or interval ending at the gate ends at
 the lap's timed end. A segment starting exactly at the gate is not yet bounded
 by the lap's timed start and reports `incompleteCoverage` for pickup.
 
+## Areas to inspect next (KAN-73)
+
+`selectFocusAreas` (`telemetry/FocusAreas`, `focus-areas-v1`) turns computed
+observations into at most three areas, with at most one per segment:
+
+| Kind | Observation | Threshold | Evidence pair |
+| --- | --- | --- | --- |
+| Best lap against the fastest sector | the best lap's time through a sector minus the fastest recorded time there (theoretical-best source) | ≥ 0.05 s | best lap / source lap |
+| Repeated loss | per segment, the losses of each session's fastest lap against the best lap; median and count | ≥ 0.05 s each, on ≥ 3 laps | the lap nearest the median / best lap |
+| Braking-point spread | interquartile range of the **measured** braking point (inferred points are never mixed in) | ≥ 10 m, ≥ 3 laps | earliest / latest braking lap |
+| Lowest-speed spread | interquartile range of the minimum speed | ≥ 5% of the median, ≥ 3 laps | slowest / fastest lap |
+
+Selection takes the strongest area of each kind in that order, then fills
+any remaining places round-robin, each kind by score (seconds, median ×
+count, metres, relative spread). Ties go by segment id.
+
+Each area states an **observation**, a measured number with its sample
+count, apart from a **hypothesis**, which says what may be worth comparing.
+A hypothesis never claims a cause and never recommends a change as faster or
+safe. The braking-spread hypothesis states explicitly that it does not show
+whether earlier or later braking is faster or safe. Speeds are in the
+recording's own units when none are declared.
+
 ## Synchronization transforms and numeric bounds
 
 `videoToTelemetryTime(video, sync)` computes `video * timeScale + offset`;

@@ -27,6 +27,7 @@
 #include "telemetry/TelemetrySession.h"
 #include "telemetry/GgPairs.h"
 #include "telemetry/DayReport.h"
+#include "telemetry/FocusAreas.h"
 #include "export/VideoFingerprint.h"
 #include "telemetry/TelemetrySource.h"
 #include "telemetry/LapTiming.h"
@@ -169,6 +170,7 @@ private slots:
     void showsHeartRateByRunAndSegmentInQml();
     void buildsDayReportWithProvenance();
     void presentsDayReportWithEvidenceNavigation();
+    void selectsFocusAreasFromComputedObservations();
     void summarizesHeartRatePerRunSectionAndInterval();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
@@ -5147,7 +5149,7 @@ void TelemetryTests::showsRecordedTemperaturesThroughTheDayInQml()
     };
     QQuickItem *trend = nullptr;
     QTRY_VERIFY((trend = findVisual(findVisual, window->contentItem(), "carDriverTrend0")));
-    QVERIFY(trend->width() > 400);
+    QTRY_VERIFY(trend->width() > 400); // laid out after the first polish on slower machines
     QVERIFY(!findVisual(findVisual, window->contentItem(), "carDriverTrend1")); // one recorded channel, none invented
     int hotIndex = -1;
     const auto runs = controller.outingChannelSummaries().value("runs").toList();
@@ -5549,6 +5551,95 @@ void TelemetryTests::presentsDayReportWithEvidenceNavigation()
     QCOMPARE(warnings.size(), 0);
 }
 
+void TelemetryTests::selectsFocusAreasFromComputedObservations()
+{
+    // KAN-73: two sessions with equal lap times, each quicker in a different
+    // half. The best lap is slower than the fastest recorded time in its slow
+    // half, so the report names that as an area to inspect, with the
+    // observation apart from the hypothesis and the pair of laps to compare.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
+    QVERIFY(writeBytes(first, warpedRouteVbo(true)));
+    QVERIFY(writeBytes(second, warpedRouteVbo(false)));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Focus", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    QTRY_VERIFY(!controller.outingLapsLoading());
+    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
+    const auto resultOf = [&](const QString &id) {
+        for (const auto &value : controller.outingDayReport().value("results").toList())
+            if (value.toMap().value("id") == id) return value.toMap();
+        return QVariantMap{};
+    };
+    QCOMPARE(resultOf("focusAreas").value("status").toString(), QString("notComputed"));
+    controller.requestOutingDayReport();
+    QTRY_VERIFY_WITH_TIMEOUT(resultOf("focusAreas").value("status") != "notComputed"
+        && resultOf("focusAreas").value("status") != "computing", 30000);
+    const auto focus = resultOf("focusAreas");
+    QCOMPARE(focus.value("status").toString(), QString("available"));
+    QCOMPARE(focus.value("algorithm").toString(), QString(focusAreasAlgorithm));
+    const auto areas = focus.value("value").toMap().value("areas").toList();
+    QVERIFY(!areas.isEmpty() && areas.size() <= 3);
+    const auto evidence = focus.value("evidence").toList();
+    QSet<QString> segments;
+    for (const auto &value : areas) {
+        const auto area = value.toMap();
+        QVERIFY(!segments.contains(area.value("segmentId").toString())); // one area per segment
+        segments.insert(area.value("segmentId").toString());
+        QVERIFY(!area.value("observation").toString().isEmpty());
+        QVERIFY(!area.value("hypothesis").toString().isEmpty());
+        QVERIFY(area.value("observation") != area.value("hypothesis"));
+        QVERIFY(!area.value("hypothesis").toString().contains("brake later", Qt::CaseInsensitive));
+        const auto item = evidence[area.value("evidenceIndex").toInt()].toMap();
+        QCOMPARE(item.value("segmentId").toString(), area.value("segmentId").toString());
+        QVERIFY(item.value("reference") != item.value("against"));
+        QCOMPARE(controller.resolveOutingLapReference(item.value("reference").toMap()).value("state").toString(), QString("resolved"));
+        QCOMPARE(controller.resolveOutingLapReference(item.value("against").toMap()).value("state").toString(), QString("resolved"));
+    }
+    const auto top = areas.first().toMap();
+    QCOMPARE(top.value("kind").toString(), QString("sectorGap"));
+    QVERIFY2(top.value("value").toDouble() > 0.5, qPrintable(top.value("observation").toString()));
+    // The evidence opens the comparison at that segment, best lap as A.
+    const auto item = evidence[top.value("evidenceIndex").toInt()].toMap();
+    QVERIFY(controller.openFocusArea(item));
+    QTRY_VERIFY(controller.comparisonPairReady());
+    QCOMPARE(controller.comparisonFocusSegmentId(), top.value("segmentId").toString());
+    QCOMPARE(controller.comparisonSlots().toList()[0].toMap().value("lap").toMap().value("reference").toMap(),
+        item.value("reference").toMap());
+    QVERIFY(!controller.openFocusArea(QVariantMap{{"kind", "lap"}}));
+
+    // The report shows the observation and the hypothesis as such, and the
+    // compare row opens the same evidence.
+    controller.setComparisonViewOpen(false);
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
+    component.setData("import QtQuick\nWindow { width: 1180; height: 720; OutingLapPanel { anchors.fill: parent } }",
+        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    const auto findVisual = [](auto &&self, QQuickItem *node, const QString &name) -> QQuickItem * {
+        if (node->objectName() == name) return node;
+        for (auto *child : node->childItems()) if (auto *found = self(self, child, name)) return found;
+        return nullptr;
+    };
+    auto *dialog = window->findChild<QObject *>("dayReportDialog"); QVERIFY(dialog);
+    QVERIFY(QMetaObject::invokeMethod(dialog, "open"));
+    QQuickItem *observation = nullptr, *hypothesis = nullptr, *compare = nullptr;
+    QTRY_VERIFY((observation = findVisual(findVisual, window->contentItem(), "dayReportFocusObservation0")));
+    hypothesis = findVisual(findVisual, window->contentItem(), "dayReportFocusHypothesis0"); QVERIFY(hypothesis);
+    QCOMPARE(observation->property("text").toString(), "Observed: " + top.value("observation").toString());
+    QCOMPARE(hypothesis->property("text").toString(), "Hypothesis: " + top.value("hypothesis").toString());
+    compare = findVisual(findVisual, window->contentItem(), "dayReportFocusCompare0"); QVERIFY(compare);
+    compare->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(controller.comparisonViewOpen());
+    QTRY_VERIFY(!dialog->property("visible").toBool());
+    QCOMPARE(warnings.size(), 0);
+}
+
 void TelemetryTests::formatsElapsedTimes()
 {
     QCOMPARE(AppController::formatElapsedTime(100.838), QString("1:40.838"));
@@ -5682,6 +5773,12 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         qInfo().noquote() << QString("  report %1 %2 %3 evidence %4 %5").arg(result.value("id").toString(), -18)
             .arg(result.value("status").toString(), -12).arg(result.value("algorithm").toString(), -22)
             .arg(result.value("evidence").toList().size(), 4).arg(result.value("reason").toString());
+    }
+    for (const auto &value : dayReport.value("results").toList()) {
+        if (value.toMap().value("id") != "focusAreas") continue;
+        for (const auto &area : value.toMap().value("value").toMap().value("areas").toList())
+            qInfo().noquote() << "  focus" << area.toMap().value("kind").toString() << "|" << area.toMap().value("observation").toString()
+                              << "|" << area.toMap().value("hypothesis").toString();
     }
     qInfo().noquote() << "  report size" << QJsonDocument(QJsonObject::fromVariantMap(dayReport)).toJson(QJsonDocument::Compact).size() << "bytes";
     const auto ranking = controller.outingTimeLossRanking();

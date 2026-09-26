@@ -35,6 +35,17 @@ Dialog {
     readonly property var consistency: root.resultOf("consistency")
     readonly property var temperatures: root.resultOf("temperatures")
     readonly property var heartRate: root.resultOf("heartRate")
+    readonly property var focusResult: root.resultOf("focusAreas")
+    function focusKindText(kind) {
+        return ({sectorGap: qsTr("BEST LAP AGAINST THE FASTEST SECTOR"), repeatedLoss: qsTr("REPEATED LOSS"),
+            brakingSpread: qsTr("BRAKING-POINT SPREAD"), minimumSpeedSpread: qsTr("LOWEST-SPEED SPREAD")})[kind] || kind;
+    }
+    function openFocus(evidence) {
+        if (appController.openFocusArea(evidence)) {
+            root.comparisonOpened();
+            root.close();
+        }
+    }
 
     onOpened: appController.requestOutingDayReport()
 
@@ -225,6 +236,58 @@ Dialog {
                         text: qsTr("Where it can improve (map)…")
                         enabled: root.theoretical.status === "available"
                         onClicked: { root.close(); root.theoreticalBestRequested(); }
+                    }
+                }
+            }
+
+            // KAN-73: areas to inspect next. The observation (a measured
+            // number) is shown apart from the hypothesis (what may be worth
+            // comparing); neither claims a cause.
+            ReportCard {
+                objectName: "dayReportFocus"
+                heading: qsTr("Where to look next")
+                result: root.focusResult
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Each starts with what was measured. The line under it is a hypothesis to check in the laps, not a cause or an instruction.")
+                    wrapMode: Text.WordWrap
+                    color: "#91a0b2"; font.pixelSize: 12
+                }
+                Repeater {
+                    model: root.focusResult.value ? root.focusResult.value.areas : []
+                    ColumnLayout {
+                        id: area
+                        required property var modelData
+                        required property int index
+                        readonly property var evidence: root.focusResult.evidence[area.modelData.evidenceIndex]
+                        Layout.fillWidth: true
+                        Layout.topMargin: 6
+                        spacing: 3
+                        Label {
+                            text: root.focusKindText(area.modelData.kind) + " · " + area.modelData.name
+                            color: "#55e6a5"; font.pixelSize: 11; font.weight: Font.DemiBold; font.letterSpacing: 0.5
+                        }
+                        Label {
+                            objectName: "dayReportFocusObservation" + area.index
+                            Layout.fillWidth: true
+                            text: qsTr("Observed: %1").arg(area.modelData.observation)
+                            wrapMode: Text.WordWrap
+                            textFormat: Text.PlainText
+                            color: "#f2f6fb"; font.pixelSize: 14
+                        }
+                        Label {
+                            objectName: "dayReportFocusHypothesis" + area.index
+                            Layout.fillWidth: true
+                            text: qsTr("Hypothesis: %1").arg(area.modelData.hypothesis)
+                            wrapMode: Text.WordWrap
+                            textFormat: Text.PlainText
+                            color: "#b5c1d0"; font.pixelSize: 13; font.italic: true
+                        }
+                        ReportRow {
+                            objectName: "dayReportFocusCompare" + area.index
+                            primary: qsTr("Compare %1 with %2 at %3").arg(area.evidence.label).arg(area.evidence.againstLabel).arg(area.modelData.name)
+                            onClicked: root.openFocus(area.evidence)
+                        }
                     }
                 }
             }

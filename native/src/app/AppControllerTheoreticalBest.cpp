@@ -353,23 +353,7 @@ QVariantMap AppController::outingTimeLossRanking() const
         result.insert("message", QStringLiteral("The group's best lap could not be timed against the approved segments."));
         return result;
     }
-    const TimedLapSectors reference{*m_theoreticalBestActual,
-        m_theoreticalBestActual->lapReference.value("startTime").toDouble()};
-    QVector<TimedLapSectors> compared;
-    if (m_timeLossAllLaps) {
-        compared = m_theoreticalBestPopulation;
-    } else {
-        QHash<QString, qsizetype> fastestByRun;
-        for (qsizetype i = 0; i < m_theoreticalBestPopulation.size(); ++i) {
-            const auto &lap = m_theoreticalBestPopulation[i];
-            const auto runId = lap.times.lapReference.value("runId").toString();
-            const auto it = fastestByRun.constFind(runId);
-            if (it == fastestByRun.cend() || lap.times.lapSeconds < m_theoreticalBestPopulation[*it].times.lapSeconds)
-                fastestByRun.insert(runId, i);
-        }
-        for (const auto index : fastestByRun) compared.append(m_theoreticalBestPopulation[index]);
-    }
-    const auto ranking = rankTimeLosses(m_theoreticalBestApproved, m_theoreticalBestAxisLength, compared, reference);
+    const auto ranking = computeTimeLossRanking(m_timeLossAllLaps, 50);
     if (!ranking.valid) {
         result.insert("state", QStringLiteral("unavailable"));
         result.insert("message", ranking.unavailableReason);
@@ -402,6 +386,29 @@ QVariantMap AppController::outingTimeLossRanking() const
     result.insert("untimedWindowCount", ranking.untimedWindowCount);
     result.insert("revision", ranking.stamp.revision);
     return result;
+}
+
+TimeLossRanking AppController::computeTimeLossRanking(const bool allLaps, const qsizetype maximumResults) const
+{
+    // Requires a ready theoretical best with a timed actual best.
+    const TimedLapSectors reference{*m_theoreticalBestActual,
+        m_theoreticalBestActual->lapReference.value("startTime").toDouble()};
+    QVector<TimedLapSectors> compared;
+    if (allLaps) {
+        compared = m_theoreticalBestPopulation;
+    } else {
+        // Each session's fastest lap, so warm-up laps do not dominate.
+        QHash<QString, qsizetype> fastestByRun;
+        for (qsizetype i = 0; i < m_theoreticalBestPopulation.size(); ++i) {
+            const auto &lap = m_theoreticalBestPopulation[i];
+            const auto runId = lap.times.lapReference.value("runId").toString();
+            const auto it = fastestByRun.constFind(runId);
+            if (it == fastestByRun.cend() || lap.times.lapSeconds < m_theoreticalBestPopulation[*it].times.lapSeconds)
+                fastestByRun.insert(runId, i);
+        }
+        for (const auto index : fastestByRun) compared.append(m_theoreticalBestPopulation[index]);
+    }
+    return rankTimeLosses(m_theoreticalBestApproved, m_theoreticalBestAxisLength, compared, reference, maximumResults);
 }
 
 void AppController::setOutingTimeLossAllLaps(const bool allLaps)

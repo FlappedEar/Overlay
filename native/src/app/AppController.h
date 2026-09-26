@@ -287,6 +287,8 @@ public:
     // Starts the background results the report needs (theoretical best with
     // losses and section progression, channel summaries).
     Q_INVOKABLE void requestOutingDayReport();
+    // KAN-73: opens a focus area's evidence pair in the comparison, at its segment.
+    Q_INVOKABLE bool openFocusArea(const QVariantMap &evidence);
     [[nodiscard]] QVariantMap outingSectorProgression() const;
     [[nodiscard]] bool outingTimeLossAllLaps() const { return m_timeLossAllLaps; }
     void setOutingTimeLossAllLaps(bool allLaps);
@@ -809,6 +811,9 @@ private:
     double m_theoreticalBestAxisLength = 0.0;
     FlappedEar::ProgressAxis m_theoreticalBestAxis;
     QHash<QString, QVector<FlappedEar::CornerLapObservation>> m_theoreticalBestCornerObservations;
+    // Losses of each session's fastest lap (or every eligible lap) against the
+    // actual best; requires a ready theoretical best with a timed actual best.
+    [[nodiscard]] FlappedEar::TimeLossRanking computeTimeLossRanking(bool allLaps, qsizetype maximumResults) const;
     QString m_comparisonFocusSegmentId;
     // KAN-57: set when the comparison is opened from a theoretical-best
     // sector. The pair is then measured against the canonical run's approved

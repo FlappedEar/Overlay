@@ -7,6 +7,7 @@
 #include "app/AppController.h"
 #include "telemetry/ChannelSummary.h"
 #include "telemetry/DayReport.h"
+#include "telemetry/FocusAreas.h"
 
 #include <QJsonDocument>
 
@@ -49,6 +50,13 @@ void AppController::requestOutingDayReport()
 {
     requestOutingTheoreticalBest();
     requestOutingChannelSummaries();
+}
+
+bool AppController::openFocusArea(const QVariantMap &evidence)
+{
+    if (evidence.value("kind").toString() != "segment") return false;
+    return openComparisonEvidence(evidence.value("reference").toMap(), evidence.value("against").toMap(),
+        evidence.value("segmentId").toString());
 }
 
 QVariantMap AppController::outingDayReport() const
@@ -242,6 +250,68 @@ QVariantMap AppController::computeOutingDayReport() const
             result.value = {{"referenceLabel", losses.value("referenceLabel").toString()}, {"losses", rows}};
         } else {
             result.reason = reasonFor(losses, result.status == DayResultStatus::NotComputed
+                ? QStringLiteral("Not calculated yet.") : QString());
+        }
+        input.results.append(result);
+    }
+
+    // Areas to inspect next (KAN-73), selected from the computed losses of
+    // each session's fastest lap, the best lap's sector gaps and the corner
+    // variability. Observations and hypotheses are kept apart.
+    {
+        DayReportResult result;
+        result.id = "focusAreas";
+        result.algorithm = QString::fromLatin1(focusAreasAlgorithm);
+        result.decisionsKey = m_theoreticalBestKey;
+        result.range = dayRange;
+        result.status = theoreticalStatus;
+        if (theoreticalStatus == DayResultStatus::Available && !m_theoreticalBestActual) {
+            result.status = DayResultStatus::Unavailable;
+            result.reason = QStringLiteral("The group's best lap could not be timed against the approved segments.");
+        } else if (theoreticalStatus == DayResultStatus::Available) {
+            FocusInputs focus;
+            focus.referenceLap = m_theoreticalBestActual->lapReference;
+            focus.referenceLabel = outingLapLabel(focus.referenceLap);
+            for (const auto &value : theoretical.value("sectors").toList()) {
+                const auto sector = value.toMap();
+                if (!sector.contains("lossSeconds") || !sector.contains("sourceLapReference")) continue;
+                focus.gaps.append({sector.value("segmentId").toString(), sector.value("name").toString(),
+                    sector.value("lossSeconds").toDouble(), focus.referenceLap, focus.referenceLabel,
+                    QJsonObject::fromVariantMap(sector.value("sourceLapReference").toMap()), sector.value("sourceLapLabel").toString()});
+            }
+            const auto ranking = computeTimeLossRanking(false, maximumOutingLapRows);
+            if (ranking.valid) {
+                focus.comparedLapCount = ranking.comparedLapCount;
+                for (const auto &loss : ranking.losses)
+                    focus.losses.append({loss.window.segmentId, loss.window.name, loss.lossSeconds, loss.lapReference});
+            }
+            QStringList cornerIds = m_theoreticalBestCornerObservations.keys();
+            cornerIds.sort();
+            for (const auto &segmentId : cornerIds) {
+                QString name = segmentId;
+                for (const auto &sector : m_theoreticalBestBest.sectors)
+                    if (sector.segmentId == segmentId) name = sector.name;
+                focus.corners.append({segmentId, name, m_theoreticalBestCornerObservations.value(segmentId)});
+            }
+            QJsonArray areas;
+            for (const auto &area : selectFocusAreas(focus)) {
+                areas.append(QJsonObject{{"kind", area.kind}, {"segmentId", area.segmentId}, {"name", area.name},
+                    {"observation", area.observation}, {"hypothesis", area.hypothesis}, {"metric", area.metric},
+                    {"value", area.value}, {"unit", area.unit}, {"sampleCount", area.sampleCount},
+                    {"evidenceIndex", result.evidence.size()}});
+                result.evidence.append(QJsonObject{{"kind", "segment"}, {"segmentId", area.segmentId},
+                    {"reference", area.lap}, {"label", outingLapLabel(area.lap)},
+                    {"against", area.against}, {"againstLabel", outingLapLabel(area.against)}});
+            }
+            result.range.insert("comparedLapCount", focus.comparedLapCount);
+            if (areas.isEmpty()) {
+                result.status = DayResultStatus::Unavailable;
+                result.reason = QStringLiteral("No loss, sector gap or spread is large enough to single out.");
+            } else {
+                result.value = {{"areas", areas}, {"referenceLabel", focus.referenceLabel}};
+            }
+        } else {
+            result.reason = reasonFor(theoretical, theoreticalStatus == DayResultStatus::NotComputed
                 ? QStringLiteral("Not calculated yet.") : QString());
         }
         input.results.append(result);
