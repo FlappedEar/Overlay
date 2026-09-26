@@ -1093,6 +1093,35 @@ gearbox at 113 °C. OBD dropouts in Sessions 3–4 (up to 582 zero samples)
 are excluded with coverage 0.95–0.98. There is no UI yet; KAN-68 shows the
 trends.
 
+## Heart-rate summaries (KAN-69)
+
+Heart rate comes only from the imported recording's own heart-rate channel
+(the `heartRate` alias, e.g. RaceChrono `heart_rate-hrm`); there is no
+separate importer. It uses the KAN-67 `summarizeChannel` with
+`heartRateSummaryPolicy()`:
+
+- **Mean:** time-weighted, joining samples only within the channel's gap
+  threshold. A strap that updates about twice a second while the logger
+  repeats the value at 10 Hz is therefore weighted by time, not by rows.
+- **Extrema** with their times, and **coverage**.
+- **Artifact policy:** values outside 30…230 bpm are excluded and counted.
+  There is no zero-placeholder rule for heart rate.
+- Heart rate is reported as a measurement only, never labelled as stress,
+  effort or confidence.
+
+Summaries exist per run and per recorded section (in `outingChannelSummaries`,
+under `heartRate`). They also exist for a selected interval of the
+comparison pair (`comparisonHeartRate(startMeters, endMeters)` on the shared
+axis), for example a sector. A recording without heart rate has no summary.
+
+`TelemetryTests::summarizesHeartRatePerRunSectionAndInterval` imports two
+runs with held heart-rate values (140 and 150 bpm, each with one 255 bpm
+artifact) and one without. It checks the per-run means, the one excluded
+artifact, coverage, section summaries, the absence of a summary for the
+third run, and both laps' means over half a lap. On the private Jastrząb
+day, session means rise from about 119–123 bpm in the morning to 133–136 bpm
+in the afternoon, with a maximum of 158 bpm and complete coverage.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings
