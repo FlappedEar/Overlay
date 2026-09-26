@@ -1406,6 +1406,25 @@ The private real-day test also saves and reopens the Jastrząb day and
 requires the same report. The full record, including the Save As defect
 found and fixed, is `docs/kan74-m4-acceptance.md`.
 
+## Day analysis in telemetry core alone (KAN-124)
+
+`OutingPipelineTests` links only `flappedear_telemetry_core`, as the
+Telemetry app will. It derives the laps of two recordings with
+`deriveOutingLaps` and checks:
+- the lap references are valid, and both runs land in one compatibility
+  group;
+- `rankOutingLaps` gives a best lap;
+- an unchanged run is reused, not derived again;
+- `summarizeOutingChannels` invents no temperature or heart rate for a
+  route without them;
+- a deleted recording gives a `missing-source` message while the other run
+  continues;
+- a tampered fingerprint is refused;
+- a cancelled derivation reports `cancelled` with no rows.
+
+The run sources are built the way the project provides them: reference and
+fingerprint, derivation digest, and the import's timing-gate revision.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings

@@ -94,6 +94,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/FocusAreas.h
     src/telemetry/OutingLapLoader.cpp
     src/telemetry/OutingLapLoader.h
+    src/telemetry/OutingLapDerivation.cpp
+    src/telemetry/OutingLapDerivation.h
     src/telemetry/OutingTheoreticalBest.cpp
     src/telemetry/OutingTheoreticalBest.h
     src/telemetry/OutingChannelSummaries.cpp

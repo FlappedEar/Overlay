@@ -65,8 +65,14 @@ temperatures, trends, cooling and heart rate per run and section. So is
 the theoretical-best worker (`calculateOutingTheoreticalBest` in
 `telemetry/OutingTheoreticalBest`). It gives every eligible lap's sector
 times on the canonical axis, the theoretical and actual best, and the
-per-corner observations. The Document, Analysis and Overlay controllers are
-extracted behind the same QML-facing API in later steps.
+per-corner observations. Lap derivation also moved to core
+(`deriveOutingLaps`, `outingSourceDependencyKey` in
+`telemetry/OutingLapDerivation`). It resolves, bounds and verifies every
+run's recording, reuses unchanged runs, and infers and groups tracks. Core
+now runs the day analysis without application code:
+`OutingPipelineTests` links only `flappedear_telemetry_core`. The Document,
+Analysis and Overlay controllers are extracted behind the same QML-facing
+API in later steps.
 
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
