@@ -1025,6 +1025,26 @@ decimated peaks are identical, that a quarter lap has fewer samples, and
 that the panel shows the peaks with no QML warnings. On the private Jastrząb
 day, the afternoon best lap (Session 5) reaches 0.98 g lateral, 0.87 g
 braking and 1.02 g combined; a morning lap peaks around 0.6 g.
+## Telemetry core boundary (KAN-123)
+
+`flappedear_telemetry_core` links Qt Core and zlib only. Every pure test
+target (`rcz`, `import`, `source_cache`, `lap_eligibility`, `track_*`,
+`sector_timing`, `theoretical_best`, `time_loss`, `consistency`,
+`driving_variability`, `braking_metrics`, `exit_metrics`, `corner_phase`,
+`braking_onset`) links only that library. They therefore prove the analysis
+code builds and runs without Gui.
+
+`flappedear_telemetry_core_boundary` (a CMake script test,
+`native/tests/CheckTelemetryCoreBoundary.cmake`) fails when a file under
+`src/telemetry` or `src/project` includes `export/`, `gopro/`, `sync/`,
+`widgets/` or `app/`, or a Gui, Qml, Quick, Multimedia, QProcess or QRhi
+header. It was checked to fail on an injected violation.
+
+`EventProjectTests::acceptsAnalysisOnlyEventDocuments` checks that a v3
+event document without `scene`, `exportSettings` and `mapSettings`
+validates. A malformed scene still fails, and a v2 editor project still
+needs its scene. The private real-day figures are unchanged by the split
+(1:47.905 theoretical against 1:49.898).
 
 ## Video-free day-result states (KAN-27)
 

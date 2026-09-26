@@ -23,6 +23,7 @@ class EventProjectTests final : public QObject {
     Q_OBJECT
 private slots:
     void acceptsLegacyAndEventDocuments();
+    void acceptsAnalysisOnlyEventDocuments();
     void boundsAndPreservesAnalysisDecisions();
     void bindsFullContentWithoutMigratingOnLoad();
     void boundsInferenceProvenanceAndRecoversIt();
@@ -62,6 +63,23 @@ void EventProjectTests::acceptsLegacyAndEventDocuments()
     QVERIFY(example.open(QIODevice::ReadOnly));
     const auto sample = QJsonDocument::fromJson(example.readAll()).object();
     QVERIFY2(ProjectLimits::validateProject(sample, &error), qPrintable(error));
+}
+
+void EventProjectTests::acceptsAnalysisOnlyEventDocuments()
+{
+    // KAN-123: the Telemetry app's documents carry no overlay scene.
+    auto analysisOnly = Fixture::project();
+    for (const auto *key : {"scene", "exportSettings", "mapSettings"}) analysisOnly.remove(key);
+    QString error;
+    QVERIFY2(ProjectLimits::validateProject(analysisOnly, &error), qPrintable(error));
+    // A scene that is present must still be valid.
+    auto malformed = analysisOnly;
+    malformed.insert("scene", QJsonObject{{"widgets", "not an array"}});
+    QVERIFY(!ProjectLimits::validateProject(malformed, &error));
+    // A single-recording (v2) editor project still needs its scene.
+    auto editor = EventProjectCodec::editorProjection(Fixture::project());
+    editor.remove("scene");
+    QVERIFY(!ProjectLimits::validateProject(editor, &error));
 }
 
 void EventProjectTests::boundsAndPreservesAnalysisDecisions()

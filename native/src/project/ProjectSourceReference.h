@@ -1,6 +1,5 @@
 #pragma once
 
-#include "export/MediaProbe.h"
 #include "telemetry/TelemetrySession.h"
 
 #include <QJsonObject>
@@ -30,15 +29,15 @@ public:
     [[nodiscard]] static ProjectSourceReference forLoadedSource(
         const QString &sourcePath, const QJsonObject &fingerprint);
 
-    [[nodiscard]] static QJsonObject videoFingerprint(
-        const QString &path, const MediaInfo &mediaInfo);
+    // Video fingerprints are built by the overlay layer (export/VideoFingerprint)
+    // from these shared, video-free building blocks (KAN-123).
+    [[nodiscard]] static QString sampledDigest(const QString &path);
+    [[nodiscard]] static qint64 roundedMicroseconds(double seconds);
     [[nodiscard]] static QJsonObject telemetryFingerprint(
         const QString &path, const TelemetrySession &session);
     [[nodiscard]] static SourceFingerprintMatch compareFingerprints(
         const QJsonObject &expected, const QJsonObject &actual);
 
-private:
-    [[nodiscard]] static QString sampledDigest(const QString &path);
 };
 
 } // namespace FlappedEar

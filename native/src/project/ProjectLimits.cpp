@@ -66,6 +66,10 @@ bool validateProject(const QJsonObject &project, QString *error)
     if (version == 3.0 && !EventProjectCodec::validate(project, error)) return false;
     if (version == 2.0 && project.contains(QStringLiteral("event"))) return fail(error, QStringLiteral("Events require project version 3."));
     const QJsonValue sceneValue = project.value(QStringLiteral("scene"));
+    // KAN-123: an event document may be analysis-only (the Telemetry app
+    // writes no overlay scene). A scene that is present must still be valid,
+    // and single-recording (v2) editor projects always need one.
+    if (version == 3.0 && sceneValue.isUndefined()) return true;
     if (!sceneValue.isObject() || !sceneValue.toObject().value(QStringLiteral("widgets")).isArray()) {
         return fail(error, QStringLiteral("Project scene/widgets structure is missing."));
     }
