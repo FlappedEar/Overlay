@@ -87,6 +87,41 @@ ChannelSummary summarizeChannel(const TelemetrySession &session, const QString &
     return result;
 }
 
+ChannelSummary combineChannelSummaries(const QVector<ChannelSummary> &parts)
+{
+    if (parts.size() == 1) return parts.first();
+    ChannelSummary result;
+    if (parts.isEmpty()) { result.unavailableReason = channelSummaryNoSamples; return result; }
+    result.channel = parts.first().channel;
+    result.unit = parts.first().unit;
+    result.startTime = parts.first().startTime;
+    result.endTime = parts.last().endTime;
+    double length = 0.0, weighted = 0.0;
+    for (const auto &part : parts) {
+        length += std::max(0.0, part.endTime - part.startTime);
+        result.excludedArtifacts += part.excludedArtifacts;
+        if (!part.valid) continue;
+        result.sampleCount += part.sampleCount;
+        result.coveredSeconds += part.coveredSeconds;
+        weighted += *part.mean * part.coveredSeconds;
+        if (!result.minimum || *part.minimum < *result.minimum) { result.minimum = part.minimum; result.minimumTime = part.minimumTime; }
+        if (!result.maximum || *part.maximum > *result.maximum) { result.maximum = part.maximum; result.maximumTime = part.maximumTime; }
+    }
+    if (!result.minimum || result.coveredSeconds <= 0.0) {
+        result.minimum.reset(); result.maximum.reset(); result.minimumTime.reset(); result.maximumTime.reset();
+        result.coveredSeconds = 0.0;
+        // Missing everywhere stays "missing"; otherwise there were no usable samples.
+        const bool missing = std::all_of(parts.cbegin(), parts.cend(),
+            [](const ChannelSummary &part) { return part.unavailableReason == channelSummaryMissing; });
+        result.unavailableReason = missing ? channelSummaryMissing : channelSummaryNoSamples;
+        return result;
+    }
+    result.mean = weighted / result.coveredSeconds;
+    result.coverage = length > 0.0 ? std::clamp(result.coveredSeconds / length, 0.0, 1.0) : 0.0;
+    result.valid = true;
+    return result;
+}
+
 QStringList recordedTemperatureChannels(const TelemetrySession &session)
 {
     static const QRegularExpression temperature(QStringLiteral("temp"), QRegularExpression::CaseInsensitiveOption);

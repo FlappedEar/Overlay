@@ -857,7 +857,13 @@ void AppController::initializeOutingLapDetail()
                         m_outingLapChannels.append(name);
                 }
             }
+            if (m_outingLapDetailSession->channels.contains(m_outingLapPendingChannel)) {
+                m_outingLapChannels.removeAll(m_outingLapPendingChannel);
+                m_outingLapChannels.prepend(m_outingLapPendingChannel);
+                while (m_outingLapChannels.size() > 4) m_outingLapChannels.removeLast();
+            }
         }
+        m_outingLapPendingChannel.clear();
         emit outingLapDetailChanged();
         emit outingLapCursorChanged();
         emit outingLapVideoChanged();
@@ -917,6 +923,14 @@ bool AppController::selectOutingLapReference(const QVariantMap &reference)
     return resolved.value("state").toString() == "resolved" && selectOutingLap(resolved.value("index").toInt());
 }
 
+bool AppController::openOutingLapChannel(const QVariantMap &reference, const QString &channel)
+{
+    if (!selectOutingLapReference(reference)) return false;
+    // Applied when the lap's recording has loaded; selecting clears it.
+    m_outingLapPendingChannel = channel;
+    return true;
+}
+
 bool AppController::selectOutingLap(int index)
 {
     if (index < 0 || index >= m_outingLapRows.size() || m_outingLapsLoading || projectLoading()
@@ -951,6 +965,7 @@ void AppController::closeOutingLap()
     m_outingLapDetailGeometry = {};
     m_outingLapTrack.clear();
     m_outingLapChannels.clear();
+    m_outingLapPendingChannel.clear();
     m_outingLapDetailState = "idle";
     m_outingLapDetailError.clear();
     resetSegmentReview();

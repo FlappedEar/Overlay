@@ -3,7 +3,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// KAN-68: how the car's recorded temperatures develop through the day. One
+// KAN-68/KAN-70: how the car's recorded temperatures and the driver's
+// recorded heart rate develop through the day. One
 // chart per recorded channel: every session is its own slot on a shared
 // scale, so no curve is drawn across a break, and a recording gap inside a
 // session leaves a hole. Blue stretches are continuously recorded cooling.
@@ -12,6 +13,15 @@ Item {
     id: root
     readonly property var summaries: appController.outingChannelSummaries
     readonly property var runs: root.summaries.runs || []
+    // KAN-70: emitted after a lap was opened on its recorded channel.
+    signal lapOpened()
+    readonly property var heartRateRuns: root.runs.filter(run => !!run.heartRate)
+    readonly property var heartRateRange: {
+        let low = Infinity, high = -Infinity;
+        for (const run of root.heartRateRuns)
+            if (run.heartRate.run.valid) { low = Math.min(low, run.heartRate.run.minimum); high = Math.max(high, run.heartRate.run.maximum); }
+        return isFinite(low) ? {low: low - 5, high: high + 5} : null;
+    }
     readonly property var channelNames: {
         const names = [];
         for (const run of root.runs)
@@ -92,7 +102,8 @@ Item {
                 Layout.fillWidth: true
                 visible: text.length > 0
                 text: root.summaries.message || (root.summaries.state === "ready" && root.channelNames.length === 0
-                    ? qsTr("None of the recordings contain a temperature channel.") : "")
+                    ? qsTr("None of the recordings contain a temperature channel.")
+                    + (root.heartRateRuns.length > 0 ? "" : " " + qsTr("No heart rate recorded either.")) : "")
                 wrapMode: Text.WordWrap
                 color: "#d6a457"
             }
@@ -103,6 +114,112 @@ Item {
                 wrapMode: Text.WordWrap
                 font.pixelSize: 11
                 color: "#91a0b2"
+            }
+            // KAN-70: the driver's recorded heart rate, as measured.
+            Frame {
+                id: heartCard
+                objectName: "carDriverHeartRate"
+                Layout.fillWidth: true
+                visible: root.heartRateRuns.length > 0
+                background: Rectangle { color: "#111a24"; radius: 8; border.color: "#293645" }
+                readonly property string channel: root.heartRateRuns.length > 0 ? root.heartRateRuns[0].heartRate.channel : ""
+                contentItem: ColumnLayout {
+                    spacing: 6
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { text: qsTr("Heart rate"); font.pixelSize: 15; font.bold: true; color: "#f2f6fb" }
+                        Label {
+                            Layout.fillWidth: true
+                            text: heartCard.channel + " · " + qsTr("observed values from the recording, not an assessment")
+                            textFormat: Text.PlainText
+                            elide: Text.ElideRight
+                            font.pixelSize: 11
+                            color: "#657386"
+                        }
+                        Label {
+                            visible: !!root.heartRateRange
+                            text: root.heartRateRange ? Math.round(root.heartRateRange.low) + " – " + Math.round(root.heartRateRange.high) + " bpm" : ""
+                            font.pixelSize: 11
+                            color: "#657386"
+                        }
+                    }
+                    DayTrendChart {
+                        objectName: "carDriverHeartRateTrend"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 110
+                        lineColor: "#e06c9f"
+                        low: root.heartRateRange ? root.heartRateRange.low : 0
+                        high: root.heartRateRange ? root.heartRateRange.high : 1
+                        entries: root.runs.map(run => run.heartRate && run.heartRate.run.valid
+                            ? {start: run.heartRate.run.startTime, end: run.heartRate.run.endTime, trace: run.heartRate.trace} : null)
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Per lap: mean bpm. Select a lap to open it with the heart-rate channel.")
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 11
+                        color: "#91a0b2"
+                    }
+                    Repeater {
+                        model: root.runs
+                        ColumnLayout {
+                            id: heartRun
+                            required property var modelData
+                            required property int index
+                            readonly property var heartRate: heartRun.modelData.heartRate
+                            readonly property var whole: heartRun.heartRate ? heartRun.heartRate.run : null
+                            Layout.fillWidth: true
+                            spacing: 3
+                            Label {
+                                objectName: "carDriverHeartRateRun" + heartRun.index
+                                Layout.fillWidth: true
+                                textFormat: Text.PlainText
+                                wrapMode: Text.WordWrap
+                                font.pixelSize: 12
+                                color: "#dce4ee"
+                                text: (heartRun.index + 1) + ". " + heartRun.modelData.runName + " · " + (
+                                    !heartRun.heartRate ? qsTr("Not recorded")
+                                    : !heartRun.whole.valid ? qsTr("No valid samples")
+                                    : qsTr("mean %1 · %2 – %3 bpm · %4 samples · %5% covered%6")
+                                        .arg(Number(heartRun.whole.mean).toFixed(0)).arg(Number(heartRun.whole.minimum).toFixed(0))
+                                        .arg(Number(heartRun.whole.maximum).toFixed(0)).arg(heartRun.whole.sampleCount)
+                                        .arg(Math.round(heartRun.whole.coverage * 100))
+                                        .arg(heartRun.whole.excludedArtifacts > 0 ? " · " + qsTr("%1 implausible excluded").arg(heartRun.whole.excludedArtifacts) : ""))
+                            }
+                            Flow {
+                                Layout.fillWidth: true
+                                visible: !!heartRun.heartRate
+                                spacing: 6
+                                Repeater {
+                                    model: heartRun.heartRate ? heartRun.heartRate.sections : []
+                                    ItemDelegate {
+                                        id: lapChip
+                                        required property var modelData
+                                        required property int index
+                                        objectName: "carDriverHeartRateLap" + heartRun.index + "-" + lapChip.index
+                                        enabled: lapChip.modelData.valid
+                                        padding: 6
+                                        font.pixelSize: 12
+                                        text: (lapChip.modelData.type === "LAP" ? qsTr("LAP %1").arg(lapChip.modelData.lapNumber)
+                                                : lapChip.modelData.type) + " · "
+                                            + (lapChip.modelData.valid ? Number(lapChip.modelData.mean).toFixed(0)
+                                                + (lapChip.modelData.coverage < 0.95 ? " (" + Math.round(lapChip.modelData.coverage * 100) + "%)" : "")
+                                                : "—")
+                                        background: Rectangle {
+                                            radius: 5
+                                            color: lapChip.down || lapChip.visualFocus ? "#243447" : "#0b1119"
+                                            border.color: "#293645"
+                                        }
+                                        onClicked: {
+                                            if (appController.openOutingLapChannel(lapChip.modelData.reference, heartRun.heartRate.channel))
+                                                root.lapOpened();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             Repeater {
                 model: root.channelNames
@@ -155,54 +272,17 @@ Item {
                                 color: "#657386"
                             }
                         }
-                        Canvas {
-                            id: trend
+                        DayTrendChart {
                             objectName: "carDriverTrend" + card.index
                             Layout.fillWidth: true
                             Layout.preferredHeight: 130
-                            readonly property int slotGap: 10
-                            property var runData: root.runs
-                            property var range: card.range
-                            onRunDataChanged: requestPaint()
-                            onRangeChanged: requestPaint()
-                            onWidthChanged: requestPaint()
-                            onAvailableChanged: if (available) requestPaint()
-                            onPaint: {
-                                const context = getContext("2d");
-                                context.reset();
-                                const count = runData.length;
-                                if (!count || !range) return;
-                                const top = 6, bottom = height - 20;
-                                const slot = (width - slotGap * (count - 1)) / count;
-                                const toY = value => bottom - (value - range.low) / (range.high - range.low) * (bottom - top);
-                                context.font = "10px sans-serif";
-                                context.textAlign = "center";
-                                for (let index = 0; index < count; ++index) {
-                                    const left = index * (slot + slotGap);
-                                    context.fillStyle = "#0b1119";
-                                    context.fillRect(left, top, slot, bottom - top);
-                                    context.fillStyle = "#91a0b2";
-                                    context.fillText(qsTr("S%1").arg(index + 1), left + slot / 2, height - 5);
-                                    const channel = root.channelOf(runData[index], card.modelData);
-                                    if (!channel || !channel.run.valid) continue;
-                                    const start = channel.run.startTime, span = Math.max(1e-6, channel.run.endTime - start);
-                                    const toX = time => left + Math.max(0, Math.min(1, (time - start) / span)) * slot;
-                                    context.fillStyle = "rgba(88,160,255,0.22)";
-                                    for (const interval of channel.cooling || [])
-                                        context.fillRect(toX(interval.startTime), top, Math.max(2, toX(interval.endTime) - toX(interval.startTime)), bottom - top);
-                                    context.strokeStyle = "#ff9b54";
-                                    context.lineWidth = 2;
-                                    context.beginPath();
-                                    let drawing = false;
-                                    for (const point of channel.trace || []) {
-                                        if (!point) { drawing = false; continue; } // a recording gap: no line
-                                        const x = toX(point[0]), y = toY(point[1]);
-                                        if (drawing) context.lineTo(x, y); else context.moveTo(x, y);
-                                        drawing = true;
-                                    }
-                                    context.stroke();
-                                }
-                            }
+                            low: card.range ? card.range.low : 0
+                            high: card.range ? card.range.high : 1
+                            entries: root.runs.map(run => {
+                                const channel = root.channelOf(run, card.modelData);
+                                return channel && channel.run.valid ? {start: channel.run.startTime, end: channel.run.endTime,
+                                    trace: channel.trace, cooling: channel.cooling} : null;
+                            })
                         }
                         GridLayout {
                             objectName: "carDriverSessions" + card.index

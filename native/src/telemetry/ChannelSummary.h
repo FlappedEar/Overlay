@@ -56,6 +56,13 @@ struct ChannelSummary {
 [[nodiscard]] ChannelSummary summarizeChannel(const TelemetrySession &session, const QString &channelOrAlias,
     double startTime, double endTime, const ChannelSummaryPolicy &policy);
 
+// One summary of disjoint intervals of the same channel, for example a track
+// segment that crosses the start/finish line and so covers the end and the
+// start of a lap (KAN-70). The mean is weighted by each part's covered time;
+// coverage is covered time over the parts' total length. startTime/endTime
+// are those of the first and last part. Valid when any part is valid.
+[[nodiscard]] ChannelSummary combineChannelSummaries(const QVector<ChannelSummary> &parts);
+
 // The recording's own temperature channels (name contains "temp"), in name
 // order. Never invented: an absent sensor is simply not listed.
 [[nodiscard]] QStringList recordedTemperatureChannels(const TelemetrySession &session);

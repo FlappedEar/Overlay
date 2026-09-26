@@ -359,12 +359,16 @@ public:
     // KAN-66: both laps' G-G samples over [start, end] metres of the shared
     // axis: at most `maximumPoints` drawn per lap, peaks and counts from all.
     Q_INVOKABLE QVariantMap comparisonGgScatter(double startMeters, double endMeters, int maximumPoints) const;
-    // KAN-69: both laps' heart rate over [start, end] metres of the shared axis.
+    // KAN-69: both laps' heart rate over [start, end] metres of the shared axis;
+    // start after end crosses start/finish (KAN-70).
     Q_INVOKABLE QVariantMap comparisonHeartRate(double startMeters, double endMeters) const;
     Q_INVOKABLE bool selectOutingLap(int index);
     // Snapshot resolution: opening detail revalidates source content off-thread.
     Q_INVOKABLE QVariantMap resolveOutingLapReference(const QVariantMap &reference) const;
     Q_INVOKABLE bool selectOutingLapReference(const QVariantMap &reference);
+    // KAN-70: opens a lap with one of its recorded channels shown first (for
+    // example heart rate from a summary). The saved chart preference is kept.
+    Q_INVOKABLE bool openOutingLapChannel(const QVariantMap &reference, const QString &channel);
     Q_INVOKABLE bool setOutingLapExcluded(const QVariantMap &reference, bool excluded, const QString &reason = {});
     Q_INVOKABLE void closeOutingLap();
     Q_INVOKABLE void requestSegmentReview();
@@ -818,6 +822,7 @@ private:
     QString m_outingLapDetailState = QStringLiteral("idle");
     QString m_outingLapDetailError;
     QStringList m_outingLapChannels;
+    QString m_outingLapPendingChannel;
     QVariantList m_outingLapTrack;
     double m_outingLapCursor = 0;
     struct SegmentReviewResult {

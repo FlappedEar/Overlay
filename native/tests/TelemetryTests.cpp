@@ -165,6 +165,7 @@ private slots:
     void showsAbGgScatterWithPeaks();
     void summarizesRecordedTemperaturesPerRunAndSection();
     void showsRecordedTemperaturesThroughTheDayInQml();
+    void showsHeartRateByRunAndSegmentInQml();
     void summarizesHeartRatePerRunSectionAndInterval();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
@@ -5214,6 +5215,141 @@ void TelemetryTests::summarizesHeartRatePerRunSectionAndInterval()
     QVERIFY(std::abs(pair[0].toMap().value("mean").toDouble() - 140.0) < 2.5);
     QVERIFY(std::abs(pair[1].toMap().value("mean").toDouble() - 150.0) < 2.5);
     QVERIFY(pair[0].toMap().value("coverage").toDouble() > 0.9);
+    // KAN-70: a range across start/finish combines the lap's end and start.
+    const auto wrapped = controller.comparisonHeartRate(length * 0.75, length * 0.25);
+    QVERIFY(wrapped.value("crossesStartFinish").toBool());
+    const auto wrappedLaps = wrapped.value("laps").toList();
+    QVERIFY(wrappedLaps[0].toMap().value("valid").toBool());
+    QVERIFY(std::abs(wrappedLaps[0].toMap().value("mean").toDouble() - 140.0) < 2.5);
+    QVERIFY(std::abs(wrappedLaps[1].toMap().value("mean").toDouble() - 150.0) < 2.5);
+    QVERIFY(wrappedLaps[0].toMap().value("coverage").toDouble() > 0.9);
+}
+
+void TelemetryTests::showsHeartRateByRunAndSegmentInQml()
+{
+    // KAN-70: the Car & driver view lists each run's recorded heart rate with
+    // samples and coverage ("Not recorded" for the run without it), and a lap
+    // opens with the heart-rate channel first without overwriting the saved
+    // chart preference. The Corner Analyzer shows A/B heart rate for the
+    // selected segment and can put the channel into the comparison charts.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto first = directory.filePath("calm.vbo"), second = directory.filePath("busy.vbo"), third = directory.filePath("none.vbo");
+    QVERIFY(writeBytes(first, routeVboWithHeartRate(140)));
+    QVERIFY(writeBytes(second, routeVboWithHeartRate(150)));
+    QVERIFY(writeBytes(third, EventProjectFixture::routeVbo()));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Heart rate QML", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second), QUrl::fromLocalFile(third)}));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    QTRY_VERIFY(!controller.outingLapsLoading());
+    const auto findVisual = [](auto &&self, QQuickItem *item, const QString &name) -> QQuickItem * {
+        if (item->objectName() == name) return item;
+        for (auto *child : item->childItems()) if (auto *found = self(self, child, name)) return found;
+        return nullptr;
+    };
+    {
+        QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+        QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+        QQmlComponent component(&engine);
+        component.setData("import QtQuick\nWindow { width: 900; height: 700; visible: true; CarDriverView { objectName: \"view\"; anchors.fill: parent } }",
+            QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 30000);
+        auto *view = findVisual(findVisual, window->contentItem(), "view"); QVERIFY(view);
+        QSignalSpy opened(view, SIGNAL(lapOpened()));
+        QQuickItem *card = nullptr;
+        QTRY_VERIFY((card = findVisual(findVisual, window->contentItem(), "carDriverHeartRate")) && card->isVisible());
+        QStringList texts;
+        for (int run = 0; run < 3; ++run) {
+            QQuickItem *label = nullptr;
+            QTRY_VERIFY((label = findVisual(findVisual, card, QString("carDriverHeartRateRun%1").arg(run))));
+            texts << label->property("text").toString();
+        }
+        QCOMPARE(texts.filter("Not recorded").size(), 1);
+        QCOMPARE(texts.filter("mean 140 · ").size(), 1);
+        QCOMPARE(texts.filter("mean 150 · ").size(), 1);
+        QVERIFY(texts.filter("samples · ").size() == 2 && texts.filter("% covered").size() == 2);
+        QCOMPARE(texts.filter("1 implausible excluded").size(), 2);
+        for (const auto &text : texts) QVERIFY(!text.contains("stress", Qt::CaseInsensitive));
+        // Open the calm run's first timed lap on its heart-rate channel.
+        const int calm = texts.indexOf(QRegularExpression(".*mean 140 · .*"));
+        QQuickItem *chip = nullptr;
+        for (int index = 0; index < 8 && !chip; ++index) {
+            auto *candidate = findVisual(findVisual, card, QString("carDriverHeartRateLap%1-%2").arg(calm).arg(index));
+            if (candidate && candidate->property("text").toString().startsWith("LAP ")) chip = candidate;
+        }
+        QVERIFY(chip); QVERIFY(chip->isEnabled());
+        chip->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+        QTRY_COMPARE(opened.size(), 1);
+        QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
+        QCOMPARE(controller.outingLapChannels().value(0), QString("heart_rate"));
+        QVERIFY(controller.outingLapChannels().size() <= 4);
+        QVERIFY(!QSettings().contains("analysis/lapChannels")); // the saved preference is not rewritten
+        QCOMPARE(warnings.size(), 0);
+        controller.closeOutingLap();
+        // A lap opened normally afterwards does not inherit the heart-rate request.
+        const auto firstSection = controller.outingChannelSummaries().value("runs").toList()[calm].toMap()
+            .value("heartRate").toMap().value("sections").toList().first().toMap();
+        QVERIFY(controller.selectOutingLapReference(firstSection.value("reference").toMap()));
+        QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
+        QVERIFY(controller.outingLapChannels().value(0) != "heart_rate");
+        controller.closeOutingLap();
+    }
+
+    // The Corner Analyzer: A/B heart rate over the selected segment.
+    // Opened as evidence from the theoretical best, on its canonical segments.
+    const auto approved = approveAllSegmentsOnRun(controller, "Session 1");
+    QVERIFY(!approved.isEmpty());
+    QString segmentId;
+    for (const auto &value : approved) {
+        const auto segment = value.toObject();
+        if (segment.value("endProgressMeters").toDouble() > segment.value("startProgressMeters").toDouble() + 50) {
+            segmentId = segment.value("id").toString(); break;
+        }
+    }
+    QVERIFY(!segmentId.isEmpty());
+    controller.requestOutingTheoreticalBest();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingTheoreticalBest().value("state").toString(), QString("ready"), 30000);
+    QVariantMap a, b;
+    for (const auto &value : controller.comparisonLaps()) {
+        const auto row = value.toMap();
+        if (a.isEmpty() && row.value("runName") == "Session 1") a = row;
+        if (b.isEmpty() && row.value("runName") == "Session 2") b = row;
+    }
+    QVERIFY(controller.openComparisonEvidence(a.value("reference").toMap(), b.value("reference").toMap(), segmentId));
+    QTRY_VERIFY(controller.comparisonPairReady());
+    QVERIFY(!controller.comparisonApprovedSegments().isEmpty());
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick\nWindow { width: 1300; height: 800; visible: true; "
+        "ComparisonDetailPanel { objectName: \"comparisonRoot\"; anchors.fill: parent } }",
+        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    auto *toggle = window->findChild<QQuickItem *>("comparisonToggleCornerAnalyzer"); QVERIFY(toggle);
+    toggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    auto *heartA = window->findChild<QObject *>("cornerAnalyzerHeartRateA"); QVERIFY(heartA);
+    auto *heartB = window->findChild<QObject *>("cornerAnalyzerHeartRateB"); QVERIFY(heartB);
+    QTRY_VERIFY(heartA->property("text").toString().endsWith(" bpm"));
+    const auto bpm = [](QObject *label) { return label->property("text").toString().section(' ', 0, 0).toDouble(); };
+    QVERIFY2(std::abs(bpm(heartA) - 140) <= 3, qPrintable(heartA->property("text").toString()));
+    QVERIFY(std::abs(bpm(heartB) - 150) <= 3);
+    auto *note = window->findChild<QObject *>("cornerAnalyzerHeartRateNote"); QVERIFY(note);
+    QVERIFY(note->property("text").toString().contains("samples"));
+    auto *comparisonRoot = window->findChild<QObject *>("comparisonRoot"); QVERIFY(comparisonRoot);
+    QTRY_VERIFY(!comparisonRoot->property("visibleChannels").toStringList().isEmpty());
+    QVERIFY(!comparisonRoot->property("visibleChannels").toStringList().contains("heart_rate"));
+    auto *show = window->findChild<QQuickItem *>("cornerAnalyzerHeartRateShow"); QVERIFY(show);
+    show->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(comparisonRoot->property("visibleChannels").toStringList().contains("heart_rate"));
+    QVERIFY(comparisonRoot->property("visibleChannels").toStringList().size() <= 4);
+    QCOMPARE(warnings.size(), 0);
 }
 
 void TelemetryTests::formatsElapsedTimes()
@@ -5412,6 +5548,9 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
     QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 60000);
     QTRY_VERIFY(controller.comparisonFocusSegmentId().isEmpty());
     QTest::qWait(1500);
+    for (const auto &value : controller.comparisonHeartRate(0.0, controller.comparisonProgressAxisLength()).value("laps").toList())
+        qInfo().noquote() << QString("  pair heart rate mean %1 bpm, %2 samples, coverage %3").arg(value.toMap().value("mean").toDouble(), 0, 'f', 1)
+            .arg(value.toMap().value("sampleCount").toInt()).arg(value.toMap().value("coverage").toDouble(), 0, 'f', 3);
     QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("corner-analyzer.png")));
     if (auto *ggToggle = window->findChild<QQuickItem *>("comparisonToggleGg")) {
         ggToggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space); QTest::qWait(1000);
