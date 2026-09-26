@@ -22,6 +22,7 @@
 #include "telemetry/TelemetryImportPlan.h"
 #include "telemetry/OutingLaps.h"
 #include "telemetry/OutingLapLoader.h"
+#include "telemetry/OutingLapDerivation.h"
 #include "telemetry/OutingTheoreticalBest.h"
 #include "telemetry/TrackInference.h"
 #include "export/MediaProbe.h"
@@ -863,27 +864,12 @@ private:
     FlappedEar::SegmentEditHistory m_segmentEditHistory;
     mutable QVector<FlappedEar::ProgressMapPoint> m_segmentReviewPickTrace;
     mutable bool m_segmentReviewPickTraceDirty = true;
-    struct OutingSourceMessage {
-        QString runId;
-        QString text;
-        QString state = {};
-    };
-    struct OutingRunResult {
-        QByteArray dependencyKey;
-        QByteArray contentRevision;
-        QVector<OutingLapRow> rows;
-        QList<OutingSourceMessage> messages;
-        quint64 derivationSerial = 0;
-        TrackInference inference;
-    };
-    struct OutingLapResult {
-        QVector<OutingLapRow> rows;
-        QList<OutingSourceMessage> messages;
+    using OutingSourceMessage = FlappedEar::OutingSourceMessage;
+    using OutingRunResult = FlappedEar::OutingRunDerivation;
+    // The core derivation plus the request identity it answers.
+    struct OutingLapResult : FlappedEar::OutingLapDerivation {
         QByteArray key;
         quint64 generation = 0;
-        bool cancelled = false;
-        QHash<QString, OutingRunResult> runs;
-        InferredTrackGroups groups;
     };
     void initializeOutingLaps();
     void refreshOutingLaps();
