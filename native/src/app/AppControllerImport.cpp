@@ -112,7 +112,7 @@ void AppController::initializeBatchImport()
             m_batchError = result.error;
         } else if (result.confirmation) {
             const QScopedValueRollback applying(m_batchApplying, true);
-            if (exporting() || projectLoading() || recoveryPending()
+            if (documentBusy() || projectLoading() || recoveryPending()
                 || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
                 || (!result.append && dirty())) {
                 m_batchState = QStringLiteral("review");
@@ -193,7 +193,7 @@ void AppController::cancelBatchImport()
 
 bool AppController::importAnalysisRuns(const QString &name, const QList<QUrl> &urls)
 {
-    if (m_batchPending || exporting() || projectLoading() || recoveryPending()
+    if (m_batchPending || documentBusy() || projectLoading() || recoveryPending()
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) return false;
     const bool append = EventProjectCodec::isEvent(m_projectTemplate);
     if (!append && (dirty() || name.trimmed().isEmpty() || name.size() > 160)) {
@@ -213,7 +213,7 @@ bool AppController::importAnalysisRuns(const QString &name, const QList<QUrl> &u
 
 bool AppController::beginBatchImport(const QList<QUrl> &urls)
 {
-    if (m_batchPending || exporting() || projectLoading() || recoveryPending()
+    if (m_batchPending || documentBusy() || projectLoading() || recoveryPending()
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) return false;
     cancelBatchImport();
     if (urls.isEmpty() || urls.size() > TelemetryImportLimits{}.maximumFiles) {
@@ -326,7 +326,7 @@ bool AppController::confirmBatchImport(const QString &name, const bool append, c
     };
     if (m_batchState != "review" || !m_batchPlan || m_batchPending) return false;
     if (!batchContextMatches()) { invalidateBatchImport(); return false; }
-    if (exporting() || projectLoading() || recoveryPending()
+    if (documentBusy() || projectLoading() || recoveryPending()
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) return reject("Finish the current operation first.");
     if (!append && dirty()) return reject("Save the current project before creating a new event, or append to this event.");
     if (append && !EventProjectCodec::isEvent(m_projectTemplate)) return reject("Open an event before appending runs.");

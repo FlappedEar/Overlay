@@ -45,6 +45,20 @@ product split (`docs/product-split-plan.md`, epic KAN-121):
 
 `AppController` is the QML-facing application boundary. It exposes source state, playback time, synchronization, live values, project dirty state, loading state, export state, analysis state, and the `WidgetModel`. It also owns the preview `TelemetryRenderContext`, so QML reads telemetry through one time transform rather than parsing files itself.
 
+**Split boundary (KAN-124, in progress).** The analysis code (day import,
+outing laps, comparison, segment review, Corner Analyzer, theoretical best,
+losses, report) reaches video only through `VideoLink` (`src/app/VideoLink.h`):
+- "video position for this run's telemetry time";
+- "telemetry time for this video position".
+
+Both are empty when the run has no loaded video or the time falls outside
+it. `AppController` implements it for the combined app. The Telemetry app
+will have no link, and then the KAN-39 lap video is simply unavailable.
+Analysis and import guards use `documentBusy()` (today: an export is
+running) instead of the overlay's `exporting()`. The Document, Analysis and
+Overlay controllers are extracted behind the same QML-facing API in later
+steps.
+
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
 ## Project
