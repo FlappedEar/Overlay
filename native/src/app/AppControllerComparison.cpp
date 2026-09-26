@@ -608,7 +608,7 @@ void AppController::loadComparisonLap()
         m_comparisonPending = true;
         m_comparisonLoadingSlot = i;
         m_comparisonWatcher.setFuture(QtConcurrent::run([source, projectPath, row, request, cancellation, cache = m_analysisSourceCache] {
-            return readOutingLapDetail(source, projectPath, row, request, cancellation, cache, /*deriveReferenceGate=*/true);
+            return FlappedEar::loadOutingLapDetail(source, projectPath, row, request, cancellation, cache, /*deriveReferenceGate=*/true);
         }));
         return;
     }

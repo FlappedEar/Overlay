@@ -151,7 +151,7 @@ AppController::ChannelSummariesResult AppController::computeOutingChannelSummari
             QVariantMap run{{"runId", runId}, {"runName", runRows.first().runName}};
             // Any section of the run loads (and verifies) the whole recording.
             const auto &first = runRows.first();
-            const auto detail = readOutingLapDetail(sourcesByRunId.value(runId), projectPath,
+            const auto detail = FlappedEar::loadOutingLapDetail(sourcesByRunId.value(runId), projectPath,
                 QVariantMap{{"startTime", first.start}, {"endTime", first.end}, {"lapNumber", first.lapNumber},
                     {"reference", first.reference.toVariantMap()}},
                 request, cancellation, cache);
