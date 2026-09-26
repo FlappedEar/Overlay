@@ -1350,6 +1350,44 @@ On the private Jastrząb day (screenshots from `analyzesPrivateTrackDayCorners`)
 Limitation: the report is reached from its button and does not open by
 itself after an import.
 
+## Areas to inspect next (KAN-73)
+
+The definitions are in `docs/telemetry-semantics.md` ("Areas to inspect
+next"). The day report carries the `focusAreas` result, whose evidence is a
+lap pair and a segment. The Day report's **Where to look next** card shows
+each area as "Observed: …" followed by "Hypothesis: …" in italics.
+"Compare A with B at X" (`openFocusArea`) opens that pair in the comparison,
+with the Corner Analyzer at that segment. The repeated-loss input is ranked
+without the 50-result truncation used for display
+(`computeTimeLossRanking`).
+
+Tests:
+- `FocusAreasTests`:
+  - one of each kind first, one area per segment, the typical lap nearest
+    the median;
+  - repeats and thresholds required (two losses are no pattern; tiny gaps
+    and spreads are no area);
+  - inferred braking points never mixed with measured ones;
+  - the braking hypothesis explicitly makes no earlier/later claim;
+  - no advice or causal wording in any area;
+  - at most three, deterministic ties, empty input gives no areas.
+- `TelemetryTests::selectsFocusAreasFromComputedObservations`, two sessions of
+  equal lap time, each quicker in a different half:
+  - `notComputed` before the workers run, then a sector-gap area over 0.5 s;
+  - resolvable, distinct evidence laps;
+  - `openFocusArea` opens the comparison at that segment with the best lap
+    as A;
+  - the report renders the labelled observation and hypothesis, and the
+    compare row opens the comparison;
+  - no QML warnings.
+
+On the private Jastrząb day the three areas are:
+1. the best lap (Session 5 · LAP 2) 0.619 s slower through Corners 9–16 than
+   Session 6 · LAP 3;
+2. Corners 2–3 lost in 5 of 5 session bests (median 2.035 s);
+3. the measured braking point for Corners 5–6 spread over 20.6 m across the
+   middle half of 21 laps.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings
