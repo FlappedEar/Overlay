@@ -59,8 +59,22 @@ Merged later on 26 September 2026, which completes **M4**:
 | KAN-73 | "Where to look next": observations apart from hypotheses (`FocusAreas.h`) | #83 |
 | KAN-74 | M4 acceptance `docs/kan74-m4-acceptance.md`, plus a fix: Save As no longer discards computed results | #84 |
 
-In flight (check `gh pr list`): #85, KAN-124 step 1. The analysis side reaches
-video only through `VideoLink`, and its guards use `documentBusy()`.
+KAN-124 (split phase 2) steps 1–7 are merged (#85, #87–#92):
+- **Step 1:** analysis reaches video only through `VideoLink`, and its guards
+  use `documentBusy()`.
+- **Steps 2–7:** these moved into `flappedear_telemetry_core`:
+  - lap derivation (`deriveOutingLaps`);
+  - the lap loader (`loadOutingLapDetail`);
+  - channel summaries (`summarizeOutingChannels`);
+  - the theoretical-best worker and its published results
+    (`calculateOutingTheoreticalBest`, `publish*`);
+  - the day-report assembly (`buildOutingDayReport`).
+
+  `OutingPipelineTests` runs the pipeline linking only core.
+
+To verify a refactor, set `FLAPPEDEAR_REPORT_DUMP` on the private real-day
+test and diff the dumps after normalising identities (see
+`docs/testing.md`).
 
 KAN-116–120 came from the **owner testing the real Jastrząb day**
 (`jastrzab/`, git-ignored). That testing exposed problems synthetic fixtures
@@ -74,7 +88,8 @@ never showed, so develop against real data. See "Real data" below.
 - the real-track sections of `docs/kan58-m3-acceptance.md` and
   `docs/kan74-m4-acceptance.md`, which are still to be filled in.
 
-Next: continue KAN-124 (split phase 2) in behaviour-preserving steps.
+Next: finish KAN-124 in behaviour-preserving steps. With the workers in
+core, what remains is mostly state and property forwarding.
 - Extract `AnalysisController`, which owns outing laps, comparison, segment
   review, theoretical best, report and channel summaries and holds a
   nullable `VideoLink *`.
@@ -196,7 +211,7 @@ rev-match blips on downshifts with the pedal at 0). Speed is `velocity`
   what landed, evidence and gaps; "Gotowe" (`41`) after merge with the final
   SHA and green main CI. All Jira content in English.
 - Build/test gate every time: `cmake --build build-native --parallel` and
-  `ctest --test-dir build-native --output-on-failure` (27 suites). Reconfigure
+  `ctest --test-dir build-native --output-on-failure` (28 suites). Reconfigure
   with `cmake -S . -B build-native -DCMAKE_BUILD_TYPE=Debug
   -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt` after adding source files.
 - Cloud CI: macOS Debug + Release on every PR push and on push to `main`
