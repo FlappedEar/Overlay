@@ -1,4 +1,4 @@
-# Session handover — 25 September 2026 (late)
+# Session handover — 26 September 2026
 
 Written for: the next Claude Code session continuing this work. Read this
 first, then `AGENTS.md` (engineering rules and safety invariants).
@@ -31,17 +31,60 @@ Merged to `main` today, all with hosted macOS Debug + Release green:
 | KAN-116 | Connected corners proposed as one corner chain (proposal algorithm v2) | #63 |
 | KAN-117 | Corner Analyzer usable on real recordings (side column, speeds, fixes) | #64 |
 | KAN-118 | Accelerator pedal, not throttle plate, is the `throttle` alias | #65 |
-| KAN-119 | Imported runs named "Session N" in recording order | #66 (merging when written) |
-| KAN-120 | "Where your best lap can improve" map; gate-crossing segments timed | #67 (merging when written) |
+| KAN-119 | Imported runs named "Session N" in recording order | #66 |
+| KAN-120 | "Where your best lap can improve" map; gate-crossing segments timed | #67 |
+
+Merged 26 September 2026:
+
+| Ticket | What | PR |
+| --- | --- | --- |
+| KAN-62 | Lap and sector timing consistency (median, IQR, minimum 3) | #69 |
+| KAN-63 | Braking/apex/exit/pickup and racing-line variability; braking approach stops at the previous corner (`braking-metrics-v2`) | #70 |
+| KAN-64 | Progression → **By section** (typical time and spread per session) | #71 |
+| KAN-65 | Timed G-G sample pairs (`GgPairs.h`) | #72 |
+| KAN-66 | A/B G-G scatter with peaks in the comparison view | #74 |
+| KAN-121 plan | `docs/product-split-plan.md` | #73 |
+
+In flight when this was written (check `gh pr list`): #75 KAN-123 (split
+phase 1: `flappedear_telemetry_core` vs `flappedear_overlay_core`), #76
+KAN-67 (temperature summaries), #77 KAN-69 (heart-rate summaries). Each is
+stacked on the previous one and merges in that order.
 
 KAN-116–120 came from the **owner testing the real Jastrząb day**
 (`jastrzab/`, git-ignored). That testing exposed problems synthetic fixtures
 never showed, so develop against real data from now on. See "Real data"
 below.
 
-Next M4 tickets: KAN-62 (eligible populations and timing consistency) and
-onward. `docs/kan58-m3-acceptance.md` still needs its real-track section
+Next M4 tickets: KAN-68 (thermal trends UI) and KAN-70 (heart-rate UI), then
+KAN-71 to KAN-74 (day report). Design these UIs for the phone/tablet app
+(split phase 4) rather than more desktop windows.
+`docs/kan58-m3-acceptance.md` still needs its real-track section
 filled in from the owner's day at the track (27 September 2026).
+
+## The product split (owner direction, 26 September 2026)
+
+The owner wants **two products in one repository**:
+
+- **Flapped Ear Telemetry:** a quick iPhone, iPad and Android app to view
+  the day's telemetry at the track. Nobody carries a laptop to the track.
+- **Flapped Ear Overlays:** the desktop video-overlay editor. Planned
+  additions are tyre pressure and temperature, and a helmet camera without
+  GPS, which needs manual sync of multiple video sources.
+
+Read `docs/product-split-plan.md` (epic KAN-121, tickets KAN-122–132) before
+any structural work. Phase 0 (KAN-122) lists owner decisions that are still
+open: the Qt store licence, updating the direction documents
+(`product-vision.md` and `AGENTS.md` still say one macOS app), bundle
+identities, and the tyre data source. Phases 1–3 need none of them except
+identities (phase 3).
+
+Split rules already in force after KAN-123:
+- `src/telemetry` and `src/project` form `flappedear_telemetry_core`, which
+  links **Qt Core and zlib only**.
+- `flappedear_telemetry_core_boundary` fails the build if they include
+  overlay, app or Gui headers.
+- New analysis code goes there, and its pure tests link only that library.
+- Keep analysis features independent of video.
 
 ## Owner direction and preferences (this session)
 
