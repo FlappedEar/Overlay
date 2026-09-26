@@ -69,6 +69,10 @@ void AppController::initializeOutingTheoreticalBest()
     // theoretical best computed from laps that no longer apply.
     const auto invalidate = [this] {
         if (m_theoreticalBestState == "idle") return;
+        // While laps are re-derived (e.g. after Save As moves the project)
+        // the population is transient; decide once they are loaded. A stale
+        // worker result is still rejected by its request number.
+        if (outingLapsLoading()) return;
         if (!m_theoreticalBestKey.isEmpty() && theoreticalBestInputKey() == m_theoreticalBestKey) return;
         ++m_theoreticalBestRequest;
         if (m_theoreticalBestCancellation) m_theoreticalBestCancellation->store(true);
