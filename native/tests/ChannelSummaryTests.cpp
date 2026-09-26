@@ -50,6 +50,7 @@ private slots:
     void excludesPlaceholdersAndImplausibleValues();
     void reportsMissingSensorsAndListsTemperatures();
     void findsContinuouslyRecordedCoolingOnly();
+    void combinesDisjointIntervals();
 };
 
 void ChannelSummaryTests::computesTimeWeightedMeanAndExtrema()
@@ -148,6 +149,34 @@ void ChannelSummaryTests::findsContinuouslyRecordedCoolingOnly()
         [](double t) { return 95 + 0.5 * std::sin(t); }));
     QVERIFY(findCoolingIntervals(steady, "coolant_temp", temperatureSummaryPolicy()).isEmpty());
     QVERIFY(findCoolingIntervals(steady, "missing", temperatureSummaryPolicy()).isEmpty());
+}
+
+void ChannelSummaryTests::combinesDisjointIntervals()
+{
+    // A segment across start/finish: the lap's last 10 s at 150 bpm and its
+    // first 30 s at 130 bpm. Weighted by covered time: (150·10 + 130·30)/40.
+    const auto session = sessionWith(channel("heart_rate", "bpm", clock(0, 100, 0.5),
+        [](double t) { return t < 50 ? 130.0 : 150.0; }), "heartRate");
+    const auto end = summarizeChannel(session, "heartRate", 90, 100, heartRateSummaryPolicy());
+    const auto start = summarizeChannel(session, "heartRate", 0, 30, heartRateSummaryPolicy());
+    const auto combined = combineChannelSummaries({end, start});
+    QVERIFY(combined.valid);
+    QVERIFY2(std::abs(*combined.mean - 135.0) < 1e-3, qPrintable(QString::number(*combined.mean)));
+    QVERIFY(std::abs(*combined.minimum - 130.0) < 1e-4 && std::abs(*combined.maximum - 150.0) < 1e-4);
+    QCOMPARE(combined.sampleCount, end.sampleCount + start.sampleCount);
+    QVERIFY(std::abs(combined.coveredSeconds - 40.0) < 1e-6);
+    QVERIFY(std::abs(combined.coverage - 1.0) < 1e-6);
+    // One part without samples lowers coverage; it does not invent values.
+    const auto empty = summarizeChannel(session, "heartRate", 200, 210, heartRateSummaryPolicy());
+    const auto partial = combineChannelSummaries({start, empty});
+    QVERIFY(partial.valid);
+    QVERIFY(std::abs(*partial.mean - 130.0) < 1e-3);
+    QVERIFY(std::abs(partial.coverage - 0.75) < 1e-6);
+    // A channel missing in every part stays missing.
+    const auto missing = combineChannelSummaries({summarizeChannel(session, "brake_temp", 0, 10, temperatureSummaryPolicy()),
+        summarizeChannel(session, "brake_temp", 20, 30, temperatureSummaryPolicy())});
+    QVERIFY(!missing.valid);
+    QCOMPARE(missing.unavailableReason, QString(channelSummaryMissing));
 }
 
 QTEST_GUILESS_MAIN(ChannelSummaryTests)

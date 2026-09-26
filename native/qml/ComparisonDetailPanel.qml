@@ -111,6 +111,14 @@ Rectangle {
         else if (channel && channels.length < 4) channels.push(channel);
         root.visibleChannels = channels;
     }
+    // KAN-70: make a recorded channel visible, replacing the last one when
+    // four are already shown. Only channels both laps recorded.
+    function showChannel(channel) {
+        if (root.availableChannels.indexOf(channel) < 0 || root.visibleChannels.indexOf(channel) >= 0) return;
+        const channels = root.visibleChannels.slice(0, 3);
+        channels.push(channel);
+        root.visibleChannels = channels;
+    }
     function replaceChannel(previous, next) {
         const channels = root.visibleChannels.slice();
         const index = channels.indexOf(previous);
@@ -373,6 +381,7 @@ Rectangle {
                     Layout.fillHeight: true
                     onRangeRequested: (start, end) => { root.zoomStart = start; root.zoomEnd = end; }
                     onHovered: meters => root.hoverDistanceMeters = meters
+                    onChannelRequested: channel => root.showChannel(channel)
                 }
                 ComparisonGgPanel {
                     objectName: "comparisonGgPanel"

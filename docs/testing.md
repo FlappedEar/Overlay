@@ -1171,6 +1171,51 @@ On the private Jastrząb day (screenshot from `analyzesPrivateTrackDayCorners`):
 - Intake air falls 20–35° on the out lap as heat soak clears.
 - Coolant holds 90–103 with small recorded dips.
 
+## Heart-rate comparisons by run and segment (KAN-70)
+
+Heart rate is shown as measured, from the recording's own channel, and never
+worded as stress, fitness or confidence.
+
+- **Progression → Car & driver** has a heart-rate card:
+  - A day trend (`DayTrendChart.qml`, shared with the temperature charts):
+    sessions as separate slots, holes at recording gaps.
+  - Per session: mean, minimum–maximum, sample count, coverage, and excluded
+    implausible values. A session without heart rate reads "Not recorded".
+  - Per recorded section, a chip with the mean (and coverage below 95%).
+    Selecting a chip calls `openOutingLapChannel(reference, channel)`, which
+    opens that lap with the heart-rate channel first in its charts. The saved
+    chart preference (`analysis/lapChannels`) is not rewritten, and a lap
+    opened normally afterwards does not inherit the request.
+- **Corner Analyzer** has an A/B heart-rate row for the selected segment:
+  - Mean per lap and Δ, with samples and coverage per lap underneath.
+  - ♥ puts the recorded heart-rate channel into the comparison charts,
+    replacing the last one when four are shown.
+  - A segment that crosses start/finish (end before start, typically the
+    last corner chain) is summarized as the lap's end plus its beginning.
+    `combineChannelSummaries` merges the two parts: the mean is weighted by
+    covered time, extrema are the extremes of both parts, and coverage is
+    measured over both lengths.
+
+Tests:
+- `ChannelSummaryTests::combinesDisjointIntervals`: an exact weighted mean
+  across two parts; an empty part lowers coverage without inventing values;
+  a channel missing in every part stays missing.
+- `TelemetryTests::summarizesHeartRatePerRunSectionAndInterval`: a range
+  across start/finish keeps each lap's level (140/150 bpm) and its coverage.
+- `TelemetryTests::showsHeartRateByRunAndSegmentInQml`:
+  - production QML, no warnings;
+  - run rows (mean, samples, coverage, one excluded artifact each,
+    "Not recorded");
+  - a lap chip opening the lap with `heart_rate` first, with the preference
+    untouched;
+  - the Corner Analyzer row, opened as theoretical-best evidence, showing
+    about 140/150 bpm, and ♥ adding the channel to the charts.
+
+On the private Jastrząb day, per-lap means rise from 112–131 bpm (Sessions
+1–2) to 139–153 bpm (Sessions 4–5). For Session 2 LAP 1 against Session 5
+LAP 2 on "Corners 9–16", which crosses start/finish, the Corner Analyzer shows
+123 against 154 bpm (429 and 317 samples, 99% and 100% covered).
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings

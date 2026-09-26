@@ -20,6 +20,8 @@ Rectangle {
     radius: 8
     signal rangeRequested(real startMeters, real endMeters)
     signal hovered(real meters)
+    // KAN-70: show a recorded channel (heart rate) in the comparison charts.
+    signal channelRequested(string channel)
 
     // appController.comparisonSlots is a real Q_PROPERTY (NOTIFY
     // comparisonSlotsChanged); forcing a read on it here is the same
@@ -30,6 +32,22 @@ Rectangle {
     property string selectedSegmentId: ""
     readonly property var metrics: root.selectedSegmentId.length > 0
         ? (appController.comparisonSlots, appController.comparisonSegmentMetrics(root.selectedSegmentId)) : ({})
+    // KAN-70: A/B heart rate over the selected segment, from each lap's own
+    // recording. A segment across the start/finish line (end before start)
+    // combines the end and the beginning of each lap.
+    readonly property var selectedSegment: root.segments.find(segment => segment.id === root.selectedSegmentId) || null
+    readonly property var heartRate: root.visible && root.selectedSegment && root.selectedSegment.endMeters !== root.selectedSegment.startMeters
+        ? (appController.comparisonSlots, appController.comparisonHeartRate(root.selectedSegment.startMeters, root.selectedSegment.endMeters)) : ({})
+    readonly property var heartRateLaps: root.heartRate.laps || []
+    readonly property bool heartRateRecorded: root.heartRateLaps.some(lap => lap.valid)
+    function heartRateText(lap) {
+        return lap && lap.valid ? Number(lap.mean).toFixed(0) + " bpm" : "—";
+    }
+    function heartRateCoverage(lap) {
+        if (!lap) return qsTr("unavailable");
+        if (!lap.valid) return lap.unavailableReason === "channelMissing" ? qsTr("not recorded") : qsTr("no valid samples");
+        return qsTr("%1 samples, %2% covered").arg(lap.sampleCount).arg(Math.round(lap.coverage * 100));
+    }
     onSegmentsChanged: {
         if (root.segments.length === 0) { root.selectedSegmentId = ""; return; }
         if (!root.segments.some(segment => segment.id === root.selectedSegmentId))
@@ -265,6 +283,45 @@ Rectangle {
                 Label { font.pixelSize: 12; text: root.formatValue(exitRow.pickupMetric && exitRow.pickupMetric.a, 1, " m"); color: "#55e6a5"; Layout.preferredWidth: 76 }
                 Label { font.pixelSize: 12; text: root.formatValue(exitRow.pickupMetric && exitRow.pickupMetric.b, 1, " m"); color: "#d95926"; Layout.preferredWidth: 76 }
                 Label { font.pixelSize: 12; text: root.formatDelta(exitRow.pickupMetric && exitRow.pickupMetric.delta, 1, " m"); color: "#f3f6fa"; font.bold: true }
+            }
+            RowLayout {
+                objectName: "cornerAnalyzerHeartRateRow"
+                Layout.fillWidth: true
+                visible: root.heartRateRecorded
+                Label { font.pixelSize: 12; text: qsTr("Heart rate"); color: "#91a0b2"; Layout.preferredWidth: 104 }
+                Label { font.pixelSize: 12; objectName: "cornerAnalyzerHeartRateA"; text: root.heartRateText(root.heartRateLaps[0]); color: "#55e6a5"; Layout.preferredWidth: 76 }
+                Label { font.pixelSize: 12; objectName: "cornerAnalyzerHeartRateB"; text: root.heartRateText(root.heartRateLaps[1]); color: "#d95926"; Layout.preferredWidth: 76 }
+                Label {
+                    font.pixelSize: 12
+                    objectName: "cornerAnalyzerHeartRateDelta"
+                    text: root.heartRateLaps.length === 2 && root.heartRateLaps[0].valid && root.heartRateLaps[1].valid
+                        ? root.formatDelta({value: root.heartRateLaps[0].mean - root.heartRateLaps[1].mean}, 0, " bpm") : "—"
+                    color: "#f3f6fa"; font.bold: true
+                }
+                Item { Layout.fillWidth: true }
+                ToolButton {
+                    objectName: "cornerAnalyzerHeartRateShow"
+                    text: qsTr("♥")
+                    implicitWidth: 26
+                    implicitHeight: 22
+                    Accessible.name: qsTr("Show the heart-rate channel in the charts")
+                    ToolTip.visible: hovered
+                    ToolTip.text: Accessible.name
+                    onClicked: {
+                        const lap = root.heartRateLaps.find(candidate => candidate.valid);
+                        if (lap) root.channelRequested(lap.channel);
+                    }
+                }
+            }
+            Label {
+                objectName: "cornerAnalyzerHeartRateNote"
+                Layout.fillWidth: true
+                visible: root.heartRateRecorded
+                text: qsTr("Mean over this segment · A %1 · B %2. Observed values only.")
+                    .arg(root.heartRateCoverage(root.heartRateLaps[0])).arg(root.heartRateCoverage(root.heartRateLaps[1]))
+                wrapMode: Text.WordWrap
+                color: "#657386"
+                font.pixelSize: 10
             }
             Label {
                 Layout.fillWidth: true

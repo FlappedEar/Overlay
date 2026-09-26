@@ -220,6 +220,7 @@ Dialog {
                 // KAN-68: recorded vehicle temperatures through the day.
                 CarDriverView {
                     objectName: "carDriverView"
+                    onLapOpened: root.close()
                 }
             }
         }

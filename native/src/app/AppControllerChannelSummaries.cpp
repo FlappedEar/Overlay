@@ -212,16 +212,25 @@ QVariantMap AppController::comparisonHeartRate(const double startMeters, const d
             if (meters >= length - 1e-6) return lapEnd;
             return timeAtProgress(m_comparisonProgressTraceCache[slot], meters);
         };
-        const auto t0 = timeAt(from), t1 = timeAt(to);
-        if (!t0 || !t1 || *t1 <= *t0) {
+        // A range with start after end crosses start/finish: the lap's end
+        // and its beginning, summarized as two parts and combined.
+        const QVector<std::pair<double, double>> ranges = from <= to
+            ? QVector<std::pair<double, double>>{{from, to}}
+            : QVector<std::pair<double, double>>{{from, length}, {0.0, to}};
+        QVector<ChannelSummary> parts;
+        for (const auto &[rangeStart, rangeEnd] : ranges) {
+            const auto t0 = timeAt(rangeStart), t1 = timeAt(rangeEnd);
+            if (!t0 || !t1 || *t1 <= *t0) { parts.clear(); break; }
+            parts.append(summarizeChannel(*comparisonSlot.session, QStringLiteral("heartRate"), *t0, *t1, heartRateSummaryPolicy()));
+        }
+        if (parts.isEmpty()) {
             laps.append(QVariantMap{{"valid", false}, {"unavailableReason", QStringLiteral("incompleteCoverage")}});
             continue;
         }
-        auto map = summaryMap(summarizeChannel(*comparisonSlot.session, QStringLiteral("heartRate"), *t0, *t1,
-            heartRateSummaryPolicy()));
+        auto map = summaryMap(combineChannelSummaries(parts));
         map.insert("channel", comparisonSlot.session->aliases.value("heartRate"));
         laps.append(map);
     }
     return {{"valid", true}, {"algorithm", QString::fromLatin1(channelSummaryAlgorithm)}, {"laps", laps},
-        {"startMeters", from}, {"endMeters", to}};
+        {"startMeters", from}, {"endMeters", to}, {"crossesStartFinish", from > to}};
 }
