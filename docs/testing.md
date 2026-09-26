@@ -1388,6 +1388,24 @@ On the private Jastrząb day the three areas are:
 3. the measured braking point for Corners 5–6 spread over 20.6 m across the
    middle half of 21 laps.
 
+## M4 acceptance (KAN-74)
+
+`TelemetryTests::acceptsM4ReportLossCornerEvidenceWorkflow` runs the M4
+workflow end to end:
+- full recordings (`fullM4Vbo`: heart rate, coolant, calculated G on
+  known-time warped laps) and a GPS-only limited run;
+- values checked against the generated source;
+- absent heart rate, temperature and G on the limited run;
+- an exclusion and a split segment;
+- navigation without video: loss → Corner Analyzer, focus area → pair, best
+  lap;
+- Save As keeping the computed results;
+- reopen with an identical report.
+
+The private real-day test also saves and reopens the Jastrząb day and
+requires the same report. The full record, including the Save As defect
+found and fixed, is `docs/kan74-m4-acceptance.md`.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings

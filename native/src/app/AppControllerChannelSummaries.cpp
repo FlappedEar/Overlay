@@ -73,6 +73,10 @@ void AppController::initializeOutingChannelSummaries()
     });
     connect(this, &AppController::outingLapsChanged, this, [this] {
         if (m_channelSummariesState == "idle") return;
+        // Summaries depend only on the recordings. Re-deriving laps (e.g.
+        // after Save As moves the project) keeps them; decide once loaded.
+        if (outingLapsLoading()) return;
+        if (!m_channelSummariesKey.isEmpty() && channelSummariesInputKey() == m_channelSummariesKey) return;
         ++m_channelSummariesRequest;
         if (m_channelSummariesCancellation) m_channelSummariesCancellation->store(true);
         m_channelSummariesState = QStringLiteral("idle");
@@ -80,6 +84,17 @@ void AppController::initializeOutingChannelSummaries()
         m_channelSummariesRuns.clear();
         emit outingChannelSummariesChanged();
     });
+}
+
+QByteArray AppController::channelSummariesInputKey() const
+{
+    // Each run's recording identity, independent of where the project is saved.
+    QByteArray key;
+    for (const auto &value : outingLapSources()) {
+        const auto runId = value.toObject().value("runId").toString();
+        key += runId.toUtf8() + '\0' + outingRunKey(runId) + '\n';
+    }
+    return key;
 }
 
 QVariantMap AppController::outingChannelSummaries() const
@@ -104,6 +119,7 @@ void AppController::requestOutingChannelSummaries()
         return;
     }
     m_channelSummariesCancellation = std::make_shared<std::atomic_bool>(false);
+    m_channelSummariesKey = channelSummariesInputKey();
     m_channelSummariesState = QStringLiteral("loading");
     m_channelSummariesMessage.clear();
     emit outingChannelSummariesChanged();

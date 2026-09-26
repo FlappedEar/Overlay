@@ -790,6 +790,8 @@ private:
     QString m_channelSummariesState = QStringLiteral("idle");
     QString m_channelSummariesMessage;
     QVariantList m_channelSummariesRuns;
+    QByteArray m_channelSummariesKey;
+    [[nodiscard]] QByteArray channelSummariesInputKey() const;
     [[nodiscard]] QString outingLapLabel(const QJsonObject &reference) const;
     // What the theoretical best and loss ranking depend on; a document change
     // that leaves this unchanged (e.g. persisting the comparison pair) keeps

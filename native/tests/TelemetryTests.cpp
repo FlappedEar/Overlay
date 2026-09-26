@@ -171,6 +171,7 @@ private slots:
     void buildsDayReportWithProvenance();
     void presentsDayReportWithEvidenceNavigation();
     void selectsFocusAreasFromComputedObservations();
+    void acceptsM4ReportLossCornerEvidenceWorkflow();
     void summarizesHeartRatePerRunSectionAndInterval();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
@@ -4287,6 +4288,34 @@ QByteArray routeVboWithHeartRate(const double level, const int samplesPerLap = 2
     }
     return out.join('\n').toUtf8();
 }
+// `base` (a routeVbo()-style recording) with extra data columns: `names`
+// are appended to the column line, `values(row)` supplies each row's values.
+QByteArray withColumns(const QByteArray &base, const QStringList &names, const std::function<QStringList(int)> &values)
+{
+    const auto lines = QString::fromUtf8(base).split('\n');
+    QStringList out;
+    bool data = false;
+    int index = 0;
+    for (const auto &line : lines) {
+        if (line == "time latitude longitude") { out << line + " " + names.join(' '); continue; }
+        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
+        out << line + " " + values(index).join(' ');
+        ++index;
+    }
+    return out.join('\n').toUtf8();
+}
+// A complete M4 recording: warpedRouteVbo() with heart rate at `heartRate`
+// bpm, coolant from `coolantStart` rising 0.01 per row, and accelerations
+// with lateral peak `gScale` and braking/accelerating peaks gScale/2.
+QByteArray fullM4Vbo(const bool fastFirstHalf, const double heartRate, const double coolantStart, const double gScale)
+{
+    return withColumns(warpedRouteVbo(fastFirstHalf), {"heart_rate", "coolant_temp-obd", "longacc-calc", "latacc-calc"},
+        [=](const int index) {
+            const double angle = -1.0 + 2 * std::numbers::pi * index / 240;
+            return QStringList{QString::number(heartRate, 'f', 1), QString::number(coolantStart + 0.01 * index, 'f', 3),
+                QString::number(gScale * 0.5 * std::cos(angle), 'f', 5), QString::number(gScale * std::sin(angle), 'f', 5)};
+        });
+}
 } // namespace
 
 // Approves every proposal on the first eligible lap of `runName`'s run and
@@ -5640,6 +5669,232 @@ void TelemetryTests::selectsFocusAreasFromComputedObservations()
     QCOMPARE(warnings.size(), 0);
 }
 
+void TelemetryTests::acceptsM4ReportLossCornerEvidenceWorkflow()
+{
+    // KAN-74: the M4 workflow end to end on full and limited fixtures:
+    // report -> loss -> corner -> evidence, values checked against the
+    // generated source, absent heart rate / temperature / G on the limited
+    // run, an exclusion, a changed segmentation, and save/reopen. No video.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo"),
+               limited = directory.filePath("limited.vbo");
+    QVERIFY(writeBytes(fullA, fullM4Vbo(true, 140, 80, 1.0)));
+    QVERIFY(writeBytes(fullB, fullM4Vbo(false, 150, 85, 0.9)));
+    QVERIFY(writeBytes(limited, warpedRouteVbo(true)));
+    const int rows = QString::fromUtf8(warpedRouteVbo(true)).split('\n').size(); // upper bound of data rows
+    const auto projectPath = directory.filePath("m4.fetproject");
+    const auto resultIn = [](const QVariantMap &report, const QString &id) {
+        for (const auto &value : report.value("results").toList())
+            if (value.toMap().value("id") == id) return value.toMap();
+        return QVariantMap{};
+    };
+    const auto allSettled = [&](AppController &controller) {
+        for (const auto &value : controller.outingDayReport().value("results").toList()) {
+            const auto status = value.toMap().value("status").toString();
+            if (status == "notComputed" || status == "computing" || status == "stale") return false;
+        }
+        return true;
+    };
+    struct Snapshot { QString bestLabel; double bestSeconds = 0; double theoreticalTotal = 0; int sectors = 0;
+        QStringList focus; int consistencyLaps = 0; QString decisions; };
+    const auto snapshot = [&](AppController &controller) {
+        const auto report = controller.outingDayReport();
+        Snapshot result;
+        result.bestLabel = resultIn(report, "bestLap").value("value").toMap().value("label").toString();
+        result.bestSeconds = resultIn(report, "bestLap").value("value").toMap().value("seconds").toDouble();
+        const auto theoretical = resultIn(report, "theoreticalBest").value("value").toMap();
+        result.theoreticalTotal = theoretical.value("totalSeconds").toDouble();
+        result.sectors = theoretical.value("sectors").toList().size();
+        for (const auto &area : resultIn(report, "focusAreas").value("value").toMap().value("areas").toList())
+            result.focus << area.toMap().value("kind").toString() + "/" + area.toMap().value("segmentId").toString();
+        result.consistencyLaps = resultIn(report, "consistency").value("value").toMap().value("day").toMap().value("count").toInt();
+        result.decisions = report.value("decisionsKey").toString();
+        return result;
+    };
+    Snapshot saved;
+    QVariantMap excludedReference;
+    {
+        AppController controller(nullptr, directory.filePath("recovery.json"));
+        QVERIFY(controller.importAnalysisRuns("M4 acceptance",
+            {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB), QUrl::fromLocalFile(limited)}));
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+        QTRY_VERIFY(!controller.outingLapsLoading());
+        QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+        const auto approved = approveAllSegmentsOnRun(controller, "Session 1");
+        QVERIFY(!approved.isEmpty());
+        controller.requestOutingDayReport();
+        QTRY_VERIFY_WITH_TIMEOUT(allSettled(controller), 60000);
+        auto report = controller.outingDayReport();
+        QCOMPARE(validateDayReport(QJsonObject::fromVariantMap(report)), QString());
+
+        // Values agree with the source. Every warped lap takes 48 s.
+        const auto best = resultIn(report, "bestLap");
+        QVERIFY(std::abs(best.value("value").toMap().value("seconds").toDouble() - 48.0) < 0.01);
+        const auto theoretical = resultIn(report, "theoreticalBest").value("value").toMap();
+        QVERIFY(theoretical.value("totalSeconds").toDouble() < 47.5 && theoretical.value("totalSeconds").toDouble() > 43.2);
+        QVERIFY(std::abs(theoretical.value("differenceSeconds").toDouble()
+            - (48.0 - theoretical.value("totalSeconds").toDouble())) < 0.02);
+        QCOMPARE(theoretical.value("sectors").toList().size(), approved.size());
+        const auto heart = resultIn(report, "heartRate").value("value").toMap().value("runs").toList();
+        const auto temperatures = resultIn(report, "temperatures").value("value").toMap().value("runs").toList();
+        QCOMPARE(heart.size(), 3);
+        int withHeart = 0, withTemperature = 0;
+        for (const auto &value : heart) {
+            const auto run = value.toMap();
+            if (!run.contains("heartRate")) continue; // the limited run: absent, not zero
+            ++withHeart;
+            const auto mean = run.value("heartRate").toMap().value("run").toMap().value("mean").toDouble();
+            QVERIFY2(std::abs(mean - 140) < 1e-3 || std::abs(mean - 150) < 1e-3, qPrintable(QString::number(mean)));
+        }
+        for (const auto &value : temperatures) {
+            const auto channels = value.toMap().value("channels").toList();
+            if (channels.isEmpty()) continue;
+            ++withTemperature;
+            const auto whole = channels.first().toMap().value("run").toMap();
+            const double start = std::round(whole.value("minimum").toDouble());
+            QVERIFY(start == 80.0 || start == 85.0);
+            // Never beyond the generated source: start + 0.01 per row.
+            QVERIFY(whole.value("maximum").toDouble() <= start + 0.01 * rows + 1e-6);
+            QVERIFY(whole.value("maximum").toDouble() > start + 1.0);
+        }
+        QCOMPARE(withHeart, 2);
+        QCOMPARE(withTemperature, 2);
+        const auto focus = resultIn(report, "focusAreas");
+        QCOMPARE(focus.value("status").toString(), QString("available"));
+
+        // Loss -> corner -> evidence, no video: the first ranked loss opens
+        // the comparison with the Corner Analyzer on that segment.
+        const auto losses = resultIn(report, "timeLosses");
+        QCOMPARE(losses.value("status").toString(), QString("available"));
+        const auto lossEvidence = losses.value("evidence").toList().first().toMap();
+        QVERIFY(controller.openTimeLoss({{"segmentId", lossEvidence.value("segmentId")}, {"lapReference", lossEvidence.value("reference")}}));
+        QTRY_VERIFY(controller.comparisonPairReady());
+        QCOMPARE(controller.comparisonFocusSegmentId(), lossEvidence.value("segmentId").toString());
+        QVERIFY(!controller.comparisonSegmentMetrics(lossEvidence.value("segmentId").toString()).isEmpty());
+        // G agrees with the generated peaks; the limited run (Session 3,
+        // identical route, so it can tie with Session 1) has none.
+        const auto gg = controller.comparisonGgScatter(0.0, controller.comparisonProgressAxisLength(), 500).value("laps").toList();
+        const auto pairSlots = controller.comparisonSlots().toList();
+        for (int slot = 0; slot < 2; ++slot) {
+            const auto lap = gg[slot].toMap();
+            if (pairSlots[slot].toMap().value("lap").toMap().value("runName") == "Session 3") {
+                QVERIFY(!lap.value("valid").toBool());
+                continue;
+            }
+            QVERIFY(lap.value("valid").toBool());
+            const double lateral = lap.value("peaks").toMap().value("lateral").toMap().value("value").toDouble();
+            QVERIFY2(std::abs(lateral - 1.0) < 0.02 || std::abs(lateral - 0.9) < 0.02, qPrintable(QString::number(lateral)));
+        }
+        controller.setComparisonViewOpen(false);
+        // A limited lap against a full one: G and heart rate are absent for it, not zero.
+        QVariantMap limitedLap, fullLap;
+        for (const auto &value : controller.comparisonLaps()) {
+            const auto row = value.toMap();
+            if (limitedLap.isEmpty() && row.value("runName") == "Session 3") limitedLap = row;
+            if (fullLap.isEmpty() && row.value("runName") == "Session 1") fullLap = row;
+        }
+        QVERIFY(!limitedLap.isEmpty() && !fullLap.isEmpty());
+        QVERIFY(controller.selectComparisonLap(0, limitedLap.value("reference").toMap()));
+        QVERIFY(controller.selectComparisonLap(1, fullLap.value("reference").toMap()));
+        QTRY_VERIFY(controller.comparisonPairReady());
+        const double pairLength = controller.comparisonProgressAxisLength();
+        const auto limitedGg = controller.comparisonGgScatter(0.0, pairLength, 500).value("laps").toList();
+        QVERIFY(!limitedGg[0].toMap().value("valid").toBool());
+        QVERIFY(!limitedGg[0].toMap().value("unavailableReason").toString().isEmpty());
+        QVERIFY(limitedGg[1].toMap().value("valid").toBool());
+        const auto limitedHeart = controller.comparisonHeartRate(0.0, pairLength).value("laps").toList();
+        QVERIFY(!limitedHeart[0].toMap().value("valid").toBool());
+        QVERIFY(!limitedHeart[0].toMap().contains("mean"));
+        QVERIFY(limitedHeart[1].toMap().value("valid").toBool());
+        controller.setComparisonViewOpen(false);
+        // The focus area's evidence opens its pair; the best lap opens without video.
+        const auto area = focus.value("value").toMap().value("areas").toList().first().toMap();
+        QVERIFY(controller.openFocusArea(focus.value("evidence").toList()[area.value("evidenceIndex").toInt()].toMap()));
+        QTRY_VERIFY(controller.comparisonPairReady());
+        controller.setComparisonViewOpen(false);
+        QVERIFY(controller.selectOutingLapReference(best.value("evidence").toList().first().toMap().value("reference").toMap()));
+        QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
+        controller.closeOutingLap();
+
+        // An exclusion changes the decisions: the old values never show,
+        // the best lap moves and the recomputed results leave the lap out.
+        const auto before = snapshot(controller);
+        excludedReference = best.value("evidence").toList().first().toMap().value("reference").toMap();
+        QVERIFY(controller.setOutingLapExcluded(excludedReference, true, "Traffic"));
+        QTRY_VERIFY(controller.outingDayReport().value("decisionsKey").toString() != before.decisions);
+        QVERIFY(!resultIn(controller.outingDayReport(), "theoreticalBest").contains("value"));
+        controller.requestOutingDayReport();
+        QTRY_VERIFY_WITH_TIMEOUT(allSettled(controller), 60000);
+        const auto excluded = snapshot(controller);
+        QVERIFY(excluded.bestLabel != before.bestLabel);
+        QCOMPARE(excluded.consistencyLaps, before.consistencyLaps - 1);
+        for (const auto &value : resultIn(controller.outingDayReport(), "theoreticalBest").value("evidence").toList())
+            QVERIFY(value.toMap().value("reference").toMap() != excludedReference);
+
+        // A changed segmentation: splitting a segment invalidates, and the
+        // recomputed report has one more sector.
+        int lapIndex = -1;
+        const auto lapRows = controller.outingLaps();
+        for (int i = 0; i < lapRows.size() && lapIndex < 0; ++i)
+            if (lapRows[i].toMap().value("type") == "LAP" && lapRows[i].toMap().value("runName") == "Session 1"
+                && lapRows[i].toMap().value("reference").toMap() != excludedReference) lapIndex = i;
+        QVERIFY(controller.selectOutingLap(lapIndex));
+        QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
+        controller.requestSegmentReview();
+        QTRY_COMPARE(controller.segmentReviewState(), QString("ready"));
+        const auto runId = controller.selectedOutingLap().value("runId").toString();
+        QJsonObject splittable;
+        for (const auto &value : controller.storedRunTrackSegments(runId).toArray())
+            if (splittable.isEmpty() && value.toObject().value("endProgressMeters").toDouble()
+                    > value.toObject().value("startProgressMeters").toDouble() + 40.0) splittable = value.toObject();
+        QVERIFY(!splittable.isEmpty());
+        QCOMPARE(controller.splitApprovedSegment(splittable.value("id").toString(),
+            (splittable.value("startProgressMeters").toDouble() + splittable.value("endProgressMeters").toDouble()) / 2.0), QString());
+        controller.closeOutingLap();
+        QTRY_VERIFY(!resultIn(controller.outingDayReport(), "theoreticalBest").contains("value"));
+        controller.requestOutingDayReport();
+        QTRY_VERIFY_WITH_TIMEOUT(allSettled(controller), 60000);
+        saved = snapshot(controller);
+        QCOMPARE(saved.sectors, excluded.sectors + 1);
+        QVERIFY(saved.decisions != excluded.decisions);
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
+        QVERIFY(!controller.dirty());
+        // Saving to a new path re-derives the laps; unchanged recordings and
+        // decisions keep every computed result instead of discarding it.
+        QTest::qWait(50);
+        QTRY_VERIFY(!controller.outingLapsLoading());
+        QTest::qWait(50);
+        QCOMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("ready"));
+        QCOMPARE(controller.outingChannelSummaries().value("state").toString(), QString("ready"));
+        QVERIFY(allSettled(controller));
+        QCOMPARE(snapshot(controller).decisions, saved.decisions);
+    }
+    {
+        // Reopen: the same decisions give the same report.
+        AppController reopened(nullptr, directory.filePath("recovery-reopen.json"));
+        reopened.requestOpenProject(QUrl::fromLocalFile(projectPath));
+        QTRY_COMPARE(reopened.vboLoadState(), QString("ready"));
+        QTRY_VERIFY(!reopened.outingLapsLoading());
+        QTRY_VERIFY(!reopened.outingComparisonGroupId().isEmpty());
+        reopened.requestOutingDayReport();
+        QTRY_VERIFY_WITH_TIMEOUT(allSettled(reopened), 60000);
+        const auto again = snapshot(reopened);
+        QCOMPARE(again.decisions, saved.decisions);
+        QCOMPARE(again.bestLabel, saved.bestLabel);
+        QVERIFY(std::abs(again.bestSeconds - saved.bestSeconds) < 1e-9);
+        QVERIFY(std::abs(again.theoreticalTotal - saved.theoreticalTotal) < 1e-9);
+        QCOMPARE(again.sectors, saved.sectors);
+        QCOMPARE(again.focus, saved.focus);
+        QCOMPARE(again.consistencyLaps, saved.consistencyLaps);
+        // Navigation still works after reopening, without video.
+        const auto evidence = resultIn(reopened.outingDayReport(), "timeLosses").value("evidence").toList().first().toMap();
+        QVERIFY(reopened.openTimeLoss({{"segmentId", evidence.value("segmentId")}, {"lapReference", evidence.value("reference")}}));
+        QTRY_VERIFY(reopened.comparisonPairReady());
+        QCOMPARE(reopened.comparisonFocusSegmentId(), evidence.value("segmentId").toString());
+    }
+}
+
 void TelemetryTests::formatsElapsedTimes()
 {
     QCOMPARE(AppController::formatElapsedTime(100.838), QString("1:40.838"));
@@ -5781,6 +6036,44 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
                               << "|" << area.toMap().value("hypothesis").toString();
     }
     qInfo().noquote() << "  report size" << QJsonDocument(QJsonObject::fromVariantMap(dayReport)).toJson(QJsonDocument::Compact).size() << "bytes";
+    // KAN-74: save and reopen the real day; the same decisions give the same report.
+    {
+        const auto keyValues = [](const QVariantMap &report) {
+            QStringList values{report.value("decisionsKey").toString()};
+            for (const auto &value : report.value("results").toList()) {
+                const auto result = value.toMap();
+                const auto content = result.value("value").toMap();
+                values << result.value("id").toString() + ":" + result.value("status").toString() + ":"
+                        + QString::number(result.value("evidence").toList().size());
+                if (result.value("id") == "bestLap") values << content.value("label").toString() + QString::number(content.value("seconds").toDouble(), 'f', 6);
+                if (result.value("id") == "theoreticalBest") values << QString::number(content.value("totalSeconds").toDouble(), 'f', 6);
+                if (result.value("id") == "focusAreas")
+                    for (const auto &area : content.value("areas").toList()) values << area.toMap().value("observation").toString();
+            }
+            return values;
+        };
+        const auto before = keyValues(controller.outingDayReport());
+        const auto projectPath = directory.filePath("real-day.fetproject");
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
+        // Saving re-derives the laps under the new path; the computed results stay.
+        QTest::qWait(50);
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 120000);
+        QCOMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("ready"));
+        QCOMPARE(controller.outingChannelSummaries().value("state").toString(), QString("ready"));
+        AppController reopened(nullptr, directory.filePath("recovery-reopen.json"));
+        reopened.requestOpenProject(QUrl::fromLocalFile(projectPath));
+        QTRY_VERIFY_WITH_TIMEOUT(!reopened.outingComparisonGroupId().isEmpty() && !reopened.outingLapsLoading(), 180000);
+        reopened.requestOutingDayReport();
+        const auto settled = [&] {
+            for (const auto &value : reopened.outingDayReport().value("results").toList())
+                if (value.toMap().value("status") != "available") return false;
+            return true;
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(settled(), 240000);
+        const auto after = keyValues(reopened.outingDayReport());
+        QCOMPARE(after, before);
+        qInfo().noquote() << "  reopened report matches:" << after.size() << "key values";
+    }
     const auto ranking = controller.outingTimeLossRanking();
     qInfo().noquote() << "Losses:" << ranking.value("observationCount").toInt() << "observed over"
         << ranking.value("comparedLapCount").toInt() << "laps";
