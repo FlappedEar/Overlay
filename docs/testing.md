@@ -958,6 +958,39 @@ keyboard and chooses its quickest lap, which opens, with no QML warnings.
 On the private Jastrząb day every section's typical time improves from the
 morning sessions to the afternoon. For example, Corners 2–3 go from 11.9 s
 (spread 2.7 s) to 8.9 s (0.3 s).
+## Timed G-G sample pairs (KAN-65)
+
+`buildGgPairs` (`native/src/telemetry/GgPairs.h/.cpp`, tag `gg-pairs-v1`)
+pairs the `longitudinalAcceleration` and `lateralAcceleration` aliases over a
+time range:
+
+- **Clock:** the longitudinal channel's samples are the clock. A lateral
+  sample at the same time is used as is (`sharedClock`). Otherwise the
+  lateral value is interpolated between the two lateral samples around it,
+  but only when they are no further apart than the lateral channel's gap
+  threshold. Gaps are never bridged, a sample without a lateral value
+  yields no point (`skippedForGap`), and there is no extrapolation at the
+  ends. The largest pairing offset is reported.
+- **Signs (as recorded, verified on the owner's recordings):** longitudinal
+  is + when accelerating and − when braking (median −0.59 g with the brake
+  pressed). Lateral is + toward the left (left turns +0.54 g, right turns
+  −0.53 g).
+- **Units:** declared `g` is used as is, and m/s² (`m/s2`, `m/s^2`, `m/s²`)
+  is converted. An undeclared unit is kept and reported (`unitsDeclared`;
+  VBO units are not recorded, see KAN-117). Any other unit is
+  `unsupportedUnit`, with no points.
+- **Outliers:** a value beyond ±4 g is excluded and counted, never clipped.
+  A missing axis is `missingLongitudinalAcceleration` or
+  `missingLateralAcceleration`, with no points.
+- **Provenance:** the channel names are reported. On RaceChrono VBO these are
+  the calculated `longacc-calc`/`latacc-calc`; the raw `longacc`/`latacc`
+  columns are constant placeholders.
+
+`GgPairsTests` covers the shared clock with signs and range, interpolation
+on an offset clock that is exact on a linear signal and never crosses a
+0.5 s hole, unit conversion, undeclared and unsupported units, and outliers,
+non-finite samples and missing axes. On the private Jastrząb day, the best
+lap's 1,418 samples all pair on a shared clock with no gaps or outliers.
 
 ## Video-free day-result states (KAN-27)
 

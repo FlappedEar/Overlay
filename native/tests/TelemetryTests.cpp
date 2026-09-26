@@ -25,6 +25,7 @@
 #include "export/TemporaryOverlayValidation.h"
 #include "sync/TelemetrySyncEngine.h"
 #include "telemetry/TelemetrySession.h"
+#include "telemetry/GgPairs.h"
 #include "telemetry/TelemetrySource.h"
 #include "telemetry/LapTiming.h"
 #include "telemetry/TelemetryRenderContext.h"
@@ -5046,6 +5047,15 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
     const auto top = losses.first().toMap();
     QVERIFY(controller.openTimeLoss(top));
     QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 60000);
+    // KAN-65: G-G pairs for lap A of the pair on the real recording.
+    {
+        const auto &slot = controller.m_comparisonSlots[0];
+        const auto pairs = buildGgPairs(*slot.session, slot.row.value("startTime").toDouble(), slot.row.value("endTime").toDouble());
+        qInfo().noquote() << "G-G pairs:" << pairs.points.size() << "of" << pairs.candidateCount << "channels"
+            << pairs.longitudinalChannel << pairs.lateralChannel << "shared clock" << pairs.sharedClock
+            << "units declared" << pairs.unitsDeclared << "gaps" << pairs.skippedForGap << "outliers" << pairs.excludedOutliers;
+        QVERIFY(pairs.valid && !pairs.points.isEmpty());
+    }
     qInfo() << "Channels" << controller.comparisonAvailableChannels().mid(0, 6) << "preferred"
         << controller.comparisonPreferredChannels();
     for (const auto &value : controller.comparisonApprovedSegments()) {

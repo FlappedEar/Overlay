@@ -144,6 +144,12 @@ the eligible laps. Measured and inferred values are never mixed. The line
 spread is reported with the recording's typical GPS accuracy and is called
 resolvable only when it exceeds that accuracy.
 
+G-G pairs (KAN-65) use the longitudinal channel's clock. Lateral values are
+interpolated only between samples within the lateral channel's gap threshold,
+and never across a gap. The recorded signs are kept: longitudinal + when
+accelerating, lateral + toward the left. Values are in g (m/s² converted,
+other units rejected), and values beyond ±4 g are excluded.
+
 Timing consistency (KAN-62) reports the median ("typical") and the
 interquartile range ("spread", seconds, the middle half of the laps) with the
 sample count. It uses the ranking's eligibility and needs at least 3 samples.
