@@ -25,8 +25,9 @@ product split (`docs/product-split-plan.md`, epic KAN-121):
 
 - **`flappedear_telemetry_core`** holds `src/telemetry` and `src/project`:
   parsers, lap timing, compatibility, segments, sector timing, theoretical
-  best, time loss, consistency, variability, G-G pairs, the event document
-  and recovery. It links **Qt Core and zlib only**, so it can be built for
+  best, time loss, consistency, variability, G-G pairs, channel summaries
+  and cooling, the computed day report (`DayReport`, KAN-71), the event
+  document and recovery. It links **Qt Core and zlib only**, so it can be built for
   iOS and Android. The `flappedear_telemetry_core_boundary` test fails if a
   file there includes overlay, video, export, app or Gui headers. Video
   fingerprints are built on the overlay side (`export/VideoFingerprint`)

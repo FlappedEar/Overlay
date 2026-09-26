@@ -43,6 +43,8 @@ inline constexpr auto lapReferenceAlgorithm = "source-laps-v1";
 [[nodiscard]] QString lapCompatibilityReasonText(const QString &reason);
 
 // Ranking results retain exact lap references and all applied eligibility reasons.
+// Changes to eligibility or tie-breaking must bump this tag (KAN-71 provenance).
+inline constexpr auto lapRankingAlgorithm = "outing-ranking-v1";
 [[nodiscard]] QJsonObject rankOutingLaps(const QVector<OutingLapRow> &rows, const QString &groupId,
     const QHash<QString, QJsonObject> &configurations, const QJsonArray &exclusions,
     const QSet<QString> &staleRunIds = {});

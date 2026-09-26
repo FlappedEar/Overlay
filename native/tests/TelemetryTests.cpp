@@ -26,6 +26,7 @@
 #include "sync/TelemetrySyncEngine.h"
 #include "telemetry/TelemetrySession.h"
 #include "telemetry/GgPairs.h"
+#include "telemetry/DayReport.h"
 #include "export/VideoFingerprint.h"
 #include "telemetry/TelemetrySource.h"
 #include "telemetry/LapTiming.h"
@@ -166,6 +167,7 @@ private slots:
     void summarizesRecordedTemperaturesPerRunAndSection();
     void showsRecordedTemperaturesThroughTheDayInQml();
     void showsHeartRateByRunAndSegmentInQml();
+    void buildsDayReportWithProvenance();
     void summarizesHeartRatePerRunSectionAndInterval();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
@@ -5352,6 +5354,97 @@ void TelemetryTests::showsHeartRateByRunAndSegmentInQml()
     QCOMPARE(warnings.size(), 0);
 }
 
+void TelemetryTests::buildsDayReportWithProvenance()
+{
+    // KAN-71: the day report presents computed results with algorithm, range,
+    // status and evidence; results not yet computed say so; a changed
+    // analysis decision (a lap exclusion) never leaves an old value showing.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto slow = directory.filePath("slow.vbo"), fast = directory.filePath("fast.vbo");
+    QVERIFY(writeBytes(slow, routeVboWithHeartRate(140)));
+    QVERIFY(writeBytes(fast, scaledRouteVbo(0.9)));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Day report", {QUrl::fromLocalFile(slow), QUrl::fromLocalFile(fast)}));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    QTRY_VERIFY(!controller.outingLapsLoading());
+    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+    const auto resultOf = [&](const QString &id) {
+        for (const auto &value : controller.outingDayReport().value("results").toList())
+            if (value.toMap().value("id") == id) return value.toMap();
+        return QVariantMap{};
+    };
+    QSignalSpy changed(&controller, &AppController::outingDayReportChanged);
+
+    // Before any background result: ranking-based results are available,
+    // the rest are "not computed" and carry no value.
+    auto report = controller.outingDayReport();
+    QCOMPARE(report.value("schema").toString(), QString(dayReportSchema));
+    QCOMPARE(report.value("groupId").toString(), controller.outingComparisonGroupId());
+    QCOMPARE(validateDayReport(QJsonObject::fromVariantMap(report)), QString());
+    const auto best = resultOf("bestLap");
+    QCOMPARE(best.value("status").toString(), QString("available"));
+    QCOMPARE(best.value("algorithm").toString(), QString(lapRankingAlgorithm));
+    const auto bestEvidence = best.value("evidence").toList();
+    QCOMPARE(bestEvidence.size(), 1);
+    QCOMPARE(bestEvidence.first().toMap().value("kind").toString(), QString("lap"));
+    QCOMPARE(controller.resolveOutingLapReference(bestEvidence.first().toMap().value("reference").toMap()).value("state").toString(),
+        QString("resolved"));
+    QVERIFY(best.value("range").toMap().value("eligibleLapCount").toInt() >= 2);
+    const auto consistency = resultOf("consistency");
+    QCOMPARE(consistency.value("status").toString(), QString("available"));
+    QCOMPARE(consistency.value("evidence").toList().size(), best.value("range").toMap().value("eligibleLapCount").toInt());
+    QCOMPARE(resultOf("progression").value("status").toString(), QString("available"));
+    for (const auto *id : {"theoreticalBest", "timeLosses", "sectionProgression", "temperatures", "heartRate"}) {
+        QCOMPARE(resultOf(id).value("status").toString(), QString("notComputed"));
+        QVERIFY(!resultOf(id).contains("value"));
+    }
+
+    // Computed: every result is available (or says why not) with evidence.
+    QString slowName;
+    for (const auto &value : controller.outingLaps()) {
+        const auto row = value.toMap();
+        if (row.value("type") == "LAP" && row.value("endTime").toDouble() - row.value("startTime").toDouble() > 45.0)
+            slowName = row.value("runName").toString();
+    }
+    QVERIFY(!approveAllSegmentsOnRun(controller, slowName).isEmpty());
+    controller.requestOutingDayReport();
+    QTRY_COMPARE_WITH_TIMEOUT(resultOf("theoreticalBest").value("status").toString(), QString("available"), 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(resultOf("heartRate").value("status").toString(), QString("available"), 30000);
+    QVERIFY(changed.size() > 0);
+    report = controller.outingDayReport();
+    QCOMPARE(validateDayReport(QJsonObject::fromVariantMap(report)), QString());
+    const auto theoretical = resultOf("theoreticalBest");
+    QCOMPARE(theoretical.value("algorithm").toString(), QString(theoreticalBestAlgorithm));
+    QVERIFY(!theoretical.value("value").toMap().value("sectors").toList().isEmpty());
+    bool segmentEvidence = false;
+    for (const auto &value : theoretical.value("evidence").toList())
+        segmentEvidence = segmentEvidence || (value.toMap().value("kind") == "segment" && !value.toMap().value("segmentId").toString().isEmpty());
+    QVERIFY(segmentEvidence);
+    const auto losses = resultOf("timeLosses");
+    QVERIFY(losses.value("status") == "available" || losses.value("status") == "unavailable");
+    if (losses.value("status") == "available") {
+        QVERIFY(!losses.value("revision").toString().isEmpty());
+        QCOMPARE(losses.value("evidence").toList().size(), losses.value("value").toMap().value("losses").toList().size());
+    }
+    QCOMPARE(resultOf("sectionProgression").value("status").toString(), QString("available"));
+    const auto heart = resultOf("heartRate");
+    QCOMPARE(heart.value("evidence").toList().size(), 1); // one run recorded heart rate
+    QCOMPARE(heart.value("evidence").toList().first().toMap().value("channel").toString(), QString("heart_rate"));
+    const auto temperatures = resultOf("temperatures");
+    QCOMPARE(temperatures.value("status").toString(), QString("unavailable")); // none recorded, none invented
+    QCOMPARE(temperatures.value("reason").toString(), QString("No temperature recorded."));
+
+    // A changed decision: excluding the best lap changes the decisions key,
+    // and the theoretical best no longer shows its old value.
+    const auto decisions = report.value("decisionsKey").toString();
+    QVERIFY(controller.setOutingLapExcluded(bestEvidence.first().toMap().value("reference").toMap(), true, "Traffic"));
+    QTRY_VERIFY(controller.outingDayReport().value("decisionsKey").toString() != decisions);
+    QVERIFY(resultOf("theoreticalBest").value("status") != "available");
+    QVERIFY(!resultOf("theoreticalBest").contains("value"));
+    QVERIFY(resultOf("bestLap").value("value").toMap().value("label") != best.value("value").toMap().value("label"));
+}
+
 void TelemetryTests::formatsElapsedTimes()
 {
     QCOMPARE(AppController::formatElapsedTime(100.838), QString("1:40.838"));
@@ -5477,6 +5570,16 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
             .arg(heartRate.value("maximum").toDouble(), 0, 'f', 0).arg(heartRate.value("coverage").toDouble(), 0, 'f', 3)
             .arg(heartRate.value("excludedArtifacts").toInt());
     }
+    // KAN-71: the day report over the same computed results.
+    const auto dayReport = controller.outingDayReport();
+    QCOMPARE(validateDayReport(QJsonObject::fromVariantMap(dayReport)), QString());
+    for (const auto &value : dayReport.value("results").toList()) {
+        const auto result = value.toMap();
+        qInfo().noquote() << QString("  report %1 %2 %3 evidence %4 %5").arg(result.value("id").toString(), -18)
+            .arg(result.value("status").toString(), -12).arg(result.value("algorithm").toString(), -22)
+            .arg(result.value("evidence").toList().size(), 4).arg(result.value("reason").toString());
+    }
+    qInfo().noquote() << "  report size" << QJsonDocument(QJsonObject::fromVariantMap(dayReport)).toJson(QJsonDocument::Compact).size() << "bytes";
     const auto ranking = controller.outingTimeLossRanking();
     qInfo().noquote() << "Losses:" << ranking.value("observationCount").toInt() << "observed over"
         << ranking.value("comparedLapCount").toInt() << "laps";

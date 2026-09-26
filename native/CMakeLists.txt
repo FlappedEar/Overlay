@@ -88,6 +88,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/GgPairs.h
     src/telemetry/ChannelSummary.cpp
     src/telemetry/ChannelSummary.h
+    src/telemetry/DayReport.cpp
+    src/telemetry/DayReport.h
     src/telemetry/DrivingVariability.cpp
     src/telemetry/DrivingVariability.h
     src/telemetry/CornerSpeeds.cpp
@@ -212,6 +214,7 @@ qt_add_executable(flappedear_native MACOSX_BUNDLE
     src/app/AppControllerCornerAnalyzer.cpp
     src/app/AppControllerTheoreticalBest.cpp
     src/app/AppControllerChannelSummaries.cpp
+    src/app/AppControllerDayReport.cpp
     src/app/AppController.cpp
     src/app/AppController.h
     src/main.cpp
