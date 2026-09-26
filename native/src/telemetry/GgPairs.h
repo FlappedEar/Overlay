@@ -4,6 +4,7 @@
 
 #include <QString>
 #include <QVector>
+#include <optional>
 
 namespace FlappedEar {
 
@@ -55,5 +56,27 @@ struct GgPairs {
 };
 
 [[nodiscard]] GgPairs buildGgPairs(const TelemetrySession &session, double startTime, double endTime);
+
+// Observed peaks of a set of pairs (KAN-66), always from every pair -- never
+// from a decimated display subset. Braking is the most negative longitudinal
+// value, reported as a positive deceleration; combined is the largest
+// magnitude sqrt(longitudinal² + lateral²). These are observed values, not a
+// percentage of available grip.
+struct GgPeak {
+    double value = 0.0;
+    GgPoint point;
+};
+struct GgPeaks {
+    std::optional<GgPeak> lateral;      // largest |lateral|
+    std::optional<GgPeak> braking;      // largest deceleration (positive g)
+    std::optional<GgPeak> acceleration; // largest positive longitudinal
+    std::optional<GgPeak> combined;     // largest magnitude
+    qsizetype sampleCount = 0;
+};
+[[nodiscard]] GgPeaks computeGgPeaks(const QVector<GgPoint> &points);
+
+// At most `maximumPoints` points for drawing, evenly spaced in time, always
+// including every peak point; the calculated peaks are unaffected.
+[[nodiscard]] QVector<GgPoint> decimateGgPoints(const QVector<GgPoint> &points, const GgPeaks &peaks, qsizetype maximumPoints);
 
 } // namespace FlappedEar

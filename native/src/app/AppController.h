@@ -351,6 +351,9 @@ public:
     Q_INVOKABLE static QString formatElapsedTime(double seconds);
     // KAN-59: one loss window per approved segment for the current pair.
     Q_INVOKABLE QVariantMap comparisonTimeLossObservations() const;
+    // KAN-66: both laps' G-G samples over [start, end] metres of the shared
+    // axis: at most `maximumPoints` drawn per lap, peaks and counts from all.
+    Q_INVOKABLE QVariantMap comparisonGgScatter(double startMeters, double endMeters, int maximumPoints) const;
     Q_INVOKABLE bool selectOutingLap(int index);
     // Snapshot resolution: opening detail revalidates source content off-thread.
     Q_INVOKABLE QVariantMap resolveOutingLapReference(const QVariantMap &reference) const;

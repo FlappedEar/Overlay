@@ -161,6 +161,7 @@ private slots:
     void reportsLapAndSectorConsistency();
     void reportsCornerVariabilityWithGpsLimits();
     void showsSectionProgressionBetweenSessions();
+    void showsAbGgScatterWithPeaks();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
     void reviewsSegmentProposalsForTheOpenLap();
@@ -4225,6 +4226,24 @@ QByteArray warpedRouteVbo(const bool fastFirstHalf, const int samplesPerLap = 24
     }
     return out.join('\n').toUtf8();
 }
+// routeVbo() with calculated acceleration columns: lateral = scale·sin(angle),
+// longitudinal = scale·0.5·cos(angle), so the peaks are known (scale lateral,
+// scale·0.5 braking and accelerating).
+QByteArray routeVboWithAccelerations(const double scale, const int samplesPerLap = 240)
+{
+    const auto lines = QString::fromUtf8(EventProjectFixture::routeVbo(samplesPerLap)).split('\n');
+    QStringList out;
+    bool data = false;
+    int index = 0;
+    for (const auto &line : lines) {
+        if (line == "time latitude longitude") { out << line + " longacc-calc latacc-calc"; continue; }
+        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
+        const double angle = -1.0 + 2 * std::numbers::pi * index / samplesPerLap;
+        out << line + QString(" %1 %2").arg(scale * 0.5 * std::cos(angle), 0, 'f', 5).arg(scale * std::sin(angle), 0, 'f', 5);
+        ++index;
+    }
+    return out.join('\n').toUtf8();
+}
 } // namespace
 
 // Approves every proposal on the first eligible lap of `runName`'s run and
@@ -4924,6 +4943,79 @@ void TelemetryTests::showsSectionProgressionBetweenSessions()
     QCOMPARE(warnings.size(), 0);
 }
 
+void TelemetryTests::showsAbGgScatterWithPeaks()
+{
+    // KAN-66: session 2 is 90 % of session 1's accelerations, so every peak is
+    // known. Peaks and counts come from all samples, the drawn points are
+    // capped, and a narrower range has fewer samples.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto first = directory.filePath("full.vbo"), second = directory.filePath("ninety.vbo");
+    QVERIFY(writeBytes(first, routeVboWithAccelerations(1.0)));
+    QVERIFY(writeBytes(second, routeVboWithAccelerations(0.9)));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("G-G", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    QTRY_VERIFY(!controller.outingLapsLoading());
+    QVariantMap a, b;
+    for (const auto &value : controller.comparisonLaps()) {
+        const auto row = value.toMap();
+        if (a.isEmpty() && row.value("runName") == "Session 1") a = row;
+        if (b.isEmpty() && row.value("runName") == "Session 2") b = row;
+    }
+    QVERIFY(!a.isEmpty() && !b.isEmpty());
+    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
+    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
+    QTRY_VERIFY(controller.comparisonPairReady());
+    const double length = controller.comparisonProgressAxisLength();
+    const auto scatter = controller.comparisonGgScatter(0.0, length, 100);
+    QVERIFY(scatter.value("valid").toBool());
+    const auto laps = scatter.value("laps").toList();
+    QCOMPARE(laps.size(), 2);
+    const auto lapA = laps[0].toMap(), lapB = laps[1].toMap();
+    QVERIFY(lapA.value("valid").toBool() && lapB.value("valid").toBool());
+    QCOMPARE(lapA.value("longitudinalChannel").toString(), QString("longacc-calc"));
+    QVERIFY(lapA.value("sharedClock").toBool());
+    QVERIFY(lapA.value("sampleCount").toInt() > 200);
+    QVERIFY(lapA.value("points").toList().size() <= 104); // drawn points capped, peaks kept
+    const auto peak = [](const QVariantMap &lap, const char *key) {
+        return lap.value("peaks").toMap().value(key).toMap().value("value").toDouble();
+    };
+    QVERIFY2(std::abs(peak(lapA, "lateral") - 1.0) < 0.02, qPrintable(QString::number(peak(lapA, "lateral"))));
+    QVERIFY(std::abs(peak(lapB, "lateral") - 0.9) < 0.02);
+    QVERIFY(std::abs(peak(lapA, "braking") - 0.5) < 0.02);
+    QVERIFY(std::abs(peak(lapB, "braking") - 0.45) < 0.02);
+    QVERIFY(peak(lapA, "combined") >= peak(lapA, "lateral") - 1e-9);
+    // Decimation never changes the peaks.
+    const auto dense = controller.comparisonGgScatter(0.0, length, 100000).value("laps").toList()[0].toMap();
+    QVERIFY(std::abs(peak(dense, "lateral") - peak(lapA, "lateral")) < 1e-12);
+    QCOMPARE(dense.value("sampleCount").toInt(), lapA.value("sampleCount").toInt());
+    // A narrower range has fewer samples.
+    const auto part = controller.comparisonGgScatter(0.0, length / 4, 100).value("laps").toList()[0].toMap();
+    QVERIFY(part.value("sampleCount").toInt() < lapA.value("sampleCount").toInt() / 2);
+
+    // The panel shows the peaks.
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick\nWindow { width: 1300; height: 800; visible: true; "
+        "ComparisonDetailPanel { objectName: \"comparisonRoot\"; anchors.fill: parent } }",
+        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    auto *toggle = window->findChild<QQuickItem *>("comparisonToggleGg"); QVERIFY(toggle);
+    toggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    auto *panel = window->findChild<QQuickItem *>("comparisonGgPanel"); QVERIFY(panel);
+    QTRY_VERIFY(panel->isVisible());
+    auto *lateralA = window->findChild<QObject *>("ggLateralA"); QVERIFY(lateralA);
+    QTRY_COMPARE(lateralA->property("text").toString(), QString("1.00 g"));
+    auto *brakingB = window->findChild<QObject *>("ggBrakingB"); QVERIFY(brakingB);
+    QTRY_COMPARE(brakingB->property("text").toString(), QString("0.45 g"));
+    QCOMPARE(warnings.size(), 0);
+}
+
 void TelemetryTests::formatsElapsedTimes()
 {
     QCOMPARE(AppController::formatElapsedTime(100.838), QString("1:40.838"));
@@ -5094,6 +5186,11 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
     QTRY_VERIFY(controller.comparisonFocusSegmentId().isEmpty());
     QTest::qWait(1500);
     QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("corner-analyzer.png")));
+    if (auto *ggToggle = window->findChild<QQuickItem *>("comparisonToggleGg")) {
+        ggToggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space); QTest::qWait(1000);
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("gg.png")));
+        ggToggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space); QTest::qWait(300);
+    }
     for (const auto &value : controller.comparisonApprovedSegments()) {
         if (value.toMap().value("type") != "straight") continue;
         auto *item = window->findChild<QQuickItem *>("cornerAnalyzerSegment-" + value.toMap().value("id").toString());

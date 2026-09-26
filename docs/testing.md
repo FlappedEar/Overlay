@@ -992,6 +992,40 @@ on an offset clock that is exact on a linear signal and never crosses a
 non-finite samples and missing axes. On the private Jastrząb day, the best
 lap's 1,418 samples all pair on a shared clock with no gaps or outliers.
 
+## A/B G-G scatter and observed peaks (KAN-66)
+
+In the comparison view, **G-G** (`ComparisonGgPanel.qml`) opens a side
+column next to the map and charts; only one side column shows at a time. It
+plots both laps' KAN-65 pairs over the shared zoom window: the whole lap, or
+the segment selected in the Corner Analyzer.
+
+- **Axes:** lateral runs left–right as the driver feels it (left on the
+  left); longitudinal points up for accelerating and down for braking. Rings
+  mark every 0.5 g. Lap A is green, lap B orange, as elsewhere.
+- **Peaks:** `computeGgPeaks` reports the peak lateral (largest |lateral|),
+  peak braking (largest deceleration, as a positive value), peak
+  acceleration and peak combined (largest magnitude), each with its point.
+  Valid sample counts are shown for both laps. Peaks are always calculated
+  from **every** pair. `decimateGgPoints` only thins what is drawn (at most
+  1,500 points per lap) and always keeps the peak points.
+- The panel names the source channels, says when units are undeclared, and
+  states that these are observed accelerations, not a share of available
+  grip. No percentage is shown.
+- `AppController::comparisonGgScatter(start, end, maximumPoints)` is only
+  evaluated while the panel is visible.
+
+`GgPairsTests::computesPeaksIndependentlyOfDecimation` checks the peak
+values and points on 5,000 points, that a 300-point decimation keeps
+identical peaks, and that no pairs means no peaks.
+`TelemetryTests::showsAbGgScatterWithPeaks` uses
+`routeVboWithAccelerations`, whose peaks are known, with session 2 at 90 %:
+lateral 1.00 against 0.90 g, braking 0.50 against 0.45 g. It checks that
+drawn points are capped while the sample count is not, that dense and
+decimated peaks are identical, that a quarter lap has fewer samples, and
+that the panel shows the peaks with no QML warnings. On the private Jastrząb
+day, the afternoon best lap (Session 5) reaches 0.98 g lateral, 0.87 g
+braking and 1.02 g combined; a morning lap peaks around 0.6 g.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings

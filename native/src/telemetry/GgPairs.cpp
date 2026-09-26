@@ -91,4 +91,32 @@ GgPairs buildGgPairs(const TelemetrySession &session, const double startTime, co
     return result;
 }
 
+GgPeaks computeGgPeaks(const QVector<GgPoint> &points)
+{
+    GgPeaks peaks;
+    peaks.sampleCount = points.size();
+    const auto consider = [](std::optional<GgPeak> &peak, const double value, const GgPoint &point) {
+        if (value > 0.0 && (!peak || value > peak->value)) peak = GgPeak{value, point};
+    };
+    for (const auto &point : points) {
+        consider(peaks.lateral, std::abs(point.lateralG), point);
+        consider(peaks.braking, -point.longitudinalG, point);
+        consider(peaks.acceleration, point.longitudinalG, point);
+        consider(peaks.combined, std::hypot(point.longitudinalG, point.lateralG), point);
+    }
+    return peaks;
+}
+
+QVector<GgPoint> decimateGgPoints(const QVector<GgPoint> &points, const GgPeaks &peaks, const qsizetype maximumPoints)
+{
+    if (maximumPoints <= 0 || points.size() <= maximumPoints) return points;
+    QVector<GgPoint> result;
+    result.reserve(maximumPoints + 4);
+    const double step = static_cast<double>(points.size()) / static_cast<double>(maximumPoints);
+    for (qsizetype k = 0; k < maximumPoints; ++k) result.append(points[static_cast<qsizetype>(k * step)]);
+    for (const auto *peak : {&peaks.lateral, &peaks.braking, &peaks.acceleration, &peaks.combined})
+        if (*peak) result.append((*peak)->point);
+    return result;
+}
+
 } // namespace FlappedEar

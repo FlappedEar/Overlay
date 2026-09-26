@@ -51,6 +51,7 @@ private slots:
     void interpolatesLateralOnAnotherClockWithoutBridgingGaps();
     void convertsOrRejectsUnits();
     void excludesOutliersAndMissingAxes();
+    void computesPeaksIndependentlyOfDecimation();
 };
 
 void GgPairsTests::pairsSamplesOnASharedClock()
@@ -146,6 +147,31 @@ void GgPairsTests::excludesOutliersAndMissingAxes()
     QVERIFY(missing.points.isEmpty());
     QCOMPARE(buildGgPairs(TelemetrySession{}, 0.0, 1.0).unavailableReason, QString(ggMissingLongitudinal));
     QVERIFY(buildGgPairs(session, 1.0, 0.5).points.isEmpty()); // inverted range
+}
+
+void GgPairsTests::computesPeaksIndependentlyOfDecimation()
+{
+    // 5000 points of a gentle circle, one braking spike and one lateral spike.
+    QVector<GgPoint> points;
+    for (int i = 0; i < 5000; ++i) points.append({i * 0.01, 0.3 * std::cos(i * 0.01), 0.3 * std::sin(i * 0.01)});
+    points[1234].longitudinalG = -1.1;               // hardest braking
+    points[3777].lateralG = -1.05;                   // hardest right-hand lateral
+    const auto peaks = computeGgPeaks(points);
+    QCOMPARE(peaks.sampleCount, 5000);
+    QVERIFY(std::abs(peaks.braking->value - 1.1) < 1e-9);
+    QCOMPARE(peaks.braking->point.time, points[1234].time);
+    QVERIFY(std::abs(peaks.lateral->value - 1.05) < 1e-9);
+    QVERIFY(peaks.combined->value >= 1.1);
+    QVERIFY(std::abs(peaks.acceleration->value - 0.3) < 1e-3);
+    const auto shown = decimateGgPoints(points, peaks, 300);
+    QVERIFY(shown.size() <= 304);
+    // Decimation keeps the peak points and does not change the peaks.
+    const auto again = computeGgPeaks(shown);
+    QVERIFY(std::abs(again.braking->value - peaks.braking->value) < 1e-12);
+    QVERIFY(std::abs(again.lateral->value - peaks.lateral->value) < 1e-12);
+    QVERIFY(std::abs(again.combined->value - peaks.combined->value) < 1e-12);
+    QCOMPARE(decimateGgPoints(points, peaks, 0).size(), points.size());
+    QVERIFY(!computeGgPeaks({}).braking);
 }
 
 QTEST_GUILESS_MAIN(GgPairsTests)

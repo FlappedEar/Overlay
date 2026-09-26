@@ -232,6 +232,7 @@ qt_add_qml_module(flappedear_native
         qml/ComparisonOverlayChart.qml
         qml/ComparisonOverlayMap.qml
         qml/ComparisonSegmentPanel.qml
+        qml/ComparisonGgPanel.qml
         qml/ComparisonLapDialog.qml
         qml/LapTimingPanel.qml
         qml/FeButton.qml

@@ -30,6 +30,10 @@ Rectangle {
     // (ComparisonSegmentPanel) -- shares this same zoomStart/zoomEnd/
     // hoverDistanceMeters state, not a separate cursor.
     property bool showingCornerAnalyzer: false
+    // KAN-66: the G-G column; only one side column at a time.
+    property bool showingGg: false
+    onShowingCornerAnalyzerChanged: if (root.showingCornerAnalyzer) root.showingGg = false
+    onShowingGgChanged: if (root.showingGg) root.showingCornerAnalyzer = false
     // KAN-41: on a fresh pair (this document's persisted A/B just restored, or
     // freshly (re)opening the compare view), apply the persisted range/channel
     // selection instead of resetting to full range/defaults, once per such
@@ -221,6 +225,12 @@ Rectangle {
                     onClicked: root.showingCornerAnalyzer = !root.showingCornerAnalyzer
                 }
                 FeButton {
+                    objectName: "comparisonToggleGg"
+                    compact: true
+                    text: root.showingGg ? qsTr("Hide G-G") : qsTr("G-G")
+                    onClicked: root.showingGg = !root.showingGg
+                }
+                FeButton {
                     objectName: "comparisonResetZoom"
                     visible: root.zoomed
                     compact: true
@@ -271,7 +281,7 @@ Rectangle {
                 spacing: 8
                 ComparisonOverlayMap {
                     id: overlayMap
-                    Layout.preferredWidth: Math.max(160, root.width * (root.showingCornerAnalyzer ? 0.2 : 0.26))
+                    Layout.preferredWidth: Math.max(160, root.width * (root.showingCornerAnalyzer || root.showingGg ? 0.2 : 0.26))
                     Layout.fillHeight: true
                     hoverDistanceMeters: root.hoverDistanceMeters
                     rangeStartMeters: root.zoomStart
@@ -363,6 +373,17 @@ Rectangle {
                     Layout.fillHeight: true
                     onRangeRequested: (start, end) => { root.zoomStart = start; root.zoomEnd = end; }
                     onHovered: meters => root.hoverDistanceMeters = meters
+                }
+                ComparisonGgPanel {
+                    objectName: "comparisonGgPanel"
+                    visible: root.showingGg
+                    Layout.preferredWidth: 380
+                    Layout.minimumWidth: 320
+                    Layout.maximumWidth: 380
+                    Layout.fillHeight: true
+                    rangeStartMeters: root.zoomStart
+                    rangeEndMeters: root.zoomEnd
+                    totalMeters: root.totalMeters
                 }
             }
         }

@@ -11,6 +11,7 @@
 
 #include "app/AppController.h"
 #include "telemetry/MetricProvenance.h"
+#include "telemetry/GgPairs.h"
 
 using namespace FlappedEar;
 
@@ -370,4 +371,52 @@ QVariantMap AppController::comparisonTimeLossObservations() const
         {"allWindowsTimed", observations.allWindowsTimed},
         {"timedIncrementSumSeconds", observations.timedIncrementSumSeconds},
         {"lapDeltaSeconds", (endA - startA) - (endB - startB)}};
+}
+
+QVariantMap AppController::comparisonGgScatter(const double startMeters, const double endMeters, const int maximumPoints) const
+{
+    if (!comparisonPairReady()) return {{"valid", false}};
+    ensureComparisonProgressAxis();
+    if (!m_comparisonProgressAxis.valid) return {{"valid", false}};
+    const double length = m_comparisonProgressAxis.lengthMeters;
+    const double from = std::clamp(startMeters, 0.0, length), to = std::clamp(endMeters, 0.0, length);
+    const auto peakMap = [](const std::optional<GgPeak> &peak) -> QVariant {
+        if (!peak) return {};
+        return QVariantMap{{"value", peak->value}, {"lateralG", peak->point.lateralG},
+            {"longitudinalG", peak->point.longitudinalG}, {"time", peak->point.time}};
+    };
+    QVariantList laps;
+    for (int slot = 0; slot < 2; ++slot) {
+        const auto &comparisonSlot = m_comparisonSlots[slot];
+        const double lapStart = comparisonSlot.row.value("startTime").toDouble();
+        const double lapEnd = comparisonSlot.row.value("endTime").toDouble();
+        const auto timeAt = [&](const double meters) -> std::optional<double> {
+            if (meters <= 1e-6) return lapStart;
+            if (meters >= length - 1e-6) return lapEnd;
+            return timeAtProgress(m_comparisonProgressTraceCache[slot], meters);
+        };
+        const auto t0 = timeAt(from), t1 = timeAt(to);
+        if (!t0 || !t1 || *t1 <= *t0) {
+            laps.append(QVariantMap{{"valid", false}, {"unavailableReason", QStringLiteral("incompleteCoverage")}});
+            continue;
+        }
+        const auto pairs = buildGgPairs(*comparisonSlot.session, *t0, *t1);
+        if (!pairs.valid) {
+            laps.append(QVariantMap{{"valid", false}, {"unavailableReason", pairs.unavailableReason}});
+            continue;
+        }
+        const auto peaks = computeGgPeaks(pairs.points);
+        QVariantList points;
+        for (const auto &point : decimateGgPoints(pairs.points, peaks, maximumPoints))
+            points.append(QVariantMap{{"x", point.lateralG}, {"y", point.longitudinalG}});
+        laps.append(QVariantMap{{"valid", true}, {"points", points}, {"sampleCount", peaks.sampleCount},
+            {"candidateCount", pairs.candidateCount}, {"skippedForGap", pairs.skippedForGap},
+            {"excludedOutliers", pairs.excludedOutliers}, {"sharedClock", pairs.sharedClock},
+            {"unitsDeclared", pairs.unitsDeclared}, {"longitudinalChannel", pairs.longitudinalChannel},
+            {"lateralChannel", pairs.lateralChannel},
+            {"peaks", QVariantMap{{"lateral", peakMap(peaks.lateral)}, {"braking", peakMap(peaks.braking)},
+                {"acceleration", peakMap(peaks.acceleration)}, {"combined", peakMap(peaks.combined)}}}});
+    }
+    return {{"valid", true}, {"algorithm", QString::fromLatin1(ggPairsAlgorithm)}, {"laps", laps},
+        {"startMeters", from}, {"endMeters", to}};
 }
