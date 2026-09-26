@@ -125,6 +125,25 @@ AppController::ChannelSummariesResult AppController::computeOutingChannelSummari
                     {"sections", sections}});
             }
             run.insert("channels", channels);
+            // KAN-69: heart rate from the recording's own heart-rate channel
+            // (the imported VBO/RCZ; never a separate source).
+            const auto heartRate = session.aliases.value("heartRate");
+            if (!heartRate.isEmpty() && session.channels.contains(heartRate)) {
+                const auto policy = heartRateSummaryPolicy();
+                QVariantList sections;
+                for (const auto &row : runRows) {
+                    auto section = summaryMap(summarizeChannel(session, heartRate, row.start, row.end, policy));
+                    section.insert("type", lapSectionName(row.type));
+                    section.insert("lapNumber", row.lapNumber);
+                    section.insert("reference", row.reference.toVariantMap());
+                    sections.append(section);
+                }
+                const auto &times = session.channels.value(heartRate).timestamps;
+                const double start = times.isEmpty() ? 0.0 : times.first();
+                run.insert("heartRate", QVariantMap{{"channel", heartRate}, {"unit", session.channels.value(heartRate).unit},
+                    {"run", summaryMap(summarizeChannel(session, heartRate, start, session.duration + start, policy))},
+                    {"sections", sections}});
+            }
             result.runs.append(run);
         }
     } catch (const OperationCancelled &) {
@@ -133,4 +152,35 @@ AppController::ChannelSummariesResult AppController::computeOutingChannelSummari
         result.error = QString::fromUtf8(error.what());
     }
     return result;
+}
+
+QVariantMap AppController::comparisonHeartRate(const double startMeters, const double endMeters) const
+{
+    if (!comparisonPairReady()) return {{"valid", false}};
+    ensureComparisonProgressAxis();
+    if (!m_comparisonProgressAxis.valid) return {{"valid", false}};
+    const double length = m_comparisonProgressAxis.lengthMeters;
+    const double from = std::clamp(startMeters, 0.0, length), to = std::clamp(endMeters, 0.0, length);
+    QVariantList laps;
+    for (int slot = 0; slot < 2; ++slot) {
+        const auto &comparisonSlot = m_comparisonSlots[slot];
+        const double lapStart = comparisonSlot.row.value("startTime").toDouble();
+        const double lapEnd = comparisonSlot.row.value("endTime").toDouble();
+        const auto timeAt = [&](const double meters) -> std::optional<double> {
+            if (meters <= 1e-6) return lapStart;
+            if (meters >= length - 1e-6) return lapEnd;
+            return timeAtProgress(m_comparisonProgressTraceCache[slot], meters);
+        };
+        const auto t0 = timeAt(from), t1 = timeAt(to);
+        if (!t0 || !t1 || *t1 <= *t0) {
+            laps.append(QVariantMap{{"valid", false}, {"unavailableReason", QStringLiteral("incompleteCoverage")}});
+            continue;
+        }
+        auto map = summaryMap(summarizeChannel(*comparisonSlot.session, QStringLiteral("heartRate"), *t0, *t1,
+            heartRateSummaryPolicy()));
+        map.insert("channel", comparisonSlot.session->aliases.value("heartRate"));
+        laps.append(map);
+    }
+    return {{"valid", true}, {"algorithm", QString::fromLatin1(channelSummaryAlgorithm)}, {"laps", laps},
+        {"startMeters", from}, {"endMeters", to}};
 }

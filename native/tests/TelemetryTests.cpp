@@ -164,6 +164,7 @@ private slots:
     void showsSectionProgressionBetweenSessions();
     void showsAbGgScatterWithPeaks();
     void summarizesRecordedTemperaturesPerRunAndSection();
+    void summarizesHeartRatePerRunSectionAndInterval();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
     void reviewsSegmentProposalsForTheOpenLap();
@@ -4262,6 +4263,23 @@ QByteArray routeVboWithCoolant(const int samplesPerLap = 240)
     }
     return out.join('\n').toUtf8();
 }
+// routeVbo() with a heart-rate column held for five rows at a time (a strap
+// updates slower than the logger), at `level` bpm with one 255 bpm artifact.
+QByteArray routeVboWithHeartRate(const double level, const int samplesPerLap = 240)
+{
+    const auto lines = QString::fromUtf8(EventProjectFixture::routeVbo(samplesPerLap)).split('\n');
+    QStringList out;
+    bool data = false;
+    int index = 0;
+    for (const auto &line : lines) {
+        if (line == "time latitude longitude") { out << line + " heart_rate"; continue; }
+        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
+        const double value = index == 100 ? 255.0 : level + ((index / 5) % 2 == 0 ? -2.0 : 2.0);
+        out << line + QString(" %1").arg(value, 0, 'f', 1);
+        ++index;
+    }
+    return out.join('\n').toUtf8();
+}
 } // namespace
 
 // Approves every proposal on the first eligible lap of `runName`'s run and
@@ -5078,6 +5096,60 @@ void TelemetryTests::summarizesRecordedTemperaturesPerRunAndSection()
     }
 }
 
+void TelemetryTests::summarizesHeartRatePerRunSectionAndInterval()
+{
+    // KAN-69: heart rate from the recordings' own channel, per run, per
+    // section and for a selected interval of the comparison pair. The 255 bpm
+    // artifact is excluded and counted; a recording without heart rate has
+    // no summary rather than an invented one.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto first = directory.filePath("calm.vbo"), second = directory.filePath("busy.vbo"), third = directory.filePath("none.vbo");
+    QVERIFY(writeBytes(first, routeVboWithHeartRate(140)));
+    QVERIFY(writeBytes(second, routeVboWithHeartRate(150)));
+    QVERIFY(writeBytes(third, EventProjectFixture::routeVbo()));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Heart rate", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second), QUrl::fromLocalFile(third)}));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    QTRY_VERIFY(!controller.outingLapsLoading());
+    controller.requestOutingChannelSummaries();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 30000);
+    int withHeartRate = 0;
+    for (const auto &value : controller.outingChannelSummaries().value("runs").toList()) {
+        const auto run = value.toMap();
+        if (!run.contains("heartRate")) continue;
+        ++withHeartRate;
+        const auto heartRate = run.value("heartRate").toMap();
+        QCOMPARE(heartRate.value("channel").toString(), QString("heart_rate"));
+        const auto whole = heartRate.value("run").toMap();
+        QVERIFY(whole.value("valid").toBool());
+        QCOMPARE(whole.value("excludedArtifacts").toInt(), 1);
+        QVERIFY(whole.value("maximum").toDouble() < 200.0);
+        const double level = run.value("runName") == "Session 1" ? 140.0 : 150.0;
+        QVERIFY2(std::abs(whole.value("mean").toDouble() - level) < 0.5, qPrintable(whole.value("mean").toString()));
+        QVERIFY(whole.value("coverage").toDouble() > 0.95);
+        QVERIFY(heartRate.value("sections").toList().size() >= 3);
+    }
+    QCOMPARE(withHeartRate, 2);
+
+    // A selected interval of the comparison pair.
+    QVariantMap a, b;
+    for (const auto &value : controller.comparisonLaps()) {
+        const auto row = value.toMap();
+        if (a.isEmpty() && row.value("runName") == "Session 1") a = row;
+        if (b.isEmpty() && row.value("runName") == "Session 2") b = row;
+    }
+    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
+    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
+    QTRY_VERIFY(controller.comparisonPairReady());
+    const double length = controller.comparisonProgressAxisLength();
+    const auto pair = controller.comparisonHeartRate(0.0, length / 2).value("laps").toList();
+    QCOMPARE(pair.size(), 2);
+    QVERIFY(std::abs(pair[0].toMap().value("mean").toDouble() - 140.0) < 2.5);
+    QVERIFY(std::abs(pair[1].toMap().value("mean").toDouble() - 150.0) < 2.5);
+    QVERIFY(pair[0].toMap().value("coverage").toDouble() > 0.9);
+}
+
 void TelemetryTests::formatsElapsedTimes()
 {
     QCOMPARE(AppController::formatElapsedTime(100.838), QString("1:40.838"));
@@ -5187,6 +5259,14 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
                 .arg(summary.value("mean").toDouble(), 6, 'f', 1).arg(summary.value("maximum").toDouble(), 6, 'f', 1)
                 .arg(summary.value("coverage").toDouble(), 5, 'f', 3).arg(summary.value("excludedArtifacts").toInt());
         }
+    }
+    for (const auto &value : controller.outingChannelSummaries().value("runs").toList()) {
+        const auto heartRate = value.toMap().value("heartRate").toMap().value("run").toMap();
+        if (heartRate.isEmpty()) continue;
+        qInfo().noquote() << QString("  %1 heart rate min %2 mean %3 max %4 coverage %5 artifacts %6").arg(value.toMap().value("runName").toString(), -10)
+            .arg(heartRate.value("minimum").toDouble(), 0, 'f', 0).arg(heartRate.value("mean").toDouble(), 0, 'f', 1)
+            .arg(heartRate.value("maximum").toDouble(), 0, 'f', 0).arg(heartRate.value("coverage").toDouble(), 0, 'f', 3)
+            .arg(heartRate.value("excludedArtifacts").toInt());
     }
     const auto ranking = controller.outingTimeLossRanking();
     qInfo().noquote() << "Losses:" << ranking.value("observationCount").toInt() << "observed over"

@@ -359,6 +359,8 @@ public:
     // KAN-66: both laps' G-G samples over [start, end] metres of the shared
     // axis: at most `maximumPoints` drawn per lap, peaks and counts from all.
     Q_INVOKABLE QVariantMap comparisonGgScatter(double startMeters, double endMeters, int maximumPoints) const;
+    // KAN-69: both laps' heart rate over [start, end] metres of the shared axis.
+    Q_INVOKABLE QVariantMap comparisonHeartRate(double startMeters, double endMeters) const;
     Q_INVOKABLE bool selectOutingLap(int index);
     // Snapshot resolution: opening detail revalidates source content off-thread.
     Q_INVOKABLE QVariantMap resolveOutingLapReference(const QVariantMap &reference) const;
