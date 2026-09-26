@@ -22,6 +22,7 @@
 #include "telemetry/TelemetryImportPlan.h"
 #include "telemetry/OutingLaps.h"
 #include "telemetry/OutingLapLoader.h"
+#include "telemetry/OutingTheoreticalBest.h"
 #include "telemetry/TrackInference.h"
 #include "export/MediaProbe.h"
 #include "export/ExportDiagnostics.h"
@@ -736,22 +737,9 @@ private:
     // -- it must decode every eligible lap's recording in turn, which the
     // 2-entry comparison cache is not sized for; a fresh single-request cache
     // is used instead (sized fine since laps are processed grouped by run).
-    struct TheoreticalBestResult {
+    // The core result plus the request it answers (stale results are dropped).
+    struct TheoreticalBestResult : FlappedEar::OutingTheoreticalBest {
         quint64 request = 0;
-        QString error;
-        FlappedEar::TheoreticalBestLap best;
-        // KAN-57: the group's actual best lap timed on the same axis, so
-        // per-sector losses compare like with like.
-        std::optional<FlappedEar::LapSectorTimes> actualBest;
-        QString canonicalRunId;
-        // KAN-60: every eligible lap timed on the canonical axis, kept for
-        // the time-loss ranking against the actual best.
-        QVector<FlappedEar::TimedLapSectors> population;
-        FlappedEar::ApprovedSegmentation approved;
-        double axisLengthMeters = 0.0;
-        FlappedEar::ProgressAxis axis; // KAN-120: drawn as the track map
-        // KAN-63: each lap's corner metrics, by corner segment id.
-        QHash<QString, QVector<FlappedEar::CornerLapObservation>> cornerObservations;
     };
     static TheoreticalBestResult computeOutingTheoreticalBest(QVector<FlappedEar::OutingLapRow> population,
         QHash<QString, QJsonObject> sourcesByRunId, QString projectPath, FlappedEar::ApprovedSegmentation approved,
