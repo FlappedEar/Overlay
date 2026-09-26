@@ -1046,6 +1046,53 @@ validates. A malformed scene still fails, and a v2 editor project still
 needs its scene. The private real-day figures are unchanged by the split
 (1:47.905 theoretical against 1:49.898).
 
+## Recorded temperature summaries (KAN-67)
+
+`summarizeChannel` (`native/src/telemetry/ChannelSummary.h/.cpp`, tag
+`channel-summary-v1`) summarizes one recorded channel over an interval:
+
+- **Mean:** time-weighted. Consecutive valid samples closer than the
+  channel's gap threshold are joined linearly, and the mean is that line's
+  integral over the covered time. A gap is never bridged.
+- **Extrema:** minimum and maximum, with the time of each.
+- **Coverage:** covered time as a fraction of the interval.
+- **Units** as declared (VBO units are not recorded; see KAN-117), and the
+  source channel name.
+- **Artifact policy**, always counted in `excludedArtifacts`, never silently
+  dropped:
+  - temperatures outside −40…250 °C are excluded;
+  - an exact 0 is excluded as an OBD placeholder when the channel's median
+    is above 20 (a channel that really sits near 0 keeps its zeros);
+  - an excluded sample also breaks the joined line.
+
+`recordedTemperatureChannels` lists only the recording's own channels whose
+name contains "temp". An absent sensor is not listed, and no thresholds are
+invented. `AppController::requestOutingChannelSummaries()` runs a background
+worker that decodes each run once. It is independent of segments and of the
+comparison group, because vehicle health applies to every run.
+`outingChannelSummaries` reports, per run and per temperature channel, the
+whole-recording summary and one summary per recorded section (OUT, laps,
+IN), giving run and lap coverage.
+
+`ChannelSummaryTests` covers:
+- an exact time-weighted mean on a linear ramp, including a sub-interval;
+- a 4 s gap that is not bridged (coverage 0.6, mean of the covered parts);
+- placeholder zeros and a 900 °C glitch excluded and counted, while zeros
+  in a near-zero channel are kept;
+- heart-rate plausibility;
+- a missing sensor and an empty interval.
+
+`TelemetryTests::summarizesRecordedTemperaturesPerRunAndSection` imports one
+run with a coolant channel (three placeholder zeros, then a rising value) and
+one without. It checks that the run without a sensor lists none, that the
+three artifacts are excluded, the coverage, and that section means rise.
+
+On the private Jastrząb day: 6 sessions × 4 channels (coolant, oil, gearbox,
+intake). Oil peaks at 108 °C in Session 1 and 128 °C in Sessions 5–6, and
+gearbox at 113 °C. OBD dropouts in Sessions 3–4 (up to 582 zero samples)
+are excluded with coverage 0.95–0.98. There is no UI yet; KAN-68 shows the
+trends.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings

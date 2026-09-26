@@ -153,6 +153,9 @@ class AppController final : public QObject {
     // KAN-62: lap-time consistency of the comparison group's eligible laps
     // (median and interquartile range), for the day and for each run.
     Q_PROPERTY(QVariantMap outingLapConsistency READ outingLapConsistency NOTIFY outingLapsChanged)
+    // KAN-67: recorded temperature channels summarized per run and per
+    // recorded section (mean, extrema, coverage); requested explicitly.
+    Q_PROPERTY(QVariantMap outingChannelSummaries READ outingChannelSummaries NOTIFY outingChannelSummariesChanged)
     // KAN-64: each approved segment's typical time and spread per session, in
     // chronological order, with the laps behind every figure.
     Q_PROPERTY(QVariantMap outingSectorProgression READ outingSectorProgression NOTIFY outingTheoreticalBestChanged)
@@ -275,6 +278,8 @@ public:
     [[nodiscard]] QVariantMap outingTheoreticalBest() const;
     [[nodiscard]] QVariantMap outingTimeLossRanking() const;
     [[nodiscard]] QVariantMap outingLapConsistency() const;
+    [[nodiscard]] QVariantMap outingChannelSummaries() const;
+    Q_INVOKABLE void requestOutingChannelSummaries();
     [[nodiscard]] QVariantMap outingSectorProgression() const;
     [[nodiscard]] bool outingTimeLossAllLaps() const { return m_timeLossAllLaps; }
     void setOutingTimeLossAllLaps(bool allLaps);
@@ -503,6 +508,7 @@ signals:
     void outingLapDetailChanged();
     void outingLapVideoChanged();
     void outingTheoreticalBestChanged();
+    void outingChannelSummariesChanged();
     void comparisonFocusSegmentIdChanged();
     void comparisonSlotsChanged();
     void comparisonViewOpenChanged();
@@ -750,6 +756,21 @@ private:
         QString canonicalRunId, QJsonObject actualBestReference, quint64 request,
         const std::shared_ptr<std::atomic_bool> &cancellation);
     void initializeOutingTheoreticalBest();
+    struct ChannelSummariesResult {
+        quint64 request = 0;
+        QString error;
+        QVariantList runs;
+    };
+    static ChannelSummariesResult computeOutingChannelSummaries(QVector<FlappedEar::OutingLapRow> rows,
+        QHash<QString, QJsonObject> sourcesByRunId, QString projectPath, quint64 request,
+        const std::shared_ptr<std::atomic_bool> &cancellation);
+    void initializeOutingChannelSummaries();
+    QFutureWatcher<ChannelSummariesResult> m_channelSummariesWatcher;
+    std::shared_ptr<std::atomic_bool> m_channelSummariesCancellation;
+    quint64 m_channelSummariesRequest = 0;
+    QString m_channelSummariesState = QStringLiteral("idle");
+    QString m_channelSummariesMessage;
+    QVariantList m_channelSummariesRuns;
     [[nodiscard]] QString outingLapLabel(const QJsonObject &reference) const;
     // What the theoretical best and loss ranking depend on; a document change
     // that leaves this unchanged (e.g. persisting the comparison pair) keeps

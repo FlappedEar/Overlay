@@ -26,6 +26,7 @@ qt_add_executable(flappedear_native_tests
     ../src/app/AppControllerSegmentReview.cpp
     ../src/app/AppControllerCornerAnalyzer.cpp
     ../src/app/AppControllerTheoreticalBest.cpp
+    ../src/app/AppControllerChannelSummaries.cpp
     TelemetryTests.cpp
     ../src/app/AppController.cpp
     ../src/app/AppController.h
@@ -149,6 +150,11 @@ target_compile_features(flappedear_gg_pairs_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_gg_pairs_tests PRIVATE flappedear_telemetry_core Qt6::Test)
 flappedear_enable_warnings(flappedear_gg_pairs_tests)
 add_test(NAME flappedear_gg_pairs_tests COMMAND flappedear_gg_pairs_tests)
+qt_add_executable(flappedear_channel_summary_tests ChannelSummaryTests.cpp)
+target_compile_features(flappedear_channel_summary_tests PRIVATE cxx_std_20)
+target_link_libraries(flappedear_channel_summary_tests PRIVATE flappedear_telemetry_core Qt6::Test)
+flappedear_enable_warnings(flappedear_channel_summary_tests)
+add_test(NAME flappedear_channel_summary_tests COMMAND flappedear_channel_summary_tests)
 qt_add_executable(flappedear_driving_variability_tests DrivingVariabilityTests.cpp)
 target_compile_features(flappedear_driving_variability_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_driving_variability_tests PRIVATE flappedear_telemetry_core Qt6::Test)
