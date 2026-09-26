@@ -1216,6 +1216,79 @@ On the private Jastrząb day, per-lap means rise from 112–131 bpm (Sessions
 LAP 2 on "Corners 9–16", which crosses start/finish, the Corner Analyzer shows
 123 against 154 bpm (429 and 317 samples, 99% and 100% covered).
 
+## Computed day report (KAN-71)
+
+`telemetry/DayReport.h/.cpp` (`day-report-v1`, schema
+`flappedear.day-report` version 1) is the report model. Screens, the desktop
+now and the phone app later, present it and never recalculate:
+
+- `buildDayReport` assembles results that were already computed. Each result
+  has:
+  - an `id`;
+  - its producing `algorithm` (plus a `revision` where the producer has one,
+    such as the time-loss stamp);
+  - a `range`: scope, group, and counts such as eligible laps, compared laps
+    and runs;
+  - a `status`: `available`, `unavailable`, `notComputed`, `computing` or
+    `stale`;
+  - a `value` only when available;
+  - `evidence` a screen can open: `lap` (a lap reference), `segment` (a
+    segment of a lap, with the reference lap for losses), `channel` (a run's
+    recorded channel) or `run`.
+- The report carries the **decisions key**: a hash of the group, approved
+  segments, track configuration, exclusions and population, the same key
+  the theoretical best uses. A result computed under another key is reported
+  `stale`, and its value and evidence are dropped. The controller also
+  resets the underlying results when decisions change, so this is a second
+  line of defence. Channel summaries do not depend on the decisions (they
+  are invalidated with the run set), so they carry no key.
+- `validateDayReport` checks a report read from elsewhere: schema, version,
+  unique ids, algorithm, known status and evidence kinds, and value only when
+  available. Results and evidence are bounded (64 and 4096) before it
+  iterates.
+
+`AppController::outingDayReport` (cached, rebuilt when laps, the theoretical
+best, the channel summaries or the document change) contains these results:
+- `bestLap`
+- `progression`
+- `consistency` (evidence is the eligible laps)
+- `theoreticalBest` (evidence is each sector's source lap and segment)
+- `timeLosses` (top 10)
+- `sectionProgression`
+- `temperatures`
+- `heartRate`
+
+`requestOutingDayReport()` starts the background results it needs.
+
+Tests:
+- `DayReportTests`: provenance on every result; a value computed under other
+  decisions is `stale` with no value or evidence, while a decision-independent
+  result is not; malformed input is rejected (duplicate id, missing
+  algorithm, evidence without a kind); read reports are validated for
+  version, results type, value/status mismatch, unknown status and evidence
+  kinds, and the result and evidence bounds.
+- `TelemetryTests::buildsDayReportWithProvenance`, two runs with one heart-rate
+  channel:
+  - before the workers run, the ranking results are available and resolve
+    their lap evidence, while the rest are `notComputed` with no value;
+  - after `requestOutingDayReport`, every result is available or says why
+    not: temperatures are "No temperature recorded", and heart rate has
+    exactly one channel of evidence;
+  - excluding the best lap changes the decisions key, so the theoretical
+    best no longer shows its old value and the best lap moves.
+
+On the private Jastrząb day, all eight results are available:
+- best lap: 1 evidence item;
+- progression: 6 sessions;
+- consistency: 23 eligible laps;
+- theoretical best: 15 evidence items;
+- time losses: 10;
+- sections by session: 84 segment × session cells;
+- temperatures: 24 channels;
+- heart rate: 6 channels.
+
+The report is 93 KB of JSON. The report screen is KAN-72.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings

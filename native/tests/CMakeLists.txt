@@ -27,6 +27,7 @@ qt_add_executable(flappedear_native_tests
     ../src/app/AppControllerCornerAnalyzer.cpp
     ../src/app/AppControllerTheoreticalBest.cpp
     ../src/app/AppControllerChannelSummaries.cpp
+    ../src/app/AppControllerDayReport.cpp
     TelemetryTests.cpp
     ../src/app/AppController.cpp
     ../src/app/AppController.h
@@ -155,6 +156,11 @@ target_compile_features(flappedear_channel_summary_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_channel_summary_tests PRIVATE flappedear_telemetry_core Qt6::Test)
 flappedear_enable_warnings(flappedear_channel_summary_tests)
 add_test(NAME flappedear_channel_summary_tests COMMAND flappedear_channel_summary_tests)
+qt_add_executable(flappedear_day_report_tests DayReportTests.cpp)
+target_compile_features(flappedear_day_report_tests PRIVATE cxx_std_20)
+target_link_libraries(flappedear_day_report_tests PRIVATE flappedear_telemetry_core Qt6::Test)
+flappedear_enable_warnings(flappedear_day_report_tests)
+add_test(NAME flappedear_day_report_tests COMMAND flappedear_day_report_tests)
 qt_add_executable(flappedear_driving_variability_tests DrivingVariabilityTests.cpp)
 target_compile_features(flappedear_driving_variability_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_driving_variability_tests PRIVATE flappedear_telemetry_core Qt6::Test)
