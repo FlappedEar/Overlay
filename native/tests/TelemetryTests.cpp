@@ -163,6 +163,7 @@ private slots:
     void reportsCornerVariabilityWithGpsLimits();
     void showsSectionProgressionBetweenSessions();
     void showsAbGgScatterWithPeaks();
+    void summarizesRecordedTemperaturesPerRunAndSection();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
     void reviewsSegmentProposalsForTheOpenLap();
@@ -4245,6 +4246,22 @@ QByteArray routeVboWithAccelerations(const double scale, const int samplesPerLap
     }
     return out.join('\n').toUtf8();
 }
+// routeVbo() with a coolant temperature column: three OBD placeholder zeros,
+// then 80 °C rising by 0.01 °C per sample.
+QByteArray routeVboWithCoolant(const int samplesPerLap = 240)
+{
+    const auto lines = QString::fromUtf8(EventProjectFixture::routeVbo(samplesPerLap)).split('\n');
+    QStringList out;
+    bool data = false;
+    int index = 0;
+    for (const auto &line : lines) {
+        if (line == "time latitude longitude") { out << line + " coolant_temp-obd"; continue; }
+        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
+        out << line + QString(" %1").arg(index < 3 ? 0.0 : 80.0 + 0.01 * index, 0, 'f', 3);
+        ++index;
+    }
+    return out.join('\n').toUtf8();
+}
 } // namespace
 
 // Approves every proposal on the first eligible lap of `runName`'s run and
@@ -5017,6 +5034,50 @@ void TelemetryTests::showsAbGgScatterWithPeaks()
     QCOMPARE(warnings.size(), 0);
 }
 
+void TelemetryTests::summarizesRecordedTemperaturesPerRunAndSection()
+{
+    // KAN-67: only recorded temperature channels are summarized (the second
+    // run has none); placeholder zeros are excluded and counted; every
+    // recorded section has its own summary with coverage.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto first = directory.filePath("hot.vbo"), second = directory.filePath("plain.vbo");
+    QVERIFY(writeBytes(first, routeVboWithCoolant()));
+    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo()));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Temperatures", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    QTRY_VERIFY(!controller.outingLapsLoading());
+    controller.requestOutingChannelSummaries();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 30000);
+    const auto summaries = controller.outingChannelSummaries();
+    QCOMPARE(summaries.value("algorithm").toString(), QString("channel-summary-v1"));
+    const auto runs = summaries.value("runs").toList();
+    QCOMPARE(runs.size(), 2);
+    QVariantMap hot, plain;
+    for (const auto &value : runs) (value.toMap().value("channels").toList().isEmpty() ? plain : hot) = value.toMap();
+    QVERIFY(!hot.isEmpty() && !plain.isEmpty()); // the run without a sensor lists none, invents none
+    const auto coolant = hot.value("channels").toList().first().toMap();
+    QCOMPARE(coolant.value("channel").toString(), QString("coolant_temp-obd"));
+    const auto run = coolant.value("run").toMap();
+    QVERIFY(run.value("valid").toBool());
+    QCOMPARE(run.value("excludedArtifacts").toInt(), 3);
+    QVERIFY(std::abs(run.value("minimum").toDouble() - 80.03) < 1e-3);
+    QVERIFY(run.value("maximum").toDouble() > run.value("mean").toDouble());
+    QVERIFY(run.value("coverage").toDouble() > 0.95);
+    const auto sections = coolant.value("sections").toList();
+    QVERIFY(sections.size() >= 3);
+    double previousMean = 0.0;
+    for (const auto &value : sections) {
+        const auto section = value.toMap();
+        QVERIFY(!section.value("type").toString().isEmpty());
+        if (!section.value("valid").toBool()) continue;
+        QVERIFY(section.value("coverage").toDouble() > 0.9);
+        QVERIFY(section.value("mean").toDouble() > previousMean); // the temperature only rises
+        previousMean = section.value("mean").toDouble();
+    }
+}
+
 void TelemetryTests::formatsElapsedTimes()
 {
     QCOMPARE(AppController::formatElapsedTime(100.838), QString("1:40.838"));
@@ -5114,6 +5175,18 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         qInfo().noquote() << QString("  %1 typical %2 spread %3 n %4").arg(sector.value("name").toString(), -14)
             .arg(consistency.value("median").toDouble(), 7, 'f', 3).arg(consistency.value("interquartileRange").toDouble(), 6, 'f', 3)
             .arg(consistency.value("count").toInt());
+    }
+    controller.requestOutingChannelSummaries();
+    QTRY_VERIFY_WITH_TIMEOUT(controller.outingChannelSummaries().value("state") != "loading", 180000);
+    for (const auto &value : controller.outingChannelSummaries().value("runs").toList()) {
+        const auto run = value.toMap();
+        for (const auto &channelValue : run.value("channels").toList()) {
+            const auto channel = channelValue.toMap(); const auto summary = channel.value("run").toMap();
+            qInfo().noquote() << QString("  %1 %2 min %3 mean %4 max %5 coverage %6 artifacts %7").arg(run.value("runName").toString(), -10)
+                .arg(channel.value("channel").toString(), -20).arg(summary.value("minimum").toDouble(), 6, 'f', 1)
+                .arg(summary.value("mean").toDouble(), 6, 'f', 1).arg(summary.value("maximum").toDouble(), 6, 'f', 1)
+                .arg(summary.value("coverage").toDouble(), 5, 'f', 3).arg(summary.value("excludedArtifacts").toInt());
+        }
     }
     const auto ranking = controller.outingTimeLossRanking();
     qInfo().noquote() << "Losses:" << ranking.value("observationCount").toInt() << "observed over"
