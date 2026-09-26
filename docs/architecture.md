@@ -70,7 +70,10 @@ per-corner observations. Lap derivation also moved to core
 `telemetry/OutingLapDerivation`). It resolves, bounds and verifies every
 run's recording, reuses unchanged runs, and infers and groups tracks. Core
 now runs the day analysis without application code:
-`OutingPipelineTests` links only `flappedear_telemetry_core`. The Document,
+`OutingPipelineTests` links only `flappedear_telemetry_core`. The day
+report is assembled in core too (`buildOutingDayReport` in
+`telemetry/OutingDayReport`), from the computed results, the decisions
+keys and the focus inputs. `AppController` only gathers them. The Document,
 Analysis and Overlay controllers are extracted behind the same QML-facing
 API in later steps.
 
