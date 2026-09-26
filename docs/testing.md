@@ -1289,6 +1289,67 @@ On the private Jastrząb day, all eight results are available:
 
 The report is 93 KB of JSON. The report screen is KAN-72.
 
+## Day report screen (KAN-72)
+
+**Day results → Day report…** (`DayReportDialog.qml`) presents
+`outingDayReport` and never recalculates. Opening it calls
+`requestOutingDayReport()`. It uses one vertical scroll with touch-sized
+rows and no information that needs hover. Every card leads to its evidence:
+
+- **Best lap and what is left:**
+  - The best lap and the theoretical best, with the time available across
+    the approved sectors.
+  - "Open best lap" opens the lap.
+  - "Where it can improve (map)…" opens the theoretical-best map.
+- **Largest time losses:**
+  - The top five, each with the lap it happened on.
+  - Selecting one opens the comparison against the group's best, with the
+    Corner Analyzer at that segment (`openTimeLoss`). Closing the comparison
+    returns to the report.
+  - "All losses…" opens the full ranking.
+- **Sessions:**
+  - Best and median per session, as "x s faster/slower than the previous
+    session".
+  - Selecting a session opens its best lap.
+  - "Sections by session…" opens that Progression tab.
+- **Consistency:** typical lap and the spread of the middle half, or why
+  there is none (fewer than three laps).
+- **Car:** the peak of each recorded temperature and the session it came
+  from, plus the count of recorded cooling intervals. Selecting a row opens
+  Progression → Car & driver.
+- **Heart rate:** mean and range per session, "Not recorded" where the
+  recording has none. Selecting a row opens Car & driver.
+
+A card without a result shows the report's reason instead of a value:
+- "Calculating…" while it is computing;
+- "Not calculated yet." when it has not been requested;
+- the producer's own reason when it is unavailable (for example "No
+  temperature recorded.");
+- the reason for a result that is out of date after an analysis change.
+
+A missing value is never shown as zero, and nothing depends on video.
+
+`TelemetryTests::presentsDayReportWithEvidenceNavigation` uses production
+`OutingLapPanel` at the 1180×720 minimum, with two runs, one of which has
+heart rate. It checks:
+- the report opens from Day results;
+- the best time and the theoretical best fill in;
+- the Car card says "No temperature recorded.";
+- the heart-rate rows read "Not recorded" and "mean 140 bpm";
+- the first loss opens the comparison, and closing it reopens the report;
+- a session opens exactly the best-lap reference in the report's evidence;
+- there are no QML warnings.
+
+On the private Jastrząb day (screenshots from `analyzesPrivateTrackDayCorners`):
+- 1:49.898 against a 1:47.905 theoretical best, 1.993 s available;
+- the top loss is +11.290 s in Corners 9–16 on Session 2 LAP 1;
+- sessions improve from 2:18.655 to 1:49.898;
+- peaks of 103 coolant, 128 oil, 113 gearbox and 75 intake;
+- heart-rate means of 119–136 bpm.
+
+Limitation: the report is reached from its button and does not open by
+itself after an import.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings

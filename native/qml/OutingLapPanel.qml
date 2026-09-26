@@ -18,6 +18,15 @@ Rectangle {
     ComparisonLapDialog { id: comparisonLapDialog }
     OutingProgressionDialog { id: progressionDialog }
     TheoreticalBestDialog { id: theoreticalBestDialog }
+    // KAN-72: the day report, with paths to every piece of evidence.
+    DayReportDialog {
+        id: dayReportDialog
+        onTheoreticalBestRequested: theoreticalBestDialog.open()
+        onTimeLossesRequested: timeLossDialog.open()
+        onProgressionRequested: tab => { progressionDialog.currentTab = tab; progressionDialog.open(); }
+        onComparisonOpened: root.returnToReport = true
+    }
+    property bool returnToReport: false
     TimeLossDialog {
         id: timeLossDialog
         onLossSelected: loss => {
@@ -32,7 +41,13 @@ Rectangle {
     Connections {
         target: appController
         function onComparisonViewOpenChanged() {
-            if (appController.comparisonViewOpen || !root.returnToLosses) return;
+            if (appController.comparisonViewOpen) return;
+            if (root.returnToReport) {
+                root.returnToReport = false;
+                Qt.callLater(() => dayReportDialog.open());
+                return;
+            }
+            if (!root.returnToLosses) return;
             root.returnToLosses = false;
             Qt.callLater(() => timeLossDialog.open());
         }
@@ -404,6 +419,14 @@ Rectangle {
                 onClicked: appController.selectOutingLapReference(root.ranking.bestOfDay.reference)
                 ToolTip.visible: hovered
                 ToolTip.text: text + (root.ranking.groupLabel ? " · " + root.ranking.groupLabel : "")
+            }
+            FeButton {
+                objectName: "openDayReport"
+                text: qsTr("Day report…")
+                enabled: ["available", "no-eligible-laps"].indexOf(root.ranking.state) >= 0
+                onClicked: dayReportDialog.open()
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("The day's results in one place, each leading to its laps, corners and channels")
             }
             FeButton {
                 objectName: "openOutingProgression"

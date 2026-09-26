@@ -13,6 +13,8 @@ Dialog {
     height: Math.min(700, parent.height - 30)
     standardButtons: Dialog.Close
     readonly property var progression: appController.outingProgression
+    // KAN-72: the day report opens a specific tab.
+    property alias currentTab: progressionTabs.currentIndex
     function duration(seconds) {
         if (seconds === null || seconds === undefined || !isFinite(seconds)) return qsTr("Unavailable");
         const ms = Math.round(seconds * 1000);

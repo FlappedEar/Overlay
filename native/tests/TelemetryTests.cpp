@@ -168,6 +168,7 @@ private slots:
     void showsRecordedTemperaturesThroughTheDayInQml();
     void showsHeartRateByRunAndSegmentInQml();
     void buildsDayReportWithProvenance();
+    void presentsDayReportWithEvidenceNavigation();
     void summarizesHeartRatePerRunSectionAndInterval();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
@@ -5445,6 +5446,109 @@ void TelemetryTests::buildsDayReportWithProvenance()
     QVERIFY(resultOf("bestLap").value("value").toMap().value("label") != best.value("value").toMap().value("label"));
 }
 
+void TelemetryTests::presentsDayReportWithEvidenceNavigation()
+{
+    // KAN-72: the day report opens from Day results, presents the computed
+    // report, says exactly what is missing (no temperature sensor: no zero),
+    // and each result leads to its evidence: a loss to the comparison (and
+    // back to the report), a session to its best lap.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto slow = directory.filePath("slow.vbo"), fast = directory.filePath("fast.vbo");
+    QVERIFY(writeBytes(slow, routeVboWithHeartRate(140)));
+    QVERIFY(writeBytes(fast, scaledRouteVbo(0.9)));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Day report QML", {QUrl::fromLocalFile(slow), QUrl::fromLocalFile(fast)}));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    QTRY_VERIFY(!controller.outingLapsLoading());
+    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+    QString slowName;
+    for (const auto &value : controller.outingLaps()) {
+        const auto row = value.toMap();
+        if (row.value("type") == "LAP" && row.value("endTime").toDouble() - row.value("startTime").toDouble() > 45.0)
+            slowName = row.value("runName").toString();
+    }
+    QVERIFY(!approveAllSegmentsOnRun(controller, slowName).isEmpty());
+
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
+    component.setData("import QtQuick\nWindow { width: 1180; height: 720; OutingLapPanel { anchors.fill: parent } }",
+        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    const auto findVisual = [](auto &&self, QQuickItem *item, const QString &name) -> QQuickItem * {
+        if (item->objectName() == name) return item;
+        for (auto *child : item->childItems()) if (auto *found = self(self, child, name)) return found;
+        return nullptr;
+    };
+    const auto find = [&](const QString &name) { return findVisual(findVisual, window->contentItem(), name); };
+    auto *open = window->findChild<QQuickItem *>("openDayReport"); QVERIFY(open);
+    QTRY_VERIFY(open->isEnabled());
+    open->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    auto *dialog = window->findChild<QObject *>("dayReportDialog"); QVERIFY(dialog);
+    QTRY_VERIFY(dialog->property("opened").toBool());
+
+    // Opening requests the background results; the report fills in.
+    const auto best = controller.outingRanking().value("bestOfDay").toMap();
+    QQuickItem *bestTime = nullptr;
+    QTRY_VERIFY((bestTime = find("dayReportBestTime")));
+    QTRY_COMPARE(bestTime->property("text").toString(), AppController::formatElapsedTime(best.value("durationSeconds").toDouble()));
+    QTRY_VERIFY_WITH_TIMEOUT(find("dayReportTheoreticalTime") && find("dayReportTheoreticalTime")->property("text").toString() != "—", 30000);
+    QQuickItem *carMissing = nullptr;
+    QTRY_VERIFY_WITH_TIMEOUT((carMissing = find("dayReportCarMissing")) && carMissing->isVisible()
+        && carMissing->property("text").toString() == "No temperature recorded.", 30000);
+    QStringList heart;
+    QTRY_VERIFY(find("dayReportHeartRate1"));
+    for (int index = 0; index < 2; ++index) heart << find(QString("dayReportHeartRate%1").arg(index))->property("primary").toString();
+    QCOMPARE(heart.filter("Not recorded").size(), 1);
+    QCOMPARE(heart.filter("mean 140 bpm").size(), 1);
+    QVERIFY(find("dayReportConsistencyDay")->property("text").toString().contains("laps"));
+
+    // A loss opens the comparison at that corner; closing it returns here.
+    const auto losses = controller.outingDayReport().value("results").toList();
+    bool lossesAvailable = false;
+    for (const auto &value : losses)
+        if (value.toMap().value("id") == "timeLosses") lossesAvailable = value.toMap().value("status") == "available";
+    QVERIFY(lossesAvailable);
+    {
+        QQuickItem *loss = nullptr;
+        QTRY_VERIFY((loss = find("dayReportLoss0")));
+        loss->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(controller.comparisonViewOpen());
+        QTRY_VERIFY(!dialog->property("visible").toBool());
+        QVERIFY(!controller.comparisonFocusSegmentId().isEmpty() || controller.comparisonPairReady());
+        controller.setComparisonViewOpen(false);
+        QTRY_VERIFY(dialog->property("opened").toBool());
+    }
+
+    // A session opens its best lap.
+    QQuickItem *session = nullptr;
+    int sessionIndex = -1;
+    for (int index = 0; index < 2 && !session; ++index) {
+        auto *candidate = find(QString("dayReportSession%1").arg(index));
+        if (candidate && candidate->isEnabled()) { session = candidate; sessionIndex = index; }
+    }
+    QVERIFY(session);
+    const auto progressionRuns = controller.outingDayReport().value("results").toList();
+    QVariantMap expected;
+    for (const auto &value : progressionRuns) {
+        const auto result = value.toMap();
+        if (result.value("id") != "progression") continue;
+        const auto row = result.value("value").toMap().value("runs").toList()[sessionIndex].toMap();
+        expected = result.value("evidence").toList()[row.value("evidenceIndex").toInt()].toMap().value("reference").toMap();
+    }
+    QVERIFY(!expected.isEmpty());
+    session->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(!dialog->property("visible").toBool());
+    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
+    QCOMPARE(controller.selectedOutingLap().value("reference").toMap(), expected);
+    controller.closeOutingLap();
+    for (const auto &warning : warnings) qInfo() << warning;
+    QCOMPARE(warnings.size(), 0);
+}
+
 void TelemetryTests::formatsElapsedTimes()
 {
     QCOMPARE(AppController::formatElapsedTime(100.838), QString("1:40.838"));
@@ -5692,6 +5796,24 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 180000);
         QTest::qWait(500);
         QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("car-driver.png")));
+        QVERIFY(QMetaObject::invokeMethod(progressionDialog, "close"));
+    }
+    if (auto *reportDialog = window->findChild<QObject *>("dayReportDialog")) {
+        QVERIFY(QMetaObject::invokeMethod(reportDialog, "open"));
+        const auto reportReady = [&] {
+            int available = 0;
+            for (const auto &value : controller.outingDayReport().value("results").toList())
+                available += value.toMap().value("status") == "available" ? 1 : 0;
+            return available == controller.outingDayReport().value("results").toList().size();
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(reportReady(), 180000);
+        QTest::qWait(800);
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("day-report.png")));
+        if (auto *flickable = reportDialog->property("contentItem").value<QQuickItem *>()) {
+            flickable->setProperty("contentY", flickable->property("contentHeight").toDouble() - flickable->height());
+            QTest::qWait(500);
+            QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("day-report-end.png")));
+        }
     }
     for (const auto &warning : warnings) qInfo() << "QML warning" << warning;
 }
