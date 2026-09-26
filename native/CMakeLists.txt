@@ -217,6 +217,7 @@ qt_add_executable(flappedear_native MACOSX_BUNDLE
     src/app/AppControllerTheoreticalBest.cpp
     src/app/AppControllerChannelSummaries.cpp
     src/app/AppControllerDayReport.cpp
+    src/app/VideoLink.h
     src/app/AppController.cpp
     src/app/AppController.h
     src/main.cpp

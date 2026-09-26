@@ -326,6 +326,7 @@ AppController::AppController(QObject *parent, QString recoveryPath,
     initializeOutingTheoreticalBest();
     initializeOutingChannelSummaries();
     initializeOutingDayReport();
+    m_videoLink = this;
     retireLegacyDocumentSettings();
     restoreStartupState();
 }
@@ -391,6 +392,7 @@ double AppController::syncOffset() const { return m_sync.offset; }
 double AppController::timeScale() const { return m_sync.timeScale; }
 bool AppController::syncing() const { return m_syncWatcher.isRunning(); }
 bool AppController::exporting() const { return m_exportProcess != nullptr; }
+bool AppController::documentBusy() const { return exporting(); }
 int AppController::exportProgress() const { return m_exportProgress; }
 QString AppController::exportState() const { return m_exportState; }
 QString AppController::exportError() const { return m_exportError; }

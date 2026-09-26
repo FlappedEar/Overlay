@@ -366,7 +366,7 @@ QVariantList AppController::segmentReviewMapLayers() const
 bool AppController::replaceRunField(const QString &runId, const QString &key, const QJsonValue &value,
     const std::function<void()> &beforeNotify)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || exporting()
+    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
         || recoveryPending() || m_batchPending
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
         || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;

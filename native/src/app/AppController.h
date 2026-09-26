@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/VideoLink.h"
 #include "telemetry/TelemetrySessionCache.h"
 
 #include "telemetry/LapTiming.h"
@@ -54,7 +55,7 @@ class TelemetryTests;
 
 namespace FlappedEar {
 
-class AppController final : public QObject {
+class AppController final : public QObject, private VideoLink {
     Q_OBJECT
     Q_PROPERTY(QUrl videoSource READ videoSource NOTIFY videoSourceChanged)
     Q_PROPERTY(QString videoName READ videoName NOTIFY videoSourceChanged)
@@ -214,6 +215,10 @@ public:
     [[nodiscard]] double timeScale() const;
     [[nodiscard]] bool syncing() const;
     [[nodiscard]] bool exporting() const;
+    // KAN-124: the document is busy with an operation that must not be
+    // interleaved with analysis edits (today: an export). Analysis and import
+    // guards use this, not the overlay's export state.
+    [[nodiscard]] bool documentBusy() const;
     [[nodiscard]] int exportProgress() const;
     [[nodiscard]] QString exportState() const;
     [[nodiscard]] QString exportError() const;
@@ -791,6 +796,10 @@ private:
     QString m_channelSummariesMessage;
     QVariantList m_channelSummariesRuns;
     QByteArray m_channelSummariesKey;
+    // KAN-124: video as the analysis side sees it; null without video support.
+    const VideoLink *m_videoLink = nullptr;
+    [[nodiscard]] std::optional<qint64> videoPositionForTelemetry(const QString &runId, double telemetrySeconds) const override;
+    [[nodiscard]] std::optional<double> telemetryForVideoPosition(const QString &runId, qint64 videoMilliseconds) const override;
     [[nodiscard]] QByteArray channelSummariesInputKey() const;
     [[nodiscard]] QString outingLapLabel(const QJsonObject &reference) const;
     // What the theoretical best and loss ranking depend on; a document change

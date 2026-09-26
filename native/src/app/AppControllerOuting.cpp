@@ -46,7 +46,7 @@ QVariantMap AppController::runMetadata(const QString &runId) const
 bool AppController::updateRunMetadata(const QString &runId, const QString &expectedToken,
     const QString &name, const QString &notes, const QString &conditions, const QString &setupChanges)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || exporting()
+    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
         || recoveryPending() || m_batchPending
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
         || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;
@@ -157,7 +157,7 @@ QString AppController::outingComparisonSelectionState() const
 
 bool AppController::selectOutingComparisonGroup(const QString &groupId)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || exporting()
+    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
         || recoveryPending() || m_batchPending
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
         || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;
@@ -322,7 +322,7 @@ QJsonObject AppController::activeLapBinding() const
 
 bool AppController::setOutingLapExcluded(const QVariantMap &referenceMap, bool excluded, const QString &reason)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || exporting()
+    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
         || recoveryPending() || m_batchPending
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
         || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;
@@ -422,7 +422,7 @@ bool AppController::setRunTrackConfiguration(
 bool AppController::setRunTrackConfigurations(
     const QStringList &runIds, const QString &layoutId, const QString &direction)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || exporting()
+    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
         || recoveryPending() || m_batchPending
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
         || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;
@@ -592,7 +592,7 @@ QVariantMap AppController::outingAnalysisStatus() const
 
 bool AppController::retryOutingAnalysis()
 {
-    if (outingLapsLoading() || projectLoading() || exporting() || recoveryPending()
+    if (outingLapsLoading() || projectLoading() || documentBusy() || recoveryPending()
         || m_batchPending || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
         || outingLapSources().isEmpty()) return false;
     // Reuse the bounded worker and its full-content checks. Retrying does not
@@ -631,7 +631,7 @@ void AppController::initializeOutingLaps()
         m_outingSourceMessages = result.messages;
         m_outingLapsLoading = false;
         refreshLapExclusionPolicy();
-        if (dirty() && !exporting() && !recoveryPending() && !m_suppressDirtyTracking) {
+        if (dirty() && !documentBusy() && !recoveryPending() && !m_suppressDirtyTracking) {
             const auto project = currentProjectObject();
             const auto withInference = projectWithOutingInference(project);
             if (withInference != project) { m_projectTemplate = withInference; markPersistentChange(); }
@@ -1136,35 +1136,46 @@ void AppController::setOutingLapCursor(double seconds)
     emit outingLapVideoChanged();
 }
 
-// KAN-39: the open lap's run must be the currently active/loaded one -- a lap
-// from a different run has no video for this increment rather than silently
-// switching the active run (and reloading its sources) just to follow a
-// lap selection. Out-of-range footage (the cursor maps to a video time before
-// 0 or past the last real frame) is also "unavailable", never clamped into a
-// misleading nearby frame, per the same rule the main preview already follows.
+// KAN-39: the open lap's video, through the VideoLink (KAN-124).
 bool AppController::outingLapVideoAvailable() const
 {
-    if (m_selectedOutingLap.isEmpty() || m_videoSource.isEmpty()) return false;
-    if (m_selectedOutingLap.value("runId").toString() != activeRunId()) return false;
-    const auto videoTime = FlappedEar::telemetryToVideoTime(m_outingLapCursor, m_sync);
-    if (!videoTime || *videoTime < 0.0) return false;
-    return qRound64(*videoTime * 1000.0) <= previewEndPositionMilliseconds();
+    if (m_selectedOutingLap.isEmpty() || !m_videoLink) return false;
+    return m_videoLink->videoPositionForTelemetry(m_selectedOutingLap.value("runId").toString(), m_outingLapCursor).has_value();
 }
 
 qint64 AppController::outingLapVideoPositionMilliseconds() const
 {
-    if (!outingLapVideoAvailable()) return 0;
-    const auto videoTime = FlappedEar::telemetryToVideoTime(m_outingLapCursor, m_sync);
-    return clampPreviewPositionMilliseconds(qRound64(*videoTime * 1000.0));
+    if (m_selectedOutingLap.isEmpty() || !m_videoLink) return 0;
+    return m_videoLink->videoPositionForTelemetry(m_selectedOutingLap.value("runId").toString(), m_outingLapCursor).value_or(0);
 }
 
 bool AppController::followOutingLapVideoPosition(const qint64 videoPositionMilliseconds)
 {
-    if (m_selectedOutingLap.isEmpty() || m_selectedOutingLap.value("runId").toString() != activeRunId()) return false;
-    const auto telemetryTime = FlappedEar::videoToTelemetryTime(videoPositionMilliseconds / 1000.0, m_sync);
+    if (m_selectedOutingLap.isEmpty() || !m_videoLink) return false;
+    const auto telemetryTime = m_videoLink->telemetryForVideoPosition(
+        m_selectedOutingLap.value("runId").toString(), videoPositionMilliseconds);
     if (!telemetryTime) return false;
     setOutingLapCursor(*telemetryTime);
     return true;
+}
+
+// KAN-124: AppController's VideoLink (the overlay side). The lap's run must be
+// the active, loaded one; a lap from another run has no video rather than
+// silently switching runs. Out-of-range footage is unavailable, never clamped.
+std::optional<qint64> AppController::videoPositionForTelemetry(const QString &runId, const double telemetrySeconds) const
+{
+    if (m_videoSource.isEmpty() || runId != activeRunId()) return std::nullopt;
+    const auto videoTime = FlappedEar::telemetryToVideoTime(telemetrySeconds, m_sync);
+    if (!videoTime || *videoTime < 0.0) return std::nullopt;
+    const auto milliseconds = qRound64(*videoTime * 1000.0);
+    if (milliseconds > previewEndPositionMilliseconds()) return std::nullopt;
+    return clampPreviewPositionMilliseconds(milliseconds);
+}
+
+std::optional<double> AppController::telemetryForVideoPosition(const QString &runId, const qint64 videoMilliseconds) const
+{
+    if (runId != activeRunId()) return std::nullopt;
+    return FlappedEar::videoToTelemetryTime(videoMilliseconds / 1000.0, m_sync);
 }
 
 } // namespace FlappedEar

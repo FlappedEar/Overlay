@@ -1795,6 +1795,18 @@ void TelemetryTests::followsOutingLapVideoPositionWithinLapBounds()
     QCOMPARE(controller.outingLapCursor(), start);
     QVERIFY(controller.followOutingLapVideoPosition(qRound64((end - 10.0 + 5.0) * 1000.0)));
     QCOMPARE(controller.outingLapCursor(), end);
+
+    // KAN-124: analysis without a video link (Flapped Ear Telemetry) has no
+    // lap video and never follows one; the cursor stays where it is.
+    const auto *link = controller.m_videoLink;
+    controller.m_videoLink = nullptr;
+    QVERIFY(!controller.outingLapVideoAvailable());
+    QCOMPARE(controller.outingLapVideoPositionMilliseconds(), qint64(0));
+    QVERIFY(!controller.followOutingLapVideoPosition(qRound64((start - 10.0 + 0.5) * 1000.0)));
+    QCOMPARE(controller.outingLapCursor(), end);
+    controller.m_videoLink = link;
+    QVERIFY(controller.followOutingLapVideoPosition(qRound64((start - 10.0 + 0.5) * 1000.0)));
+    QCOMPARE(controller.outingLapCursor(), start + 0.5);
 }
 
 void TelemetryTests::derivesOutingLapSections()
