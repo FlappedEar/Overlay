@@ -5149,7 +5149,7 @@ void TelemetryTests::showsRecordedTemperaturesThroughTheDayInQml()
     };
     QQuickItem *trend = nullptr;
     QTRY_VERIFY((trend = findVisual(findVisual, window->contentItem(), "carDriverTrend0")));
-    QVERIFY(trend->width() > 400);
+    QTRY_VERIFY(trend->width() > 400); // laid out after the first polish on slower machines
     QVERIFY(!findVisual(findVisual, window->contentItem(), "carDriverTrend1")); // one recorded channel, none invented
     int hotIndex = -1;
     const auto runs = controller.outingChannelSummaries().value("runs").toList();
