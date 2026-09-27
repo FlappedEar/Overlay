@@ -5,6 +5,7 @@
 #include "project/ProjectDocumentState.h"
 #include "project/ProjectRecoveryStore.h"
 #include "project/ProjectWriter.h"
+#include "telemetry/TelemetryFolderScan.h"
 #include "telemetry/TelemetryImportPlan.h"
 
 #include <QFutureWatcher>
@@ -85,6 +86,9 @@ public:
     Q_INVOKABLE bool selectEventRun(const QString &runId);
     Q_INVOKABLE bool beginBatchImport(const QList<QUrl> &urls);
     Q_INVOKABLE bool importAnalysisRuns(const QString &name, const QList<QUrl> &urls);
+    // KAN-87: the VBO/RCZ recordings of a folder (and, when asked, its
+    // subfolders) through the same review; see scanTelemetryFolder.
+    Q_INVOKABLE bool importAnalysisFolder(const QString &name, const QUrl &folder, bool includeSubfolders);
     Q_INVOKABLE void cancelBatchImport();
     Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices);
     Q_INVOKABLE void requestNewProject();
@@ -110,7 +114,7 @@ public:
     [[nodiscard]] quint64 nextSourceGeneration() { return ++m_sourceGeneration; }
     [[nodiscard]] bool projectLoadRunning() const { return m_projectLoadWatcher.isRunning(); }
     void cancelProjectLoad();
-    [[nodiscard]] bool importRunning() const { return m_batchWatcher.isRunning(); }
+    [[nodiscard]] bool importRunning() const { return m_batchWatcher.isRunning() || m_folderScanWatcher.isRunning(); }
     void cancelImport();
     void setProjectLoadState(bool loading, QString stage = {}, QString error = {});
     // While alive, changes are the document's own state, not user edits.
@@ -208,6 +212,8 @@ private:
     QString m_projectLoadStage;
     QString m_projectLoadError;
     QFutureWatcher<BatchImportResult> m_batchWatcher;
+    QFutureWatcher<TelemetryFolderScan> m_folderScanWatcher;
+    QString m_folderImportName;
     QTimer m_batchProgressTimer;
     std::shared_ptr<std::atomic_bool> m_batchCancellation;
     std::shared_ptr<std::atomic_int> m_batchProgress;

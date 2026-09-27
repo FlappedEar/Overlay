@@ -1497,8 +1497,16 @@ void TelemetryTests::startsOutingThroughAnalysisQml()
     QVERIFY(name); QVERIFY(choose); QVERIFY(runs);
     QVERIFY(!window->property("hasWorkspace").toBool());
     QVERIFY(!choose->property("enabled").toBool());
+    // KAN-87: a folder is offered beside the files, with an explicit
+    // subfolder choice that starts off.
+    auto *chooseFolder = window->findChild<QObject *>("analysisChooseFolder");
+    auto *subfolders = window->findChild<QObject *>("analysisIncludeSubfolders");
+    QVERIFY(chooseFolder); QVERIFY(subfolders);
+    QVERIFY(!chooseFolder->property("enabled").toBool());
+    QVERIFY(!subfolders->property("checked").toBool());
     name->setProperty("text", "QML outing");
     QVERIFY(choose->property("enabled").toBool());
+    QVERIFY(chooseFolder->property("enabled").toBool());
     const QVariant files = QVariant::fromValue(QList<QUrl>{QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH))});
     QSignalSpy committed(&controller, &AppController::batchImportCommitted);
     QVERIFY(QMetaObject::invokeMethod(window.get(), "importFiles", Q_ARG(QVariant, files)));

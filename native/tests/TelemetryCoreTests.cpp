@@ -8,6 +8,7 @@
 #include "project/ProjectLimits.h"
 #include "telemetry/LapTiming.h"
 #include "telemetry/OutingLaps.h"
+#include "telemetry/TelemetryFolderScan.h"
 #include "telemetry/TelemetryGeometry.h"
 #include "telemetry/TelemetryImportPlan.h"
 #include "telemetry/TelemetrySession.h"
@@ -40,6 +41,7 @@ bool writeBytes(const QString &path, const QByteArray &bytes)
 class TelemetryCoreTests final : public QObject {
     Q_OBJECT
 private slots:
+    void scansFoldersForRecordingsWithinBounds();
     void derivesOutingLapSections();
     void rejectsMalformedLapReferences_data();
     void rejectsMalformedLapReferences();
@@ -1073,6 +1075,64 @@ void TelemetryCoreTests::boundsExternalJsonDocuments()
         malformedPath, ProjectLimits::projectBytes, QStringLiteral("Project"));
     QVERIFY(!malformed.success());
     QVERIFY(malformed.error.contains(QStringLiteral("invalid JSON")));
+}
+
+void TelemetryCoreTests::scansFoldersForRecordingsWithinBounds()
+{
+    // KAN-87: a chosen folder yields its VBO/RCZ recordings under an explicit
+    // subfolder policy, within depth and entry bounds, never following links
+    // (so a link back up the tree cannot loop), refusing more than a batch
+    // rather than truncating, and stopping when cancelled.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QDir root(directory.path());
+    QVERIFY(root.mkpath("sub/deeper/deepest"));
+    for (const auto *name : {"a.VBO", "b.rcz", "notes.txt", ".hidden.vbo", "sub/c.vbo", "sub/deeper/d.rcz", "sub/deeper/deepest/e.vbo"})
+        QVERIFY(writeBytes(root.filePath(name), "x"));
+
+    auto top = scanTelemetryFolder(root.path(), false);
+    QVERIFY(top.error.isEmpty());
+    QCOMPARE(top.files, QStringList({root.filePath("a.VBO"), root.filePath("b.rcz")}));
+    QVERIFY(top.notes.join(' ').contains("1 other file(s) were ignored"));
+
+    auto all = scanTelemetryFolder(root.path(), true);
+    QCOMPARE(all.files.size(), 5);
+    QVERIFY(all.files.contains(root.filePath("sub/deeper/deepest/e.vbo")));
+    QVERIFY(std::is_sorted(all.files.cbegin(), all.files.cend()));
+
+    TelemetryFolderScanLimits shallow; shallow.maximumDepth = 1;
+    auto bounded = scanTelemetryFolder(root.path(), true, {}, shallow);
+    QCOMPARE(bounded.files.size(), 3); // a, b, sub/c
+    QVERIFY(bounded.notes.join(' ').contains("1 folder(s) deeper than 1 levels were not scanned"));
+
+#ifdef Q_OS_UNIX
+    // A link back to the top and a link to a file: neither is followed.
+    QVERIFY(QFile::link(root.path(), root.filePath("sub/loop")));
+    QVERIFY(QFile::link(root.filePath("a.VBO"), root.filePath("sub/linked.vbo")));
+    auto linked = scanTelemetryFolder(root.path(), true);
+    QCOMPARE(linked.files.size(), 5);
+    QVERIFY(linked.notes.join(' ').contains("2 link(s) were not followed"));
+    QVERIFY(!scanTelemetryFolder(root.filePath("sub/loop"), true).error.isEmpty()); // a linked root is refused
+#endif
+
+    TelemetryFolderScanLimits two; two.maximumFiles = 2;
+    auto tooMany = scanTelemetryFolder(root.path(), true, {}, two);
+    QVERIFY(tooMany.files.isEmpty());
+    QVERIFY(tooMany.error.contains("holds 5 recordings; import at most 2"));
+
+    TelemetryFolderScanLimits few; few.maximumEntries = 2;
+    auto stopped = scanTelemetryFolder(root.path(), true, {}, few);
+    QVERIFY(stopped.notes.join(' ').contains("Stopped after 2 files and folders"));
+
+    int checks = 0;
+    auto cancelled = scanTelemetryFolder(root.path(), true, [&checks] { return ++checks > 3; });
+    QVERIFY(cancelled.cancelled);
+    QVERIFY(cancelled.files.isEmpty());
+
+    QVERIFY(!scanTelemetryFolder(root.filePath("missing"), true).error.isEmpty());
+    QVERIFY(!scanTelemetryFolder(root.filePath("a.VBO"), true).error.isEmpty());
+    const QString empty = root.filePath("empty");
+    QVERIFY(root.mkpath("empty"));
+    QVERIFY(scanTelemetryFolder(empty, false).error.contains("No VBO or RCZ recordings were found (subfolders were not included)"));
 }
 
 QTEST_GUILESS_MAIN(TelemetryCoreTests)

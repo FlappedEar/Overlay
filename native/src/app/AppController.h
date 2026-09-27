@@ -453,6 +453,7 @@ public:
     [[nodiscard]] int batchImportTotal() const { return m_document.batchImportTotal(); }
     Q_INVOKABLE bool beginBatchImport(const QList<QUrl> &urls) { return m_document.beginBatchImport(urls); }
     Q_INVOKABLE bool importAnalysisRuns(const QString &name, const QList<QUrl> &urls) { return m_document.importAnalysisRuns(name, urls); }
+    Q_INVOKABLE bool importAnalysisFolder(const QString &name, const QUrl &folder, bool includeSubfolders) { return m_document.importAnalysisFolder(name, folder, includeSubfolders); }
     Q_INVOKABLE void cancelBatchImport() { m_document.cancelBatchImport(); }
     Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices) { return m_document.confirmBatchImport(name, append, choices); }
     Q_INVOKABLE void relinkVideo(const QUrl &url);
