@@ -379,14 +379,14 @@ Rectangle {
                 text: qsTr("%1 proposal(s) · axis %2").arg(root.items.length).arg(root.meters(appController.segmentReviewAxisLength))
             }
             FeButton {
-                objectName: "approveCertainSegments"
+                objectName: "approveAllSegments"
                 compact: true
                 accent: true
-                text: qsTr("Approve all certain")
-                enabled: root.items.some(item => item.state === "proposed" && item.certain)
+                text: qsTr("Approve all")
+                enabled: root.items.some(item => item.state === "proposed")
                 onClicked: {
-                    root.actionError = appController.approveCertainSegmentProposals() > 0
-                        ? "" : qsTr("No certain proposal could be approved.");
+                    root.actionError = appController.approveAllSegmentProposals() > 0
+                        ? "" : qsTr("No proposal could be approved.");
                 }
             }
         }

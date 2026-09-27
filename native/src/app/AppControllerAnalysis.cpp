@@ -31,6 +31,11 @@ void AppController::initializeAnalysis()
     connect(&m_analysis, &AnalysisController::comparisonFocusSegmentIdChanged, this, &AppController::comparisonFocusSegmentIdChanged);
     connect(&m_analysis, &AnalysisController::comparisonSlotsChanged, this, &AppController::comparisonSlotsChanged);
     connect(&m_analysis, &AnalysisController::comparisonVideoChanged, this, &AppController::comparisonVideoChanged);
+    connect(&m_analysis, &AnalysisController::automaticSegmentsFinished, this, [this](const QString &lap, const int count) {
+        setStatus(lap.isEmpty()
+            ? tr("Segments could not be created automatically from the best lap; open a lap to review its proposals.")
+            : tr("%n segment(s) created automatically from the best lap (%1). Open a lap to review or edit them.", nullptr, count).arg(lap));
+    });
     // KAN-107: the active run's footage is the loaded video; its changes reach the A/B panes too.
     connect(this, &AppController::videoSourceChanged, &m_analysis, [this] { m_analysis.runVideoChanged(); });
     connect(this, &AppController::sourceLoadStateChanged, &m_analysis, [this] { m_analysis.runVideoChanged(); });
@@ -559,6 +564,11 @@ QString AppController::approveSegmentProposal(int index)
 int AppController::approveCertainSegmentProposals()
 {
     return m_analysis.approveCertainSegmentProposals();
+}
+
+int AppController::approveAllSegmentProposals()
+{
+    return m_analysis.approveAllSegmentProposals();
 }
 
 bool AppController::setSegmentProposalRejected(int index, bool rejected)

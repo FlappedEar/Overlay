@@ -162,6 +162,7 @@ qt_add_library(flappedear_telemetry_app STATIC
     src/app/AnalysisControllerChannelSummaries.cpp
     src/app/AnalysisControllerComparison.cpp
     src/app/AnalysisControllerComparisonVideo.cpp
+    src/app/AnalysisControllerAutomaticSegments.cpp
     src/app/AnalysisControllerCornerAnalyzer.cpp
     src/app/AnalysisControllerMapLayers.cpp
     src/app/AnalysisControllerDayReport.cpp

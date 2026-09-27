@@ -607,3 +607,33 @@ Clock drift is reported only when it moves the offset across the overlap by
 more than twice the windows' uncertainty. Otherwise the offset is the
 windows' mean, and the review says that no drift is resolvable. Two
 recordings of 3 minutes on the same clock therefore show no spurious drift.
+
+## Automatic segments (KAN-136)
+
+A track layout of the day that has **no approved segments on any run** gets
+them automatically:
+- the proposals of the day's best lap (its run's lap detail and segment
+  proposals, as the segment review computes them) are all approved on that
+  run;
+- the status bar says how many, and from which lap;
+- sector times, the theoretical best, time losses, the Corner Analyzer and
+  the day report then work straight after import, with no review.
+
+These are ordinary approved segments. The lap view's segment review edits,
+splits, merges or revokes them, and **Approve all** approves every open
+proposal of a lap, whatever its boundary uncertainty. The attempt is made
+once per document, layout and best lap, so revoked segments do not come back
+by themselves. The Overlays app turns this on; the analysis controller's
+default is off, so a headless caller chooses.
+
+A lap whose layout, direction or timing gate is not identified cannot store
+segments. Its segment review says so and points to Correct grouping, instead
+of offering proposals that cannot be approved.
+
+**Silesia Ring, 27 September 2026 (private):**
+- All three sessions now resolve to one clockwise layout (before the
+  cross-track route matching, only Session 2 did).
+- 16 segments are created automatically from Session 3 LAP 3 (2:13.774).
+- The theoretical best is 2:11.541, and most time is in Corners 10–11
+  (+0.514 s).
+

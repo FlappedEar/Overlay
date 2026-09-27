@@ -485,6 +485,17 @@ and RMS separation must not exceed 10 metres. These finite GPS tolerances cannot
 distinguish physically separate routes that remain within that envelope; manual
 correction remains available.
 
+Separation is measured across the track, from each point to the other route's
+path, not to its nearest resampled point (KAN-136). On a 3.6 km circuit the 256
+points are about 14 m apart. Two laps on the same line can therefore be sampled
+up to 7 m apart along the track, and the point-to-point measure rejected whole
+sessions at Silesia Ring as "conflicting routes".
+
+Only the cross-track distance decides whether routes differ. A detour, another
+layout or the reverse direction still fails the same limits. The algorithm name
+stays `gps-route-v1`: this only admits laps that were wrongly rejected, and
+runs that matched before keep their layout identities and approved segments.
+
 Up to 64 evenly distributed complete traces establish a representative using
 complete-link clustering. A cluster must contain at least two laps and 60% of
 usable candidates. Conflicting routes remain unresolved. Every complete trace is

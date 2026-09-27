@@ -151,8 +151,9 @@ QString AnalysisController::segmentReviewUnavailableReason() const
     if (!m_selectedOutingLap.value("referenceIssue").toString().isEmpty()
         || !m_selectedOutingLap.value("layoutIssue").toString().isEmpty())
         return QStringLiteral("This lap has incomplete GPS or does not follow the run's layout. Open a clean lap to review segments.");
-    if (segmentReviewConfiguration().isEmpty())
-        return QStringLiteral("Confirm the track layout, direction and timing gate before reviewing segments.");
+    if (segmentReviewConfiguration().isEmpty() || !m_selectedOutingLap.value("compatibilityResolved").toBool())
+        return QStringLiteral("This run's track layout, direction or timing gate is not identified yet, so its segments cannot be stored. "
+                              "Set them under Correct grouping, then review segments.");
     return {};
 }
 
@@ -424,6 +425,30 @@ QString AnalysisController::approveSegmentProposal(const int index)
     if (!replaceRunTrackSegments(runId, *next)) return QStringLiteral("The project cannot be changed right now.");
     m_rejectedSegmentProposals.remove(index);
     return {};
+}
+
+int AnalysisController::approveAllSegmentProposals()
+{
+    // KAN-136: every open proposal, whatever its boundary uncertainty; the
+    // review can still edit, split, merge or revoke each afterwards.
+    const auto items = currentSegmentReviewItems();
+    const auto runId = m_selectedOutingLap.value("runId").toString();
+    QJsonValue stored;
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray())
+        if (value.toObject().value("id").toString() == runId) stored = value.toObject().value("trackSegments");
+    int approved = 0;
+    for (const auto &item : items) {
+        if (item.state != SegmentReviewState::Proposed) continue;
+        const auto segment = makeTrackSegment(item.proposal.type, item.proposal.name,
+            item.proposal.start.progressMeters, item.proposal.end.progressMeters, segmentReviewConfiguration());
+        const auto next = segment.isEmpty() ? std::nullopt
+            : withApprovedSegment(stored, segment, m_segmentReviewAxis.lengthMeters);
+        if (!next) continue;
+        stored = *next;
+        ++approved;
+    }
+    if (approved == 0 || !replaceRunTrackSegments(runId, stored.toArray())) return 0;
+    return approved;
 }
 
 int AnalysisController::approveCertainSegmentProposals()
