@@ -1463,6 +1463,67 @@ true when `AnalysisController` (step 8) and `DocumentController` (step 9)
 were extracted from `AppController`. The regression tests reach their
 internals through `controller.m_analysis` and `controller.m_document`.
 
+## Minimum layout and keyboard workflows (KAN-78)
+
+`TelemetryTests::keepsAnalysisControlsReachableAtMinimumSize` opens the
+production `AnalysisWindow.qml` on a synthetic analysed day. The day has
+two full M4 recordings, approved segments and a computed day report. The
+test runs at 1180×720, the editor minimum, and at 760×480, the Analysis
+window's own minimum. It walks the workflow:
+- the lap list;
+- an open lap;
+- segment review and an approved segment being edited;
+- the comparison with the Corner Analyzer;
+- the theoretical-best, time-loss and day-report dialogs;
+- all three progression tabs.
+
+In every state, each visible, enabled control (buttons, fields, pickers,
+sliders) must have its centre inside the window and inside every clipping
+parent. A control inside a scrolling area counts when it lies within the
+area's scrollable content; the check respects a ListView's own origin. No
+dialog may be larger than the window. `FLAPPEDEAR_LAYOUT_REVIEW_DIR`
+receives screenshots.
+
+A display that cannot show the requested size skips that size rather than
+checking a smaller window. The hosted CI runner is one: at most 1180×656
+fits there. So CI checks 760×480, and 1180×720 is checked on a Mac whose
+screen fits it (recorded below).
+
+**Keyboard.** Typing a lap-exclusion reason or a segment name and pressing
+Escape keeps the lap open. Before this fix, the lap view's (and the
+comparison's) window-wide Escape shortcut closed the view and discarded
+the text. Both shortcuts are now disabled while a text field or text area
+has focus. The Analysis window's transport shortcuts are already off while
+a day is open, and are blocked in text and other controls.
+
+**Fixed at 760×480:**
+- **Comparison:** "Reset zoom", "Add channel" and the Corner Analyzer's
+  metric buttons were off the right edge. The lap labels now elide, each
+  chart's channel picker narrows so its × stays visible, and the Corner
+  Analyzer scrolls vertically.
+- **Segment review:** an open edit form spilled over the section slider
+  below the panel. The panel is now one vertical scroll surface when it is
+  shorter than its content.
+- **Theoretical best:** the summary line widened the dialog's content, so
+  the "Laps today" text, the "Where the time is" column and the algorithm
+  note were clipped. The summary now wraps, and the column narrows.
+
+At 1180×720 every state already passed, apart from the Escape defect. The
+lap-exclusion reason now uses the app's text field style instead of the
+platform's black box.
+
+**Real day.** With `FLAPPEDEAR_REVIEW_SIZE=760x480` (or `1180x720`),
+`analyzesPrivateTrackDayCorners` also checks reachability in each of its
+screenshot states on the Jastrząb day: 6 sessions and 14 segments. Both
+sizes pass on a Mac mini M4, macOS 27.0 (27 September 2026).
+
+**Limitations at 760×480:**
+- The theoretical-best map shrinks to its legend; its segment list scrolls.
+- With four comparison channels, each chart row is about 50 px tall, so
+  the channel pickers cover the charts' name labels.
+
+Everything stays reachable.
+
 ## Full-day responsiveness and memory (KAN-77)
 
 `TelemetryAppTests::measuresAPrivateFullDay` measures a real day through

@@ -151,7 +151,19 @@ Rectangle {
             return qsTr("Lap A and Lap B are from different, incompatible track configurations.");
         return qsTr("Select two ready, compatible laps to compare.");
     }
-    Shortcut { sequence: "Escape"; enabled: root.visible; onActivated: appController.comparisonViewOpen = false }
+    // KAN-78: Escape closes this view, except while typing in a text field
+    // or area here (a lap-exclusion reason, a segment name), which keeps
+    // the view and the edit.
+    function textEditorHasFocus() {
+        let item = Window.activeFocusItem;
+        while (item) {
+            if (item instanceof TextInput || item instanceof TextEdit)
+                return true;
+            item = item.parent;
+        }
+        return false;
+    }
+    Shortcut { sequence: "Escape"; enabled: root.visible && !root.textEditorHasFocus(); onActivated: appController.comparisonViewOpen = false }
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 14
@@ -211,8 +223,13 @@ Rectangle {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 20
+                // KAN-78: the labels give way (elided) so the buttons stay on
+                // screen at the 760 px analysis-window minimum.
                 Label {
                     objectName: "comparisonLapLabelA"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 60
+                    Layout.maximumWidth: implicitWidth
                     text: root.lapLabel(0)
                     color: "#55e6a5"
                     font.pixelSize: 13
@@ -220,12 +237,15 @@ Rectangle {
                 }
                 Label {
                     objectName: "comparisonLapLabelB"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 60
+                    Layout.maximumWidth: implicitWidth
                     text: root.lapLabel(1)
                     color: "#d95926"
                     font.pixelSize: 13
                     elide: Text.ElideMiddle
                 }
-                Item { Layout.fillWidth: true }
+                Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
                 FeButton {
                     objectName: "comparisonToggleCornerAnalyzer"
                     compact: true
@@ -330,7 +350,10 @@ Rectangle {
                                         spacing: 4
                                         FeComboBox {
                                             objectName: "comparisonReplaceChannel-" + rowItem.modelData
-                                            Layout.preferredWidth: 150
+                                            // Narrows with the chart so its × stays visible.
+                                            Layout.fillWidth: true
+                                            Layout.minimumWidth: 60
+                                            Layout.maximumWidth: 150
                                             implicitHeight: 22
                                             model: root.availableChannels.filter(
                                                 channel => channel === rowItem.modelData || root.visibleChannels.indexOf(channel) < 0)
@@ -345,7 +368,7 @@ Rectangle {
                                             Accessible.name: qsTr("Remove %1").arg(rowItem.modelData)
                                             onClicked: root.toggleChannel(rowItem.modelData)
                                         }
-                                        Item { Layout.fillWidth: true }
+                                        Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
                                     }
                                     ComparisonOverlayChart {
                                         objectName: "comparisonOverlayChart-" + rowItem.modelData

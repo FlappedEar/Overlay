@@ -97,6 +97,7 @@ class TelemetryTests final : public QObject {
     Q_OBJECT
 
     static QJsonArray approveAllSegmentsOnRun(FlappedEar::AppController &controller, const QString &runName);
+    static QStringList unreachableControls(QQuickWindow *window);
 private slots:
     void initTestCase();
     void preservesIdentityAcrossProductRename();
@@ -198,6 +199,8 @@ private slots:
     void keepsOutputSafeWhenTheDestinationFills_data();
     void keepsOutputSafeWhenTheDestinationFills();
     void describesOutOfSpaceExportFailures();
+    void keepsAnalysisControlsReachableAtMinimumSize_data();
+    void keepsAnalysisControlsReachableAtMinimumSize();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -367,6 +370,66 @@ private slots:
     void preservesEditsAfterDocumentFirstProjectOpen();
     void syncsOptionalRealRecording();
 };
+
+namespace {
+// KAN-78: a control is reachable when its centre lies inside the window and
+// inside every clipping ancestor, where a scrolling ancestor (Flickable)
+// counts as reachable if the control lies within its scrollable content.
+bool isInteractiveControl(const QQuickItem *item)
+{
+    for (const char *type : {"QQuickAbstractButton", "QQuickComboBox", "QQuickTextInput", "QQuickTextEdit",
+                             "QQuickSlider", "QQuickRangeSlider", "QQuickSpinBox"})
+        if (item->inherits(type)) return true;
+    return false;
+}
+
+QString describeItem(const QQuickItem *item)
+{
+    QString text = item->property("text").toString();
+    if (text.isEmpty()) text = item->property("placeholderText").toString();
+    const QString name = item->objectName().isEmpty() ? QString::fromLatin1(item->metaObject()->className()) : item->objectName();
+    const QRectF scene = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
+    return QStringLiteral("%1 \"%2\" at %3,%4 %5x%6").arg(name, text.left(40)).arg(scene.x(), 0, 'f', 0)
+        .arg(scene.y(), 0, 'f', 0).arg(scene.width(), 0, 'f', 0).arg(scene.height(), 0, 'f', 0);
+}
+
+// The content item of a Flickable clips nothing on its own.
+bool isFlickableContent(const QQuickItem *item)
+{
+    const auto *parent = item->parentItem();
+    return parent && parent->inherits("QQuickFlickable")
+        && parent->property("contentItem").value<QQuickItem *>() == item;
+}
+
+bool reachableControl(QQuickItem *item, const QRectF &window)
+{
+    QQuickItem *current = item;
+    QPointF centre = item->mapToScene(QPointF(item->width() / 2, item->height() / 2));
+    for (QQuickItem *parent = item->parentItem(); parent; parent = parent->parentItem()) {
+        if (parent->inherits("QQuickFlickable")) {
+            // Scrolling brings anything within the content into view.
+            auto *content = parent->property("contentItem").value<QQuickItem *>();
+            if (!content) return false;
+            const QPointF inContent = current->mapToItem(content, QPointF(current->width() / 2, current->height() / 2));
+            // Content starts at the view's origin, which a ListView may move below zero.
+            const double originX = parent->property("originX").toDouble(), originY = parent->property("originY").toDouble();
+            const double width = std::max(parent->property("contentWidth").toDouble(), parent->width());
+            const double height = std::max(parent->property("contentHeight").toDouble(), parent->height());
+            if (inContent.x() < originX - 1 || inContent.y() < originY - 1
+                || inContent.x() > originX + width + 1 || inContent.y() > originY + height + 1) return false;
+            if (parent->width() < 8 || parent->height() < 8) return false;
+            current = parent;
+            centre = parent->mapToScene(QPointF(parent->width() / 2, parent->height() / 2));
+            continue;
+        }
+        if (parent->clip() && !isFlickableContent(parent)) {
+            const QRectF clipRect = parent->mapRectToScene(QRectF(0, 0, parent->width(), parent->height()));
+            if (!clipRect.adjusted(-1, -1, 1, 1).contains(centre)) return false;
+        }
+    }
+    return window.adjusted(-1, -1, 1, 1).contains(centre);
+}
+} // namespace
 
 void TelemetryTests::initTestCase()
 {
@@ -5916,9 +5979,18 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
     QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
-    window->resize(1600, 900);
+    // KAN-78: FLAPPEDEAR_REVIEW_SIZE (e.g. 760x480) reviews the real day at a
+    // minimum size; every screenshot state is then checked for reachability.
+    const auto sizeText = qEnvironmentVariable("FLAPPEDEAR_REVIEW_SIZE", "1600x900").split('x');
+    const QSize reviewSize(sizeText.value(0).toInt(), sizeText.value(1).toInt());
+    QVERIFY(reviewSize.isValid());
+    window->resize(reviewSize);
     controller.setAnalysisVisible(true);
     window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    QStringList unreachable;
+    const auto reachable = [&](const QString &state) {
+        for (const auto &problem : unreachableControls(window)) unreachable << state + ": " + problem;
+    };
     // Reopen with the window present, as in the app where the panel always exists.
     controller.setComparisonViewOpen(false);
     QVERIFY(controller.openTimeLoss(top));
@@ -5928,10 +6000,10 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
     for (const auto &value : controller.comparisonHeartRate(0.0, controller.comparisonProgressAxisLength()).value("laps").toList())
         qInfo().noquote() << QString("  pair heart rate mean %1 bpm, %2 samples, coverage %3").arg(value.toMap().value("mean").toDouble(), 0, 'f', 1)
             .arg(value.toMap().value("sampleCount").toInt()).arg(value.toMap().value("coverage").toDouble(), 0, 'f', 3);
-    QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("corner-analyzer.png")));
+    QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("corner-analyzer.png"))); reachable("corner-analyzer");
     if (auto *ggToggle = window->findChild<QQuickItem *>("comparisonToggleGg")) {
         ggToggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space); QTest::qWait(1000);
-        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("gg.png")));
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("gg.png"))); reachable("gg");
         ggToggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space); QTest::qWait(300);
     }
     for (const auto &value : controller.comparisonApprovedSegments()) {
@@ -5952,7 +6024,7 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         for (const auto &value : controller.outingTheoreticalBest().value("gains").toList())
             if (value.toMap().value("type") == "corner") { theoretical->setProperty("selectedSegmentId", value.toMap().value("segmentId")); break; }
         QTest::qWait(800);
-        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("theoretical-best.png")));
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("theoretical-best.png"))); reachable("theoretical-best");
         QVERIFY(QMetaObject::invokeMethod(theoretical, "close"));
     }
     auto *progressionDialog = window->findChild<QObject *>("outingProgressionDialog");
@@ -5961,11 +6033,11 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         QVERIFY(QMetaObject::invokeMethod(progressionDialog, "open"));
         progressionTabs->setProperty("currentIndex", 1);
         QTest::qWait(1200);
-        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("section-progression.png")));
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("section-progression.png"))); reachable("section-progression");
         progressionTabs->setProperty("currentIndex", 2);
         QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 180000);
         QTest::qWait(500);
-        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("car-driver.png")));
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("car-driver.png"))); reachable("car-driver");
         QVERIFY(QMetaObject::invokeMethod(progressionDialog, "close"));
     }
     if (auto *reportDialog = window->findChild<QObject *>("dayReportDialog")) {
@@ -5978,7 +6050,7 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         };
         QTRY_VERIFY_WITH_TIMEOUT(reportReady(), 180000);
         QTest::qWait(800);
-        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("day-report.png")));
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("day-report.png"))); reachable("day-report");
         if (auto *flickable = reportDialog->property("contentItem").value<QQuickItem *>()) {
             flickable->setProperty("contentY", flickable->property("contentHeight").toDouble() - flickable->height());
             QTest::qWait(500);
@@ -5986,6 +6058,7 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         }
     }
     for (const auto &warning : warnings) qInfo() << "QML warning" << warning;
+    QVERIFY2(unreachable.isEmpty(), qPrintable(unreachable.join('\n')));
 }
 
 void TelemetryTests::selectsCornerAnalyzerSegmentThroughQml()
@@ -7804,6 +7877,177 @@ void TelemetryTests::describesOutOfSpaceExportFailures()
     const auto other = describeExportFailure(QStringLiteral("FFmpeg composition failed."), QStringLiteral("Invalid argument"));
     QCOMPARE(other.error, QStringLiteral("FFmpeg composition failed."));
     QCOMPARE(other.diagnostics, QStringLiteral("Invalid argument"));
+}
+
+QStringList TelemetryTests::unreachableControls(QQuickWindow *window)
+{
+    QStringList problems;
+    const QRectF bounds(0, 0, window->width(), window->height());
+    std::function<void(QQuickItem *)> visit = [&](QQuickItem *item) {
+        if (!item->isVisible() || item->opacity() <= 0.01 || item->width() <= 0 || item->height() <= 0) return;
+        if (item->inherits("QQuickPopupItem")) {
+            const QRectF popup = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
+            if (!bounds.adjusted(-1, -1, 1, 1).contains(popup))
+                problems << QStringLiteral("dialog larger than the window: %1").arg(describeItem(item));
+        }
+        if (isInteractiveControl(item) && item->isEnabled() && !reachableControl(item, bounds)) problems << describeItem(item);
+        if (isInteractiveControl(item) && !item->inherits("QQuickComboBox") && !item->inherits("QQuickSpinBox")) return;
+        for (auto *child : item->childItems()) visit(child);
+    };
+    visit(window->contentItem());
+    return problems;
+}
+
+void TelemetryTests::keepsAnalysisControlsReachableAtMinimumSize_data()
+{
+    QTest::addColumn<QSize>("size");
+    QTest::newRow("editor minimum 1180x720") << QSize(1180, 720);
+    QTest::newRow("analysis window minimum 760x480") << QSize(760, 480);
+}
+
+void TelemetryTests::keepsAnalysisControlsReachableAtMinimumSize()
+{
+    // KAN-78: at the supported minimum sizes every control of the day-analysis
+    // workflow -- the lap list, an open lap with segment editing, the
+    // comparison, theoretical best, time losses, the progression tabs and the
+    // day report -- is on screen or reachable by scrolling, no dialog is larger
+    // than the window, and Escape while typing never closes the view being
+    // edited. FLAPPEDEAR_LAYOUT_REVIEW_DIR, when set, receives screenshots.
+    QFETCH(QSize, size);
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
+    QVERIFY(writeBytes(fullA, fullM4Vbo(true, 140, 80, 1.0)));
+    QVERIFY(writeBytes(fullB, fullM4Vbo(false, 150, 85, 0.9)));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Layout day", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
+    controller.requestOutingDayReport();
+    const auto settled = [&] {
+        for (const auto &value : controller.outingDayReport().value("results").toList()) {
+            const auto status = value.toMap().value("status").toString();
+            if (status == "notComputed" || status == "computing" || status == "stale") return false;
+        }
+        return true;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(settled(), 60000);
+
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QQmlComponent component(&engine);
+    component.loadUrl(QUrl::fromLocalFile(QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
+        {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
+    QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->resize(size);
+    controller.setAnalysisVisible(true);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    // A display smaller than the minimum (a CI runner) cannot show it; the
+    // check needs the real size, so it is skipped there rather than faked.
+    if (!QTest::qWaitFor([&] { return window->size() == size; }, 3000))
+        QSKIP(qPrintable(QStringLiteral("This display cannot show a %1x%2 window (got %3x%4).")
+            .arg(size.width()).arg(size.height()).arg(window->width()).arg(window->height())));
+    const QString reviewDirectory = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    QStringList failures;
+    const auto check = [&](const QString &state) {
+        QTest::qWait(400);
+        const auto problems = unreachableControls(window);
+        for (const auto &problem : problems) failures << state + ": " + problem;
+        if (!reviewDirectory.isEmpty())
+            static_cast<void>(window->grabWindow().save(QDir(reviewDirectory).filePath(
+                QStringLiteral("%1x%2-%3.png").arg(size.width()).arg(size.height()).arg(state))));
+    };
+    check("lap-list");
+
+    // An open lap with segment review and an approved segment in edit mode.
+    int lapIndex = -1;
+    const auto rows = controller.outingLaps();
+    for (int i = 0; i < rows.size() && lapIndex < 0; ++i)
+        if (rows[i].toMap().value("type") == "LAP" && rows[i].toMap().value("runName") == "Session 1") lapIndex = i;
+    QVERIFY(controller.selectOutingLap(lapIndex));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingLapDetailState(), QString("ready"), 20000);
+    check("lap");
+    auto *review = window->findChild<QQuickItem *>("toggleSegmentReview");
+    QVERIFY(review);
+    review->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.segmentReviewState(), QString("ready"), 20000);
+    check("lap-segments");
+    // Escape while typing a reason keeps the lap open (the text field has it).
+    auto *reason = window->findChild<QQuickItem *>("lapExclusionReason");
+    QVERIFY(reason);
+    reason->forceActiveFocus();
+    for (const char c : QByteArray("traffic")) QTest::keyClick(window, c);
+    QTest::keyClick(window, Qt::Key_Escape);
+    QVERIFY2(!controller.selectedOutingLap().isEmpty(), "Escape in the exclusion reason closed the lap");
+    // Repeater delegates are only reachable through the visual tree.
+    const auto findVisual = [&](const QString &objectName) {
+        QQuickItem *found = nullptr;
+        std::function<void(QQuickItem *)> search = [&](QQuickItem *item) {
+            if (found || !item->isVisible()) return;
+            if (item->objectName() == objectName) { found = item; return; }
+            for (auto *child : item->childItems()) search(child);
+        };
+        search(window->contentItem());
+        return found;
+    };
+    {
+        auto *edit = findVisual("editApprovedSegment");
+        QVERIFY2(edit, "no approved segment to edit");
+        edit->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+        check("lap-segment-edit");
+        QQuickItem *name = nullptr;
+        std::function<void(QQuickItem *)> find = [&](QQuickItem *item) {
+            if (name || !item->isVisible()) return;
+            if (item->property("placeholderText").toString() == "Name" && item->inherits("QQuickTextInput")) { name = item; return; }
+            for (auto *child : item->childItems()) find(child);
+        };
+        find(window->contentItem());
+        QVERIFY(name);
+        name->forceActiveFocus();
+        for (const char c : QByteArray("Hairpin")) QTest::keyClick(window, c);
+        QTest::keyClick(window, Qt::Key_Escape);
+        QVERIFY2(!controller.selectedOutingLap().isEmpty(), "Escape in a segment name closed the lap");
+    }
+    controller.closeOutingLap();
+
+    // The comparison with the Corner Analyzer on the largest loss.
+    const auto losses = [&] {
+        for (const auto &value : controller.outingDayReport().value("results").toList())
+            if (value.toMap().value("id") == "timeLosses") return value.toMap().value("evidence").toList();
+        return QVariantList{};
+    }();
+    QVERIFY(!losses.isEmpty());
+    QVERIFY(controller.openTimeLoss({{"segmentId", losses.first().toMap().value("segmentId")},
+                                     {"lapReference", losses.first().toMap().value("reference")}}));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
+    check("comparison");
+    controller.setComparisonViewOpen(false);
+
+    for (const auto &[name, state] : {std::pair{"theoreticalBestDialog", "theoretical-best"},
+                                      std::pair{"timeLossDialog", "time-losses"},
+                                      std::pair{"dayReportDialog", "day-report"}}) {
+        auto *dialog = window->findChild<QObject *>(name);
+        QVERIFY2(dialog, name);
+        QVERIFY(QMetaObject::invokeMethod(dialog, "open"));
+        QTRY_VERIFY(dialog->property("opened").toBool());
+        check(state);
+        QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+        QTRY_VERIFY(!dialog->property("visible").toBool());
+    }
+    auto *progression = window->findChild<QObject *>("outingProgressionDialog");
+    auto *tabs = window->findChild<QObject *>("progressionTabs");
+    QVERIFY(progression && tabs);
+    QVERIFY(QMetaObject::invokeMethod(progression, "open"));
+    QTRY_VERIFY(progression->property("opened").toBool());
+    for (int tab = 0; tab < 3; ++tab) {
+        tabs->setProperty("currentIndex", tab);
+        check(QStringLiteral("progression-%1").arg(tab));
+    }
+    QVERIFY(QMetaObject::invokeMethod(progression, "close"));
+    QVERIFY2(failures.isEmpty(), qPrintable(failures.join('\n')));
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()

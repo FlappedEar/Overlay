@@ -66,9 +66,23 @@ Rectangle {
 
     Component.onCompleted: if (root.reviewState === "idle") appController.requestSegmentReview()
 
-    ColumnLayout {
+    // KAN-78: one vertical scroll surface when the panel is shorter than its
+    // content (an open edit form at the 480 px analysis-window minimum), so
+    // nothing spills over the controls below; unchanged when it fits.
+    Flickable {
+        id: scroller
+        objectName: "segmentReviewScroll"
         anchors.fill: parent
         anchors.margins: 12
+        contentWidth: width
+        contentHeight: column.height
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: ScrollBar { policy: scroller.contentHeight > scroller.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+    ColumnLayout {
+        id: column
+        width: scroller.width
+        height: Math.max(implicitHeight, scroller.height)
         spacing: 8
 
         RowLayout {
@@ -382,6 +396,7 @@ Rectangle {
             objectName: "segmentProposalList"
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.minimumHeight: 140
             visible: root.reviewState === "ready"
             clip: true
             spacing: 6
@@ -582,5 +597,6 @@ Rectangle {
             }
         }
         Item { visible: root.reviewState !== "ready"; Layout.fillHeight: true }
+    }
     }
 }

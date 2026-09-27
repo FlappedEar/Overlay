@@ -123,7 +123,9 @@ Dialog {
             }
 
             // Headline: your best lap -> theoretical best -> time available.
-            RowLayout {
+            // KAN-78: wraps onto a second line in a narrow window instead of
+            // widening the dialog's content past its edge.
+            Flow {
                 objectName: "theoreticalBestSummary"
                 Layout.fillWidth: true
                 visible: root.theoretical.state === "ready"
@@ -168,7 +170,6 @@ Dialog {
                         color: "#ff9a4d"; font.pixelSize: 22; font.weight: Font.DemiBold
                     }
                 }
-                Item { Layout.fillWidth: true }
             }
 
             RowLayout {
@@ -319,6 +320,7 @@ Dialog {
                 ColumnLayout {
                     Layout.preferredWidth: 420
                     Layout.maximumWidth: 420
+                    Layout.minimumWidth: 280
                     Layout.fillHeight: true
                     spacing: 4
                     Label { text: qsTr("WHERE THE TIME IS"); color: "#8d9aaa"; font.pixelSize: 10; font.letterSpacing: 1 }
