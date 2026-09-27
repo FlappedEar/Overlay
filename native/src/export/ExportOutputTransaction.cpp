@@ -118,6 +118,23 @@ ExportOutputTransaction::PreparationResult ExportOutputTransaction::prepare(
                     QStringLiteral("Export output collides with a source or temporary file.")};
         }
     }
+    // KAN-76: an existing target may be another name for a source (a hard
+    // link), which no path comparison can see. Compare the files themselves.
+    if (m_targetExistedBeforeExport) {
+        QStringList sources = collisionPaths;
+        sources.append(inputPath);
+        for (const QString &source : sources) {
+            ExportTargetIdentity sourceIdentity;
+            if (!source.isEmpty()
+                && ExportTargetIdentity::capture(normalizedComparisonPath(source), &sourceIdentity)
+                    == ExportTargetIdentity::CaptureStatus::Captured
+                && capturedIdentity.sameFile(sourceIdentity)) {
+                reset();
+                return {PreparationStatus::Error,
+                        QStringLiteral("Export output is another name (a hard link) for a source file.")};
+            }
+        }
+    }
     if (m_targetExistedBeforeExport && !overwriteAllowed) {
         return {PreparationStatus::OverwriteConfirmationRequired, {}};
     }

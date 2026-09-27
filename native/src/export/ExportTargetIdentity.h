@@ -21,6 +21,9 @@ public:
         const QString &path, ExportTargetIdentity *identity, QString *error = nullptr);
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] bool matches(const ExportTargetIdentity &other) const;
+    // The same file on disk (device and file id), whatever its name: a hard
+    // link is another path to it.
+    [[nodiscard]] bool sameFile(const ExportTargetIdentity &other) const;
 
 private:
     quint64 m_device = 0;

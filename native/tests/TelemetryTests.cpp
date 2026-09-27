@@ -192,6 +192,7 @@ private slots:
     void publishesCurrentLapAfterFirstAcceptedPass();
     void publishesAndClearsLapStateWithController();
     void derivesNavigableLapFragmentsAndHotlapExportRange();
+    void protectsEveryDaySourceFromExport();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -7519,6 +7520,106 @@ void TelemetryTests::derivesNavigableLapFragmentsAndHotlapExportRange()
                                                    hotlap.value(QStringLiteral("inTimecode")).toString(),
                                                    hotlap.value(QStringLiteral("outTimecode")).toString()),
              hotlap.value(QStringLiteral("durationSeconds")).toDouble());
+}
+
+void TelemetryTests::protectsEveryDaySourceFromExport()
+{
+    // KAN-76: exporting the active run of an analysed day must never
+    // replace a recording of any run, an alternative source, the video or
+    // the project -- by its own path or an alias (a symlinked folder, a hard
+    // link, different letter case) -- even with overwrite consent. An
+    // unrelated existing file still needs consent.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the export-protection test.");
+    QSettings settings; settings.clear(); settings.sync();
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QString video = directory.filePath("clip.mp4");
+    QProcess encoder;
+    encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                           "color=c=black:s=32x32:r=30:d=4", "-c:v", "mpeg4", "-q:v", "3", video});
+    QVERIFY2(encoder.waitForFinished(30'000) && encoder.exitCode() == 0, encoder.readAllStandardError().constData());
+    const QString first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo"),
+                  alternative = directory.filePath("second-alternative.vbo");
+    QVERIFY(writeBytes(first, warpedRouteVbo(true)));
+    QVERIFY(writeBytes(second, warpedRouteVbo(false)));
+    QVERIFY(writeBytes(alternative, warpedRouteVbo(false, 200)));
+
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    // Two runs; the second carries an alternative recording.
+    QVERIFY(controller.beginBatchImport({QUrl::fromLocalFile(first), QUrl::fromLocalFile(second), QUrl::fromLocalFile(alternative)}));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.batchImportState(), QString("review"), 20000);
+    QHash<QString, QString> proposals;
+    for (const auto &value : controller.batchImportRows())
+        proposals.insert(QFileInfo(value.toMap().value("path").toString()).fileName(), value.toMap().value("proposalId").toString());
+    QCOMPARE(proposals.size(), 3);
+    QSignalSpy committed(&controller, &AppController::batchImportCommitted);
+    QVERIFY(controller.confirmBatchImport("Protected day", false, {
+        QVariantMap{{"proposalId", proposals.value("first.vbo")}, {"groupId", proposals.value("first.vbo")}},
+        QVariantMap{{"proposalId", proposals.value("second.vbo")}, {"groupId", proposals.value("second.vbo")}},
+        QVariantMap{{"proposalId", proposals.value("second-alternative.vbo")}, {"groupId", proposals.value("second.vbo")}}}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    QCOMPARE(controller.eventRuns().size(), 2);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 20000);
+    controller.loadVideo(QUrl::fromLocalFile(video));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 20000);
+
+    // The day-analysis state a real day carries: approved segments and an exclusion.
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && !controller.outingComparisonGroupId().isEmpty(), 20000);
+    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
+    QVariantMap excluded;
+    for (const auto &value : controller.outingLaps())
+        if (value.toMap().value("type") == "LAP" && value.toMap().value("runName") == "Session 2") { excluded = value.toMap().value("reference").toMap(); break; }
+    QVERIFY(controller.setOutingLapExcluded(excluded, true, "Traffic"));
+    const QString project = directory.filePath("day.fetproject");
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(project)));
+    const QString activeTelemetry = QFileInfo(controller.m_telemetryPath).fileName();
+    QVERIFY(activeTelemetry == "first.vbo" || activeTelemetry == "second.vbo");
+
+    const auto exportTo = [&](const QString &target) {
+        return controller.startExport(QUrl::fromLocalFile(target), 32, 32, 30, 1, 8'000'000, false, false, {}, {}, true);
+    };
+    const auto refused = [&](const QString &target, const QString &protectedFile) {
+        const QByteArray before = readBytes(protectedFile);
+        if (before.isEmpty()) return QString("could not read ") + protectedFile;
+        if (exportTo(target)) { controller.cancelExport(); return QString("export started onto ") + target; }
+        if (controller.exportState() != "failed") return QString("state ") + controller.exportState() + " for " + target;
+        if (readBytes(protectedFile) != before) return QString("changed ") + protectedFile;
+        return QString();
+    };
+    // Every source of every run, the video and the project, by their own paths.
+    for (const QString &path : {first, second, alternative, video, project}) {
+        const auto failure = refused(path, path);
+        QVERIFY2(failure.isEmpty(), qPrintable(failure));
+    }
+#ifdef Q_OS_UNIX
+    // Through a symlinked folder.
+    const QString alias = directory.filePath("alias");
+    QVERIFY(QFile::link(directory.path(), alias));
+    for (const QString &name : {"first.vbo", "second-alternative.vbo", "day.fetproject"}) {
+        const auto failure = refused(QDir(alias).filePath(name), directory.filePath(name));
+        QVERIFY2(failure.isEmpty(), qPrintable(failure));
+    }
+    // A hard link: another name for the same file.
+    const QString hardLink = directory.filePath("hard-link.vbo");
+    QCOMPARE(::link(QFile::encodeName(second).constData(), QFile::encodeName(hardLink).constData()), 0);
+    {
+        const auto failure = refused(hardLink, second);
+        QVERIFY2(failure.isEmpty(), qPrintable(failure));
+        QVERIFY(controller.exportError().contains("hard link"));
+    }
+#endif
+    // Different letter case, where the file system ignores case (APFS default).
+    const QString upper = directory.filePath("SECOND-ALTERNATIVE.VBO");
+    if (QFileInfo::exists(upper)) {
+        const auto failure = refused(upper, alternative);
+        QVERIFY2(failure.isEmpty(), qPrintable(failure));
+    }
+    // An unrelated existing file is not a source, but needs overwrite consent.
+    const QString unrelated = directory.filePath("previous-export.mp4");
+    QVERIFY(writeBytes(unrelated, "earlier export"));
+    QVERIFY(!controller.startExport(QUrl::fromLocalFile(unrelated), 32, 32, 30, 1, 8'000'000, false, false, {}, {}, false));
+    QCOMPARE(controller.exportState(), QString("overwriteConfirmationRequired"));
+    QCOMPARE(readBytes(unrelated), QByteArray("earlier export"));
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()
