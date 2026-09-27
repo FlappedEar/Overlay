@@ -514,7 +514,7 @@ void TelemetryAppTests::reviewsApprovesAndReopensSourceFusion()
     for (int index = 0; index < laps.size(); ++index)
         if (laps[index].toMap().value("type") == "LAP") { lapIndex = index; break; }
     QVERIFY(lapIndex >= 0);
-    QVERIFY(analysis.selectOutingLap(lapIndex));
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading() && analysis.selectOutingLap(lapIndex), 20000);
     QTRY_COMPARE_WITH_TIMEOUT(analysis.outingLapDetailState(), QString("ready"), 20000);
     const auto series = analysis.outingLapSeries("coolant_temp-obd", 200);
     QVERIFY2(!series.contains("reason") && !series.value("segments").toList().isEmpty(), qPrintable(series.value("reason").toString()));
@@ -531,9 +531,10 @@ void TelemetryAppTests::reviewsApprovesAndReopensSourceFusion()
 
     // The fused file changes on disk: the lap no longer opens with it.
     QVERIFY(writeFile(obdPath, withSpeed(warpedRouteVbo(true), true, 0.5)));
-    QVERIFY(analysis.selectOutingLap(lapIndex == 0 ? 1 : 0));
+    // Saving under a new path re-derives the laps; select once they have settled.
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading() && analysis.selectOutingLap(lapIndex == 0 ? 1 : 0), 20000);
     QTRY_VERIFY_WITH_TIMEOUT(analysis.outingLapDetailState() != "loading", 20000);
-    QVERIFY(analysis.selectOutingLap(lapIndex));
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading() && analysis.selectOutingLap(lapIndex), 20000);
     QTRY_VERIFY_WITH_TIMEOUT(analysis.outingLapDetailState() == "error" || analysis.outingLapDetailState() == "stale", 20000);
 
     // Removing the fusion returns the run to its primary alone; so does a new primary.
