@@ -381,6 +381,8 @@ public:
     // start after end crosses start/finish (KAN-70).
     Q_INVOKABLE QVariantMap comparisonHeartRate(double startMeters, double endMeters) const;
     Q_INVOKABLE QVariantMap comparisonTrailBraking(double startMeters, double endMeters) const;
+    Q_INVOKABLE QVariantList comparisonMapLayerOptions() const;
+    Q_INVOKABLE QVariantMap comparisonMapLayer(const QString &layerId, int slot) const;
     Q_INVOKABLE bool selectOutingLap(int index);
     // Snapshot resolution: opening detail revalidates source content off-thread.
     Q_INVOKABLE QVariantMap resolveOutingLapReference(const QVariantMap &reference) const;

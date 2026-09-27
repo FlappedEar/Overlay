@@ -126,6 +126,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/CoastingAnalysis.h
     src/telemetry/DrivingStates.cpp
     src/telemetry/DrivingStates.h
+    src/telemetry/MapLayers.cpp
+    src/telemetry/MapLayers.h
     src/telemetry/TelemetryFolderScan.cpp
     src/telemetry/TelemetryFolderScan.h
     src/telemetry/TelemetryImportPlan.cpp
@@ -150,6 +152,7 @@ qt_add_library(flappedear_telemetry_app STATIC
     src/app/AnalysisControllerChannelSummaries.cpp
     src/app/AnalysisControllerComparison.cpp
     src/app/AnalysisControllerCornerAnalyzer.cpp
+    src/app/AnalysisControllerMapLayers.cpp
     src/app/AnalysisControllerDayReport.cpp
     src/app/AnalysisControllerOuting.cpp
     src/app/AnalysisControllerSegmentReview.cpp

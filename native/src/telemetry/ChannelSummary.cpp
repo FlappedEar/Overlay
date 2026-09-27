@@ -24,6 +24,23 @@ ChannelSummaryPolicy heartRateSummaryPolicy()
     return policy;
 }
 
+bool zeroIsPlaceholder(const TelemetryChannel &channel, const ChannelSummaryPolicy &policy)
+{
+    // The channel's typical value decides whether an exact zero is a placeholder.
+    if (!policy.zeroIsPlaceholder) return false;
+    QVector<float> finite;
+    for (const float value : channel.values) if (std::isfinite(value)) finite.append(value);
+    if (finite.isEmpty()) return false;
+    std::nth_element(finite.begin(), finite.begin() + finite.size() / 2, finite.end());
+    return std::abs(finite[finite.size() / 2]) > policy.placeholderTypicalAbove;
+}
+
+bool plausibleSample(const double value, const ChannelSummaryPolicy &policy, const bool zeroPlaceholder)
+{
+    return std::isfinite(value) && value >= policy.minimumPlausible && value <= policy.maximumPlausible
+        && !(zeroPlaceholder && value == 0.0);
+}
+
 ChannelSummary summarizeChannel(const TelemetrySession &session, const QString &channelOrAlias,
     const double startTime, const double endTime, const ChannelSummaryPolicy &policy)
 {
@@ -42,16 +59,7 @@ ChannelSummary summarizeChannel(const TelemetrySession &session, const QString &
         result.unavailableReason = channelSummaryNoSamples;
         return result;
     }
-    // The channel's typical value decides whether an exact zero is a placeholder.
-    bool zeroPlaceholder = false;
-    if (policy.zeroIsPlaceholder) {
-        QVector<float> finite;
-        for (const float value : channel.values) if (std::isfinite(value)) finite.append(value);
-        if (!finite.isEmpty()) {
-            std::nth_element(finite.begin(), finite.begin() + finite.size() / 2, finite.end());
-            zeroPlaceholder = std::abs(finite[finite.size() / 2]) > policy.placeholderTypicalAbove;
-        }
-    }
+    const bool zeroPlaceholder = zeroIsPlaceholder(channel, policy);
     const double gapLimit = telemetryGapThreshold(channel);
     std::optional<std::pair<double, double>> previous; // time, value
     double integral = 0.0;
@@ -138,15 +146,7 @@ QVector<CoolingInterval> findCoolingIntervals(const TelemetrySession &session, c
     const auto found = session.channels.constFind(session.aliases.value(channelOrAlias, channelOrAlias));
     if (found == session.channels.cend() || found->timestamps.size() != found->values.size()) return intervals;
     const auto &channel = *found;
-    bool zeroPlaceholder = false;
-    if (policy.zeroIsPlaceholder) {
-        QVector<float> finite;
-        for (const float value : channel.values) if (std::isfinite(value)) finite.append(value);
-        if (!finite.isEmpty()) {
-            std::nth_element(finite.begin(), finite.begin() + finite.size() / 2, finite.end());
-            zeroPlaceholder = std::abs(finite[finite.size() / 2]) > policy.placeholderTypicalAbove;
-        }
-    }
+    const bool zeroPlaceholder = zeroIsPlaceholder(channel, policy);
     const double gapLimit = telemetryGapThreshold(channel);
     // Split into continuously recorded stretches of valid samples.
     QVector<QVector<std::pair<double, double>>> stretches(1);
