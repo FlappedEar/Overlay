@@ -640,3 +640,34 @@ of offering proposals that cannot be approved.
 - The theoretical best is 2:11.541, and most time is in Corners 10–11
   (+0.514 s).
 
+
+## Tyre temperature and pressure (KAN-132)
+
+The tyres widget reads each corner's own tyre channels (`telemetry/TyreData`,
+`tyre-data-v1`). Nothing is substituted. A corner without a channel is shown
+as a dash, and so is a moment where its channel has no valid value.
+
+- **Temperature is °C.** A channel that declares Fahrenheit is converted.
+  Plausible values are −40 to 250 °C.
+- **Pressure is converted to bar.** A declared unit (`bar`, `psi`, `kPa`)
+  decides the conversion. Without one, the median of the channel's non-zero
+  samples decides: 0.5–8 is bar, 8–100 psi, 100–1000 kPa. A channel outside
+  those ranges is not treated as a tyre pressure, and that corner's pressure
+  is unavailable. Plausible values are above 0 and up to 10 bar.
+- **An exact 0 is a placeholder.** TPMS sensors report 0 until their first
+  reading. A tyre at exactly 0 °C or 0 bar therefore shows as no data.
+- Values are interpolated between the two neighbouring valid samples, never
+  across a placeholder, an implausible sample or a gap in the channel. There is
+  no smoothing and no stale hold, unlike the overlay channels above.
+
+**Silesia Ring, 27 September 2026 (private):**
+- RaceChrono records `tyre_temp_{fl,fr,rl,rr}-canbus` and
+  `tyre_pressure_{fl,fr,rl,rr}-canbus` with no declared unit.
+- The owner confirmed that temperatures are °C.
+- The pressures, 182–308 in steps of about 3, classify as kPa: 214 is
+  2.14 bar.
+- Sampled every second, each corner has values 84–100% of the session.
+  Temperatures are 24–53 °C and pressures 1.82–2.33 bar.
+- One exception is Session 1 FR, which reads 3.08 bar for about three
+  seconds. That is what was recorded, and it is shown as is.
+- The Jastrząb day has no tyre channels, so the widget shows dashes there.

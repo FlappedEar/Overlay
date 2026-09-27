@@ -3,6 +3,7 @@
 #include "telemetry/LapTiming.h"
 #include "telemetry/TelemetrySession.h"
 #include "telemetry/TrackGeometry.h"
+#include "telemetry/TyreData.h"
 
 #include <QObject>
 #include <QVariant>
@@ -47,6 +48,12 @@ public:
     // before the lap's start-line crossing the elapsed time is 0, during it
     // runs, and after the lap ends it stays at the lap's final time.
     Q_INVOKABLE QVariantMap fixedLapTiming(int lapNumber) const;
+    // KAN-132: {available, corners: [{corner: "FL", hasTemperature,
+    // hasPressure, temperature (°C), pressure (bar), pressureSourceUnit}]}
+    // at the current time, FL, FR, RL, RR in order. A value is present only
+    // when recorded and valid at that time; `available` is false when the
+    // recording has no tyre channels at all.
+    Q_INVOKABLE QVariantMap tyreValues() const;
 
 public slots:
     void setTime(double time);
@@ -61,6 +68,7 @@ private:
     const TelemetrySession *m_session = nullptr;
     const TrackGeometry *m_geometry = nullptr;
     LapSession m_lapSession;
+    TyreChannelMap m_tyreChannels;
     QVariantList m_trackPoints;
     SyncTransform m_sync;
     double m_time = 0.0;

@@ -34,6 +34,7 @@
 #include "telemetry/TelemetryRenderContext.h"
 #include "telemetry/TrackGeometry.h"
 #include "telemetry/TelemetryGeometry.h"
+#include "telemetry/TyreData.h"
 #include "telemetry/VboParser.h"
 #include "RczFixture.h"
 #include "EventProjectFixture.h"
@@ -198,6 +199,7 @@ private slots:
     void publishesAndClearsLapStateWithController();
     void derivesNavigableLapFragmentsAndHotlapExportRange();
     void showsOneHotlapAndExportsItByDefault();
+    void showsTyreTemperatureAndPressurePerCorner();
     void protectsEveryDaySourceFromExport();
     void keepsOutputSafeWhenTheDestinationFills_data();
     void keepsOutputSafeWhenTheDestinationFills();
@@ -219,6 +221,7 @@ private slots:
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
+    void rendersTyresInExportScene();
     void decodesOptionalRealVideoFrameWithNativeSink();
     void benchmarksCachedOptionalRealVboPresentationLookups();
     void persistsWidgetScenes();
@@ -7954,6 +7957,95 @@ void TelemetryTests::showsOneHotlapAndExportsItByDefault()
             QVERIFY2(error.toString().contains("Cannot open: qrc:"), qPrintable(error.toString()));
 }
 
+void TelemetryTests::showsTyreTemperatureAndPressurePerCorner()
+{
+    // KAN-132: the tyres widget shows each corner's temperature (°C) and
+    // pressure (recorded in kPa, shown in bar or psi). A corner without a
+    // channel, and a sensor's 0 placeholders before its first reading, show
+    // a dash -- never a substituted value.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the tyres widget test.");
+    QSettings settings; settings.clear(); settings.sync();
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QString videoPath = directory.filePath(QStringLiteral("tyres.mp4"));
+    QProcess encoder;
+    encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                           "color=c=black:s=32x32:r=30:d=12", "-c:v", "mpeg4", "-q:v", "3", videoPath});
+    QVERIFY(encoder.waitForFinished(30'000) && encoder.exitCode() == 0);
+    QByteArray vbo = "[header]\ncoordinate units = degrees\n[column names]\ntime latitude longitude "
+                     "tyre_temp_rr-canbus tyre_pressure_rr-canbus tyre_temp_fl-canbus tyre_pressure_fl-canbus\n[data]\n";
+    for (int second = 0; second <= 10; ++second) {
+        const bool reported = second >= 3; // FL's sensor reports from 3 s
+        vbo += QByteArray::number(second) + " 52.0001 21.0002 +045.000 +230.000 "
+            + (reported ? QByteArray("+040.000 +214.000") : QByteArray("+000.000 +000.000")) + "\n";
+    }
+    const QString vboPath = directory.filePath(QStringLiteral("tyres.vbo"));
+    QVERIFY(writeBytes(vboPath, vbo));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.loadVideo(QUrl::fromLocalFile(videoPath));
+    QTRY_COMPARE(controller.videoLoadState(), QStringLiteral("ready"));
+    controller.loadVbo(QUrl::fromLocalFile(vboPath));
+    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+
+    controller.setPlaybackTime(1.0);
+    QVariantMap values = controller.renderContext()->tyreValues();
+    QVERIFY(values.value("available").toBool());
+    QVariantList corners = values.value("corners").toList();
+    QCOMPARE(corners.size(), 4);
+    QCOMPARE(corners[0].toMap().value("corner").toString(), QString("FL"));
+    QVERIFY(!corners[0].toMap().value("hasTemperature").toBool()); // placeholder
+    QVERIFY(!corners[1].toMap().value("hasPressure").toBool());    // FR not recorded
+    QCOMPARE(corners[3].toMap().value("temperature").toDouble(), 45.0);
+    QCOMPARE(corners[3].toMap().value("pressure").toDouble(), 2.30);
+    QCOMPARE(corners[3].toMap().value("pressureSourceUnit").toString(), QString("kPa"));
+
+    auto *model = controller.widgetModel();
+    const int tyres = model->addWidget("tyres");
+    QVERIFY(tyres >= 0);
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create());
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    const auto findVisual = [](auto &&self, QQuickItem *item, const std::function<bool(QQuickItem *)> &match) -> QQuickItem * {
+        if (match(item)) return item;
+        for (auto *child : item->childItems()) if (auto *found = self(self, child, match)) return found;
+        return nullptr;
+    };
+    const auto cornerText = [&](const QString &corner, const QString &kind) {
+        auto *cell = findVisual(findVisual, window->contentItem(),
+            [&](QQuickItem *item) { return item->objectName() == "tyreCorner" + corner; });
+        auto *label = cell ? findVisual(findVisual, cell, [&](QQuickItem *item) { return item->objectName() == kind; }) : nullptr;
+        return label ? label->property("text").toString() : QString();
+    };
+    // The preview player primes itself at its first frame and then owns the
+    // playhead: FL's sensor has not reported yet, FR is not recorded.
+    if (!QTest::qWaitFor([&] { return controller.playbackTime() > 0.0; }, 15000))
+        QSKIP("Media playback is unavailable here.");
+    QTRY_VERIFY_WITH_TIMEOUT(!window->property("previewPrimeFramePending").toBool(), 15000);
+    QVERIFY(controller.playbackTime() < 3.0);
+    QTRY_COMPARE(cornerText("RR", "tyreTemperature"), QString("45°C"));
+    QCOMPARE(cornerText("RR", "tyrePressure"), QString("2.30 bar"));
+    QCOMPARE(cornerText("FL", "tyreTemperature"), QString("—"));
+    QCOMPARE(cornerText("FL", "tyrePressure"), QString("—"));
+    QCOMPARE(cornerText("FR", "tyrePressure"), QString("—"));
+
+    // The inspector switches the pressure to psi.
+    window->setProperty("selectedWidgetIndex", tyres);
+    QQuickItem *unit = nullptr;
+    QTRY_VERIFY((unit = findVisual(findVisual, window->contentItem(),
+        [](QQuickItem *item) { return item->objectName() == "tyrePressureUnit" && item->isVisible(); })));
+    QVERIFY(QMetaObject::invokeMethod(unit, "activated", Q_ARG(int, 1)));
+    QTRY_COMPARE(model->widget(tyres).value("settings").toMap().value("pressureUnit").toString(), QString("psi"));
+    QTRY_COMPARE(cornerText("RR", "tyrePressure"), QString("33.4 psi"));
+    for (const auto &arguments : warnings)
+        for (const auto &error : arguments.first().value<QList<QQmlError>>())
+            QVERIFY2(error.toString().contains("Cannot open: qrc:"), qPrintable(error.toString()));
+}
+
 void TelemetryTests::derivesNavigableLapFragmentsAndHotlapExportRange()
 {
     const QString ffmpeg = FfmpegTools::ffmpegPath();
@@ -9932,6 +10024,7 @@ void TelemetryTests::providesCustomizableArchetypes()
         {"retroSpeedArc", {"source", "minValue", "maxValue", "segments", "lowColor"}},
         {"retroNameplate", {"topSource", "bottomSource", "topText", "bottomText"}},
         {"brandLogo", {"logoOpacity", "logoScale"}},
+        {"tyres", {"label", "showTemperature", "showPressure", "pressureUnit", "coldBelow", "hotAbove"}},
     };
     for (auto iterator = specialized.cbegin(); iterator != specialized.cend(); ++iterator) {
         const int index = model.addWidget(iterator.key());
@@ -13334,6 +13427,66 @@ void TelemetryTests::rendersCanvasWidgetsInFirstOffscreenFrames()
         frames.append(image);
     }
     QCOMPARE(frames[0], frames[1]);
+}
+
+void TelemetryTests::rendersTyresInExportScene()
+{
+    // KAN-132: the export renderer shares the tyres widget with the preview.
+    // FL's sensor reports from 3 s: before that its cell shows dashes only.
+    QString vbo = QStringLiteral("[header]\ncoordinate units = degrees\n[column names]\ntime latitude longitude "
+        "tyre_temp_fl-canbus tyre_pressure_fl-canbus tyre_temp_rr-canbus tyre_pressure_rr-canbus\n[data]\n");
+    for (int second = 0; second <= 10; ++second)
+        vbo += QStringLiteral("%1 52.0001 21.0002 %2 45 230\n").arg(second).arg(second >= 3 ? "40 214" : "0 0");
+    const TelemetrySession session = VboParser::parse(vbo);
+    WidgetModel widgets;
+    const int tyres = widgets.addWidget(QStringLiteral("tyres"));
+    QVERIFY(tyres >= 0);
+    widgets.moveWidget(tyres, 0.05, 0.05);
+    widgets.resizeWidget(tyres, 0.40, 0.60);
+    TelemetryFrameRenderer renderer;
+    QVERIFY2(renderer.initialize(&widgets, &session, nullptr, SyncTransform{}, QSize(640, 480)),
+             qPrintable(renderer.errorString()));
+    // Bright text pixels in the widget's front-left quarter.
+    const auto frontLeftInk = [](const QImage &image) {
+        qsizetype count = 0;
+        for (int y = static_cast<int>(0.05 * image.height()); y < static_cast<int>(0.35 * image.height()); ++y)
+            for (int x = static_cast<int>(0.05 * image.width()); x < static_cast<int>(0.22 * image.width()); ++x) {
+                const QColor pixel = image.pixelColor(x, y);
+                if (pixel.alpha() > 200 && pixel.lightness() > 180) ++count;
+            }
+        return count;
+    };
+    const QImage before = renderer.renderFrame(1.0);
+    const QImage after = renderer.renderFrame(5.0);
+    QVERIFY2(!before.isNull() && !after.isNull(), qPrintable(renderer.errorString()));
+    QVERIFY2(frontLeftInk(after) > frontLeftInk(before) + 50,
+             qPrintable(QStringLiteral("front-left ink %1 -> %2").arg(frontLeftInk(before)).arg(frontLeftInk(after))));
+    const QString shots = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!shots.isEmpty()) static_cast<void>(after.save(QDir(shots).filePath("tyres-export.png")));
+
+    // Opt-in: a real day's first recording with tyre channels, mid-session.
+    const QString day = qEnvironmentVariable("FLAPPEDEAR_REAL_DAY");
+    if (day.isEmpty()) return;
+    for (const auto &file : QDir(day).entryInfoList({"*.vbo"}, QDir::Files, QDir::Name)) {
+        const TelemetrySession real = TelemetrySource::load(file.absoluteFilePath());
+        const TyreChannelMap map = mapTyreChannels(real);
+        if (!map.hasAny()) continue;
+        const auto &timestamps = real.channels.value(map.pressure[0]).timestamps;
+        const double time = timestamps[timestamps.size() / 2];
+        TelemetryFrameRenderer realRenderer;
+        QVERIFY2(realRenderer.initialize(&widgets, &real, nullptr, SyncTransform{}, QSize(1280, 720)),
+                 qPrintable(realRenderer.errorString()));
+        const QImage frame = realRenderer.renderFrame(time);
+        QVERIFY(!frame.isNull());
+        for (int corner = 0; corner < tyreCornerCount; ++corner) {
+            const auto reading = tyreReadingAt(real, map, static_cast<TyreCorner>(corner), time);
+            qInfo().noquote() << file.baseName().left(24) << tyreCornerCode(static_cast<TyreCorner>(corner))
+                              << reading.temperatureCelsius.value_or(-1) << "°C" << reading.pressureBar.value_or(-1) << "bar";
+            QVERIFY(reading.temperatureCelsius && reading.pressureBar);
+        }
+        if (!shots.isEmpty()) static_cast<void>(frame.save(QDir(shots).filePath("tyres-export-real.png")));
+        break;
+    }
 }
 
 void TelemetryTests::rendersAllComparisonTilesInProductionScene()

@@ -41,6 +41,7 @@ qt_add_resources(flappedear_native_tests "flappedear_test_qml"
         ../qml/widgets/RetroSpeedArcWidget.qml
         ../qml/widgets/RetroTachometerWidget.qml
         ../qml/widgets/TelemetryPanel.qml
+        ../qml/widgets/TyresWidget.qml
 )
 target_compile_definitions(flappedear_native_tests PRIVATE
     GUI_SESSION_LOCK_HELPER_PATH="$<TARGET_FILE:flappedear_gui_session_lock_helper>"

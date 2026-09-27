@@ -138,7 +138,7 @@ Rectangle {
                         }
 
                         RowLayout {
-                            visible: ["speed", "rpm", "heartRate", "customValue", "retroCustomValue", "arcGauge", "dialGauge", "retroGear", "retroPedal", "retroSpeedArc", "retroTachometer", "retroNameplate", "gForceMagnitudeBar"].includes(root.selectedWidget.type)
+                            visible: ["speed", "rpm", "heartRate", "customValue", "retroCustomValue", "arcGauge", "dialGauge", "retroGear", "retroPedal", "retroSpeedArc", "retroTachometer", "retroNameplate", "gForceMagnitudeBar", "tyres"].includes(root.selectedWidget.type)
                             Layout.fillWidth: true
                             Label {
                                 text: qsTr("Font size")
@@ -198,13 +198,13 @@ Rectangle {
                             text: qsTr("Telemetry & format")
                         }
                         Label {
-                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo"
+                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres"
                             text: qsTr("Source channel")
                             color: "#8b98a8"
                             font.pixelSize: 11
                         }
                         FeComboBox {
-                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo"
+                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres"
                             Layout.fillWidth: true
                             model: root.channelModel()
                             currentIndex: Math.max(0, model.indexOf(root.settings.source || qsTr("Automatic")))
@@ -212,7 +212,7 @@ Rectangle {
                         }
 
                         GridLayout {
-                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo"
+                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres"
                             Layout.fillWidth: true
                             columns: 2
                             columnSpacing: 8
@@ -310,7 +310,7 @@ Rectangle {
                             }
                         }
                         RowLayout {
-                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo"
+                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres"
                             FeCheckBox {
                                 text: qsTr("Show unit")
                                 checked: root.settings.showUnit ?? true
@@ -649,6 +649,42 @@ Rectangle {
                             ColorField { Layout.fillWidth: true; colorValue: root.settings.barColor || "#55e6a5"; onEdited: value => root.setSetting("barColor", value) }
                             Label { text: qsTr("Bar background"); color: "#8b98a8"; font.pixelSize: 11 }
                             ColorField { Layout.fillWidth: true; colorValue: root.settings.barBackgroundColor || "#24303d"; onEdited: value => root.setSetting("barBackgroundColor", value) }
+                        }
+
+                        ColumnLayout {
+                            visible: root.selectedWidget.type === "tyres"
+                            Layout.fillWidth: true
+                            spacing: 6
+                            SectionTitle { text: qsTr("Tyres") }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: qsTr("Per corner from the recording's tyre channels. Temperature in °C; pressure converted to the unit below. A dash means no data at that moment.")
+                                color: "#8b98a8"; font.pixelSize: 11
+                            }
+                            RowLayout {
+                                FeCheckBox { text: qsTr("Label"); checked: root.settings.showLabel ?? true; onToggled: root.setSetting("showLabel", checked) }
+                                FeCheckBox { text: qsTr("Temperature"); checked: root.settings.showTemperature ?? true; onToggled: root.setSetting("showTemperature", checked) }
+                                FeCheckBox { text: qsTr("Pressure"); checked: root.settings.showPressure ?? true; onToggled: root.setSetting("showPressure", checked) }
+                            }
+                            GridLayout {
+                                Layout.fillWidth: true
+                                columns: 2
+                                Label { text: qsTr("Label"); color: "#8b98a8"; font.pixelSize: 11 }
+                                FeTextField { Layout.fillWidth: true; text: root.settings.label || "TYRES"; onEditingFinished: root.setSetting("label", text) }
+                                Label { text: qsTr("Pressure unit"); color: "#8b98a8"; font.pixelSize: 11 }
+                                FeComboBox {
+                                    objectName: "tyrePressureUnit"
+                                    Layout.fillWidth: true
+                                    model: ["bar", "psi"]
+                                    currentIndex: root.settings.pressureUnit === "psi" ? 1 : 0
+                                    onActivated: index => root.setSetting("pressureUnit", index === 1 ? "psi" : "bar")
+                                }
+                                Label { text: qsTr("Cold below (°C)"); color: "#8b98a8"; font.pixelSize: 11 }
+                                FeTextField { Layout.fillWidth: true; placeholderText: qsTr("off"); text: Number(root.settings.coldBelow ?? 0) > 0 ? Number(root.settings.coldBelow).toString() : ""; onEditingFinished: root.setSetting("coldBelow", Math.max(0, Number(text) || 0)) }
+                                Label { text: qsTr("Hot above (°C)"); color: "#8b98a8"; font.pixelSize: 11 }
+                                FeTextField { Layout.fillWidth: true; placeholderText: qsTr("off"); text: Number(root.settings.hotAbove ?? 0) > 0 ? Number(root.settings.hotAbove).toString() : ""; onEditingFinished: root.setSetting("hotAbove", Math.max(0, Number(text) || 0)) }
+                            }
                         }
 
                         ColumnLayout {

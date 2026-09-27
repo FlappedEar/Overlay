@@ -61,6 +61,10 @@
     },
     "track": { "lineColor": "#55e6a5", "lineWidth": 3, "markerColor": "#ffffff", "markerSize": 10, "trackPadding": 10, "mirrorX": false, "mirrorY": false },
     "customValue": { "label": "VALUE", "decimals": 1 },
+    "tyres": {
+      "label": "TYRES", "showLabel": true, "showTemperature": true, "showPressure": true,
+      "pressureUnit": "bar", "pressureDecimals": 2, "coldBelow": 0, "hotAbove": 0
+    },
     "retroCustomValue": {
       "showBackground": true, "showBorder": true, "padding": 10, "label": "VALUE", "decimals": 1,
       "fallbackText": "—", "panelColor": "#16232d", "valueColor": "#f2f5f7", "labelColor": "#c0cad2",

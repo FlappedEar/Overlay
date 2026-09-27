@@ -80,6 +80,11 @@ ApplicationWindow {
             "icon": "123"
         },
         {
+            "label": "Tyres",
+            "type": "tyres",
+            "icon": "◫"
+        },
+        {
             "label": "Retro Custom",
             "type": "retroCustomValue",
             "icon": "R+"

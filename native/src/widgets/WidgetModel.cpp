@@ -59,7 +59,7 @@ const QStringList widgetTypes = {
     "f1GForceRadar",  "gForceMagnitudeBar", "track", "customValue", "retroCustomValue", "arcGauge", "dialGauge",
     "telemetryOverlay", "lapBest", "lapCurrent", "lapDelta", "speedBest", "speedCurrent",
     "speedDelta", "retroGrandPrix", "retroTachometer", "retroGear",
-    "retroPedal", "retroSpeedArc", "retroNameplate", "brandLogo"};
+    "retroPedal", "retroSpeedArc", "retroNameplate", "brandLogo", "tyres"};
 
 QPair<double, double> defaultSize(const QString &type)
 {
@@ -114,6 +114,9 @@ QPair<double, double> defaultSize(const QString &type)
     }
     if (type == "brandLogo") {
         return {0.12, 0.16};
+    }
+    if (type == "tyres") {
+        return {0.17, 0.20};
     }
     return {0.15, 0.16};
 }

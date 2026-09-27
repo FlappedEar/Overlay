@@ -300,6 +300,8 @@ SyncTransform TelemetryRenderContext::syncTransform() const { return m_sync; }
 
 void TelemetryRenderContext::setSession(const TelemetrySession *session)
 {
+    // Sessions are immutable once loaded; map their tyre channels once.
+    m_tyreChannels = session ? mapTyreChannels(*session) : TyreChannelMap{};
     if (m_session == session) {
         return;
     }
@@ -361,6 +363,30 @@ QString TelemetryRenderContext::valueText(const QString &channelName, const int 
     const QVariant value = telemetryValue(channelName);
     return value.isValid() ? QString::number(value.toDouble(), 'f', qBound(0, decimals, 6))
                            : QStringLiteral("—");
+}
+
+QVariantMap TelemetryRenderContext::tyreValues() const
+{
+    QVariantMap result;
+    const bool available = m_session && m_tyreChannels.hasAny();
+    result.insert(QStringLiteral("available"), available);
+    if (!available) return result;
+    const auto time = videoToTelemetryTime(m_time, m_sync);
+    QVariantList corners;
+    for (int index = 0; index < tyreCornerCount; ++index) {
+        const auto corner = static_cast<TyreCorner>(index);
+        const TyreReading reading = time ? tyreReadingAt(*m_session, m_tyreChannels, corner, *time) : TyreReading{};
+        QVariantMap entry;
+        entry.insert(QStringLiteral("corner"), tyreCornerCode(corner));
+        entry.insert(QStringLiteral("hasTemperature"), reading.temperatureCelsius.has_value());
+        entry.insert(QStringLiteral("hasPressure"), reading.pressureBar.has_value());
+        if (reading.temperatureCelsius) entry.insert(QStringLiteral("temperature"), *reading.temperatureCelsius);
+        if (reading.pressureBar) entry.insert(QStringLiteral("pressure"), *reading.pressureBar);
+        entry.insert(QStringLiteral("pressureSourceUnit"), pressureUnitName(m_tyreChannels.pressureUnit[index]));
+        corners.append(entry);
+    }
+    result.insert(QStringLiteral("corners"), corners);
+    return result;
 }
 
 QVariant TelemetryRenderContext::telemetryTime() const
