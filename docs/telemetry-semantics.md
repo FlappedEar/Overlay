@@ -359,3 +359,57 @@ automatically better or safer, and the note says so.
 **On the Jastrząb day:** in Corners 2–3 (174 m), Session 2 LAP 1 (A) brakes
 while cornering for 1.8 s over 35 m. The best lap, Session 5 LAP 2 (B), does
 so for 2.9 s over 65 m. Both use the measured brake and calculated lateral G.
+
+## Map layers (KAN-97)
+
+The A/B map can colour one lap's racing line by a value. **Line: A / B**
+(the default) shows the two laps in their own colours. The other choices
+are:
+- **Speed**;
+- **Δ time (A−B)**;
+- **Lateral G** and **Longitudinal G**;
+- **Throttle** and **Brake (measured)**;
+- each recorded temperature channel (a name containing "temp").
+
+The **A**/**B** buttons choose the lap. The other lap stays visible,
+dimmed, and the hover markers of both laps still follow the charts.
+
+A layer is built in two steps (`telemetry/MapLayers`, algorithm
+`map-layer-v1`):
+1. `channelAlongProgress` samples the channel at up to 800 evenly spaced
+   positions on the pair's shared progress axis, through the lap's own time
+   at that progress. The value comes from the two neighbouring samples. It
+   is unavailable when either sample is missing, non-finite or implausible,
+   or when the samples are further apart than the channel's gap threshold.
+   Temperatures use the KAN-67 policy: −40 to 250 °C are plausible, and an
+   exact zero is a placeholder on a channel that is typically warm.
+2. `placeOnMap` puts each value at the lap's position on the shared map.
+
+A missing progress, time, position or value ends the line, so gaps stay
+open. The Δ layer uses the pair's delta series (positive: A behind) drawn
+where the chosen lap was.
+
+Colour scales:
+- Speed, pedals and temperatures use one blue hue, dim to bright, over the
+  lap's own range.
+- The Δ and G layers use a diverging scale, symmetric around zero: blue,
+  grey at zero, amber. Δ is labelled "A ahead" to "A behind", and
+  longitudinal G "braking" to "accelerating". Lateral G keeps the logger's
+  sign.
+
+The legend shows the range, the layer, the lap, and the unit when the
+recording declares one. G from a RaceChrono `-calc` channel and the delta
+are marked **calculated**. A channel neither lap recorded is listed as "not
+recorded" and draws nothing: the brake layer is never inferred from
+deceleration. When only the other lap has the channel, the map says which
+lap lacks it. The layer is static geometry: it is rebuilt when the layer,
+lap or pair changes, never on hover.
+
+**On the Jastrząb day:** the best lap (Session 5 LAP 2, lap B of the largest
+loss) has every layer:
+- speed 33–121 and brake 0–57 %, both recorded;
+- lateral G −0.98 to 0.95 and longitudinal G −0.87 to 0.39, both calculated;
+- four recorded temperatures: coolant 97–101 °C, engine oil 114–121 °C,
+  gearbox 98–104 °C and intake 30–33 °C.
+
+The logger declares no units for speed and the pedals, so none are shown.

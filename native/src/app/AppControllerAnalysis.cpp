@@ -556,4 +556,14 @@ QVariantMap AppController::comparisonTrailBraking(double startMeters, double end
     return m_analysis.comparisonTrailBraking(startMeters, endMeters);
 }
 
+QVariantList AppController::comparisonMapLayerOptions() const
+{
+    return m_analysis.comparisonMapLayerOptions();
+}
+
+QVariantMap AppController::comparisonMapLayer(const QString &layerId, int slot) const
+{
+    return m_analysis.comparisonMapLayer(layerId, slot);
+}
+
 } // namespace FlappedEar

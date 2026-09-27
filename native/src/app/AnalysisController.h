@@ -230,6 +230,11 @@ public:
     // the shared axis: overlap time and distance, the states' provenance and
     // strips (fractions of the range) for braking, cornering and the overlap.
     Q_INVOKABLE QVariantMap comparisonTrailBraking(double startMeters, double endMeters) const;
+    // KAN-97: analytical map layers for the A/B pair. The options list every
+    // layer (speed, delta, G, pedals, recorded temperatures) with whether
+    // either lap has it; a layer colours one lap's line on the shared map.
+    Q_INVOKABLE QVariantList comparisonMapLayerOptions() const;
+    Q_INVOKABLE QVariantMap comparisonMapLayer(const QString &layerId, int slot) const;
     Q_INVOKABLE bool selectOutingLap(int index);
     // Snapshot resolution: opening detail revalidates source content off-thread.
     Q_INVOKABLE QVariantMap resolveOutingLapReference(const QVariantMap &reference) const;

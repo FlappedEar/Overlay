@@ -206,6 +206,7 @@ private slots:
     void switchesTheActiveRunPrimaryWithoutStaleEditorState();
     void showsCoastingOnTheOpenLap();
     void showsTrailBrakingInTheCornerAnalyzer();
+    void coloursTheComparisonMapByAChannel();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -6123,6 +6124,25 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         QTest::qWait(300);
         QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("trail-braking.png"))); reachable("trail-braking");
     }
+    // KAN-97: map layers on the pair, lap B (the faster lap of the loss).
+    for (const auto &value : controller.comparisonMapLayerOptions()) {
+        const auto option = value.toMap();
+        const auto layer = controller.comparisonMapLayer(option.value("id").toString(), 1);
+        qInfo().noquote() << QString("  map layer %1: %2 %3..%4 %5 (%6)").arg(option.value("id").toString())
+            .arg(layer.value("valid").toBool() ? "valid" : "unavailable " + layer.value("reason").toString())
+            .arg(layer.value("minimum").toDouble(), 0, 'f', 2).arg(layer.value("maximum").toDouble(), 0, 'f', 2)
+            .arg(layer.value("unit").toString()).arg(layer.value("provenance").toString());
+    }
+    if (auto *map = window->findChild<QQuickItem *>("comparisonOverlayMap")) {
+        segmentPanel->setProperty("selectedSegmentId", QString());
+        for (const auto *id : {"speed", "brake"}) {
+            map->setProperty("layerId", QString::fromLatin1(id));
+            QTest::qWait(800);
+            QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath(QString("map-layer-%1.png").arg(id))));
+            reachable(QString("map-layer-%1").arg(id));
+        }
+        map->setProperty("layerId", QString());
+    }
     // The theoretical-best window on the same real day.
     controller.setComparisonViewOpen(false);
     QTest::qWait(500);
@@ -8663,6 +8683,133 @@ void TelemetryTests::showsTrailBrakingInTheCornerAnalyzer()
         QTest::qWait(500);
         static_cast<void>(window->grabWindow().save(QDir(review).filePath("trail-braking.png")));
     }
+    QCOMPARE(warnings.size(), 0);
+}
+
+void TelemetryTests::coloursTheComparisonMapByAChannel()
+{
+    // KAN-97: analytical map layers on the A/B map. Recorded speed, G and a
+    // temperature colour the chosen lap's line with a legend; the A-B delta
+    // is diverging around zero; a channel neither lap recorded (brake,
+    // throttle here) is unavailable, never inferred.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
+    QVERIFY(writeBytes(fullA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
+    QVERIFY(writeBytes(fullB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Map day", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
+    controller.requestOutingDayReport();
+    QTRY_VERIFY_WITH_TIMEOUT([&] {
+        for (const auto &value : controller.outingDayReport().value("results").toList())
+            if (value.toMap().value("id") == "timeLosses") return value.toMap().value("status") == "available";
+        return false;
+    }(), 60000);
+    QVariantList losses;
+    for (const auto &value : controller.outingDayReport().value("results").toList())
+        if (value.toMap().value("id") == "timeLosses") losses = value.toMap().value("evidence").toList();
+    QVERIFY(controller.openTimeLoss({{"segmentId", losses.first().toMap().value("segmentId")},
+                                     {"lapReference", losses.first().toMap().value("reference")}}));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
+
+    QHash<QString, bool> available;
+    for (const auto &value : controller.comparisonMapLayerOptions())
+        available.insert(value.toMap().value("id").toString(), value.toMap().value("available").toBool());
+    QVERIFY(available.value("speed") && available.value("delta") && available.value("lateralG")
+        && available.value("longitudinalG") && available.value("temperature:coolant_temp-obd"));
+    QVERIFY(available.contains("brake") && !available.value("brake"));
+    QVERIFY(available.contains("throttle") && !available.value("throttle"));
+
+    const auto temperature = controller.comparisonMapLayer("temperature:coolant_temp-obd", 0);
+    QVERIFY(temperature.value("valid").toBool());
+    QCOMPARE(temperature.value("scale").toString(), QString("sequential"));
+    // The recorded coolant rises 0.01 °C per sample from 80 or 85 °C.
+    QVERIFY(temperature.value("minimum").toDouble() >= 80.0 && temperature.value("maximum").toDouble() <= 90.0);
+    QVERIFY(temperature.value("maximum").toDouble() > temperature.value("minimum").toDouble());
+    for (const auto &value : temperature.value("polylines").toList()) {
+        const auto polyline = value.toMap();
+        QCOMPARE(polyline.value("points").toList().size(), polyline.value("values").toList().size());
+        for (const auto &point : polyline.value("points").toList()) {
+            QVERIFY(point.toPointF().x() >= -0.01 && point.toPointF().x() <= 1.01);
+            QVERIFY(point.toPointF().y() >= -0.01 && point.toPointF().y() <= 1.01);
+        }
+    }
+    const auto lateral = controller.comparisonMapLayer("lateralG", 1);
+    QVERIFY(lateral.value("valid").toBool());
+    QCOMPARE(lateral.value("scale").toString(), QString("diverging"));
+    QCOMPARE(lateral.value("provenance").toString(), QString("calculated"));
+    QVERIFY(lateral.value("minimum").toDouble() < 0 && lateral.value("maximum").toDouble() > 0);
+    const auto delta = controller.comparisonMapLayer("delta", 1);
+    QVERIFY(delta.value("valid").toBool());
+    QCOMPARE(delta.value("unit").toString(), QString("s"));
+    QCOMPARE(controller.comparisonMapLayer("brake", 0).value("reason").toString(), QString("channelMissing"));
+    QCOMPARE(controller.comparisonMapLayer("nonsense", 0).value("reason").toString(), QString("unknownLayer"));
+    QVERIFY(!controller.comparisonMapLayer("speed", 2).value("valid").toBool());
+
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
+        {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->resize(1180, 656);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    auto *map = window->findChild<QQuickItem *>("comparisonOverlayMap"); QVERIFY(map);
+    auto *picker = window->findChild<QQuickItem *>("comparisonMapLayerPicker"); QVERIFY(picker);
+    auto *layerCanvas = window->findChild<QQuickItem *>("comparisonMapLayer"); QVERIFY(layerCanvas);
+    auto *legend = window->findChild<QQuickItem *>("comparisonMapLegend"); QVERIFY(legend);
+    QTRY_VERIFY(picker->isVisible());
+    QVERIFY(!layerCanvas->isVisible() && !legend->isVisible()); // off by default
+
+    // Choosing the temperature in the picker colours lap B and shows the legend.
+    const auto options = map->property("layerOptions").toList();
+    int temperatureIndex = -1;
+    for (int index = 0; index < options.size(); ++index)
+        if (options[index].toMap().value("id") == "temperature:coolant_temp-obd") temperatureIndex = index + 1;
+    QVERIFY(temperatureIndex > 0);
+    QVERIFY(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, temperatureIndex)));
+    QCOMPARE(map->property("layerId").toString(), QString("temperature:coolant_temp-obd"));
+    QTRY_VERIFY(layerCanvas->isVisible() && legend->isVisible());
+    QVERIFY(window->findChild<QQuickItem *>("comparisonMapLegendSource")->property("text").toString().contains("lap B"));
+    QVERIFY(window->findChild<QQuickItem *>("comparisonMapLegendHigh")->property("text").toString().startsWith("8"));
+    // Lap A instead.
+    auto *slotA = window->findChild<QQuickItem *>("comparisonMapLayerSlotA"); QVERIFY(slotA && slotA->isVisible());
+    slotA->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_COMPARE(map->property("layerSlot").toInt(), 0);
+    QTRY_VERIFY(window->findChild<QQuickItem *>("comparisonMapLegendSource")->property("text").toString().contains("lap A"));
+
+    // Diverging delta: symmetric around zero, labelled.
+    map->setProperty("layerId", "delta");
+    QTRY_VERIFY(layerCanvas->isVisible());
+    QVERIFY(std::abs(map->property("layerLow").toDouble() + map->property("layerHigh").toDouble()) < 1e-9);
+    QVERIFY(window->findChild<QQuickItem *>("comparisonMapLegendHigh")->property("text").toString().contains("A behind"));
+    // Hovering moves only the markers; the layer is not rebuilt.
+    const auto polylines = layerCanvas->property("polylines");
+    map->setProperty("hoverDistanceMeters", 100.0);
+    QTest::qWait(100);
+    QCOMPARE(layerCanvas->property("polylines"), polylines);
+
+    // Not recorded: unavailable, nothing drawn.
+    map->setProperty("layerId", "brake");
+    QTRY_VERIFY(!layerCanvas->isVisible());
+    QCOMPARE(window->findChild<QQuickItem *>("comparisonMapLayerUnavailable")->property("text").toString(),
+        QString("Not recorded on either lap."));
+    const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    map->setProperty("layerId", "speed");
+    QTRY_VERIFY(layerCanvas->isVisible());
+    if (!review.isEmpty()) {
+        QTest::qWait(300);
+        static_cast<void>(window->grabWindow().save(QDir(review).filePath("map-layer.png")));
+    }
+    QVERIFY(unreachableControls(window).isEmpty());
+    // Back to plain A/B lines.
+    QVERIFY(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 0)));
+    QTRY_VERIFY(!layerCanvas->isVisible() && !legend->isVisible());
     QCOMPARE(warnings.size(), 0);
 }
 

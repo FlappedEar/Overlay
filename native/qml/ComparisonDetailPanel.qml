@@ -309,6 +309,7 @@ Rectangle {
                 spacing: 8
                 ComparisonOverlayMap {
                     id: overlayMap
+                    objectName: "comparisonOverlayMap"
                     Layout.preferredWidth: Math.max(160, root.width * (root.showingCornerAnalyzer || root.showingGg ? 0.2 : 0.26))
                     Layout.fillHeight: true
                     hoverDistanceMeters: root.hoverDistanceMeters

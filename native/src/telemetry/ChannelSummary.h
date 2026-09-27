@@ -37,6 +37,11 @@ struct ChannelSummaryPolicy {
 [[nodiscard]] ChannelSummaryPolicy temperatureSummaryPolicy();
 // Heart rate (bpm): 30..230 plausible.
 [[nodiscard]] ChannelSummaryPolicy heartRateSummaryPolicy();
+// Whether an exact zero in `channel` is a placeholder under `policy`: only
+// when the policy says so and the channel's median is above its typical level.
+[[nodiscard]] bool zeroIsPlaceholder(const TelemetryChannel &channel, const ChannelSummaryPolicy &policy);
+// A finite sample inside the policy's plausible range that is not a placeholder.
+[[nodiscard]] bool plausibleSample(double value, const ChannelSummaryPolicy &policy, bool zeroPlaceholder);
 
 struct ChannelSummary {
     QString channel;
