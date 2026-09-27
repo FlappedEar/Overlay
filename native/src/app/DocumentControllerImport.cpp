@@ -1,6 +1,7 @@
-#include "app/AppController.h"
+#include "app/DocumentController.h"
 #include "project/EventProjectCodec.h"
 #include "project/ProjectLimits.h"
+#include "telemetry/OutingLaps.h"
 #include "telemetry/SourceOperation.h"
 
 #include <QCryptographicHash>
@@ -70,14 +71,14 @@ QSet<QString> existingContent(const QJsonObject &project)
 
 } // namespace
 
-bool AppController::batchContextMatches() const
+bool DocumentController::batchContextMatches() const
 {
     return m_batchDocumentId == m_documentId && m_batchRevision == m_documentState.revision()
         && m_batchProjectPath == m_documentState.projectPath()
         && m_batchGeneration == m_sourceGeneration;
 }
 
-void AppController::invalidateBatchImport()
+void DocumentController::invalidateBatchImport()
 {
     if (m_batchApplying || m_batchState == "idle" || m_batchState == "error" || batchContextMatches()) return;
     cancelBatchImport();
@@ -86,10 +87,10 @@ void AppController::invalidateBatchImport()
     emit batchImportChanged();
 }
 
-void AppController::initializeBatchImport()
+void DocumentController::initializeBatchImport()
 {
-    connect(this, &AppController::documentStateChanged, this, &AppController::invalidateBatchImport);
-    connect(this, &AppController::sourceLoadStateChanged, this, &AppController::invalidateBatchImport);
+    connect(this, &DocumentController::documentStateChanged, this, &DocumentController::invalidateBatchImport);
+    connect(this, &DocumentController::sourceLoadStateChanged, this, &DocumentController::invalidateBatchImport);
     m_batchProgressTimer.setInterval(100);
     connect(&m_batchProgressTimer, &QTimer::timeout, this, [this] {
         if (m_batchProgress && m_batchProcessed != m_batchProgress->load()) {
@@ -112,7 +113,7 @@ void AppController::initializeBatchImport()
             m_batchError = result.error;
         } else if (result.confirmation) {
             const QScopedValueRollback applying(m_batchApplying, true);
-            if (documentBusy() || projectLoading() || recoveryPending()
+            if (m_host.documentBusy() || projectLoading() || recoveryPending()
                 || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
                 || (!result.append && dirty())) {
                 m_batchState = QStringLiteral("review");
@@ -131,8 +132,8 @@ void AppController::initializeBatchImport()
                     m_batchRows.clear();
                     m_batchState = QStringLiteral("idle");
                     m_batchError.clear();
-                    setAnalysisVisible(true);
-                    setStatus(result.append ? QStringLiteral("Runs added to the event. Save to keep them.")
+                    m_host.revealAnalysis();
+                    m_host.showStatus(result.append ? QStringLiteral("Runs added to the event. Save to keep them.")
                                             : QStringLiteral("Event created. Save to keep it."));
                     emit batchImportCommitted();
                 } else {
@@ -176,7 +177,7 @@ void AppController::initializeBatchImport()
     });
 }
 
-void AppController::cancelBatchImport()
+void DocumentController::cancelBatchImport()
 {
     m_analysisImportAutomatic = false;
     m_analysisImportMessages.clear();
@@ -191,9 +192,9 @@ void AppController::cancelBatchImport()
     emit batchImportChanged();
 }
 
-bool AppController::importAnalysisRuns(const QString &name, const QList<QUrl> &urls)
+bool DocumentController::importAnalysisRuns(const QString &name, const QList<QUrl> &urls)
 {
-    if (m_batchPending || documentBusy() || projectLoading() || recoveryPending()
+    if (m_batchPending || m_host.documentBusy() || projectLoading() || recoveryPending()
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) return false;
     const bool append = EventProjectCodec::isEvent(m_projectTemplate);
     if (!append && (dirty() || name.trimmed().isEmpty() || name.size() > 160)) {
@@ -211,9 +212,9 @@ bool AppController::importAnalysisRuns(const QString &name, const QList<QUrl> &u
     return true;
 }
 
-bool AppController::beginBatchImport(const QList<QUrl> &urls)
+bool DocumentController::beginBatchImport(const QList<QUrl> &urls)
 {
-    if (m_batchPending || documentBusy() || projectLoading() || recoveryPending()
+    if (m_batchPending || m_host.documentBusy() || projectLoading() || recoveryPending()
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) return false;
     cancelBatchImport();
     if (urls.isEmpty() || urls.size() > TelemetryImportLimits{}.maximumFiles) {
@@ -285,7 +286,7 @@ bool AppController::beginBatchImport(const QList<QUrl> &urls)
     return true;
 }
 
-void AppController::publishBatchRows()
+void DocumentController::publishBatchRows()
 {
     m_batchRows.clear();
     if (!m_batchPlan) return;
@@ -319,14 +320,14 @@ void AppController::publishBatchRows()
     }
 }
 
-bool AppController::confirmBatchImport(const QString &name, const bool append, const QVariantList &choices)
+bool DocumentController::confirmBatchImport(const QString &name, const bool append, const QVariantList &choices)
 {
     const auto reject = [this](const QString &error) {
         m_batchError = error; emit batchImportChanged(); return false;
     };
     if (m_batchState != "review" || !m_batchPlan || m_batchPending) return false;
     if (!batchContextMatches()) { invalidateBatchImport(); return false; }
-    if (documentBusy() || projectLoading() || recoveryPending()
+    if (m_host.documentBusy() || projectLoading() || recoveryPending()
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) return reject("Finish the current operation first.");
     if (!append && dirty()) return reject("Save the current project before creating a new event, or append to this event.");
     if (append && !EventProjectCodec::isEvent(m_projectTemplate)) return reject("Open an event before appending runs.");

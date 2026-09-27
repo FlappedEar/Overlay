@@ -1435,9 +1435,9 @@ Dump before and after a refactor, then normalise the per-import identities:
 
 Diff the results. For KAN-124 step 6 (report assembly moved to core) the
 1,400-line reports were identical apart from those identities. The same was
-true when `AnalysisController` was extracted from `AppController` (step 8).
-The regression tests reach analysis internals through
-`controller.m_analysis`.
+true when `AnalysisController` (step 8) and `DocumentController` (step 9)
+were extracted from `AppController`. The regression tests reach their
+internals through `controller.m_analysis` and `controller.m_document`.
 
 ## Video-free day-result states (KAN-27)
 

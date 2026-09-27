@@ -20,7 +20,11 @@ target_link_libraries(flappedear_probe_test_helper PRIVATE Qt6::Core)
 flappedear_enable_warnings(flappedear_probe_test_helper)
 
 qt_add_executable(flappedear_native_tests
-    ../src/app/AppControllerImport.cpp
+    ../src/app/DocumentControllerImport.cpp
+    ../src/app/DocumentController.cpp
+    ../src/app/DocumentController.h
+    ../src/app/DocumentHost.h
+    ../src/app/AppControllerDocument.cpp
     ../src/app/AnalysisControllerComparison.cpp
     ../src/app/AnalysisControllerOuting.cpp
     ../src/app/AnalysisControllerSegmentReview.cpp

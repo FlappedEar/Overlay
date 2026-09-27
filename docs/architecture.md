@@ -100,10 +100,27 @@ It sees the project only through `AnalysisDocument`
   import, pending destructive action);
 - read the source generation and the active run.
 
-`AppController` implements both `AnalysisDocument` and `VideoLink` and
-forwards its QML API unchanged. It still applies lap exclusions to the
-editor's own lap navigation when analysis re-applies them. The Document
-and Overlay controllers are extracted in later steps.
+`DocumentController` (`src/app/DocumentController.h`) owns the project
+document:
+- the saved project, its identity and revisions, and dirty state;
+- recovery;
+- new, open, save and quit decisions;
+- run selection and day import.
+
+It implements `AnalysisDocument`. Whatever the application adds comes
+through `DocumentHost` (`src/app/DocumentHost.h`):
+- source generations, and the editor state stored in the project (the
+  active run's sources, synchronisation, overlay scene and chart
+  channels);
+- the verified analysis a saved project carries;
+- whether the document is busy (an export).
+
+A Telemetry app hosts a document without an editor.
+
+`AppController` implements `DocumentHost` and `VideoLink` and forwards its
+QML API unchanged. It still applies lap exclusions to the editor's own lap
+navigation when analysis re-applies them. The Overlay controller is
+extracted in a later step.
 
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
