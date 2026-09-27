@@ -76,6 +76,38 @@ remaining M5 items wait for the owner):
 | KAN-90 | Attach a recording to a run after reviewing evidence; choose the primary | #106 |
 | — | Adding runs to a day is not made stale by analysis bookkeeping | #107 |
 
+Merged later on 27 September 2026 (M6 analysis, source fusion and video):
+
+| Ticket | What | PR |
+| --- | --- | --- |
+| KAN-91 | Driving states with provenance (`DrivingStates.h`) | #108 |
+| KAN-92 | Coasting by episode, segment and lap; on the map | #109 |
+| KAN-93 | Trail braking in the Corner Analyzer | #110 |
+| KAN-97 | A/B map layers: speed, Δ, G, pedals, recorded temperatures (`MapLayers.h`) | #111 |
+| KAN-100 | Temperature against lap time and acceleration, with the time-of-day confound (`TemperatureAssociation.h`) | #112 |
+| KAN-101 | Recording clock alignment, declared against measured (`RecordingAlignment.h`); sync engine moved into telemetry core | #113 |
+| KAN-102 | Channel fusion policy with per-sample provenance (`ChannelFusion.h`) | #114 |
+| KAN-103 | Fusion review, approval and reopen in Run details (`run.fusion`) | #115 |
+| KAN-104 | GoPro chapter groups reviewed before loading (`GoProChapters.h`) | #116 |
+| KAN-105 | Chapters played as one timeline (`MediaTimeline.h`, `video.chapters`) | #117 |
+| KAN-107 | Side-by-side A/B lap video from each run's verified footage | #118 |
+| KAN-133 | No compiler warnings in a clean build | #119 |
+
+**KAN-106 (export across chapters) is paused, deliberately.** Exporting a
+chaptered video is refused with an explicit message, so the first chapter is
+never exported alone. The Jira scoping note lists what a safe version needs:
+- exact per-chapter tick counts, passed to the worker instead of re-probing;
+- a concat list as a new owned manifest artifact;
+- an audio policy at chapter joins;
+- export protection of chapters 2..N in single-video projects.
+
+It changes the protected staged export, so it waits for the owner and for
+KAN-81.
+
+Fusion (KAN-101–103) and chapters/side-by-side video (KAN-104–107) are
+validated on synthetic data only. The private day has one VBO per session
+and no video.
+
 **Waiting for the owner (M5):**
 - KAN-80 and KAN-81 need the matching private video.
 - KAN-83 needs a clean account or machine.
@@ -88,6 +120,10 @@ remaining M5 items wait for the owner):
   where shared profiles live, and how they differ from an event's setup
   snapshot.
 - KAN-113, KAN-114 and KAN-115 are owner-marked "backlog only".
+- KAN-94–96 (realistic potential) and KAN-108–109 (Explain this lap) depend
+  on KAN-86. KAN-98–99 (comparable visits) depend on KAN-89.
+- KAN-106 (chapter export) is paused; see above.
+- KAN-132 (tyre data) needs the phase-0 decision on its data source.
 
 KAN-124 (split phase 2) steps 1–11 are merged (#85, #87–#92, #94–#97):
 - **Step 1:** analysis reaches video only through `VideoLink`, and its guards
@@ -204,6 +240,15 @@ the review directory set, it saves screenshots of:
 - the By section and Car & driver tabs;
 - the day report.
 
+With the review directory set, it also saves screenshots of trail braking,
+the speed and brake map layers, and the temperature association. It logs
+every map layer and association. Latest additions:
+- Corners 2–3 trail braking: 1.8 s over 35 m (Session 2 LAP 1) against
+  2.9 s over 65 m on the best lap;
+- every temperature correlates with quicker laps (coolant ρ −0.84), but all
+  of them rise with the order of laps (ρ 0.81–0.86), so every card is
+  flagged as confounded.
+
 **Look at the screenshots** before claiming UI work is done. Last result:
 - 1:49.898 best against 1:47.905 theoretical, 1.993 s available;
 - focus areas: Corners 9–16 (+0.619 s against Session 6 · LAP 3), Corners
@@ -250,6 +295,23 @@ rev-match blips on downshifts with the pedal at 0). Speed is `velocity`
 - Save As changes the project path and re-derives the laps. Results
   invalidated on `outingLapsChanged` must wait until `!outingLapsLoading()`
   and then compare their input key (KAN-74 fix).
+- **Tests after an import:** the analysis records its track inference as an
+  edit. Wait for `!outingLapsLoading()` with laps present before attaching a
+  recording or selecting a lap, or the review goes stale on the hosted runner
+  (this bit KAN-103 twice). After a save under a new path, select laps only
+  once they settle.
+- **QML media:**
+  - `MediaPlayer` can report `LoadedMedia` more than once for one file;
+  - a position set while the file loads can be ignored;
+  - keep a requested position until a frame at it has shown (KAN-105 in
+    `Main.qml`);
+  - silent priming (play, then pause on a frame) is not "playing".
+- **QML bindings:** inside a property's change handler, other bindings that
+  depend on it can still be stale, so read the property itself
+  (`ComparisonVideoPane.show()`). `layer` is FINAL on `Item`.
+- `Main.qml` can be loaded in a test from its file with `appController` only.
+  The branding image is not in the test binary, so ignore "Cannot open:
+  qrc:" warnings there.
 
 ## Working conventions (still in force)
 
@@ -257,7 +319,8 @@ rev-match blips on downshifts with the pedal at 0). Speed is `velocity`
   what landed, evidence and gaps; "Gotowe" (`41`) after merge with the final
   SHA and green main CI. All Jira content in English.
 - Build/test gate every time: `cmake --build build-native --parallel` and
-  `ctest --test-dir build-native --output-on-failure` (28 suites). Reconfigure
+  `ctest --test-dir build-native --output-on-failure` (38 suites; a clean
+  build prints no warnings since KAN-133). Reconfigure
   with `cmake -S . -B build-native -DCMAKE_BUILD_TYPE=Debug
   -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt` after adding source files.
 - Cloud CI: macOS Debug + Release on every PR push and on push to `main`
