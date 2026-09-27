@@ -151,7 +151,7 @@ Dialog {
                         FeButton {
                             objectName: "useVideoChapterGroup-" + groupBlock.index
                             accent: !groupBlock.modelData.needsReview
-                            text: groupBlock.modelData.chapters.length > 1 ? qsTr("Use this recording (chapter 1 for now)") : qsTr("Use this video")
+                            text: groupBlock.modelData.chapters.length > 1 ? qsTr("Use this recording") : qsTr("Use this video")
                             enabled: groupBlock.modelData.chapters.every(chapter => chapter.probed)
                             onClicked: if (root.review.choose(groupBlock.index)) root.close()
                         }
@@ -160,7 +160,7 @@ Dialog {
                 Label {
                     Layout.fillWidth: true
                     visible: root.groups.some(group => group.chapters.length > 1)
-                    text: qsTr("Playing a chapter group as one continuous video is not available yet: only its first chapter is loaded.")
+                    text: qsTr("A recording's chapters play as one continuous video, in the order shown. Exporting it is not available yet.")
                     wrapMode: Text.WordWrap
                     font.pixelSize: 11
                     color: "#657386"

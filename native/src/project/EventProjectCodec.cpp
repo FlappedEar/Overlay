@@ -3,6 +3,7 @@
 #include "telemetry/TrackSegments.h"
 #include "telemetry/TrackSegmentReview.h"
 #include "project/ProjectLimits.h"
+#include "project/VideoChapters.h"
 
 #include <QCryptographicHash>
 #include <QJsonDocument>
@@ -138,6 +139,17 @@ QJsonObject rebaseReference(QJsonObject reference, const QString &oldPath, const
     reference.remove(QStringLiteral("fingerprint"));
     for (auto it = known.begin(); it != known.end(); ++it) reference.insert(it.key(), it.value());
     return reference;
+}
+
+// KAN-105: a run's video with its chapters, every reference rebased.
+QJsonObject rebaseVideo(QJsonObject video, const QString &oldPath, const QString &newPath)
+{
+    QJsonArray chapters;
+    for (const auto &value : video.value(QStringLiteral("chapters")).toArray())
+        chapters.append(rebaseReference(value.toObject(), oldPath, newPath));
+    video = rebaseReference(video, oldPath, newPath);
+    if (!chapters.isEmpty()) video.insert(QStringLiteral("chapters"), chapters);
+    return video;
 }
 
 } // namespace
@@ -283,7 +295,8 @@ bool EventProjectCodec::validate(const QJsonObject &project, QString *error)
         if (!validFusion(run)) {
             return fail(error, QStringLiteral("Source fusion decision is malformed or not bound to this run's recordings."));
         }
-        if (sources.contains(QStringLiteral("video")) && !validReference(sources.value(QStringLiteral("video")))) {
+        if (sources.contains(QStringLiteral("video")) && (!validReference(sources.value(QStringLiteral("video")))
+                || !VideoChaptersCodec::valid(sources.value(QStringLiteral("video")).toObject()))) {
             return fail(error, QStringLiteral("Run video reference is invalid."));
         }
         const QJsonObject sync = run.value(QStringLiteral("sync")).toObject();
@@ -388,6 +401,8 @@ QStringList EventProjectCodec::referencedPaths(const QJsonObject &project, const
     for (const QJsonValue &value : event.value(QStringLiteral("runs")).toArray()) {
         const auto sources = value.toObject().value(QStringLiteral("sources")).toObject();
         append(sources.value(QStringLiteral("video")).toObject());
+        for (const QJsonValue &chapter : sources.value(QStringLiteral("video")).toObject().value(QStringLiteral("chapters")).toArray())
+            append(chapter.toObject());
         for (const QJsonValue &source : sources.value(QStringLiteral("telemetry")).toArray()) {
             append(source.toObject().value(QStringLiteral("reference")).toObject());
         }
@@ -433,7 +448,7 @@ QJsonObject EventProjectCodec::withEditorState(
             else sources.remove(QStringLiteral("video"));
             run.insert(QStringLiteral("sync"), editorProject.value(QStringLiteral("sync")));
         } else if (sources.contains(QStringLiteral("video"))) {
-            sources.insert(QStringLiteral("video"), rebaseReference(sources.value(QStringLiteral("video")).toObject(), previousProjectPath, targetProjectPath));
+            sources.insert(QStringLiteral("video"), rebaseVideo(sources.value(QStringLiteral("video")).toObject(), previousProjectPath, targetProjectPath));
         }
         const auto previousFingerprint = primaryFingerprint(run);
         run.insert(QStringLiteral("sources"), sources);

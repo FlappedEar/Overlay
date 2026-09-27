@@ -236,7 +236,31 @@ Chapters without usable creation times, or all stamped alike, are ordered by the
 
 **Review.** `app/VideoChapterReview` runs the probing. It is guarded by a request number and cooperatively cancellable. The user can move chapters, and the moved group is checked again.
 
-**Current limitation.** Opening video in the editor now accepts several files. One ordinary file loads directly as before; anything else goes through the Video chapters review. A chosen group still loads only its first chapter, and the status says so. Continuous playback of a chapter group is KAN-105.
+Opening video in the editor accepts several files. One ordinary file loads directly as before; anything else goes through the Video chapters review. A chosen group plays as one timeline (KAN-105, below).
+
+### Chapter timeline (KAN-105)
+
+`export/MediaTimeline` turns a recording's chapters into one continuous timeline:
+- each chapter starts where the previous chapter's probed video stream ended;
+- timeline time maps to a chapter and a local time, and back;
+- a chapter whose file is missing, or no longer matches its fingerprint, keeps its saved duration and is an explicit gap, never closed up.
+
+Synchronization, telemetry time, lap seeking and the analysis video link all use timeline time. Telemetry therefore never resets at a file boundary.
+
+**Loading.** `AppController` probes the first chapter as the video, as before, and every further chapter with it. Each further chapter is checked against its saved fingerprint. The editor then exposes the current chapter's file, where it starts on the timeline, a function that locates a timeline time, and a function that switches chapter.
+
+**Editor preview (`Main.qml`).**
+- Every seek goes through `seekTimeline()`. A seek into another chapter switches the player's file and applies the local position once a frame at it is shown. That is necessary because the player can report `LoadedMedia` more than once for one file, and a position set as the file loads can be ignored.
+- Silent priming does not count as playing.
+- At a chapter's end, playback continues into the next chapter, or stops at a gap, which is shown over the video.
+- The preview's end, clamping and timecodes cover the whole timeline, framed at the first chapter's rate.
+
+**Analysis.** The analysis window's and lap detail's mirrored players show the current chapter's file, at the timeline position minus that chapter's start.
+
+**Limitations.**
+- Auto sync reads GoPro GPS from the first chapter only. Its offset is valid for the whole timeline, because the first chapter's time is the timeline's start.
+- Relink moves the first chapter; to fill a missing chapter, choose the recording's chapters again.
+- Exporting a chaptered video is refused with an explicit message until KAN-106, never cut to its first chapter.
 
 ## Widgets and QML
 

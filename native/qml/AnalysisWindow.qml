@@ -10,6 +10,9 @@ Window {
     id: root
     required property url videoSource
     required property real playbackPosition
+    // KAN-105: where the current chapter file starts on the timeline; the
+    // mirrored players show videoSource at playbackPosition minus this.
+    property real chapterStartMilliseconds: 0
     required property bool playbackRunning
     required property real mediaDuration
     signal seekRequested(real milliseconds)
@@ -99,8 +102,8 @@ Window {
             saveLayout();
     }
     onPlaybackPositionChanged: {
-        if (Math.abs(analysisPlayer.position - playbackPosition) > 180)
-            analysisPlayer.position = playbackPosition;
+        if (Math.abs(analysisPlayer.position - (playbackPosition - chapterStartMilliseconds)) > 180)
+            analysisPlayer.position = playbackPosition - chapterStartMilliseconds;
     }
     onPlaybackRunningChanged: {
         if (playbackRunning)
@@ -118,7 +121,7 @@ Window {
         }
         onMediaStatusChanged: {
             if (mediaStatus === MediaPlayer.LoadedMedia) {
-                position = root.playbackPosition;
+                position = root.playbackPosition - root.chapterStartMilliseconds;
                 if (root.playbackRunning)
                     play();
             }
@@ -282,6 +285,7 @@ Window {
             visible: root.showingLap
             videoSource: root.videoSource
             playbackPosition: root.playbackPosition
+            chapterStartMilliseconds: root.chapterStartMilliseconds
             playbackRunning: root.playbackRunning
             onSeekRequested: milliseconds => root.seekRequested(milliseconds)
         }

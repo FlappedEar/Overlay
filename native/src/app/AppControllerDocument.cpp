@@ -1,4 +1,5 @@
 #include "app/AppController.h"
+#include "project/VideoChapters.h"
 #include "app/AppLog.h"
 #include "project/EventProjectCodec.h"
 
@@ -53,6 +54,18 @@ void AppController::applyEditorProject(const ProjectLoadResult &result)
     m_videoReference = result.videoReference;
     m_vboReference = result.vboReference;
     m_videoSource = QUrl();
+    // KAN-105: the saved chapters, not yet verified, so a save before (or
+    // without) loading the video keeps them; the video probe refreshes them.
+    m_videoChapterStates.clear();
+    const auto chapters = VideoChaptersCodec::read(
+        EventProjectCodec::editorProjection(result.project).value("sources").toObject().value("video").toObject());
+    QVector<TimelineChapter> timelineChapters;
+    for (const auto &chapter : chapters) {
+        m_videoChapterStates.append({chapter.reference, {}, chapter.durationSeconds, false, QStringLiteral("loading")});
+        timelineChapters.append({{}, chapter.durationSeconds, false});
+    }
+    m_videoTimeline = MediaTimeline::fromChapters(timelineChapters);
+    m_videoChapterIndex = 0;
     m_exportSourceInfo = {};
     m_videoLoadState = result.videoReference.isEmpty() ? QStringLiteral("idle")
         : result.resolvedVideoPath.isEmpty() ? QStringLiteral("missing")
@@ -104,6 +117,9 @@ void AppController::clearEditor()
     m_pendingVboPath.clear();
     m_videoSource = QUrl();
     m_videoReference = {};
+    m_videoChapterStates.clear();
+    m_videoTimeline = {};
+    m_videoChapterIndex = 0;
     m_exportSourceInfo = {};
     m_exportMetrics.clear();
     m_exportDiagnosticLog.clear();
@@ -159,6 +175,22 @@ QJsonObject AppController::withEditorState(QJsonObject project, const QString &d
     };
     overlaySource(QStringLiteral("video"), video);
     overlaySource(QStringLiteral("telemetry"), telemetry);
+    // KAN-105: the chapters, written by the same rules as the video itself.
+    if (sources.contains(QStringLiteral("video"))) {
+        QJsonObject videoSource = sources.value(QStringLiteral("video")).toObject();
+        if (m_videoChapterStates.size() > 1) {
+            QVector<VideoChapterReference> chapters;
+            for (const auto &chapter : m_videoChapterStates) chapters.append({chapter.reference, chapter.durationSeconds});
+            chapters.first().reference = m_videoReference;
+            videoSource.insert(QStringLiteral("chapters"), VideoChaptersCodec::write(chapters, [&](const ProjectSourceReference &reference) {
+                return eventProject ? EventProjectCodec::referenceForSave(reference, documentPath, targetPath)
+                                    : ProjectSourceReferenceCodec::toJson(reference, targetPath);
+            }));
+        } else {
+            videoSource.remove(QStringLiteral("chapters"));
+        }
+        sources.insert(QStringLiteral("video"), videoSource);
+    }
     project.insert(QStringLiteral("sources"), sources);
     QJsonObject sync = project.value("sync").toObject();
     sync.insert("offset", m_sync.offset);
@@ -190,6 +222,9 @@ void AppController::editorProjectSaved(const QJsonObject &project)
     const QJsonObject editor = EventProjectCodec::editorProjection(project);
     m_videoReference = ProjectSourceReferenceCodec::fromProject(editor, QStringLiteral("video"), QStringLiteral("videoPath"));
     m_vboReference = ProjectSourceReferenceCodec::fromProject(editor, QStringLiteral("telemetry"), QStringLiteral("vboPath"));
+    const auto chapters = VideoChaptersCodec::read(editor.value("sources").toObject().value("video").toObject());
+    if (chapters.size() == m_videoChapterStates.size())
+        for (qsizetype index = 0; index < chapters.size(); ++index) m_videoChapterStates[index].reference = chapters[index].reference;
 }
 
 } // namespace FlappedEar

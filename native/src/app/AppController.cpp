@@ -1,4 +1,5 @@
 #include "app/AppController.h"
+#include "project/VideoChapters.h"
 #include "app/PreviewPlayback.h"
 #include "export/ExportFormat.h"
 #include "export/ExportEngine.h"
@@ -72,15 +73,12 @@ AppController::AppController(QObject *parent, QString recoveryPath,
 {
     m_sync = {};
     m_previewRenderContext.setSyncTransform(m_sync);
-    // KAN-104: a reviewed chapter group. Until chapters play as one timeline,
-    // only its first file is loaded, and the status says so.
+    // KAN-104: a reviewed chapter group.
     connect(&m_videoChapters, &VideoChapterReview::groupChosen, this, [this](const QList<QUrl> &files, bool) {
-        // Shown once the video is open, so the load's own status cannot hide it.
-        m_videoChapterNotice = files.size() > 1
-            ? tr("Loaded chapter 1 of %1. Playing a chapter group as one continuous video is not available yet; "
-                 "the other chapters are not loaded.").arg(files.size())
-            : QString();
-        loadVideo(files.first());
+        // KAN-105: several chapters play as one timeline.
+        m_videoChapterNotice.clear();
+        if (files.size() > 1) loadVideoChapters(files);
+        else loadVideo(files.first());
     });
     m_widgetModel.resetDefaults();
     connect(&m_widgetModel, &WidgetModel::revisionChanged, this, [this] {
@@ -382,10 +380,21 @@ QVariantMap AppController::previewViewport(const int availableWidth, const int a
     return {{"x", viewport.x()}, {"y", viewport.y()},
             {"width", viewport.width()}, {"height", viewport.height()}};
 }
+std::optional<qint64> AppController::timelineLastFrame() const
+{
+    // KAN-105: the whole chapter timeline, framed at the first chapter's rate.
+    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
+        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
+    if (!videoChaptered() || !rate.isValid()) return std::nullopt;
+    const auto frames = static_cast<qint64>(std::floor(m_videoTimeline.durationSeconds() * rate.numerator / rate.denominator + 1e-6));
+    return frames >= 1 ? std::optional<qint64>(frames - 1) : std::nullopt;
+}
 qint64 AppController::previewEndPositionMilliseconds() const
 {
     const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
         ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
+    if (const auto last = timelineLastFrame())
+        return PreviewPlayback::framePositionMilliseconds(*last, rate).value_or(0);
     const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
     const auto position = range ? PreviewPlayback::framePositionMilliseconds(range->lastFrame, rate) : std::nullopt;
     return position.value_or(0);
@@ -402,6 +411,8 @@ qint64 AppController::clampPreviewPositionMilliseconds(const qint64 requestedMil
 {
     const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
         ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
+    if (const auto last = timelineLastFrame())
+        return PreviewPlayback::clampPositionMilliseconds(requestedMilliseconds, *last, rate).value_or(0);
     const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
     const auto position = range
         ? PreviewPlayback::clampPositionMilliseconds(requestedMilliseconds, range->lastFrame, rate)
@@ -412,7 +423,8 @@ QString AppController::previewTimecodeForPositionMilliseconds(const qint64 posit
 {
     const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
         ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
+    auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
+    if (const auto last = timelineLastFrame()) range = ExportFrameRange{0, *last};
     if (!range || !rate.isValid() || positionMilliseconds < 0) return {};
     const qint64 bounded = clampPreviewPositionMilliseconds(positionMilliseconds);
     if (bounded >= previewEndPositionMilliseconds()) {
@@ -425,6 +437,7 @@ QString AppController::previewEndTimecode() const
 {
     const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
         ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
+    if (const auto last = timelineLastFrame()) return ExportEngine::formatSmpteTimecode(*last, rate);
     const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
     return range ? ExportEngine::formatSmpteTimecode(range->lastFrame, rate) : QString();
 }
@@ -701,7 +714,7 @@ quint64 AppController::beginSourceReplacement(const bool replacingVideo)
         if (replacingVideo) startVboLoad(request.path, generation, request.markDocumentDirty,
                                         request.expectedFingerprint, request.relink);
         else startVideoProbe(request.path, generation, request.markDocumentDirty,
-                             request.expectedFingerprint, request.relink);
+                             request.expectedFingerprint, request.relink, request.chapters);
     }
     return generation;
 }
@@ -746,18 +759,19 @@ void AppController::cancelSourceJobs(const bool cancelOutingDetail)
 
 void AppController::startVideoProbe(
     const QString &path, const quint64 generation, const bool markDocumentDirty,
-    QJsonObject expectedFingerprint, const bool relink)
+    QJsonObject expectedFingerprint, const bool relink, QVector<VideoChapterInput> chapters)
 {
     AppLog::info(QStringLiteral("Video load/probe started: %1").arg(path));
     m_videoProbeCancellation = std::make_shared<std::atomic_bool>(false);
     const std::shared_ptr<std::atomic_bool> cancellation = m_videoProbeCancellation;
-    m_videoLoadRequest = {path, markDocumentDirty, expectedFingerprint, relink};
+    m_videoLoadRequest = {path, markDocumentDirty, expectedFingerprint, relink, chapters};
     m_pendingVideoPath = path;
     m_videoLoadMarksDocumentDirty = markDocumentDirty;
     m_videoLoadState = QStringLiteral("loading");
     emit sourceLoadStateChanged();
     m_videoProbeWatcher.setFuture(QtConcurrent::run(
-        [path, generation, cancellation, expectedFingerprint = std::move(expectedFingerprint), relink] {
+        [path, generation, cancellation, expectedFingerprint = std::move(expectedFingerprint), relink,
+         chapters = std::move(chapters)] {
         VideoProbeResult result;
         result.path = path;
         result.generation = generation;
@@ -767,6 +781,43 @@ void AppController::startVideoProbe(
             result.mediaInfo = MediaProbe::probe(
                 path, {}, false, -1, {}, [cancellation] { return cancellation->load(); });
             result.fingerprint = videoSourceFingerprint(path, result.mediaInfo);
+            // KAN-105: every further chapter, probed and checked against its
+            // saved fingerprint. One that is missing, unreadable or no longer
+            // the same file is a gap of its saved duration.
+            if (!chapters.isEmpty()) {
+                const auto videoDuration = [](const MediaInfo &info) {
+                    return info.videoDuration > 0.0 ? info.videoDuration : info.duration;
+                };
+                result.chapters.append({ProjectSourceReferenceCodec::forLoadedSource(path, result.fingerprint), path,
+                    videoDuration(result.mediaInfo), true, {}});
+                for (const auto &input : chapters) {
+                    if (cancellation->load()) break;
+                    VideoChapterState chapter{input.reference, input.path, input.durationSeconds, false, {}};
+                    if (input.path.isEmpty()) {
+                        chapter.problem = QStringLiteral("missing");
+                    } else {
+                        try {
+                            const auto info = MediaProbe::probeSummary(input.path, {}, 30'000, {},
+                                [cancellation] { return cancellation->load(); });
+                            const auto fingerprint = videoSourceFingerprint(input.path, info);
+                            if (ProjectSourceReferenceCodec::compareFingerprints(input.reference.fingerprint, fingerprint)
+                                == SourceFingerprintMatch::Mismatch) {
+                                chapter.problem = QStringLiteral("mismatch");
+                            } else {
+                                chapter.reference = ProjectSourceReferenceCodec::forLoadedSource(input.path, fingerprint);
+                                chapter.durationSeconds = videoDuration(info);
+                                chapter.available = true;
+                            }
+                        } catch (const OperationCancelled &) {
+                            throw;
+                        } catch (const std::exception &error) {
+                            chapter.problem = QString::fromUtf8(error.what());
+                        }
+                    }
+                    if (!chapter.available) chapter.path.clear();
+                    result.chapters.append(chapter);
+                }
+            }
             result.success = !cancellation->load();
             if (!result.success) {
                 result.cancelled = true;
@@ -852,6 +903,26 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     m_exportSourceInfo = result.mediaInfo;
     m_videoReference = ProjectSourceReferenceCodec::forLoadedSource(
         result.path, result.fingerprint);
+    // KAN-105: chapters play as one timeline; a gap keeps its saved duration.
+    m_videoChapterStates = result.chapters;
+    m_videoChapterIndex = 0;
+    QVector<TimelineChapter> timelineChapters;
+    for (const auto &chapter : m_videoChapterStates)
+        timelineChapters.append({chapter.path, chapter.durationSeconds, chapter.available});
+    m_videoTimeline = MediaTimeline::fromChapters(timelineChapters);
+    if (!m_videoChapterStates.isEmpty() && !m_videoTimeline.isValid()) {
+        // A chapter without a known duration cannot hold its place in time.
+        AppLog::warn(QStringLiteral("Video chapters without usable durations; opening the first chapter alone"));
+        m_videoChapterStates.clear();
+        m_videoChapterNotice = tr("Some chapters have no known duration, so only the first chapter is open.");
+    }
+    if (m_videoChapterStates.isEmpty()) m_videoTimeline = {};
+    int gaps = 0;
+    for (const auto &chapter : m_videoChapterStates) gaps += chapter.available ? 0 : 1;
+    if (gaps > 0)
+        m_videoChapterNotice = tr("%n chapter(s) are missing or changed and play as a gap. Choose the recording's chapters again to fill it.",
+                                  nullptr, gaps);
+    emit videoChaptersChanged();
     m_videoLoadState = QStringLiteral("ready");
     m_pendingVideoPath.clear();
     m_syncCandidate.clear();
@@ -918,6 +989,82 @@ void AppController::commitVboLoad(const VboLoadResult &result, const bool markDo
     setStatus(message);
 }
 
+QUrl AppController::videoChapterSource() const
+{
+    if (!videoChaptered()) return m_videoSource;
+    const auto &chapter = m_videoTimeline.chapter(m_videoChapterIndex);
+    return chapter.available ? QUrl::fromLocalFile(chapter.path) : QUrl();
+}
+
+qint64 AppController::videoChapterStartMilliseconds() const
+{
+    return videoChaptered() ? qRound64(m_videoTimeline.chapterStartSeconds(m_videoChapterIndex) * 1000.0) : 0;
+}
+
+QVariantList AppController::videoChapterList() const
+{
+    QVariantList list;
+    if (!videoChaptered()) return list;
+    for (int index = 0; index < m_videoTimeline.chapterCount(); ++index) {
+        const auto &state = m_videoChapterStates.value(index);
+        list.append(QVariantMap{{"index", index},
+            {"startMilliseconds", qRound64(m_videoTimeline.chapterStartSeconds(index) * 1000.0)},
+            {"durationMilliseconds", qRound64(m_videoTimeline.chapter(index).durationSeconds * 1000.0)},
+            {"available", m_videoTimeline.chapter(index).available},
+            {"url", m_videoTimeline.chapter(index).available ? QUrl::fromLocalFile(m_videoTimeline.chapter(index).path) : QUrl()},
+            {"name", QFileInfo(state.reference.displayPath()).fileName()}, {"problem", state.problem}});
+    }
+    return list;
+}
+
+QVariantMap AppController::locateVideoTimeline(const qint64 timelineMilliseconds) const
+{
+    if (!videoChaptered()) return {{"chapter", 0}, {"localMilliseconds", timelineMilliseconds}, {"gap", false}};
+    const auto position = m_videoTimeline.locate(std::clamp(timelineMilliseconds / 1000.0, 0.0, m_videoTimeline.durationSeconds()));
+    if (!position) return {};
+    return {{"chapter", position->chapter}, {"localMilliseconds", qRound64(position->localSeconds * 1000.0)}, {"gap", position->gap}};
+}
+
+bool AppController::setVideoChapter(const int index)
+{
+    if (!videoChaptered() || index < 0 || index >= m_videoTimeline.chapterCount()) return false;
+    if (index == m_videoChapterIndex) return true;
+    m_videoChapterIndex = index;
+    emit videoChaptersChanged();
+    return true;
+}
+
+QVector<AppController::VideoChapterInput> AppController::videoChapterInputs() const
+{
+    QVector<VideoChapterInput> inputs;
+    for (qsizetype index = 1; index < m_videoChapterStates.size(); ++index) {
+        const auto &chapter = m_videoChapterStates[index];
+        inputs.append({chapter.reference, ProjectSourceReferenceCodec::resolve(chapter.reference, m_document.documentPath()),
+            chapter.durationSeconds});
+    }
+    return inputs;
+}
+
+void AppController::loadVideoChapters(const QList<QUrl> &files)
+{
+    if (files.size() < 2 || files.size() > MediaTimeline::maximumChapters) return;
+    QVector<VideoChapterInput> chapters;
+    for (const auto &url : files) {
+        const QFileInfo info(url.toLocalFile());
+        const auto extension = info.suffix().toLower();
+        if (!info.isFile() || (extension != "mp4" && extension != "mov")) {
+            setStatus("Choose existing MP4 or MOV chapter files.");
+            return;
+        }
+        if (url != files.first()) chapters.append({{}, normalizedSourcePath(info.absoluteFilePath()), 0.0});
+    }
+    const auto first = normalizedSourcePath(QFileInfo(files.first().toLocalFile()).absoluteFilePath());
+    const quint64 generation = beginSourceReplacement(true);
+    m_pendingVideoPath = first;
+    startVideoProbe(first, generation, true, {}, false, chapters);
+    setStatus(QStringLiteral("Loading %1 video chapters").arg(files.size()));
+}
+
 void AppController::loadVideo(const QUrl &url)
 {
     const QString path = url.toLocalFile();
@@ -969,7 +1116,8 @@ void AppController::relinkVideo(const QUrl &url)
     const quint64 generation = beginSourceReplacement(true);
     const QString path = normalizedSourcePath(info.absoluteFilePath());
     m_pendingVideoPath = path;
-    startVideoProbe(path, generation, true, m_videoReference.fingerprint, true);
+    // Relinking moves the first chapter; the other chapters keep their references.
+    startVideoProbe(path, generation, true, m_videoReference.fingerprint, true, videoChapterInputs());
 }
 
 void AppController::relinkVbo(const QUrl &url)
@@ -1074,8 +1222,15 @@ void AppController::startEditorSources(const ProjectLoadResult &result)
     m_pendingVideoPath = result.resolvedVideoPath;
     m_pendingVboPath = result.resolvedVboPath;
     if (!result.resolvedVideoPath.isEmpty()) {
+        // KAN-105: the saved chapters after the first, each resolved on its own.
+        const auto editor = EventProjectCodec::editorProjection(result.project);
+        QVector<VideoChapterInput> chapters;
+        const auto saved = VideoChaptersCodec::read(editor.value("sources").toObject().value("video").toObject());
+        for (qsizetype index = 1; index < saved.size(); ++index)
+            chapters.append({saved[index].reference, ProjectSourceReferenceCodec::resolve(saved[index].reference, result.projectPath),
+                saved[index].durationSeconds});
         startVideoProbe(result.resolvedVideoPath, result.generation, false,
-                        result.videoReference.fingerprint, false);
+                        result.videoReference.fingerprint, false, chapters);
     }
     if (!result.resolvedVboPath.isEmpty()) {
         startVboLoad(result.resolvedVboPath, result.generation, false,
@@ -1197,6 +1352,16 @@ bool AppController::startExport(
     const QString outputPath = output.toLocalFile();
     if (!m_session || inputPath.isEmpty() || m_telemetryPath.isEmpty() || outputPath.isEmpty()) {
         m_exportError = QStringLiteral("Open a video and telemetry, then choose an output file.");
+        m_exportState = QStringLiteral("failed");
+        AppLog::error(QStringLiteral("Export failed: %1").arg(m_exportError));
+        emit exportChanged();
+        return false;
+    }
+    if (videoChaptered()) {
+        // KAN-105: exporting across chapter files is KAN-106. Never export
+        // the first chapter alone as if it were the whole recording.
+        m_exportError = QStringLiteral("Exporting a video made of several chapters is not available yet. "
+                                       "Open a single video file to export.");
         m_exportState = QStringLiteral("failed");
         AppLog::error(QStringLiteral("Export failed: %1").arg(m_exportError));
         emit exportChanged();

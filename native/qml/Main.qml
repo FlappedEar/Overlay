@@ -642,14 +642,48 @@ ApplicationWindow {
         }
         return false;
     }
+    // KAN-105: positions are timeline time. For one video that is the
+    // player's own position; across chapters it adds the current chapter's
+    // start, so telemetry time never resets at a file boundary.
+    readonly property real timelinePosition: appController.videoChapterStartMilliseconds + mediaPlayer.position
+    property real pendingChapterPosition: -1
+    property bool resumeAfterChapter: false
+    property bool chapterSeekRetried: false
+    readonly property var currentChapter: appController.videoChaptered
+        ? appController.videoChapterList[appController.videoChapterIndex] : null
+    function seekTimeline(milliseconds) {
+        const bounded = appController.clampPreviewPositionMilliseconds(milliseconds);
+        if (!appController.videoChaptered) {
+            mediaPlayer.position = bounded;
+            return;
+        }
+        const target = appController.locateVideoTimeline(bounded);
+        if (target.chapter === undefined)
+            return;
+        if (target.chapter === appController.videoChapterIndex && !target.gap) {
+            window.pendingChapterPosition = -1;
+            window.resumeAfterChapter = false;
+            mediaPlayer.position = target.localMilliseconds;
+            return;
+        }
+        // Another chapter: its file loads, then the position applies there.
+        // Silent priming is not playing.
+        window.resumeAfterChapter = !target.gap && mediaPlayer.playbackState === MediaPlayer.PlayingState
+            && !window.previewPrimeFramePending;
+        window.chapterSeekRetried = false;
+        window.pendingChapterPosition = target.gap ? -1 : target.localMilliseconds;
+        appController.setVideoChapter(target.chapter);
+        if (target.gap)
+            appController.playbackTime = bounded / 1000.0; // a missing chapter still has its time
+    }
     function togglePlayback() {
         if (!appController.videoSource.toString())
             return;
         if (mediaPlayer.playbackState === MediaPlayer.PlayingState)
             mediaPlayer.pause();
         else {
-            if (mediaPlayer.position >= appController.previewEndPositionMilliseconds)
-                mediaPlayer.position = 0;
+            if (window.timelinePosition >= appController.previewEndPositionMilliseconds)
+                window.seekTimeline(0);
             mediaPlayer.play();
         }
         window.showFullScreenControls();
@@ -657,7 +691,7 @@ ApplicationWindow {
     function seekPlayback(deltaMilliseconds) {
         if (!appController.videoSource.toString())
             return;
-        mediaPlayer.position = appController.clampPreviewPositionMilliseconds(mediaPlayer.position + deltaMilliseconds);
+        window.seekTimeline(window.timelinePosition + deltaMilliseconds);
         window.showFullScreenControls();
     }
     function showFullScreenControls() {
@@ -726,8 +760,8 @@ ApplicationWindow {
     Shortcut { sequence: "Right"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: window.seekPlayback(5000) }
     Shortcut { sequence: "Shift+Left"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: window.seekPlayback(-30000) }
     Shortcut { sequence: "Shift+Right"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: window.seekPlayback(30000) }
-    Shortcut { sequence: "Home"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: { mediaPlayer.position = 0; window.showFullScreenControls(); } }
-    Shortcut { sequence: "End"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: { mediaPlayer.position = appController.previewEndPositionMilliseconds; window.showFullScreenControls(); } }
+    Shortcut { sequence: "Home"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: { window.seekTimeline(0); window.showFullScreenControls(); } }
+    Shortcut { sequence: "End"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: { window.seekTimeline(appController.previewEndPositionMilliseconds); window.showFullScreenControls(); } }
     Shortcut {
         sequence: "Ctrl+E"
         context: Qt.WindowShortcut
@@ -1631,7 +1665,7 @@ ApplicationWindow {
 
     MediaPlayer {
         id: mediaPlayer
-        source: appController.videoSource
+        source: appController.videoChapterSource
         audioOutput: AudioOutput {
             // The initial decoder priming is intentionally inaudible.
             muted: window.previewPrimeFramePending
@@ -1644,22 +1678,41 @@ ApplicationWindow {
                 window.showFullScreenControls();
         }
         onPositionChanged: function(position) {
-            appController.playbackTime = position / 1000.0;
+            appController.playbackTime = (appController.videoChapterStartMilliseconds + position) / 1000.0;
         }
         onMediaStatusChanged: {
             if (mediaStatus === MediaPlayer.LoadedMedia) {
                 // AVFoundation does not submit a paused seek frame for this GoPro source.
                 // Prime decoding silently and pause only once VideoOutput has received a
-                // frame at timeline frame 1 (or later).
-                window.previewPrimeTargetPosition = appController.previewInitialPositionMilliseconds();
-                window.previewPrimeFramePending = true;
+                // frame at timeline frame 1 (or later). After a chapter switch the target
+                // is the requested position in the new chapter, and playing continues.
+                // The request stays until a frame at it is shown, because the
+                // player can report LoadedMedia more than once for one file.
+                const chapterSwitch = window.pendingChapterPosition >= 0;
+                const resume = chapterSwitch && window.resumeAfterChapter;
+                window.previewPrimeTargetPosition = chapterSwitch ? window.pendingChapterPosition
+                                                                  : appController.previewInitialPositionMilliseconds();
+                window.previewPrimeFramePending = !resume;
                 position = window.previewPrimeTargetPosition;
                 play();
-                previewPrimeTimeout.restart();
+                if (!resume)
+                    previewPrimeTimeout.restart();
             }
             if (mediaStatus === MediaPlayer.EndOfMedia) {
+                const next = appController.videoChapterIndex + 1;
+                if (appController.videoChaptered && next < appController.videoChapterList.length) {
+                    // Continue into the next chapter at its start (or stop at a gap).
+                    const available = appController.videoChapterList[next].available;
+                    window.pendingChapterPosition = available ? 0 : -1;
+                    window.resumeAfterChapter = available;
+                    window.chapterSeekRetried = false;
+                    appController.setVideoChapter(next);
+                    if (!available)
+                        appController.playbackTime = appController.videoChapterStartMilliseconds / 1000.0;
+                    return;
+                }
                 pause();
-                position = appController.previewEndPositionMilliseconds;
+                position = appController.previewEndPositionMilliseconds - appController.videoChapterStartMilliseconds;
             }
         }
         onErrorOccurred: function(error, errorString) {
@@ -1688,11 +1741,12 @@ ApplicationWindow {
         active: appController.analysisVisible
         sourceComponent: Component {
             AnalysisWindow {
-                videoSource: appController.videoSource
-                playbackPosition: mediaPlayer.position
+                videoSource: appController.videoChapterSource
+                chapterStartMilliseconds: appController.videoChapterStartMilliseconds
+                playbackPosition: window.timelinePosition
                 playbackRunning: mediaPlayer.playbackState === MediaPlayer.PlayingState
                 mediaDuration: appController.previewEndPositionMilliseconds
-                onSeekRequested: milliseconds => mediaPlayer.position = appController.clampPreviewPositionMilliseconds(milliseconds)
+                onSeekRequested: milliseconds => window.seekTimeline(milliseconds)
                 onTogglePlaybackRequested: window.togglePlayback()
             }
         }
@@ -2136,10 +2190,35 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     fillMode: VideoOutput.PreserveAspectFit
                                 }
+                                // KAN-105: a missing chapter is an explicit gap, never skipped.
+                                Label {
+                                    objectName: "videoChapterGap"
+                                    anchors.centerIn: parent
+                                    width: Math.min(parent.width - 40, 420)
+                                    visible: !!window.currentChapter && !window.currentChapter.available
+                                    horizontalAlignment: Text.AlignHCenter
+                                    wrapMode: Text.WordWrap
+                                    color: "#d6a457"
+                                    text: window.currentChapter
+                                        ? qsTr("Chapter %1 (%2) is missing or changed. The timeline keeps its time; choose the recording's chapters again to fill it.")
+                                            .arg(window.currentChapter.index + 1).arg(window.currentChapter.name)
+                                        : ""
+                                }
                             }
                             Connections {
                                 target: videoOutput.videoSink
                                 function onVideoFrameChanged(frame) {
+                                    // KAN-105: a chapter switch is done once a frame at its position shows.
+                                    if (window.pendingChapterPosition >= 0) {
+                                        if (mediaPlayer.position >= window.pendingChapterPosition - 100) {
+                                            window.pendingChapterPosition = -1;
+                                            window.resumeAfterChapter = false;
+                                        } else if (!window.chapterSeekRetried) {
+                                            // A position set as the file loads can be ignored; seek once now it plays.
+                                            window.chapterSeekRetried = true;
+                                            mediaPlayer.position = window.pendingChapterPosition;
+                                        }
+                                    }
                                     if (!window.previewPrimeFramePending
                                             || mediaPlayer.position < window.previewPrimeTargetPosition)
                                         return;
@@ -2266,7 +2345,7 @@ ApplicationWindow {
                                         onClicked: window.togglePlayback()
                                     }
                                     Label {
-                                        text: appController.previewTimecodeForPositionMilliseconds(mediaPlayer.position)
+                                        text: appController.previewTimecodeForPositionMilliseconds(window.timelinePosition)
                                         color: "#dbe4ed"
                                         font.family: "Menlo"
                                         font.pixelSize: 10
@@ -2276,7 +2355,7 @@ ApplicationWindow {
                                         Layout.fillWidth: true
                                         from: 0
                                         to: Math.max(1, appController.previewEndPositionMilliseconds)
-                                        value: mediaPlayer.position
+                                        value: window.timelinePosition
                                         onPressedChanged: {
                                             window.fullScreenScrubbing = pressed;
                                             if (pressed) {
@@ -2287,7 +2366,7 @@ ApplicationWindow {
                                             }
                                         }
                                         onMoved: {
-                                            mediaPlayer.position = appController.clampPreviewPositionMilliseconds(value);
+                                            window.seekTimeline(value);
                                             window.showFullScreenControls();
                                         }
                                     }
@@ -2322,7 +2401,7 @@ ApplicationWindow {
                                 onClicked: window.togglePlayback()
                             }
                             Label {
-                                text: appController.previewTimecodeForPositionMilliseconds(mediaPlayer.position)
+                                text: appController.previewTimecodeForPositionMilliseconds(window.timelinePosition)
                                 color: "#d2dae4"
                                 font.family: "Menlo"
                                 font.pixelSize: 10
@@ -2336,8 +2415,8 @@ ApplicationWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     from: 0
                                     to: Math.max(1, appController.previewEndPositionMilliseconds)
-                                    value: mediaPlayer.position
-                                    onMoved: mediaPlayer.position = appController.clampPreviewPositionMilliseconds(value)
+                                    value: window.timelinePosition
+                                    onMoved: window.seekTimeline(value)
                                 }
                                 Repeater {
                                     model: window.selectedWidgetCues()
