@@ -19,6 +19,29 @@ Existing symbolic links and Windows reparse points are rejected during preparati
 does not follow a link to its referent and does not replace a link while describing that action as an
 overwrite of the referent. Existing targets must be explicit regular files.
 
+**Sources are never a target (KAN-76).** When an event is open, the
+controller protects:
+- the loaded recording;
+- every run's recordings, including alternative sources;
+- every run's video;
+- the project file.
+
+Preparation refuses a target that is any of these. Paths are compared
+after canonical resolution, so a symlinked folder or different letter case
+(on macOS, where the file system ignores case) still matches. An existing
+target is also compared by device and file id against every protected
+file and the input video, because a hard link is another name for a
+source that no path comparison can see. The refusal holds even with
+overwrite consent.
+
+`TelemetryTests::protectsEveryDaySourceFromExport` tests this through
+`AppController::startExport`. The day it uses has two runs, an
+alternative recording, a video, approved segments and a lap exclusion,
+and it is saved. The test tries every source and the project by its own
+path, through a symlinked folder, by a hard link and by different letter
+case. Each export is refused and no file changes. An unrelated existing
+file still asks for overwrite consent.
+
 For an existing regular-file target, replacement requires the controller's explicit
 `overwriteAllowed` flag. At that approved preparation, `ExportTargetIdentity` captures native file
 identity plus size and high-resolution modification state without reading or hashing file contents:

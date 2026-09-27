@@ -106,4 +106,9 @@ bool ExportTargetIdentity::matches(const ExportTargetIdentity &other) const
         && m_modifiedLow == other.m_modifiedLow;
 }
 
+bool ExportTargetIdentity::sameFile(const ExportTargetIdentity &other) const
+{
+    return m_valid && other.m_valid && m_device == other.m_device && m_fileId == other.m_fileId;
+}
+
 } // namespace FlappedEar
