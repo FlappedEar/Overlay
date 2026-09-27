@@ -103,17 +103,18 @@ never showed, so develop against real data. See "Real data" below.
 - the real-track sections of `docs/kan58-m3-acceptance.md` and
   `docs/kan74-m4-acceptance.md`, which are still to be filled in.
 
-Next: finish KAN-124 in behaviour-preserving steps.
-- Move the document and analysis tests that need no editor from
-  `TelemetryTests.cpp` to `TelemetryController`-based tests (see
-  `TelemetryAppTests.cpp`). Most of the 246 left there drive the editor, QML
-  panels or export.
-- Extract `OverlayController`, or decide that `AppController` itself is the
-  Overlays controller. After steps 8–10 it holds only the editor, sources,
-  sync, preview and export, plus forwarding.
+KAN-124 is closed (Gotowe, 27 September 2026). `OverlayController` was not
+extracted: `AppController` already holds only the overlay editor plus
+`DocumentHost`/`VideoLink` and forwarding. The reasoning is in the Jira
+comment; the owner can reopen the ticket.
 
-Before and after each step, run the private real-day check. Its report
-key values must stay identical.
+For any further refactor, run the private real-day check before and after.
+Its report key values must stay identical.
+
+**KAN-77 (full-day budgets).** `TelemetryAppTests::measuresAPrivateFullDay`
+measures the real day headless and enforces budgets. A day from import to
+report takes about 7 s in Release, with a peak of 150 MiB. See
+`docs/testing.md`.
 
 ## The product split (owner direction, 26 September 2026)
 

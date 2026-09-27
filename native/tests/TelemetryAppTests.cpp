@@ -10,11 +10,18 @@
 #include "telemetry/DayReport.h"
 
 #include <QCoreApplication>
+#include <QThread>
+#include <QDir>
+#include <QElapsedTimer>
+#include <QSysInfo>
 #include <QJsonDocument>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <mach/mach.h>
+#include <sys/resource.h>
+#include <sys/sysctl.h>
 
 using namespace FlappedEar;
 
@@ -91,6 +98,33 @@ int approveSegments(AnalysisController &analysis)
     analysis.closeOutingLap();
     return approved;
 }
+// Resident and peak resident memory of this process, in MiB (macOS).
+double residentMiB()
+{
+    mach_task_basic_info info{};
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) != KERN_SUCCESS)
+        return -1;
+    return static_cast<double>(info.resident_size) / (1024.0 * 1024.0);
+}
+
+double peakResidentMiB()
+{
+    rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+    return static_cast<double>(usage.ru_maxrss) / (1024.0 * 1024.0); // bytes on macOS
+}
+
+QString hardwareModel()
+{
+    char model[256] = {};
+    size_t size = sizeof(model);
+    if (sysctlbyname("hw.model", model, &size, nullptr, 0) != 0) return QSysInfo::currentCpuArchitecture();
+    char cpu[256] = {};
+    size_t cpuSize = sizeof(cpu);
+    sysctlbyname("machdep.cpu.brand_string", cpu, &cpuSize, nullptr, 0);
+    return QString::fromLatin1(model) + " / " + QString::fromLatin1(cpu);
+}
 } // namespace
 
 class TelemetryAppTests final : public QObject {
@@ -99,6 +133,7 @@ private slots:
     void initTestCase();
     void importsAnalysesSavesAndReopensWithoutTheEditor();
     void keepsTheEditorStateAnotherAppSaved();
+    void measuresAPrivateFullDay();
 };
 
 void TelemetryAppTests::initTestCase()
@@ -245,6 +280,131 @@ void TelemetryAppTests::keepsTheEditorStateAnotherAppSaved()
     QTRY_VERIFY_WITH_TIMEOUT(!reopened.analysis()->outingLapsLoading(), 20000);
     QCOMPARE(reopened.analysis()->outingAnalysisStatus().value("state").toString(), QString("ready"));
     QVERIFY(reopened.analysis()->outingLaps().size() >= 3);
+}
+
+void TelemetryAppTests::measuresAPrivateFullDay()
+{
+    // KAN-77: opt-in timings and memory for a real day through the Telemetry
+    // controller (no editor, no Gui). FLAPPEDEAR_REAL_DAY is a directory of
+    // private VBO recordings (never committed). Budgets are in
+    // docs/testing.md; they fail here when exceeded.
+    const auto path = qEnvironmentVariable("FLAPPEDEAR_REAL_DAY");
+    if (path.isEmpty()) QSKIP("FLAPPEDEAR_REAL_DAY is not set");
+    QList<QUrl> recordings;
+    qint64 bytes = 0;
+    for (const auto &info : QDir(path).entryInfoList({"*.vbo"}, QDir::Files, QDir::Name)) {
+        recordings.append(QUrl::fromLocalFile(info.absoluteFilePath()));
+        bytes += info.size();
+    }
+    QVERIFY(!recordings.isEmpty());
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const double baseline = residentMiB();
+    qInfo().noquote() << "Hardware:" << hardwareModel() << "·" << QThread::idealThreadCount() << "threads ·"
+                      << QSysInfo::prettyProductName();
+    qInfo().noquote() << QString("Dataset: %1 recordings, %2 MiB").arg(recordings.size()).arg(bytes / 1048576.0, 0, 'f', 1);
+    QElapsedTimer timer;
+    struct Phase { QString name; qint64 milliseconds; double resident; double peak; };
+    QList<Phase> phases;
+    const auto phase = [&](const QString &name) {
+        phases.append({name, timer.restart(), residentMiB(), peakResidentMiB()});
+        qInfo().noquote() << QString("  %1 %2 ms · resident %3 MiB · peak %4 MiB").arg(name, -28)
+            .arg(phases.last().milliseconds, 6).arg(phases.last().resident, 6, 'f', 0).arg(phases.last().peak, 6, 'f', 0);
+    };
+
+    TelemetryController controller(directory.filePath("recovery.json"));
+    auto &document = *controller.document();
+    auto &analysis = *controller.analysis();
+    QSignalSpy committed(&document, &DocumentController::batchImportCommitted);
+    timer.start();
+    QVERIFY(document.importAnalysisRuns("Measured day", recordings));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 120000);
+    phase("import (verify, group)");
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading() && !analysis.outingComparisonGroupId().isEmpty(), 120000);
+    int laps = 0;
+    for (const auto &value : analysis.outingLaps()) laps += value.toMap().value("type") == "LAP";
+    phase("lap derivation");
+
+    const auto bestOfDay = analysis.outingRanking().value("bestOfDay").toMap();
+    QVERIFY(analysis.selectOutingLapReference(bestOfDay.value("reference").toMap()));
+    QTRY_COMPARE_WITH_TIMEOUT(analysis.outingLapDetailState(), QString("ready"), 60000);
+    phase("open lap");
+    analysis.requestSegmentReview();
+    QTRY_COMPARE_WITH_TIMEOUT(analysis.segmentReviewState(), QString("ready"), 60000);
+    const auto proposals = analysis.segmentReviewItems().size();
+    for (int i = 0; i < proposals; ++i) QCOMPARE(analysis.approveSegmentProposal(i), QString());
+    phase("segment review + approve");
+
+    // Cursor interaction on the open lap: what a drag across the charts asks for.
+    const auto lap = analysis.selectedOutingLap();
+    const double start = lap.value("startTime").toDouble(), end = lap.value("endTime").toDouble();
+    constexpr int steps = 1000;
+    qint64 slowestLapStep = 0;
+    QElapsedTimer step;
+    for (int i = 0; i < steps; ++i) {
+        step.start();
+        analysis.setOutingLapCursor(start + (end - start) * i / (steps - 1));
+        (void) analysis.outingLapTrackPoint();
+        (void) analysis.outingLapValueText("speed");
+        slowestLapStep = std::max(slowestLapStep, step.nsecsElapsed());
+    }
+    phase("lap cursor x1000");
+    analysis.closeOutingLap();
+
+    // A/B: the slowest session's best lap against the best of the day.
+    const auto runs = analysis.outingRanking().value("runs").toList();
+    QVariantMap slowest;
+    for (const auto &value : runs) {
+        const auto best = value.toMap().value("bestLap").toMap();
+        if (!best.isEmpty() && (slowest.isEmpty() || best.value("durationSeconds").toDouble() > slowest.value("durationSeconds").toDouble()))
+            slowest = best;
+    }
+    QVERIFY(analysis.selectComparisonLap(0, slowest.value("reference").toMap()));
+    QVERIFY(analysis.useBestComparisonLap(true));
+    QTRY_VERIFY_WITH_TIMEOUT(analysis.comparisonPairReady(), 60000);
+    phase("A/B selection");
+    const double axis = analysis.comparisonProgressAxisLength();
+    QVERIFY(axis > 0);
+    qint64 slowestPairStep = 0;
+    for (int i = 0; i < steps; ++i) {
+        step.start();
+        const double at = axis * i / (steps - 1);
+        (void) analysis.comparisonPositionAtProgress(0, at);
+        (void) analysis.comparisonPositionAtProgress(1, at);
+        slowestPairStep = std::max(slowestPairStep, step.nsecsElapsed());
+    }
+    const auto charts = [&] {
+        (void) analysis.comparisonDeltaSeriesByProgress(0, axis, 1200);
+        for (int slot = 0; slot < 2; ++slot) (void) analysis.comparisonChannelSeriesByProgress(slot, "speed", 0, axis, 1200);
+        (void) analysis.comparisonGgScatter(0, axis, 1200);
+    };
+    phase("A/B cursor x1000");
+    charts();
+    phase("A/B charts (delta, speed, G-G)");
+
+    analysis.requestOutingDayReport();
+    QTRY_VERIFY_WITH_TIMEOUT(settled(analysis.outingDayReport()), 300000);
+    phase("day report");
+    const auto saved = directory.filePath("day.fetproject");
+    QVERIFY(document.saveProject(QUrl::fromLocalFile(saved)));
+    phase("save");
+
+    qInfo().noquote() << QString("Laps %1 · segments %2 · slowest lap-cursor step %3 ms · slowest A/B-cursor step %4 ms · process baseline %5 MiB")
+        .arg(laps).arg(proposals).arg(slowestLapStep / 1e6, 0, 'f', 2).arg(slowestPairStep / 1e6, 0, 'f', 2).arg(baseline, 0, 'f', 0);
+
+    // Budgets (docs/testing.md, KAN-77): about 3-4x the measured Mac
+    // baseline, and one 60 Hz frame for every cursor step.
+    const auto took = [&](const QString &name) {
+        for (const auto &item : phases) if (item.name == name) return item.milliseconds;
+        return qint64(-1);
+    };
+    QVERIFY2(slowestLapStep < 16'000'000, "a lap cursor step must fit in one 60 Hz frame");
+    QVERIFY2(slowestPairStep < 16'000'000, "an A/B cursor step must fit in one 60 Hz frame");
+    QVERIFY2(took("open lap") < 3'000, "opening a lap");
+    QVERIFY2(took("A/B selection") < 6'000, "loading an A/B pair");
+    QVERIFY2(took("A/B charts (delta, speed, G-G)") < 250, "drawing the A/B charts' data");
+    QVERIFY2(took("import (verify, group)") + took("lap derivation") < 30'000, "import to laps");
+    QVERIFY2(took("day report") < 30'000, "the day report");
+    QVERIFY2(phases.last().peak < 512, "peak memory");
 }
 
 QTEST_GUILESS_MAIN(TelemetryAppTests)
