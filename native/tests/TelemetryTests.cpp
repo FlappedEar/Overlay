@@ -50,6 +50,7 @@
 #include "project/ProjectSourceReference.h"
 #include "project/BoundedJsonLoader.h"
 #include "project/ProjectLimits.h"
+#include "telemetry/TrackInference.h"
 
 #include <QColor>
 #include <QDateTime>
@@ -172,6 +173,7 @@ private slots:
     void summarizesHeartRatePerRunSectionAndInterval();
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
+    void createsSegmentsAutomaticallyFromTheBestLap();
     void reviewsSegmentProposalsForTheOpenLap();
     void editsApprovedSegmentsWithUndo();
     void persistsSegmentationAcrossSaveRecoveryAndReopen();
@@ -5792,6 +5794,70 @@ void TelemetryTests::formatsElapsedTimes()
     QCOMPARE(AppController::formatElapsedTime(-2.5), QString("-2.500 s"));
     QCOMPARE(AppController::formatElapsedTime(3661.0), QString("61:01.000"));
     QCOMPARE(AppController::formatElapsedTime(std::numeric_limits<double>::quiet_NaN()), QString("—"));
+}
+
+void TelemetryTests::createsSegmentsAutomaticallyFromTheBestLap()
+{
+    // KAN-136: with automatic segments on (the Overlays app turns it on), a
+    // layout without approved segments gets the day's best lap's proposals
+    // approved without any review, so the theoretical best works straight
+    // after import; the segments stay editable. Set FLAPPEDEAR_REAL_DAY to a
+    // folder of private recordings to run the same on a real day as well.
+    QStringList days{QString()};
+    if (const auto real = qEnvironmentVariable("FLAPPEDEAR_REAL_DAY"); !real.isEmpty()) days.append(real);
+    for (const auto &day : days) {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        QSettings settings; settings.clear(); settings.sync();
+        QList<QUrl> recordings;
+        if (day.isEmpty()) {
+            const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
+            QVERIFY(writeBytes(fullA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
+            QVERIFY(writeBytes(fullB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
+            recordings = {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)};
+        } else {
+            for (const auto &info : QDir(day).entryInfoList({"*.vbo", "*.VBO", "*.rcz", "*.RCZ"}, QDir::Files, QDir::Name))
+                recordings.append(QUrl::fromLocalFile(info.absoluteFilePath()));
+            QVERIFY(!recordings.isEmpty());
+        }
+        AppController controller(nullptr, directory.filePath("recovery.json"));
+        controller.setAutomaticSegments(true);
+        QVERIFY(controller.importAnalysisRuns("Automatic", recordings));
+        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == recordings.size() && !controller.outingLapsLoading(), 180000);
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingComparisonGroupId().isEmpty(), 60000);
+        // Every timed lap of the day belongs to an identified layout.
+        const auto allResolved = [&] {
+            for (const auto &value : controller.outingLaps()) {
+                const auto row = value.toMap();
+                if (row.value("type") == "LAP" && !row.value("compatibilityResolved").toBool()) return false;
+            }
+            return true;
+        };
+        if (!QTest::qWaitFor(allResolved, 60000)) {
+            for (const auto &value : controller.outingLaps())
+                if (value.toMap().value("type") == "LAP" && !value.toMap().value("compatibilityResolved").toBool())
+                    qInfo() << value.toMap().value("runName") << value.toMap().value("compatibilityReasons");
+            for (const auto &message : controller.outingLapMessages()) qInfo() << message;
+            QFAIL("A timed lap stayed on an unidentified layout.");
+        }
+        // No review: the best lap's run gets approved segments on its own.
+        const auto best = controller.outingRanking().value("bestOfDay").toMap();
+        const auto runId = best.value("runId").toString();
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.m_analysis.storedRunTrackSegments(runId).toArray().isEmpty(), 60000);
+        const auto segments = controller.m_analysis.storedRunTrackSegments(runId).toArray();
+        QVERIFY(segments.size() >= 4);
+        QTRY_VERIFY(controller.statusText().contains("created automatically"));
+        controller.requestOutingTheoreticalBest();
+        QTRY_COMPARE_WITH_TIMEOUT(controller.outingTheoreticalBest().value("state").toString(), QString("ready"), 120000);
+        const auto theoretical = controller.outingTheoreticalBest();
+        qInfo().noquote() << QString("  %1: %2 automatic segments from %3; theoretical %4 of best %5")
+            .arg(day.isEmpty() ? "synthetic" : "real day").arg(segments.size())
+            .arg(best.value("runName").toString() + " LAP " + best.value("lapNumber").toString())
+            .arg(theoretical.value("totalSeconds").toDouble(), 0, 'f', 3).arg(best.value("durationSeconds").toDouble(), 0, 'f', 3);
+        // Once per layout and best lap: revoking them does not bring them back.
+        QVERIFY(controller.m_analysis.replaceRunTrackSegments(runId, {}));
+        QTest::qWait(1500);
+        QVERIFY(controller.m_analysis.storedRunTrackSegments(runId).toArray().isEmpty());
+    }
 }
 
 void TelemetryTests::analyzesPrivateTrackDayCorners()

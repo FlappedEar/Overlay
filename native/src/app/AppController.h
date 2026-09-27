@@ -427,6 +427,9 @@ public:
     Q_INVOKABLE void requestSegmentReview();
     Q_INVOKABLE QString approveSegmentProposal(int index);
     Q_INVOKABLE int approveCertainSegmentProposals();
+    // KAN-136: every proposal not rejected or overlapping an approved segment.
+    Q_INVOKABLE int approveAllSegmentProposals();
+    void setAutomaticSegments(bool enabled) { m_analysis.setAutomaticSegments(enabled); }
     Q_INVOKABLE bool setSegmentProposalRejected(int index, bool rejected);
     Q_INVOKABLE QString editSegmentProposal(int index, const QString &name, const QString &type,
         double startMeters, double endMeters);

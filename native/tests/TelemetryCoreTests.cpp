@@ -47,6 +47,7 @@ private slots:
     void rejectsMalformedLapReferences_data();
     void rejectsMalformedLapReferences();
     void infersRoutesFromOrderedCompleteLaps();
+    void matchesLongCircuitsByCrossTrackDistance();
     void rejectsMalformedLapExclusions_data();
     void rejectsMalformedLapExclusions();
     void groupsOnlyDatedUnambiguousAlternatives();
@@ -150,6 +151,45 @@ void TelemetryCoreTests::rejectsMalformedLapReferences()
     auto reference = makeLapReference(row, "event", "source", QByteArray(64, 'a'), QByteArray(64, 'b'));
     QVERIFY(validLapReference(reference)); reference.insert(field, value);
     QVERIFY(!validLapReference(reference));
+}
+
+void TelemetryCoreTests::matchesLongCircuitsByCrossTrackDistance()
+{
+    // A 3.6 km circuit (Silesia Ring size): 256 route points are ~14 m apart,
+    // so two laps on the same line can be sampled up to 7 m apart along the
+    // track. Only the cross-track distance decides whether routes differ.
+    const auto circuit = [](const double lateralMeters, const double phase, const double bulgeMeters) {
+        RouteShape route;
+        route.direction = QStringLiteral("counterclockwise");
+        route.origin = {50.0, 19.0};
+        const double a = 800.0, b = 360.0; // ellipse semi-axes: ~3.6 km around
+        QVector<QPointF> points;
+        for (int i = 0; i < 256; ++i) {
+            const double t = 2.0 * std::numbers::pi * (i + phase) / 256.0;
+            const QPointF onTrack(a * std::cos(t), b * std::sin(t));
+            const QPointF normal(b * std::cos(t), a * std::sin(t));
+            const double length = std::hypot(normal.x(), normal.y());
+            // A wider line (lateral) everywhere, plus a detour on a quarter of the lap.
+            const double offset = lateralMeters + (t > 0.5 && t < 2.0 ? bulgeMeters : 0.0);
+            points.append(onTrack + normal / length * offset);
+        }
+        double perimeter = 0;
+        for (int i = 0; i < 256; ++i) perimeter += std::hypot(points[(i + 1) % 256].x() - points[i].x(), points[(i + 1) % 256].y() - points[i].y());
+        route.points = points;
+        route.lengthMeters = perimeter;
+        return route;
+    };
+    const auto reference = circuit(0.0, 0.0, 0.0);
+    QVERIFY(reference.lengthMeters > 3500 && reference.lengthMeters < 3800);
+    // Same route, a wider line (8 m) sampled half a point out of step: the same circuit.
+    QVERIFY(routesMatch(reference, circuit(8.0, 0.5, 0.0)));
+    QVERIFY(routesMatch(circuit(-6.0, 0.25, 0.0), reference));
+    // A 40 m detour over a quarter of the lap (a pit lane, another layout) is a different route.
+    QVERIFY(!routesMatch(reference, circuit(0.0, 0.5, 40.0)));
+    // The same shape driven the other way is never matched.
+    auto reversed = circuit(0.0, 0.0, 0.0);
+    reversed.direction = QStringLiteral("clockwise");
+    QVERIFY(!routesMatch(reference, reversed));
 }
 
 void TelemetryCoreTests::infersRoutesFromOrderedCompleteLaps()

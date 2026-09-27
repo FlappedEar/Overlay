@@ -63,11 +63,24 @@ bool routesMatch(const RouteShape &a, const RouteShape &b, const CancellationChe
     for (const auto &point : b.points) projected.append({point.x() * scale + offset.eastMeters, point.y() + offset.northMeters});
     // Cyclic shifts tolerate a different recording/trace start without rotating,
     // translating or reversing the physical route to manufacture a match.
+    // Each point is measured against the other route's path (its two
+    // neighbouring resampled segments), not its nearest resampled point: on a
+    // long circuit the points are ~14 m apart, and an along-track offset of up
+    // to half that is not a different route. Only the cross-track distance is.
+    const auto toSegment = [](const QPointF &p, const QPointF &a, const QPointF &b) {
+        const QPointF ab = b - a;
+        const double length2 = ab.x() * ab.x() + ab.y() * ab.y();
+        const double t = length2 > 0 ? std::clamp(((p - a).x() * ab.x() + (p - a).y() * ab.y()) / length2, 0.0, 1.0) : 0.0;
+        return distance(p, a + ab * t);
+    };
     for (int shift = 0; shift < shapePoints; ++shift) {
         throwIfCancelled(cancelled);
         double squared = 0; bool within = true;
         for (int i = 0; i < shapePoints; ++i) {
-            const double d = distance(a.points[i], projected[(i + shift) % shapePoints]);
+            const int k = (i + shift) % shapePoints;
+            const auto &previous = projected[(k + shapePoints - 1) % shapePoints];
+            const auto &next = projected[(k + 1) % shapePoints];
+            const double d = std::min(toSegment(a.points[i], previous, projected[k]), toSegment(a.points[i], projected[k], next));
             if (d > 25) { within = false; break; }
             squared += d * d;
         }

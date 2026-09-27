@@ -128,6 +128,10 @@ public:
 
     // Null when there is no video support (Flapped Ear Telemetry).
     void setVideoLink(VideoLink *link) { m_videoLink = link; }
+    // KAN-136: approve the best lap's proposals automatically when a layout
+    // has no approved segments (off by default; the Overlays app turns it on).
+    void setAutomaticSegments(bool enabled);
+    [[nodiscard]] bool automaticSegments() const { return m_automaticSegments; }
     // KAN-107: a run's footage finished verifying (or changed).
     void runVideoChanged() { ++m_comparisonVideoRevision; emit comparisonVideoChanged(); }
 
@@ -267,6 +271,7 @@ public:
     Q_INVOKABLE void requestSegmentReview();
     Q_INVOKABLE QString approveSegmentProposal(int index);
     Q_INVOKABLE int approveCertainSegmentProposals();
+    Q_INVOKABLE int approveAllSegmentProposals();
     Q_INVOKABLE bool setSegmentProposalRejected(int index, bool rejected);
     Q_INVOKABLE QString editSegmentProposal(int index, const QString &name, const QString &type,
         double startMeters, double endMeters);
@@ -360,6 +365,8 @@ signals:
     void comparisonFocusSegmentIdChanged();
     void comparisonSlotsChanged();
     void comparisonVideoChanged();
+    // lapLabel empty: the best lap could not be segmented automatically.
+    void automaticSegmentsFinished(const QString &lapLabel, int count);
     void comparisonViewOpenChanged();
     void outingLapCursorChanged();
     void segmentReviewChanged();
@@ -520,6 +527,23 @@ private:
         QString unavailable; // no proposals can be made, and why
         QString error;
     };
+    // KAN-136: automatic segments from the day's best lap.
+    struct AutomaticSegmentsResult {
+        QByteArray key;
+        QString groupId;
+        QString runId;
+        QString lapLabel;
+        SegmentReviewResult review;
+        QString error;
+    };
+    void initializeAutomaticSegments();
+    void createAutomaticSegments();
+    [[nodiscard]] QByteArray automaticSegmentsKey() const;
+    [[nodiscard]] bool groupHasApprovedSegments(const QString &groupId) const;
+    bool m_automaticSegments = false;
+    QByteArray m_automaticSegmentsAttempted;
+    std::shared_ptr<std::atomic_bool> m_automaticSegmentsCancellation;
+    QFutureWatcher<AutomaticSegmentsResult> m_automaticSegmentsWatcher;
     static SegmentReviewResult computeSegmentReview(std::shared_ptr<const TelemetrySession> session,
         double startTime, double endTime, int lapNumber, quint64 request,
         const std::shared_ptr<std::atomic_bool> &cancellation);

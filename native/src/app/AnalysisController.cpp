@@ -16,6 +16,7 @@ AnalysisController::AnalysisController(AnalysisDocument &document, QObject *pare
     initializeOutingTheoreticalBest();
     initializeOutingChannelSummaries();
     initializeOutingDayReport();
+    initializeAutomaticSegments();
 }
 
 AnalysisController::~AnalysisController() = default;
@@ -53,12 +54,14 @@ void AnalysisController::cancelWork(const bool cancelDetail)
     if (cancelDetail && m_outingLapDetailCancellation) m_outingLapDetailCancellation->store(true);
     if (cancelDetail && m_segmentReviewCancellation) m_segmentReviewCancellation->store(true);
     if (m_outingLapCancellation) m_outingLapCancellation->store(true);
+    if (m_automaticSegmentsCancellation) m_automaticSegmentsCancellation->store(true);
 }
 
 bool AnalysisController::workRunning() const
 {
     return m_outingLapWatcher.isRunning() || m_outingLapDetailWatcher.isRunning()
-        || m_comparisonWatcher.isRunning() || m_segmentReviewWatcher.isRunning();
+        || m_comparisonWatcher.isRunning() || m_segmentReviewWatcher.isRunning()
+        || m_automaticSegmentsWatcher.isRunning();
 }
 
 QVariantMap AnalysisController::sessionSeries(const TelemetrySession &session, const QString &channelName,
