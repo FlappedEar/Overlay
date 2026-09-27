@@ -128,6 +128,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/DrivingStates.h
     src/telemetry/MapLayers.cpp
     src/telemetry/MapLayers.h
+    src/telemetry/ChannelFusion.cpp
+    src/telemetry/ChannelFusion.h
     src/telemetry/RecordingAlignment.cpp
     src/telemetry/RecordingAlignment.h
     src/telemetry/TelemetrySyncEngine.cpp

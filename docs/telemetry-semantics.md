@@ -523,3 +523,57 @@ in-lap):
 
 The private Jastrząb day has one VBO per session and no alternative
 recording, so there is no real-data result yet.
+
+## Channel fusion policy (KAN-102)
+
+`fuseChannels` (`telemetry/ChannelFusion`, algorithm `channel-fusion-v1`)
+defines how channels from a run's alternative recordings would join its
+primary recording. It is the core policy that the review and persistence
+of fusion decisions (KAN-103) will use. No screen uses it yet, and nothing
+is fused in a project today.
+
+Every output channel says:
+- which source each stretch of samples came from (its source ID);
+- the clock transform that source was put through;
+- the channel's unit;
+- the rule that selected it: `primary`, `added`, `fillGaps`,
+  `preferAlternative` or `unresolvedConflict`.
+
+A **stretch** (segment) is a run of samples from one source without a gap.
+Each stretch also gives that source's own median sample spacing, so a 1 Hz
+OBD channel never claims the primary's 10 Hz resolution.
+
+**Which sources can join.** Only a source whose clock alignment (KAN-101)
+was "aligned" is used. Any other status, a non-finite clock, or a drift
+that would reverse time refuses the whole source, and the result lists it.
+Times move onto the primary clock as **primary time = source time + offset
++ drift × source time**.
+
+**Matching channels.** A channel is matched by its alias when it has one
+(for example `speed`), otherwise by its name:
+- **Only the alternative has it** (an RCZ's OBD coolant, say): it is added
+  on the primary clock.
+- **Both have it:** the primary's samples are kept. At each of the
+  alternative's samples, the value is compared with the primary's value at
+  the same moment. The overlap conflicts when at least 10 samples compare
+  and their median difference exceeds a per-unit tolerance: km/h 2, % 3,
+  g 0.05, °C 2, rpm 100, otherwise 5 % of the primary's range.
+- **A conflict without a rule** is reported as unresolved. The channel
+  still carries the primary's samples, so nothing is replaced silently.
+- **Rules** are chosen per channel and alternative source:
+  - `PrimaryOnly` resolves the conflict and keeps the primary; the
+    disagreement is still reported.
+  - `FillGaps` keeps the primary and uses the alternative only outside the
+    primary's recorded stretches.
+  - `PreferAlternative` does the reverse.
+- **Units** must match exactly. A mismatch (for example m/s against km/h)
+  is listed, and that channel is neither compared nor fused. Nothing is
+  rescaled.
+
+**No resampling.** Every output sample is a real sample of one source with
+its timestamp transformed; nothing is interpolated. Gaps that neither
+source covers stay gaps. When both have a sample at the same instant, the
+preferred source's sample is kept, so timestamps stay strictly increasing.
+
+**Tested on synthetic data only.** The private day has no alternative
+recording, so there is no real-data result yet.
