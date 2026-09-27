@@ -34,7 +34,7 @@
 #include "export/ExportProcessSupervisor.h"
 #include "export/PersistentExportLog.h"
 #include "export/BoundedProcessOutput.h"
-#include "sync/TelemetrySyncEngine.h"
+#include "telemetry/TelemetrySyncEngine.h"
 #include "widgets/WidgetModel.h"
 #include "project/ProjectWriter.h"
 #include "project/ProjectDocumentState.h"
@@ -466,6 +466,7 @@ public:
     Q_INVOKABLE bool confirmRunRecording() { return m_document.confirmRunRecording(); }
     Q_INVOKABLE void cancelRunRecording() { m_document.cancelRunRecording(); }
     Q_INVOKABLE bool setRunPrimarySource(const QString &runId, const QString &sourceId) { return m_document.setRunPrimarySource(runId, sourceId); }
+    Q_INVOKABLE bool checkRunRecordingAlignment(const QString &runId, const QString &sourceId) { return m_document.checkRunRecordingAlignment(runId, sourceId); }
     [[nodiscard]] QVariantMap runRecordingReview() const { return m_document.runRecordingReview(); }
     Q_INVOKABLE void cancelBatchImport() { m_document.cancelBatchImport(); }
     Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices) { return m_document.confirmBatchImport(name, append, choices); }

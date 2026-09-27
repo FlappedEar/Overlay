@@ -383,6 +383,24 @@ void TelemetryAppTests::attachesAlternativeRecordingsAndSwitchesThePrimary()
     QVERIFY(!recordings[1].toMap().value("primary").toBool());
     QVERIFY(document.dirty());
 
+    // KAN-101: comparing the clocks describes the alignment and changes
+    // nothing. These route fixtures carry no speed, so there is no measured
+    // evidence: insufficient, never approved.
+    QVERIFY(!document.checkRunRecordingAlignment(runId, recordings[0].toMap().value("sourceId").toString())); // the primary itself
+    const auto revisionBefore = document.currentProjectObject();
+    QVERIFY(document.checkRunRecordingAlignment(runId, recordings[1].toMap().value("sourceId").toString()));
+    QCOMPARE(document.runRecordingReview().value("state").toString(), QString("aligning"));
+    QTRY_COMPARE_WITH_TIMEOUT(document.runRecordingReview().value("state").toString(), QString("alignment"), 20000);
+    const auto alignment = document.runRecordingReview().value("alignment").toMap();
+    QCOMPARE(alignment.value("algorithm").toString(), QString("recording-alignment-v1"));
+    QCOMPARE(alignment.value("status").toString(), QString("insufficient"));
+    QCOMPARE(alignment.value("reason").toString(), QString("noSpeed"));
+    QVERIFY(!alignment.contains("offsetSeconds"));
+    QCOMPARE(document.runRecordingReview().value("name").toString(), QString("session-copy.vbo"));
+    QCOMPARE(document.currentProjectObject(), revisionBefore);
+    document.cancelRunRecording();
+    QVERIFY(document.runRecordingReview().isEmpty());
+
     // Choosing the alternative as primary re-derives the run from it.
     const auto previousPrimary = recordings[0].toMap().value("sourceId").toString();
     const auto newPrimary = recordings[1].toMap().value("sourceId").toString();

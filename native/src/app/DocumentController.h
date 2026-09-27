@@ -116,6 +116,11 @@ public:
     // Makes an attached recording the run's primary after verifying it;
     // the run's laps are derived again from it.
     Q_INVOKABLE bool setRunPrimarySource(const QString &runId, const QString &sourceId);
+    // KAN-101: describes how an alternative recording's clock lines up with
+    // the run's primary (declared and measured offset, drift, uncertainty,
+    // evidence). Read-only: nothing is applied or fused. The result arrives
+    // as runRecordingReview state "alignment".
+    Q_INVOKABLE bool checkRunRecordingAlignment(const QString &runId, const QString &sourceId);
     [[nodiscard]] QVariantMap runRecordingReview() const { return m_recordingReview; }
 
     // For the host's editor state.
@@ -211,7 +216,7 @@ private:
     [[nodiscard]] QByteArray eventSourcesSignature() const;
     void publishBatchRows();
     struct RecordingWork {
-        enum class Kind { Attach, Confirm, Primary };
+        enum class Kind { Attach, Confirm, Primary, Align };
         Kind kind = Kind::Attach;
         QString sourceId;
         QString path;
@@ -220,6 +225,7 @@ private:
         QJsonObject fingerprint;
         QString gateRevision;
         QVariantMap evidence;
+        QVariantMap alignment;
         QString error;
         bool cancelled = false;
     };

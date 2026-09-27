@@ -128,6 +128,10 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/DrivingStates.h
     src/telemetry/MapLayers.cpp
     src/telemetry/MapLayers.h
+    src/telemetry/RecordingAlignment.cpp
+    src/telemetry/RecordingAlignment.h
+    src/telemetry/TelemetrySyncEngine.cpp
+    src/telemetry/TelemetrySyncEngine.h
     src/telemetry/TemperatureAssociation.cpp
     src/telemetry/TemperatureAssociation.h
     src/telemetry/TelemetryFolderScan.cpp
@@ -174,7 +178,8 @@ target_link_libraries(flappedear_telemetry_app PUBLIC flappedear_telemetry_core 
 flappedear_enable_warnings(flappedear_telemetry_app)
 
 # The desktop overlay side: FFmpeg export, the QRhi frame renderer, GoPro,
-# synchronization, widgets and the app support used by the editor.
+# widgets and the app support used by the editor. Synchronization is in
+# telemetry core (KAN-101), shared by video and recording alignment.
 qt_add_library(flappedear_overlay_core STATIC
     src/app/ApplicationIdentity.h
     src/app/GuiSessionLock.cpp
@@ -225,8 +230,6 @@ qt_add_library(flappedear_overlay_core STATIC
     src/export/TemporaryOverlayValidation.h
     src/gopro/GoProTelemetrySource.cpp
     src/gopro/GoProTelemetrySource.h
-    src/sync/TelemetrySyncEngine.cpp
-    src/sync/TelemetrySyncEngine.h
     src/widgets/WidgetModel.cpp
     src/widgets/WidgetModel.h
 )

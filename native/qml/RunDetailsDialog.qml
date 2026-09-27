@@ -19,7 +19,47 @@ Dialog {
     property var recordings: []
     readonly property var review: appController.runRecordingReview
     readonly property bool reviewForThisRun: review.runId === root.editingRunId && (review.state || "") !== ""
-    readonly property bool recordingBusy: ["checking", "attaching", "switching"].indexOf(review.state || "") >= 0
+    readonly property bool recordingBusy: ["checking", "attaching", "switching", "aligning"].indexOf(review.state || "") >= 0
+    // KAN-101: how an alternative recording's clock lines up with the primary.
+    // Described only: nothing is applied, and ambiguity is said as such.
+    function secondsText(value) { return (value >= 0 ? "+" : "−") + Math.abs(Number(value)).toFixed(2) + " s"; }
+    function alignmentText(name, alignment) {
+        if (!alignment) return "";
+        const lines = [];
+        const verdict = {
+            aligned: qsTr("%1 lines up with the primary."),
+            ambiguous: qsTr("%1: the alignment is ambiguous and is not approved."),
+            conflicting: qsTr("%1: the evidence conflicts; the alignment is not approved."),
+            insufficient: qsTr("%1: there is not enough evidence to align it.")
+        }[alignment.status] || "%1";
+        lines.push(verdict.arg(name));
+        if (alignment.offsetSeconds !== undefined)
+            lines.push(qsTr("Measured from the speed traces: primary time = this recording's time %1 ± %2 s%3.")
+                .arg(root.secondsText(alignment.offsetSeconds)).arg(Number(alignment.uncertaintySeconds).toFixed(2))
+                .arg(alignment.driftPpm !== undefined ? qsTr(", drift %1 ppm").arg(Math.round(alignment.driftPpm)) : ""));
+        if (alignment.correlation > -1)
+            lines.push(qsTr("Speed correlation %1 over %2 of overlap; %3 of %4 windows agree.")
+                .arg(Number(alignment.correlation).toFixed(3)).arg(Math.round(alignment.overlapSeconds) + " s")
+                .arg(alignment.usedWindows).arg(alignment.windows));
+        lines.push(alignment.declaredOffsetSeconds !== undefined
+            ? qsTr("Declared by the loggers' clocks: %1.").arg(root.secondsText(alignment.declaredOffsetSeconds))
+            : qsTr("The loggers do not both state a start time."));
+        const reasons = {
+            repeatedMatch: qsTr("The speed traces also match at another offset (laps repeat), and no logger clock tells which one is right."),
+            declaredClockDisagrees: qsTr("The loggers' clocks disagree with the measured offset. One clock may be wrong or in another time zone."),
+            weakMatch: qsTr("The speed traces do not match closely enough."),
+            tooFewWindows: qsTr("Too few stretches of the overlap match on their own."),
+            windowsDisagree: qsTr("Stretches along the overlap give different offsets."),
+            implausibleDrift: qsTr("The clocks would drift apart faster than a logger plausibly does."),
+            shortOverlap: qsTr("The recordings overlap for less than 20 s."),
+            noSpeed: qsTr("One of the recordings has no speed channel.")
+        };
+        if (alignment.reason) lines.push(reasons[alignment.reason] || alignment.reason);
+        if (alignment.resolvedByDeclaredClock)
+            lines.push(qsTr("Laps repeat, so the speed traces also match elsewhere; the loggers' clocks chose this match."));
+        lines.push(qsTr("Both recordings stay usable on their own; nothing is merged."));
+        return lines.join("\n");
+    }
     function evidenceText(evidence) {
         if (!evidence) return "";
         const lines = [qsTr("%1 recording, beside the primary %2.").arg(evidence.format || "?").arg(evidence.primaryFormat || "?")];
@@ -169,6 +209,14 @@ Dialog {
                                 color: recordingRow.modelData.primary ? "#55e6a5" : "#ff9585"
                             }
                             FeButton {
+                                objectName: "checkRecordingClock"
+                                visible: !recordingRow.modelData.primary
+                                compact: true
+                                text: qsTr("Check clock")
+                                enabled: recordingRow.modelData.available && !root.recordingBusy
+                                onClicked: appController.checkRunRecordingAlignment(root.editingRunId, recordingRow.modelData.sourceId)
+                            }
+                            FeButton {
                                 objectName: "makePrimaryRecording"
                                 visible: !recordingRow.modelData.primary
                                 compact: true
@@ -189,13 +237,15 @@ Dialog {
                         Layout.fillWidth: true
                         visible: root.reviewForThisRun
                         wrapMode: Text.WordWrap
-                        color: root.review.state === "error" ? "#ff9585" : "#dce4ee"
+                        color: root.review.state === "error" ? "#ff9585"
+                            : root.review.state === "alignment" && root.review.alignment.status !== "aligned" ? "#d6a457" : "#dce4ee"
                         text: root.review.state === "review"
                             ? qsTr("Review %1:").arg(root.review.name || "") + "\n" + root.evidenceText(root.review.evidence)
+                            : root.review.state === "alignment" ? root.alignmentText(root.review.name || "", root.review.alignment)
                             : (root.review.message || "")
                     }
                     RowLayout {
-                        visible: root.reviewForThisRun && (root.review.state === "review" || root.review.state === "error")
+                        visible: root.reviewForThisRun && ["review", "error", "alignment"].indexOf(root.review.state) >= 0
                         FeButton {
                             objectName: "confirmRunRecording"
                             visible: root.review.state === "review"

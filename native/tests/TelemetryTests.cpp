@@ -23,7 +23,7 @@
 #include "export/MediaProbe.h"
 #include "export/TelemetryFrameRenderer.h"
 #include "export/TemporaryOverlayValidation.h"
-#include "sync/TelemetrySyncEngine.h"
+#include "telemetry/TelemetrySyncEngine.h"
 #include "telemetry/TelemetrySession.h"
 #include "telemetry/GgPairs.h"
 #include "telemetry/DayReport.h"
@@ -8535,7 +8535,33 @@ void TelemetryTests::switchesTheActiveRunPrimaryWithoutStaleEditorState()
     };
     find(window->contentItem());
     QVERIFY(makePrimary && makePrimary->isEnabled());
+    // KAN-101: comparing the clocks first, from the same row.
+    QQuickItem *checkClock = nullptr, *reviewLabel = nullptr;
+    std::function<void(QQuickItem *)> findClock = [&](QQuickItem *item) {
+        if (!item->isVisible()) return;
+        if (item->objectName() == "checkRecordingClock") checkClock = item;
+        if (item->objectName() == "runRecordingReview") reviewLabel = item;
+        for (auto *child : item->childItems()) findClock(child);
+    };
+    findClock(window->contentItem());
+    QVERIFY(checkClock && checkClock->isEnabled());
+    checkClock->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.runRecordingReview().value("state").toString(), QString("alignment"), 20000);
+    QTRY_VERIFY((findClock(window->contentItem()), reviewLabel && reviewLabel->isVisible()));
+    const auto clockText = reviewLabel->property("text").toString();
+    QVERIFY2(clockText.contains("not enough evidence") && clockText.contains("no speed channel")
+        && clockText.contains("nothing is merged"), qPrintable(clockText));
     const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!review.isEmpty()) {
+        auto *scroll = window->findChild<QQuickItem *>("runDetailsScroll");
+        auto *flick = scroll ? scroll->property("contentItem").value<QQuickItem *>() : nullptr;
+        QTest::qWait(300);
+        if (flick) flick->setProperty("contentY", flick->property("contentHeight").toDouble() - flick->height());
+        QTest::qWait(300);
+        static_cast<void>(window->grabWindow().save(QDir(review).filePath("recording-clock.png")));
+    }
+    controller.cancelRunRecording();
+    QTRY_VERIFY(controller.runRecordingReview().isEmpty());
     if (!review.isEmpty()) {
         auto *scroll = window->findChild<QQuickItem *>("runDetailsScroll");
         auto *flick = scroll ? scroll->property("contentItem").value<QQuickItem *>() : nullptr;

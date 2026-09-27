@@ -469,3 +469,57 @@ a cause.
 Every temperature rose through the day while the laps got quicker, so all
 four are flagged: the hotter laps are the later, faster ones, and this data
 cannot separate temperature from the day's progression.
+
+## Recording clock alignment (KAN-101)
+
+A run can hold alternative recordings beside its primary (KAN-90). Before
+any channel could be fused, their clocks must line up. **Run details →
+Recordings → Check clock** describes how an alternative lines up with the
+primary. It shows the result and changes nothing: no offset is stored or
+applied, and both recordings stay usable on their own.
+
+The convention is **primary time = alternative time + offset + drift ×
+alternative time**. `alignRecordings` (`telemetry/RecordingAlignment`,
+algorithm `recording-alignment-v1`) keeps two kinds of evidence apart:
+- **Declared:** each logger's start timestamp (`firstTimestampMilliseconds`).
+  RCZ always states one; a RaceChrono VBO states one when it records "File
+  created on". The declared offset is the difference between the two.
+- **Measured:** the central sync engine cross-correlates the two speed
+  traces over the whole overlap. It then repeats this in up to 8 windows of
+  at least 60 s along the overlap, each searched within ±10 s of the whole
+  result. A window counts when its correlation is at least 0.9. The offset
+  and drift (in ppm) are a least-squares line through the counted windows,
+  and drift is reported with three or more. The uncertainty is the
+  windows' residual, at least 0.05 s (the engine's 10 Hz grid).
+
+The status is never "aligned" by default:
+- **insufficient:** a recording has no speed channel, the engine cannot run
+  (too few samples), or the overlap is shorter than 20 s.
+- **ambiguous:** reported in five cases:
+  - the whole-overlap correlation is below 0.9;
+  - fewer than two windows count;
+  - the windows disagree by more than 0.3 s;
+  - the drift exceeds 1000 ppm, beyond what a logger clock plausibly does;
+  - **repeated match:** the match is not unique (engine confidence below
+    0.75) and no declared clock is available.
+
+  Laps repeat, so two speed traces usually also match about one lap away.
+  The speed match alone cannot tell which lap is right.
+- **conflicting:** a declared offset differs from the measured one by more
+  than 2 s (or three uncertainties). One logger's clock may be wrong or in
+  another time zone. Both values are shown and neither is chosen.
+- **aligned:** the measured match is unique on its own, or it repeats but
+  the declared clock agrees and so chooses between the matches. The result
+  says which of the two it was. The offset shown is always the measured
+  one.
+
+**Tested on synthetic data only.** The core tests use a synthetic track day
+(a lap shape, slow drift across laps, pit exit, a yellow-flag lap and an
+in-lap):
+- a 123.4 s offset is measured within 0.1 s;
+- 400 ppm drift is recovered within 120 ppm;
+- identical cycles and constant speed are never approved;
+- a declared clock one minute off is a conflict.
+
+The private Jastrząb day has one VBO per session and no alternative
+recording, so there is no real-data result yet.

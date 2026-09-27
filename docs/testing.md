@@ -1036,7 +1036,8 @@ code builds and runs without Gui.
 
 `flappedear_telemetry_core_boundary` (a CMake script test,
 `native/tests/CheckTelemetryCoreBoundary.cmake`) fails when a file under
-`src/telemetry` or `src/project` includes `export/`, `gopro/`, `sync/`,
+`src/telemetry` or `src/project` includes `export/`, `gopro/`, `sync/` (the
+sync engine itself now lives in `src/telemetry`, KAN-101),
 `widgets/` or `app/`, or a Gui, Qml, Quick, Multimedia, QProcess or QRhi
 header. It was checked to fail on an injected violation.
 

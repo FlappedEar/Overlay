@@ -4,6 +4,7 @@
 #include "project/ProjectSourceReference.h"
 #include "telemetry/LapTiming.h"
 #include "telemetry/OutingLaps.h"
+#include "telemetry/RecordingAlignment.h"
 #include "telemetry/TelemetryImportPlan.h"
 #include "telemetry/TelemetrySource.h"
 
@@ -24,6 +25,29 @@ ProjectSourceReference referenceOf(const QJsonObject &json)
 {
     return {json.value("relativePath").toString(), json.value("absolutePath").toString(),
             json.value("fingerprint").toObject()};
+}
+
+QVariantMap alignmentMap(const RecordingAlignment &alignment)
+{
+    QVariantMap map{{"algorithm", QString::fromLatin1(recordingAlignmentAlgorithm)}, {"status", alignment.status},
+        {"reason", alignment.reason}, {"correlation", alignment.correlation}, {"peakUniqueness", alignment.peakUniqueness},
+        {"confidence", alignment.confidence}, {"overlapSeconds", alignment.overlapSeconds},
+        {"windows", alignment.windows.size()}, {"usedWindows", alignment.usedWindows},
+        {"resolvedByDeclaredClock", alignment.resolvedByDeclaredClock}};
+    if (alignment.declaredOffset) map.insert("declaredOffsetSeconds", *alignment.declaredOffset);
+    if (alignment.offset) map.insert("offsetSeconds", *alignment.offset);
+    if (alignment.driftPpm) map.insert("driftPpm", *alignment.driftPpm);
+    if (alignment.uncertaintySeconds) map.insert("uncertaintySeconds", *alignment.uncertaintySeconds);
+    return map;
+}
+
+// Loads a run's recording after checking it is still the attached content.
+TelemetrySession loadVerified(const QString &path, const QByteArray &expectedSha, const CancellationCheck &cancelled)
+{
+    const auto size = QFileInfo(path).size();
+    if (!expectedSha.isEmpty() && TelemetrySource::contentSha256(path, size, cancelled).toHex() != expectedSha)
+        throw std::runtime_error(QObject::tr("A recording's content changed; relink it first.").toStdString());
+    return TelemetrySource::load(path, cancelled);
 }
 
 QJsonObject runById(const QJsonObject &project, const QString &runId)
@@ -238,6 +262,60 @@ bool DocumentController::setRunPrimarySource(const QString &runId, const QString
     return true;
 }
 
+bool DocumentController::checkRunRecordingAlignment(const QString &runId, const QString &sourceId)
+{
+    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || m_recordingWatcher.isRunning()) return false;
+    const auto run = runById(m_projectTemplate, runId);
+    const auto primaryId = run.value("primaryTelemetrySourceId").toString();
+    if (run.isEmpty() || sourceId == primaryId) return false;
+    QString primaryPath, candidatePath, candidateName;
+    QByteArray primarySha, candidateSha;
+    for (const auto &value : run.value("sources").toObject().value("telemetry").toArray()) {
+        const auto source = value.toObject();
+        const auto reference = referenceOf(source.value("reference").toObject());
+        const auto path = ProjectSourceReferenceCodec::resolve(reference, m_documentState.projectPath());
+        if (source.value("id").toString() == primaryId) {
+            primaryPath = path;
+            primarySha = EventProjectCodec::sourceContentRevision(source);
+        } else if (source.value("id").toString() == sourceId) {
+            candidatePath = path;
+            candidateSha = EventProjectCodec::sourceContentRevision(source);
+            candidateName = QFileInfo(reference.absolutePath.isEmpty() ? reference.relativePath : reference.absolutePath).fileName();
+        }
+    }
+    if (primaryPath.isEmpty() || candidatePath.isEmpty()) {
+        setRecordingReview({{"state", "error"}, {"runId", runId},
+            {"message", tr("Both the primary and this recording must be available to compare their clocks. Relink the missing one.")}});
+        return false;
+    }
+    m_recordingRunId = runId;
+    m_recordingRevision = m_documentState.revision();
+    m_recordingDocumentId = m_documentId;
+    m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
+    const auto cancellation = m_recordingCancellation;
+    setRecordingReview({{"state", "aligning"}, {"runId", runId}, {"sourceId", sourceId},
+        {"message", tr("Comparing the recordings' clocks…")}});
+    m_recordingWatcher.setFuture(QtConcurrent::run([primaryPath, primarySha, candidatePath, candidateSha, candidateName,
+                                                        sourceId, cancellation] {
+        RecordingWork work;
+        work.kind = RecordingWork::Kind::Align;
+        work.sourceId = sourceId;
+        work.path = candidateName;
+        const auto cancelled = [cancellation] { return cancellation->load(); };
+        try {
+            const auto primary = loadVerified(primaryPath, primarySha, cancelled);
+            const auto candidate = loadVerified(candidatePath, candidateSha, cancelled);
+            work.alignment = alignmentMap(alignRecordings(primary, candidate, cancelled));
+        } catch (const OperationCancelled &) {
+            work.cancelled = true;
+        } catch (const std::exception &error) {
+            work.error = QString::fromUtf8(error.what());
+        }
+        return work;
+    }));
+    return true;
+}
+
 void DocumentController::initializeRunRecordings()
 {
     connect(this, &DocumentController::documentStateChanged, this, [this] {
@@ -257,6 +335,11 @@ void DocumentController::initializeRunRecordings()
         }
         if (!work.error.isEmpty()) {
             setRecordingReview({{"state", "error"}, {"runId", runId}, {"message", work.error}});
+            return;
+        }
+        if (work.kind == RecordingWork::Kind::Align) {
+            setRecordingReview({{"state", "alignment"}, {"runId", runId}, {"sourceId", work.sourceId},
+                {"name", work.path}, {"alignment", work.alignment}});
             return;
         }
         if (work.kind == RecordingWork::Kind::Attach) {
