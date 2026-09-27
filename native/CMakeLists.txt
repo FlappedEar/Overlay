@@ -161,6 +161,7 @@ qt_add_library(flappedear_telemetry_app STATIC
     src/app/AnalysisController.h
     src/app/AnalysisControllerChannelSummaries.cpp
     src/app/AnalysisControllerComparison.cpp
+    src/app/AnalysisControllerComparisonVideo.cpp
     src/app/AnalysisControllerCornerAnalyzer.cpp
     src/app/AnalysisControllerMapLayers.cpp
     src/app/AnalysisControllerDayReport.cpp
@@ -323,6 +324,7 @@ qt_add_qml_module(flappedear_native
         qml/ComparisonOverlayMap.qml
         qml/ComparisonSegmentPanel.qml
         qml/ComparisonGgPanel.qml
+        qml/ComparisonVideoPane.qml
         qml/ComparisonLapDialog.qml
         qml/LapTimingPanel.qml
         qml/FeButton.qml

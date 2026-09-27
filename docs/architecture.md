@@ -262,6 +262,22 @@ Synchronization, telemetry time, lap seeking and the analysis video link all use
 - Relink moves the first chapter; to fill a missing chapter, choose the recording's chapters again.
 - Exporting a chaptered video is refused with an explicit message until KAN-106, never cut to its first chapter.
 
+### Side-by-side A/B video (KAN-107)
+
+**Where the footage comes from.** The A/B comparison's **Video** column shows each lap of the pair on its own run's footage, at the same point of the shared track-progress axis. The footage comes through `VideoLink::runVideo`:
+- The active run's footage is the loaded, verified video, with its chapters.
+- Another run's saved video, and its chapters, are resolved and each file's fingerprint probed on a worker. This is cached per run under a key made of the document, its path, and the run's video references and sync.
+- The footage is shown only when its files verify. A matching path alone is never accepted.
+- A missing, changed or unreadable file is reported as the run's state; a missing chapter with a known duration stays a gap.
+
+**Mapping a track point to a frame.** `AnalysisController::comparisonVideoAtProgress` maps a track point to the lap's telemetry time through its projected trace. It then applies that run's own sync (telemetry = video × timeScale + offset), then a chapter and local time. `comparisonProgressForVideo` is the inverse.
+
+**The panes (`ComparisonVideoPane.qml`).**
+- **Paused:** both panes show the frame at the shared cursor, or just inside the zoomed range. A paused seek plays silently until a frame at the position shows.
+- **Playing:** the first lap with footage plays in real time and reports the track progress it reaches. The shared cursor follows it, and so do the charts, the map and the other pane. The other lap keeps to the same track position, re-seeking when it drifts by more than 0.25 s, so it runs ahead or behind real time where the lap times differ.
+- **Chapters:** a chapter boundary loads the next file at the right local position.
+- **Missing footage:** a lap without footage, or not covering a point, says so in its pane. It never blocks the other pane or the analysis.
+
 ## Widgets and QML
 
 The floating Analysis window is transient UI state. It starts closed for application startup, New, and Open. A QML `Loader` creates `AnalysisWindow` and its secondary `MediaPlayer` only after the user opens Analysis; closing it deactivates the loader and releases the secondary decoder. Channel selection remains persistent project configuration.

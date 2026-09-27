@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QVector>
 #include <QtGlobal>
 #include <optional>
 
@@ -21,6 +22,29 @@ public:
     // Telemetry time of run `runId` shown at `videoMilliseconds`; nullopt when
     // the run is not the one the video belongs to.
     [[nodiscard]] virtual std::optional<double> telemetryForVideoPosition(const QString &runId, qint64 videoMilliseconds) const = 0;
+
+    // KAN-107: any run's own footage, for side-by-side A/B video. The active
+    // run's is the loaded video; another run's saved video (and chapters) is
+    // resolved and each file's fingerprint verified in the background before
+    // it is ever shown -- a matching path alone is not enough.
+    struct RunVideoChapter {
+        QString path;             // empty for a gap
+        double startSeconds = 0.0;
+        double durationSeconds = 0.0;
+        bool available = false;
+    };
+    struct RunVideo {
+        // none (the run has no video), verifying, ready, missing, mismatch, error
+        QString state = QStringLiteral("none");
+        QString message;
+        QVector<RunVideoChapter> chapters;  // timeline order; one entry for a single video
+        double offset = 0.0;                 // the run's sync: telemetry = video * timeScale + offset
+        double timeScale = 1.0;
+    };
+    [[nodiscard]] virtual RunVideo runVideo(const QString &runId) const = 0;
+    // Starts verifying the run's saved video if that has not been done for
+    // its current references; the analysis is told when it finishes.
+    virtual void requestRunVideo(const QString &runId) = 0;
 };
 
 } // namespace FlappedEar

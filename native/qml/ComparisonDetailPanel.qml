@@ -13,6 +13,7 @@ import QtQuick.Layouts
 // shows both laps' values, their delta, and where each car was on track.
 Rectangle {
     id: root
+    objectName: "comparisonDetailPanel"
     color: "#090e14"
     readonly property var slots: appController.comparisonSlots
     // "Δ time" is a synthetic pseudo-channel (the cumulative time gap between
@@ -32,8 +33,25 @@ Rectangle {
     property bool showingCornerAnalyzer: false
     // KAN-66: the G-G column; only one side column at a time.
     property bool showingGg: false
-    onShowingCornerAnalyzerChanged: if (root.showingCornerAnalyzer) root.showingGg = false
-    onShowingGgChanged: if (root.showingGg) root.showingCornerAnalyzer = false
+    // KAN-107: side-by-side A/B video, also a side column.
+    property bool showingVideo: false
+    property bool videoPlaying: false
+    readonly property int videoDriver: (appController.comparisonVideoRevision, appController.comparisonSlots,
+        appController.comparisonVideo(0).state === "ready") ? 0 : 1
+    onShowingCornerAnalyzerChanged: if (root.showingCornerAnalyzer) { root.showingGg = false; root.showingVideo = false; }
+    onShowingGgChanged: if (root.showingGg) { root.showingCornerAnalyzer = false; root.showingVideo = false; }
+    onShowingVideoChanged: {
+        if (root.showingVideo) { root.showingCornerAnalyzer = false; root.showingGg = false; }
+        else root.videoPlaying = false;
+    }
+    // Where both panes show: the cursor, else the start of the zoomed range.
+    // Just inside the range: exactly 0 m can precede a lap's projected trace.
+    readonly property real videoProgress: root.hoverDistanceMeters >= 0 ? root.hoverDistanceMeters
+        : Math.min(root.zoomEnd, root.zoomStart + 0.5)
+    function advanceVideo(meters) {
+        if (meters >= root.zoomEnd) { root.videoPlaying = false; return; }
+        root.hoverDistanceMeters = meters; // the charts and map follow the playing laps
+    }
     // KAN-41: on a fresh pair (this document's persisted A/B just restored, or
     // freshly (re)opening the compare view), apply the persisted range/channel
     // selection instead of resetting to full range/defaults, once per such
@@ -259,6 +277,12 @@ Rectangle {
                     onClicked: root.showingGg = !root.showingGg
                 }
                 FeButton {
+                    objectName: "comparisonToggleVideo"
+                    compact: true
+                    text: root.showingVideo ? qsTr("Hide video") : qsTr("Video")
+                    onClicked: root.showingVideo = !root.showingVideo
+                }
+                FeButton {
                     objectName: "comparisonResetZoom"
                     visible: root.zoomed
                     compact: true
@@ -310,7 +334,7 @@ Rectangle {
                 ComparisonOverlayMap {
                     id: overlayMap
                     objectName: "comparisonOverlayMap"
-                    Layout.preferredWidth: Math.max(160, root.width * (root.showingCornerAnalyzer || root.showingGg ? 0.2 : 0.26))
+                    Layout.preferredWidth: Math.max(160, root.width * (root.showingCornerAnalyzer || root.showingGg || root.showingVideo ? 0.2 : 0.26))
                     Layout.fillHeight: true
                     hoverDistanceMeters: root.hoverDistanceMeters
                     rangeStartMeters: root.zoomStart
@@ -406,6 +430,48 @@ Rectangle {
                     onRangeRequested: (start, end) => { root.zoomStart = start; root.zoomEnd = end; }
                     onHovered: meters => root.hoverDistanceMeters = meters
                     onChannelRequested: channel => root.showChannel(channel)
+                }
+                ColumnLayout {
+                    objectName: "comparisonVideoPanel"
+                    visible: root.showingVideo
+                    Layout.preferredWidth: 400
+                    Layout.minimumWidth: 300
+                    Layout.maximumWidth: 460
+                    Layout.fillHeight: true
+                    spacing: 6
+                    RowLayout {
+                        Layout.fillWidth: true
+                        FeButton {
+                            objectName: "comparisonVideoPlay"
+                            compact: true
+                            text: root.videoPlaying ? "Ⅱ" : "▶"
+                            enabled: (appController.comparisonVideoRevision, appController.comparisonVideo(root.videoDriver).state === "ready")
+                            onClicked: root.videoPlaying = !root.videoPlaying
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Both laps at the same point on track. Lap %1 plays in real time; the other keeps its place, so it runs ahead or behind where the laps differ.")
+                                .arg(root.videoDriver === 0 ? "A" : "B")
+                            wrapMode: Text.WordWrap
+                            font.pixelSize: 10
+                            color: "#657386"
+                        }
+                    }
+                    Repeater {
+                        model: 2
+                        delegate: ComparisonVideoPane {
+                            required property int index
+                            objectName: "comparisonVideoPane" + index
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            slot: index
+                            progressMeters: root.showingVideo ? root.videoProgress : -1
+                            playing: root.videoPlaying
+                            driver: index === root.videoDriver
+                            onProgressAdvanced: meters => root.advanceVideo(meters)
+                            onEnded: root.videoPlaying = false
+                        }
+                    }
                 }
                 ComparisonGgPanel {
                     objectName: "comparisonGgPanel"

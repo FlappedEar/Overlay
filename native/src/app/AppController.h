@@ -117,6 +117,7 @@ class AppController final : public QObject, private VideoLink, private DocumentH
     Q_PROPERTY(QString batchImportError READ batchImportError NOTIFY batchImportChanged)
     Q_PROPERTY(QStringList analysisImportMessages READ analysisImportMessages NOTIFY batchImportChanged)
     Q_PROPERTY(QVariantList comparisonSlots READ comparisonSlots NOTIFY comparisonSlotsChanged)
+    Q_PROPERTY(int comparisonVideoRevision READ comparisonVideoRevision NOTIFY comparisonVideoChanged)
     Q_PROPERTY(QVariantList comparisonLaps READ comparisonLaps NOTIFY comparisonSlotsChanged)
     Q_PROPERTY(bool comparisonPairReady READ comparisonPairReady NOTIFY comparisonSlotsChanged)
     Q_PROPERTY(QStringList comparisonAvailableChannels READ comparisonAvailableChannels NOTIFY comparisonSlotsChanged)
@@ -357,6 +358,12 @@ public:
     Q_INVOKABLE QVariantMap comparisonLapSeries(
         int slot, const QString &channel, double startTime, double endTime, int maximumPoints) const;
     Q_INVOKABLE QVariantList comparisonLapTrack(int slot) const;
+    [[nodiscard]] int comparisonVideoRevision() const { return m_analysis.comparisonVideoRevision(); }
+    Q_INVOKABLE QVariantMap comparisonVideo(int slot) { return m_analysis.comparisonVideo(slot); }
+    Q_INVOKABLE QVariantMap comparisonVideoAtProgress(int slot, double progressMeters) const
+    { return m_analysis.comparisonVideoAtProgress(slot, progressMeters); }
+    Q_INVOKABLE double comparisonProgressForVideo(int slot, int chapter, double localMilliseconds) const
+    { return m_analysis.comparisonProgressForVideo(slot, chapter, localMilliseconds); }
     // Overlay comparison: both slots' GPS traces sharing one normalization
     // (so they draw to scale on one map), and channel/delta series
     // parameterized by the shared cross-lap track-progress axis (KAN-31/32/33)
@@ -582,6 +589,7 @@ signals:
     void segmentReviewChanged();
     void videoSourceChanged();
     void videoChaptersChanged();
+    void comparisonVideoChanged();
     void telemetryChanged();
     void lapNavigationChanged();
     void statusTextChanged();
@@ -702,6 +710,10 @@ private:
     // AnalysisDocument and reaches the loaded video through VideoLink.
     [[nodiscard]] std::optional<qint64> videoPositionForTelemetry(const QString &runId, double telemetrySeconds) const override;
     [[nodiscard]] std::optional<double> telemetryForVideoPosition(const QString &runId, qint64 videoMilliseconds) const override;
+    // KAN-107: any run's footage for side-by-side A/B video.
+    [[nodiscard]] RunVideo runVideo(const QString &runId) const override;
+    void requestRunVideo(const QString &runId) override;
+    [[nodiscard]] QByteArray runVideoKey(const QJsonObject &run) const;
     // DocumentHost: the active run's editor state in the project document.
     [[nodiscard]] bool acceptsEditorProject(const QJsonObject &project, const QString &projectPath) override;
     [[nodiscard]] bool applyEditorScene(const ProjectLoadResult &result, QString *error) override;
@@ -741,6 +753,15 @@ private:
     QFutureWatcher<AutoSyncResult> m_syncWatcher;
     QFutureWatcher<VideoProbeResult> m_videoProbeWatcher;
     VideoChapterReview m_videoChapters;
+    // KAN-107: other runs' footage, verified off the UI thread and cached
+    // under a key of the document and the run's references and sync.
+    struct RunVideoEntry {
+        QByteArray key;
+        RunVideo video;
+        bool running = false;
+    };
+    QHash<QString, RunVideoEntry> m_runVideos;
+    std::shared_ptr<std::atomic_bool> m_runVideoCancellation = std::make_shared<std::atomic_bool>(false);
     QVector<VideoChapterState> m_videoChapterStates; // empty for an ordinary video
     MediaTimeline m_videoTimeline;
     int m_videoChapterIndex = 0;
