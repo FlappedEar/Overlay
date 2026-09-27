@@ -1,6 +1,7 @@
 #include "EventProjectFixture.h"
 #include "project/EventProjectCodec.h"
 #include "project/ProjectLimits.h"
+#include "project/VideoChapters.h"
 #include "project/ProjectRecoveryStore.h"
 #include "export/ExportOutputTransaction.h"
 
@@ -29,6 +30,7 @@ private slots:
     void boundsInferenceProvenanceAndRecoversIt();
     void boundsAndPreservesRunMetadata();
     void boundsSourceFusionAndRecoversIt();
+    void boundsAndRebasesVideoChapters();
     void persistsTrackConfigurationAndUnknownLegacyState();
     void rejectsInvalidTrackConfigurations_data();
     void rejectsInvalidTrackConfigurations();
@@ -291,6 +293,75 @@ void EventProjectTests::boundsSourceFusionAndRecoversIt()
     auto notObject = Fixture::project(); auto notRuns = Fixture::runs(notObject); auto notRun = notRuns[0].toObject();
     notRun.insert("fusion", 7); notRuns[0] = notRun; Fixture::setRuns(notObject, notRuns);
     QVERIFY(!ProjectLimits::validateProject(notObject));
+}
+
+void EventProjectTests::boundsAndRebasesVideoChapters()
+{
+    // KAN-105: a video made of chapters keeps its first chapter as the video
+    // reference and lists every chapter with its duration; malformed lists
+    // are rejected in both project versions; Save As rebases an inactive
+    // run's chapters; export protection sees every chapter.
+    const QJsonObject first{{"relativePath", "GX010123.MP4"}, {"fingerprint", QJsonObject{{"kind", "video-v1"}}}};
+    const auto chapter = [](const QString &path, const double duration) {
+        return QJsonObject{{"relativePath", path}, {"durationSeconds", duration}};
+    };
+    auto withChapters = [&](const QJsonArray &chapters) {
+        auto video = first; video.insert("chapters", chapters); return video;
+    };
+    auto firstChapter = first; firstChapter.insert("durationSeconds", 530.53);
+    const QJsonArray valid{firstChapter, chapter("GX020123.MP4", 530.53), chapter("GX030123.MP4", 100.0)};
+    QVERIFY(VideoChaptersCodec::valid(withChapters(valid)));
+    QVERIFY(VideoChaptersCodec::valid(first)); // an ordinary video
+    QCOMPARE(VideoChaptersCodec::read(withChapters(valid)).size(), 3);
+    QCOMPARE(VideoChaptersCodec::read(withChapters(valid))[2].durationSeconds, 100.0);
+    QVector<QJsonObject> bad;
+    bad.append(withChapters({firstChapter}));                                   // one chapter is not a list
+    bad.append(withChapters({chapter("GX020123.MP4", 530.0), chapter("GX030123.MP4", 100.0)})); // does not start with the video
+    bad.append(withChapters({firstChapter, chapter("GX020123.MP4", 0.0)}));
+    bad.append(withChapters({firstChapter, chapter("GX020123.MP4", -3.0)}));
+    bad.append(withChapters({firstChapter, chapter("GX020123.MP4", 90000.0)}));
+    bad.append(withChapters({firstChapter, QJsonObject{{"relativePath", "GX020123.MP4"}}}));  // no duration
+    bad.append(withChapters({firstChapter, QJsonObject{{"durationSeconds", 1.0}}}));         // no path
+    bad.append(withChapters({firstChapter, QJsonObject{{"relativePath", "/absolute.MP4"}, {"durationSeconds", 1.0}}}));
+    bad.append(withChapters({firstChapter, 7}));
+    QJsonArray many{firstChapter};
+    for (int index = 2; index <= 65; ++index) many.append(chapter(QString("GX%1.MP4").arg(index), 1.0));
+    bad.append(withChapters(many));
+    auto notArray = first; notArray.insert("chapters", QJsonObject{}); bad.append(notArray);
+    for (const auto &video : bad) {
+        QVERIFY(!VideoChaptersCodec::valid(video));
+        QVERIFY(VideoChaptersCodec::read(video).isEmpty());
+        // v3: the run's video; v2: the editor project's video.
+        auto project = Fixture::project(); auto runs = Fixture::runs(project); auto run = runs[0].toObject();
+        auto sources = run.value("sources").toObject(); sources.insert("video", video); run.insert("sources", sources);
+        runs[0] = run; Fixture::setRuns(project, runs);
+        QVERIFY(!ProjectLimits::validateProject(project));
+        auto editor = EventProjectCodec::editorProjection(Fixture::project());
+        auto editorSources = editor.value("sources").toObject(); editorSources.insert("video", video); editor.insert("sources", editorSources);
+        QVERIFY(!ProjectLimits::validateProject(editor));
+    }
+
+    // An inactive run's chapters are rebased on Save As and protected from export.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QString oldPath = directory.filePath("old/event.fetproject");
+    const QString newPath = directory.filePath("new/event.fetproject");
+    auto project = Fixture::project(); auto runs = Fixture::runs(project); auto inactive = runs[1].toObject();
+    auto inactiveSources = inactive.value("sources").toObject();
+    inactiveSources.insert("video", withChapters(valid)); inactive.insert("sources", inactiveSources);
+    runs[1] = inactive; Fixture::setRuns(project, runs);
+    QVERIFY(ProjectLimits::validateProject(project));
+    const auto saved = EventProjectCodec::withEditorState(project, EventProjectCodec::editorProjection(project), oldPath, newPath);
+    QString error;
+    QVERIFY2(ProjectLimits::validateProject(saved, &error), qPrintable(error));
+    const auto video = Fixture::runs(saved)[1].toObject().value("sources").toObject().value("video").toObject();
+    const auto chapters = video.value("chapters").toArray();
+    QCOMPARE(chapters.size(), 3);
+    QCOMPARE(video.value("relativePath").toString(), QString("../old/GX010123.MP4"));
+    QCOMPARE(chapters[0].toObject().value("relativePath").toString(), QString("../old/GX010123.MP4"));
+    QCOMPARE(chapters[2].toObject().value("relativePath").toString(), QString("../old/GX030123.MP4"));
+    QCOMPARE(chapters[2].toObject().value("durationSeconds").toDouble(), 100.0);
+    const auto protectedPaths = EventProjectCodec::referencedPaths(project, oldPath);
+    QVERIFY(protectedPaths.contains(QDir(directory.filePath("old")).absoluteFilePath("GX030123.MP4")));
 }
 
 void EventProjectTests::persistsTrackConfigurationAndUnknownLegacyState()

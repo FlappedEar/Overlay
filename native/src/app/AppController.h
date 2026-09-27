@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app/VideoChapterReview.h"
+#include "export/MediaTimeline.h"
 #include "app/VideoLink.h"
 #include "app/AnalysisController.h"
 #include "app/DocumentController.h"
@@ -191,6 +192,13 @@ class AppController final : public QObject, private VideoLink, private DocumentH
     Q_PROPERTY(quint64 lastSavedRevision READ lastSavedRevision NOTIFY documentStateChanged)
     Q_PROPERTY(QString pendingDestructiveAction READ pendingDestructiveAction NOTIFY destructiveActionChanged)
     Q_PROPERTY(QString videoLoadState READ videoLoadState NOTIFY sourceLoadStateChanged)
+    // KAN-105: a video of several chapters plays as one timeline. The player
+    // shows the current chapter's file; positions in QML are timeline time.
+    Q_PROPERTY(bool videoChaptered READ videoChaptered NOTIFY videoChaptersChanged)
+    Q_PROPERTY(int videoChapterIndex READ videoChapterIndex NOTIFY videoChaptersChanged)
+    Q_PROPERTY(QUrl videoChapterSource READ videoChapterSource NOTIFY videoChaptersChanged)
+    Q_PROPERTY(qint64 videoChapterStartMilliseconds READ videoChapterStartMilliseconds NOTIFY videoChaptersChanged)
+    Q_PROPERTY(QVariantList videoChapterList READ videoChapterList NOTIFY videoChaptersChanged)
     // KAN-104: GoPro chapter-group review before a video is loaded.
     Q_PROPERTY(FlappedEar::VideoChapterReview *videoChapters READ videoChapters CONSTANT)
     Q_PROPERTY(QString vboLoadState READ vboLoadState NOTIFY sourceLoadStateChanged)
@@ -282,6 +290,16 @@ public:
     [[nodiscard]] QString activeTemplateId() const;
 
     Q_INVOKABLE void loadVideo(const QUrl &url);
+    // KAN-105: a reviewed chapter group, played as one timeline.
+    void loadVideoChapters(const QList<QUrl> &files);
+    [[nodiscard]] int videoChapterIndex() const { return m_videoChapterIndex; }
+    [[nodiscard]] QUrl videoChapterSource() const;
+    [[nodiscard]] qint64 videoChapterStartMilliseconds() const;
+    [[nodiscard]] QVariantList videoChapterList() const;
+    // {chapter, localMilliseconds, gap} for a timeline position; {} outside it.
+    Q_INVOKABLE QVariantMap locateVideoTimeline(qint64 timelineMilliseconds) const;
+    // Shows chapter `index` in the player (its file, or a gap).
+    Q_INVOKABLE bool setVideoChapter(int index);
     [[nodiscard]] VideoChapterReview *videoChapters() { return &m_videoChapters; }
     // True when the chosen files need a chapter review rather than a direct load.
     Q_INVOKABLE bool videoFilesNeedReview(const QList<QUrl> &urls) const { return VideoChapterReview::needsReview(urls); }
@@ -563,6 +581,7 @@ signals:
     void outingLapCursorChanged();
     void segmentReviewChanged();
     void videoSourceChanged();
+    void videoChaptersChanged();
     void telemetryChanged();
     void lapNavigationChanged();
     void statusTextChanged();
@@ -602,11 +621,25 @@ private:
         QString vboPath;
     };
 
+    // KAN-105: a chapter after the first, as asked for and as found.
+    struct VideoChapterInput {
+        ProjectSourceReference reference;  // empty for a newly chosen file
+        QString path;                      // resolved; empty when missing
+        double durationSeconds = 0.0;      // saved duration, kept for a gap
+    };
+    struct VideoChapterState {
+        ProjectSourceReference reference;
+        QString path;
+        double durationSeconds = 0.0;
+        bool available = false;
+        QString problem;                   // why it is a gap
+    };
     struct VideoProbeResult {
         bool success = false;
         bool cancelled = false;
         QString path;
         MediaInfo mediaInfo;
+        QVector<VideoChapterState> chapters; // all chapters, the first included; empty for one video
         QString error;
         quint64 generation = 0;
         QJsonObject fingerprint;
@@ -637,12 +670,18 @@ private:
         bool markDocumentDirty = false;
         QJsonObject expectedFingerprint;
         bool relink = false;
+        QVector<VideoChapterInput> chapters;
     };
     [[nodiscard]] quint64 beginSourceReplacement(bool replacingVideo);
     [[nodiscard]] quint64 beginSourceGeneration(bool preserveOuting = false) override;
     void cancelSourceJobs(bool cancelOutingDetail = true);
     void startVideoProbe(const QString &path, quint64 generation, bool markDocumentDirty,
-                         QJsonObject expectedFingerprint = {}, bool relink = false);
+                         QJsonObject expectedFingerprint = {}, bool relink = false,
+                         QVector<VideoChapterInput> chapters = {});
+    // KAN-105: the video as chapters played as one timeline.
+    [[nodiscard]] bool videoChaptered() const { return m_videoTimeline.chapterCount() > 1; }
+    [[nodiscard]] QVector<VideoChapterInput> videoChapterInputs() const;
+    [[nodiscard]] std::optional<qint64> timelineLastFrame() const;
     void startVboLoad(const QString &path, quint64 generation, bool markDocumentDirty,
                       QJsonObject expectedFingerprint = {}, bool relink = false);
     void commitVideoProbe(const VideoProbeResult &result, bool markDocumentDirty);
@@ -702,6 +741,9 @@ private:
     QFutureWatcher<AutoSyncResult> m_syncWatcher;
     QFutureWatcher<VideoProbeResult> m_videoProbeWatcher;
     VideoChapterReview m_videoChapters;
+    QVector<VideoChapterState> m_videoChapterStates; // empty for an ordinary video
+    MediaTimeline m_videoTimeline;
+    int m_videoChapterIndex = 0;
     QString m_videoChapterNotice;
     QFutureWatcher<VboLoadResult> m_vboLoadWatcher;
     quint64 m_syncRevision = 0;

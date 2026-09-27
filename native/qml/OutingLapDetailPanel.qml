@@ -19,6 +19,7 @@ Rectangle {
     // the same shape, passed down explicitly since this is a separate
     // component, not sharing that file's local ids.
     property url videoSource
+    property real chapterStartMilliseconds: 0 // KAN-105: see AnalysisWindow
     property real playbackPosition: 0
     property bool playbackRunning: false
     signal seekRequested(real milliseconds)
@@ -70,7 +71,7 @@ Rectangle {
             }
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.LoadedMedia) {
-                    position = root.playbackPosition;
+                    position = root.playbackPosition - root.chapterStartMilliseconds;
                     if (root.playbackRunning) play();
                 }
             }
@@ -81,8 +82,9 @@ Rectangle {
         }
     }
     onPlaybackPositionChanged: {
-        if (lapVideoPlayerLoader.item && Math.abs(lapVideoPlayerLoader.item.position - root.playbackPosition) > 180)
-            lapVideoPlayerLoader.item.position = root.playbackPosition;
+        if (lapVideoPlayerLoader.item
+                && Math.abs(lapVideoPlayerLoader.item.position - (root.playbackPosition - root.chapterStartMilliseconds)) > 180)
+            lapVideoPlayerLoader.item.position = root.playbackPosition - root.chapterStartMilliseconds;
         // Playback drives the analysis cursor while playing; scrubbing the
         // cursor drives video seeking otherwise (below) -- kept mutually
         // exclusive on root.playbackRunning so the two directions cannot

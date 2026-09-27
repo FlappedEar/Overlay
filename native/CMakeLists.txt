@@ -46,6 +46,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/project/ProjectDocumentState.h
     src/project/ProjectRecoveryStore.cpp
     src/project/ProjectRecoveryStore.h
+    src/project/VideoChapters.cpp
+    src/project/VideoChapters.h
     src/project/ProjectSourceReference.cpp
     src/project/ProjectSourceReference.h
     src/project/EventProjectCodec.cpp
@@ -220,6 +222,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/export/FfmpegTools.cpp
     src/export/FfmpegTools.h
     src/export/MediaProbe.cpp
+    src/export/MediaTimeline.cpp
+    src/export/MediaTimeline.h
     src/export/VideoFingerprint.cpp
     src/export/VideoFingerprint.h
     src/export/MediaProbe.h

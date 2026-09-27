@@ -206,6 +206,8 @@ private slots:
     void switchesTheActiveRunPrimaryWithoutStaleEditorState();
     void reviewsSourceFusionInRunDetails();
     void reviewsGoProChapterGroups();
+    void keepsVideoChaptersAsOneTimeline();
+    void playsVideoChaptersAcrossBoundaries();
     void showsCoastingOnTheOpenLap();
     void showsTrailBrakingInTheCornerAnalyzer();
     void coloursTheComparisonMapByAChannel();
@@ -9163,7 +9165,11 @@ void TelemetryTests::reviewsGoProChapterGroups()
     QTRY_COMPARE(review->state(), QString("idle"));
     QTRY_VERIFY_WITH_TIMEOUT(controller.videoLoadState() == "ready", 30000);
     QCOMPARE(QFileInfo(controller.videoSource().toLocalFile()).fileName(), QString("GX010123.MP4"));
-    QVERIFY(controller.statusText().contains("chapter 1 of 3"));
+    // KAN-105: the group plays as one timeline, in the order chosen (1, 3, 2).
+    QTRY_VERIFY(controller.videoChaptered());
+    QStringList order;
+    for (const auto &value : controller.videoChapterList()) order.append(value.toMap().value("name").toString());
+    QCOMPARE(order, (QStringList{"GX010123.MP4", "GX030123.MP4", "GX020123.MP4"}));
     QCOMPARE(warnings.size(), 0);
 
     // Stale probing never lands: a second review supersedes the first.
@@ -9173,6 +9179,146 @@ void TelemetryTests::reviewsGoProChapterGroups()
     QCOMPARE(review->groups().size(), 2);
     review->cancel();
     QCOMPARE(review->state(), QString("idle"));
+}
+
+namespace {
+// Two or more short H.264 chapters for the KAN-105 tests.
+bool encodeChapter(const QString &ffmpeg, const QString &path, const int seconds)
+{
+    QProcess encoder;
+    encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+        QString("testsrc2=s=320x180:r=30:d=%1").arg(seconds), "-c:v", "libx264", "-pix_fmt", "yuv420p", path});
+    return encoder.waitForFinished(30'000) && encoder.exitCode() == 0;
+}
+} // namespace
+
+void TelemetryTests::keepsVideoChaptersAsOneTimeline()
+{
+    // KAN-105: chapters form one continuous timeline, are saved with their
+    // durations, reopen as chapters, and a missing chapter keeps its time as
+    // a gap. Export of a chaptered video is refused, never truncated.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the chapter timeline test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    QVERIFY(encodeChapter(ffmpeg, directory.filePath("GX010200.MP4"), 3));
+    QVERIFY(encodeChapter(ffmpeg, directory.filePath("GX020200.MP4"), 2));
+    QVERIFY(encodeChapter(ffmpeg, directory.filePath("GX030200.MP4"), 2));
+    const auto file = [&](const QString &name) { return QUrl::fromLocalFile(directory.filePath(name)); };
+    const auto projectPath = directory.filePath("chapters.fetproject");
+    {
+        AppController controller(nullptr, directory.filePath("recovery.json"));
+        controller.loadVideoChapters({file("GX010200.MP4"), file("GX020200.MP4"), file("GX030200.MP4")});
+        QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 30000);
+        QVERIFY(controller.videoChaptered());
+        const auto chapters = controller.videoChapterList();
+        QCOMPARE(chapters.size(), 3);
+        QCOMPARE(chapters[1].toMap().value("startMilliseconds").toLongLong(), 3000);
+        QCOMPARE(chapters[2].toMap().value("startMilliseconds").toLongLong(), 5000);
+        // The timeline's last frame is the last chapter's last frame: 7 s at 30 fps.
+        QCOMPARE(controller.previewEndPositionMilliseconds(), 6966); // frame 209 at 30 fps
+        QCOMPARE(controller.previewEndTimecode(), QString("00:00:06:29"));
+        QCOMPARE(controller.clampPreviewPositionMilliseconds(99'000), 6966);
+        const auto located = controller.locateVideoTimeline(4200);
+        QCOMPARE(located.value("chapter").toInt(), 1);
+        QCOMPARE(located.value("localMilliseconds").toLongLong(), 1200);
+        QVERIFY(controller.setVideoChapter(2));
+        QCOMPARE(QFileInfo(controller.videoChapterSource().toLocalFile()).fileName(), QString("GX030200.MP4"));
+        QCOMPARE(controller.videoChapterStartMilliseconds(), 5000);
+        QVERIFY(!controller.setVideoChapter(3));
+        // Export is refused rather than cut to the first chapter.
+        controller.loadVbo(QUrl::fromLocalFile(QFINDTESTDATA("fixtures/basic.vbo")));
+        QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 30000);
+        QVERIFY(!controller.startExport(QUrl::fromLocalFile(directory.filePath("out.mp4")), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, false));
+        QVERIFY(controller.exportError().contains("several chapters"));
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
+    }
+    const auto saved = QJsonDocument::fromJson(readBytes(projectPath)).object();
+    const auto video = saved.value("sources").toObject().value("video").toObject();
+    const auto savedChapters = video.value("chapters").toArray();
+    QCOMPARE(savedChapters.size(), 3);
+    QCOMPARE(savedChapters[0].toObject().value("relativePath"), video.value("relativePath"));
+    QVERIFY(std::abs(savedChapters[1].toObject().value("durationSeconds").toDouble() - 2.0) < 0.05);
+    QVERIFY(ProjectLimits::validateProject(saved));
+
+    // Reopened: chapters again. Then with the middle chapter gone: a gap of 2 s.
+    for (const bool removeMiddle : {false, true}) {
+        if (removeMiddle) QVERIFY(QFile::remove(directory.filePath("GX020200.MP4")));
+        AppController reopened(nullptr, directory.filePath(removeMiddle ? "recovery-3.json" : "recovery-2.json"));
+        reopened.requestOpenProject(QUrl::fromLocalFile(projectPath));
+        QTRY_COMPARE_WITH_TIMEOUT(reopened.videoLoadState(), QString("ready"), 30000);
+        QVERIFY(reopened.videoChaptered());
+        const auto chapters = reopened.videoChapterList();
+        QCOMPARE(chapters.size(), 3);
+        QCOMPARE(chapters[1].toMap().value("available").toBool(), !removeMiddle);
+        QCOMPARE(chapters[2].toMap().value("startMilliseconds").toLongLong(), 5000); // time kept across the gap
+        QCOMPARE(reopened.previewEndPositionMilliseconds(), 6966);
+        if (removeMiddle) {
+            QVERIFY(reopened.locateVideoTimeline(4000).value("gap").toBool());
+            QVERIFY(reopened.statusText().contains("gap"));
+            // Saving keeps the missing chapter's reference and duration.
+            QVERIFY(reopened.saveProject(QUrl::fromLocalFile(projectPath)));
+            const auto again = QJsonDocument::fromJson(readBytes(projectPath)).object()
+                .value("sources").toObject().value("video").toObject().value("chapters").toArray();
+            QCOMPARE(again.size(), 3);
+            QVERIFY(std::abs(again[1].toObject().value("durationSeconds").toDouble() - 2.0) < 0.05);
+        }
+    }
+    // An ordinary video replaces the chapters.
+    AppController single(nullptr, directory.filePath("recovery-4.json"));
+    single.loadVideo(file("GX010200.MP4"));
+    QTRY_COMPARE_WITH_TIMEOUT(single.videoLoadState(), QString("ready"), 30000);
+    QVERIFY(!single.videoChaptered());
+    QVERIFY(single.videoChapterList().isEmpty());
+    QCOMPARE(single.videoChapterSource(), single.videoSource());
+}
+
+void TelemetryTests::playsVideoChaptersAcrossBoundaries()
+{
+    // KAN-105: in the editor window, a seek past the first chapter opens the
+    // second at the right local position, and playing through a chapter's end
+    // continues into the next one with telemetry time still running on.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the chapter playback test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    QVERIFY(encodeChapter(ffmpeg, directory.filePath("GX010300.MP4"), 3));
+    QVERIFY(encodeChapter(ffmpeg, directory.filePath("GX020300.MP4"), 3));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.loadVideoChapters({QUrl::fromLocalFile(directory.filePath("GX010300.MP4")),
+        QUrl::fromLocalFile(directory.filePath("GX020300.MP4"))});
+    QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 30000);
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create());
+    QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    // The first chapter primes to its first frame; wait for the player.
+    if (!QTest::qWaitFor([&] { return controller.playbackTime() > 0.0; }, 15000))
+        QSKIP("Media playback is unavailable here.");
+    QVERIFY(QMetaObject::invokeMethod(window, "seekTimeline", Q_ARG(QVariant, 4500)));
+    QTRY_COMPARE(controller.videoChapterIndex(), 1);
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(controller.playbackTime() - 4.5) < 0.1, 15000);
+    QVERIFY(window->property("timelinePosition").toDouble() > 4400);
+    // Back into the first chapter, then play through its end.
+    QVERIFY(QMetaObject::invokeMethod(window, "seekTimeline", Q_ARG(QVariant, 2300)));
+    QTRY_COMPARE(controller.videoChapterIndex(), 0);
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(controller.playbackTime() - 2.3) < 0.15, 15000);
+    // Silent priming of the reopened chapter ends first; then play.
+    QTRY_VERIFY_WITH_TIMEOUT(!window->property("previewPrimeFramePending").toBool(), 15000);
+    QVERIFY(QMetaObject::invokeMethod(window, "togglePlayback"));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.videoChapterIndex(), 1, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(controller.playbackTime() > 3.3, 10000); // time runs on past the boundary
+    QVERIFY(QMetaObject::invokeMethod(window, "togglePlayback"));
+    for (const auto &arguments : warnings)
+        for (const auto &error : arguments.first().value<QList<QQmlError>>())
+            // The branding image is not bundled into the test binary.
+            QVERIFY2(!error.toString().contains("Main.qml") || error.toString().contains("Cannot open: qrc:"),
+                qPrintable(error.toString()));
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()

@@ -45,6 +45,34 @@ Relative paths use forward-slash JSON spelling and resolve only against the dire
 
 When a loaded source is in the project directory, or no more than two parent directories above it, Save/Save As writes a relative reference. The normalized absolute location is retained as a fallback. Moving a project folder with its `media` subdirectory therefore keeps the relative reference usable on another filesystem root or operating system.
 
+
+### Video chapters (KAN-105)
+
+A video made of GoPro chapter files keeps its first chapter as the ordinary `video` reference, so a reader that knows only one video still opens the start of the recording. `video.chapters` then lists every chapter in timeline order, the first included:
+
+```json
+"video": {
+  "relativePath": "media/GX010123.MP4",
+  "fingerprint": { "kind": "video-v1" },
+  "chapters": [
+    { "relativePath": "media/GX010123.MP4", "fingerprint": { "kind": "video-v1" }, "durationSeconds": 530.53 },
+    { "relativePath": "media/GX020123.MP4", "fingerprint": { "kind": "video-v1" }, "durationSeconds": 530.53 },
+    { "relativePath": "media/GX030123.MP4", "fingerprint": { "kind": "video-v1" }, "durationSeconds": 100.1 }
+  ]
+}
+```
+
+**Validation.** Both project versions validate the list:
+- 2 to 64 entries;
+- each entry has a relative or an absolute path, and a finite `durationSeconds` in (0, 86 400];
+- the first entry names the same file and fingerprint as `video` itself.
+
+**Durations and gaps.** Each duration is the chapter's probed video-stream duration. It keeps the timeline's time when a chapter file is missing, so the missing chapter plays as a gap of that length.
+
+**Rebasing and protection.** Save As rebases every chapter reference by the same rules as the video, including in inactive runs of an event. Export protection covers every chapter path.
+
+**Unchanged documents.** A document without `chapters` is an ordinary single video, unchanged.
+
 ## Source fingerprints
 
 Fingerprints are deterministic identity metadata, not cryptographic proof of complete-file identity. Both source types store file size and a SHA-256 digest over at most three fixed 64 KiB regions: head, middle, and tail. Video additionally stores probed duration in microseconds, dimensions, exact rational frame rate, and codec. Newly modeled profile, pixel-format, bit-depth, orientation, bitrate, and color fields deliberately do not participate in the existing `video-v1` fingerprint, preserving compatibility with saved projects. Telemetry additionally stores parsed duration, sample count, and sorted channel name/unit/sample-count metadata.
