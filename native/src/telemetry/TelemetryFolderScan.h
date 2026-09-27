@@ -35,4 +35,14 @@ struct TelemetryFolderScan {
 [[nodiscard]] TelemetryFolderScan scanTelemetryFolder(const QString &folder, bool includeSubfolders,
     const CancellationCheck &cancelled = {}, TelemetryFolderScanLimits limits = {});
 
+// KAN-88: what was dropped or chosen -- any mix of recordings, other files
+// and folders -- as one list of recordings for the ordinary review. Folders
+// are scanned as above; a file that is not a VBO/RCZ recording, or is
+// missing, is reported and skipped. A recording reached twice counts once.
+// A folder with nothing to import is reported and skipped when there are
+// other sources, and is the error when it is the only one. More recordings
+// than `maximumFiles` in total is an error.
+[[nodiscard]] TelemetryFolderScan scanTelemetrySources(const QStringList &paths, bool includeSubfolders,
+    const CancellationCheck &cancelled = {}, TelemetryFolderScanLimits limits = {});
+
 } // namespace FlappedEar

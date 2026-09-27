@@ -89,6 +89,9 @@ public:
     // KAN-87: the VBO/RCZ recordings of a folder (and, when asked, its
     // subfolders) through the same review; see scanTelemetryFolder.
     Q_INVOKABLE bool importAnalysisFolder(const QString &name, const QUrl &folder, bool includeSubfolders);
+    // KAN-88: dropped (or chosen) files and folders, in any mix; see
+    // scanTelemetrySources. Unsupported items are reported, not imported.
+    Q_INVOKABLE bool importAnalysisSources(const QString &name, const QList<QUrl> &urls, bool includeSubfolders);
     Q_INVOKABLE void cancelBatchImport();
     Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices);
     Q_INVOKABLE void requestNewProject();

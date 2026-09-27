@@ -121,6 +121,32 @@ source-group policy, and event transaction as picked files. Recordings
 already in the outing are skipped when appending. A document or source
 change during the scan cancels it, like any import.
 
+## Drag and drop (KAN-88)
+
+Recordings and folders can be dropped anywhere on the Lap Analysis window,
+in any mix. They go through the same review as the pickers
+(`scanTelemetrySources`):
+- recordings are taken;
+- folders are scanned as above;
+- anything else ("photo.jpg: not a VBO or RCZ recording; not imported."),
+  a missing path or a link is reported;
+- a recording reached twice counts once.
+
+On the start panel a dropped folder follows the "Include subfolders" box.
+In an open day it is added without its subfolders, as the drop hint says;
+the header menu offers both.
+
+While an import, export, project load or unsaved-changes decision is under
+way, the drop hint turns amber. The drop is refused with "Finish the current
+import, export or decision first. Nothing was imported." and the project is
+unchanged. A drop without an outing name gets the ordinary name error.
+
+An automatic import (picker or drop) whose recordings are all already in
+the outing now ends quietly: "Nothing new to add: every recording is already
+in this outing." Previously it was an empty review rejected with "Select at
+least one new run." If nothing could be read, it is an error with each
+file's reason.
+
 ## Advanced import review
 
 1. Choose **File → Import telemetry runs…** and select multiple VBO/RCZ files

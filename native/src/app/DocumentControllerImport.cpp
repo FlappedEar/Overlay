@@ -13,6 +13,7 @@
 #include <QSet>
 #include <QUuid>
 #include <QtConcurrent>
+#include <algorithm>
 #include <limits>
 
 namespace FlappedEar {
@@ -191,7 +192,29 @@ void DocumentController::initializeBatchImport()
                 }
                 // Reuse the same guarded document transaction and final digest check.
                 // Automatic groups require unique dated GPS evidence.
-                confirmBatchImport(m_analysisImportName, m_analysisImportAppend, choices);
+                const bool anythingNew = std::any_of(choices.cbegin(), choices.cend(),
+                    [](const QVariant &choice) { return !choice.toMap().value("groupId").toString().isEmpty(); });
+                if (anythingNew) {
+                    confirmBatchImport(m_analysisImportName, m_analysisImportAppend, choices);
+                } else {
+                    // Nothing new: leave the document as it is and say why, rather
+                    // than an empty review. Everything already in the outing is not
+                    // a failure; nothing readable is.
+                    const bool allExisting = !m_batchRows.isEmpty() && std::all_of(m_batchRows.cbegin(), m_batchRows.cend(),
+                        [](const QVariant &row) { return row.toMap().value("status").toString() == "ready"
+                            && row.toMap().value("existing").toBool(); });
+                    m_batchPlan.reset();
+                    m_batchFingerprints.clear();
+                    m_batchExisting.clear();
+                    m_batchRows.clear();
+                    if (allExisting) {
+                        m_batchState = QStringLiteral("idle");
+                        m_analysisImportMessages.prepend(QStringLiteral("Nothing new to add: every recording is already in this outing."));
+                    } else {
+                        m_batchState = QStringLiteral("error");
+                        m_batchError = QStringLiteral("None of the files could be imported; see the messages below.");
+                    }
+                }
             }
         }
         if (!m_batchPending) m_analysisImportAutomatic = false;
@@ -236,6 +259,11 @@ bool DocumentController::importAnalysisRuns(const QString &name, const QList<QUr
 
 bool DocumentController::importAnalysisFolder(const QString &name, const QUrl &folder, const bool includeSubfolders)
 {
+    return importAnalysisSources(name, {folder}, includeSubfolders);
+}
+
+bool DocumentController::importAnalysisSources(const QString &name, const QList<QUrl> &urls, const bool includeSubfolders)
+{
     if (m_batchPending || m_host.documentBusy() || projectLoading() || recoveryPending()
         || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) return false;
     const bool append = EventProjectCodec::isEvent(m_projectTemplate);
@@ -247,9 +275,19 @@ bool DocumentController::importAnalysisFolder(const QString &name, const QUrl &f
         emit batchImportChanged();
         return false;
     }
-    if (!folder.isLocalFile() || folder.toLocalFile().size() > ProjectLimits::maximumStringCharacters) {
+    QStringList paths;
+    for (const auto &url : urls) {
+        if (!url.isLocalFile() || url.toLocalFile().size() > ProjectLimits::maximumStringCharacters) {
+            m_batchState = QStringLiteral("error");
+            m_batchError = QStringLiteral("Only bounded local files and folders are supported.");
+            emit batchImportChanged();
+            return false;
+        }
+        paths.append(url.toLocalFile());
+    }
+    if (paths.isEmpty() || paths.size() > 256) {
         m_batchState = QStringLiteral("error");
-        m_batchError = QStringLiteral("Only a bounded local folder path is supported.");
+        m_batchError = QStringLiteral("Choose between 1 and 256 files or folders.");
         emit batchImportChanged();
         return false;
     }
@@ -264,8 +302,8 @@ bool DocumentController::importAnalysisFolder(const QString &name, const QUrl &f
     m_batchPending = true;
     emit batchImportChanged();
     const auto cancellation = m_batchCancellation;
-    m_folderScanWatcher.setFuture(QtConcurrent::run([path = folder.toLocalFile(), includeSubfolders, cancellation] {
-        return scanTelemetryFolder(path, includeSubfolders, [cancellation] { return cancellation->load(); });
+    m_folderScanWatcher.setFuture(QtConcurrent::run([paths, includeSubfolders, cancellation] {
+        return scanTelemetrySources(paths, includeSubfolders, [cancellation] { return cancellation->load(); });
     }));
     return true;
 }
