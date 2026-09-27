@@ -96,9 +96,22 @@ Rectangle {
         return (value >= 0 ? "+" : "") + value.toFixed(digits) + (suffix || "");
     }
 
-    ColumnLayout {
+    // KAN-78: one vertical scroll surface when the panel is shorter than its
+    // content (the 480 px analysis-window minimum); unchanged otherwise.
+    Flickable {
+        id: scroller
+        objectName: "cornerAnalyzerScroll"
         anchors.fill: parent
         anchors.margins: 10
+        contentWidth: width
+        contentHeight: column.height
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: ScrollBar { policy: scroller.contentHeight > scroller.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+    ColumnLayout {
+        id: column
+        width: scroller.width
+        height: Math.max(implicitHeight, scroller.height)
         spacing: 8
         Label {
             text: qsTr("CORNER ANALYZER")
@@ -333,5 +346,6 @@ Rectangle {
             }
             Item { Layout.fillHeight: true }
         }
+    }
     }
 }

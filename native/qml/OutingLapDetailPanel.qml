@@ -30,7 +30,19 @@ Rectangle {
     function duration(seconds) {
         return Math.floor(seconds / 60) + ":" + (seconds % 60).toFixed(3).padStart(6, "0");
     }
-    Shortcut { sequence: "Escape"; enabled: root.visible; onActivated: appController.closeOutingLap() }
+    // KAN-78: Escape closes this view, except while typing in a text field
+    // or area here (a lap-exclusion reason, a segment name), which keeps
+    // the view and the edit.
+    function textEditorHasFocus() {
+        let item = Window.activeFocusItem;
+        while (item) {
+            if (item instanceof TextInput || item instanceof TextEdit)
+                return true;
+            item = item.parent;
+        }
+        return false;
+    }
+    Shortcut { sequence: "Escape"; enabled: root.visible && !root.textEditorHasFocus(); onActivated: appController.closeOutingLap() }
 
     // A second, muted, position-mirrored player -- the same pattern
     // AnalysisWindow.qml already uses for its own (legacy-mode) video pane,
@@ -130,7 +142,7 @@ Rectangle {
                 text: root.lap.excluded ? qsTr("Excluded from comparisons") : qsTr("Lap eligibility")
                 color: root.lap.excluded ? "#ffb84d" : "#91a0b2"
             }
-            TextField {
+            FeTextField {
                 id: exclusionReason
                 objectName: "lapExclusionReason"
                 Layout.fillWidth: true
