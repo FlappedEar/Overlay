@@ -83,4 +83,45 @@ TelemetryFolderScan scanTelemetryFolder(const QString &folder, const bool includ
     return result;
 }
 
+TelemetryFolderScan scanTelemetrySources(const QStringList &paths, const bool includeSubfolders,
+    const CancellationCheck &cancelled, TelemetryFolderScanLimits limits)
+{
+    limits.maximumFiles = std::clamp<qsizetype>(limits.maximumFiles, 1, TelemetryFolderScanLimits{}.maximumFiles);
+    TelemetryFolderScan result;
+    QSet<QString> seen;
+    const auto add = [&](const QString &path) {
+        const QString canonical = QFileInfo(path).canonicalFilePath();
+        if (seen.contains(canonical)) return;
+        seen.insert(canonical);
+        result.files.append(path);
+    };
+    for (const QString &path : paths) {
+        if (cancelled && cancelled()) { result = {}; result.cancelled = true; return result; }
+        const QFileInfo info(path);
+        const QString name = info.fileName().isEmpty() ? path : info.fileName();
+        if (info.isDir() && !info.isSymLink()) {
+            auto scan = scanTelemetryFolder(path, includeSubfolders, cancelled, limits);
+            if (scan.cancelled) { result = {}; result.cancelled = true; return result; }
+            if (!scan.error.isEmpty() && paths.size() == 1) return scan;
+            for (const auto &note : scan.notes) result.notes.append(name + ": " + note);
+            if (!scan.error.isEmpty()) { result.notes.append(name + ": " + scan.error); continue; }
+            for (const auto &file : scan.files) add(file);
+            continue;
+        }
+        const QString suffix = info.suffix().toLower();
+        if (!info.exists()) result.notes.append(QStringLiteral("%1: not found; not imported.").arg(name));
+        else if (info.isSymLink()) result.notes.append(QStringLiteral("%1: a link; not followed.").arg(name));
+        else if (info.isFile() && (suffix == QStringLiteral("vbo") || suffix == QStringLiteral("rcz"))) add(info.absoluteFilePath());
+        else result.notes.append(QStringLiteral("%1: not a VBO or RCZ recording; not imported.").arg(name));
+    }
+    if (result.files.size() > limits.maximumFiles) {
+        result.error = QStringLiteral("That is %1 recordings; import at most %2 at a time.")
+            .arg(result.files.size()).arg(limits.maximumFiles);
+        result.files.clear();
+        return result;
+    }
+    if (result.files.isEmpty()) result.error = QStringLiteral("No VBO or RCZ recordings to import.");
+    return result;
+}
+
 } // namespace FlappedEar

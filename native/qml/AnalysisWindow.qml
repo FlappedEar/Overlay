@@ -37,6 +37,24 @@ Window {
     function importFiles(urls) {
         return appController.importAnalysisRuns(startPanel.outingName, urls);
     }
+    // KAN-88: dropped files and folders go through the same review as the
+    // pickers. A drop while an import, export, load or decision is under
+    // way is refused with a reason and changes nothing. Folders dropped on
+    // the start panel follow its subfolder choice; in an open day a dropped
+    // folder is taken without its subfolders (the header menu offers both).
+    property string dropNotice: ""
+    function dropUrls(urls) {
+        if (!urls || urls.length === 0) return false;
+        if (!root.canImport) {
+            root.dropNotice = qsTr("Finish the current import, export or decision first. Nothing was imported.");
+            dropNoticeTimer.restart();
+            return false;
+        }
+        root.dropNotice = "";
+        return appController.importAnalysisSources(startPanel.outingName, urls,
+            !root.hasWorkspace && startPanel.includeSubfolders);
+    }
+    Timer { id: dropNoticeTimer; interval: 6000; onTriggered: root.dropNotice = "" }
     FileDialog {
         id: outingFiles
         title: qsTr("Add runs to your outing")
@@ -343,5 +361,49 @@ Window {
                 onSeekRequested: milliseconds => root.seekRequested(milliseconds)
             }
         }
+    }
+
+    DropArea {
+        id: dropImport
+        objectName: "analysisDropArea"
+        anchors.fill: parent
+        onEntered: drag => drag.accepted = drag.hasUrls
+        onDropped: drop => {
+            if (!drop.hasUrls) return;
+            drop.acceptProposedAction();
+            root.dropUrls(drop.urls);
+        }
+    }
+    Rectangle {
+        objectName: "analysisDropHint"
+        anchors.fill: parent
+        anchors.margins: 8
+        visible: dropImport.containsDrag
+        color: "#cc070b10"
+        radius: 12
+        border.color: root.canImport ? "#55e6a5" : "#ffb84d"
+        border.width: 2
+        Label {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 48, 520)
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            color: "#f2f6fb"
+            font.pixelSize: 18
+            text: !root.canImport ? qsTr("Busy — finish the current import, export or decision first.")
+                : root.hasWorkspace ? qsTr("Drop RCZ or VBO files, or a folder (without its subfolders), to add them to this day.")
+                : qsTr("Drop RCZ or VBO files, or a folder, to start the outing.")
+        }
+    }
+    Label {
+        objectName: "analysisDropNotice"
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottomMargin: 18
+        visible: root.dropNotice.length > 0
+        text: root.dropNotice
+        color: "#ffb84d"
+        padding: 10
+        background: Rectangle { color: "#1a1208"; radius: 8; border.color: "#ffb84d" }
     }
 }

@@ -42,6 +42,7 @@ class TelemetryCoreTests final : public QObject {
     Q_OBJECT
 private slots:
     void scansFoldersForRecordingsWithinBounds();
+    void combinesDroppedFilesAndFolders();
     void derivesOutingLapSections();
     void rejectsMalformedLapReferences_data();
     void rejectsMalformedLapReferences();
@@ -1133,6 +1134,41 @@ void TelemetryCoreTests::scansFoldersForRecordingsWithinBounds()
     const QString empty = root.filePath("empty");
     QVERIFY(root.mkpath("empty"));
     QVERIFY(scanTelemetryFolder(empty, false).error.contains("No VBO or RCZ recordings were found (subfolders were not included)"));
+}
+
+void TelemetryCoreTests::combinesDroppedFilesAndFolders()
+{
+    // KAN-88: any mix of dropped items becomes one list of recordings, with
+    // an explicit note for everything that is not imported.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QDir root(directory.path());
+    QVERIFY(root.mkpath("day/sub"));
+    QVERIFY(root.mkpath("empty"));
+    for (const auto *name : {"loose.vbo", "photo.jpg", "day/a.vbo", "day/b.RCZ", "day/sub/c.vbo"})
+        QVERIFY(writeBytes(root.filePath(name), "x"));
+
+    const auto mixed = scanTelemetrySources({root.filePath("loose.vbo"), root.filePath("photo.jpg"),
+        root.filePath("missing.vbo"), root.filePath("day"), root.filePath("day/a.vbo"), root.filePath("empty")}, false);
+    QVERIFY(mixed.error.isEmpty());
+    // day/a.vbo arrives twice (itself and through its folder) and counts once.
+    QCOMPARE(mixed.files.size(), 3);
+    const auto notes = mixed.notes.join('\n');
+    QVERIFY(notes.contains("photo.jpg: not a VBO or RCZ recording; not imported."));
+    QVERIFY(notes.contains("missing.vbo: not found; not imported."));
+    QVERIFY(notes.contains("empty: No VBO or RCZ recordings were found"));
+
+    QCOMPARE(scanTelemetrySources({root.filePath("day")}, true).files.size(), 3);
+    // A single folder keeps its own error; only unsupported items is an error too.
+    QVERIFY(scanTelemetrySources({root.filePath("empty")}, false).error.contains("No VBO or RCZ recordings were found"));
+    const auto nothing = scanTelemetrySources({root.filePath("photo.jpg")}, false);
+    QCOMPARE(nothing.error, QString("No VBO or RCZ recordings to import."));
+    QVERIFY(nothing.notes.join(' ').contains("photo.jpg"));
+
+    TelemetryFolderScanLimits two; two.maximumFiles = 2;
+    QVERIFY(scanTelemetrySources({root.filePath("day"), root.filePath("loose.vbo")}, false, {}, two).error
+        .contains("That is 3 recordings; import at most 2"));
+    int checks = 0;
+    QVERIFY(scanTelemetrySources({root.filePath("day"), root.filePath("loose.vbo")}, true, [&checks] { return ++checks > 2; }).cancelled);
 }
 
 QTEST_GUILESS_MAIN(TelemetryCoreTests)

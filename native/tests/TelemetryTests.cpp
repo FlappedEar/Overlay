@@ -202,6 +202,7 @@ private slots:
     void keepsAnalysisControlsReachableAtMinimumSize_data();
     void keepsAnalysisControlsReachableAtMinimumSize();
     void keepsACompleteDayThroughMoveRelinkAndRecovery();
+    void importsDroppedFilesAndFolders();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -8283,6 +8284,78 @@ void TelemetryTests::keepsACompleteDayThroughMoveRelinkAndRecovery()
         QVERIFY(!controller.dirty());
         QVERIFY(!controller.recoveryPending());
     }
+}
+
+void TelemetryTests::importsDroppedFilesAndFolders()
+{
+    // KAN-88: dropping onto the Analysis window uses the same review as the
+    // pickers; unsupported items and busy states get explicit outcomes and
+    // never change the current project.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const QDir root(directory.path());
+    QVERIFY(root.mkpath("day/later"));
+    QVERIFY(writeBytes(root.filePath("day/first.vbo"), warpedRouteVbo(true)));
+    QVERIFY(writeBytes(root.filePath("day/second.vbo"), warpedRouteVbo(false)));
+    QVERIFY(writeBytes(root.filePath("day/later/third.vbo"), warpedRouteVbo(true, 200)));
+    QVERIFY(writeBytes(root.filePath("photo.jpg"), "not telemetry"));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> window(component.createWithInitialProperties({{"videoSource", QUrl{}},
+        {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
+    QVERIFY2(window, qPrintable(component.errorString()));
+    QVERIFY(window->findChild<QObject *>("analysisDropArea"));
+    const auto drop = [&](const QList<QUrl> &urls) -> bool {
+        QVariant result;
+        if (!QMetaObject::invokeMethod(window.get(), "dropUrls", Q_RETURN_ARG(QVariant, result),
+                                       Q_ARG(QVariant, QVariant::fromValue(urls)))) return false;
+        return result.toBool();
+    };
+    QSignalSpy committed(&controller, &AppController::batchImportCommitted);
+
+    // Without an outing name the drop says so and imports nothing.
+    QVERIFY(!drop({QUrl::fromLocalFile(root.filePath("day"))}));
+    QVERIFY(controller.batchImportError().contains("outing name"));
+    QVERIFY(controller.eventRuns().isEmpty());
+
+    // A folder and an unsupported file: the recordings are imported, the
+    // file is reported. The start panel's subfolder choice is off.
+    window->findChild<QObject *>("analysisOutingName")->setProperty("text", "Dropped day");
+    QVERIFY(drop({QUrl::fromLocalFile(root.filePath("day")), QUrl::fromLocalFile(root.filePath("photo.jpg"))}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    QCOMPARE(controller.eventRuns().size(), 2);
+    QVERIFY(controller.analysisImportMessages().join(' ').contains("photo.jpg: not a VBO or RCZ recording"));
+    QVERIFY(controller.dirty());
+    // Let the new day settle (its recording loads, laps derive) before the next drop.
+    QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 20000);
+
+    // A drop during a pending decision is refused and changes nothing.
+    controller.requestNewProject();
+    QVERIFY(!controller.pendingDestructiveAction().isEmpty());
+    const auto project = controller.currentProjectObject();
+    QVERIFY(!drop({QUrl::fromLocalFile(root.filePath("day/later"))}));
+    QVERIFY(!window->property("dropNotice").toString().isEmpty());
+    QCOMPARE(controller.currentProjectObject(), project);
+    controller.cancelPendingDestructiveAction();
+
+    // In an open day a dropped folder is added without its subfolders;
+    // dropping the subfolder itself adds its recording.
+    QVERIFY(drop({QUrl::fromLocalFile(root.filePath("day"))}));
+    // Both recordings are already in the day: nothing changes, and it says so.
+    QTRY_COMPARE_WITH_TIMEOUT(controller.batchImportState(), QString("idle"), 20000);
+    QVERIFY(controller.batchImportError().isEmpty());
+    QVERIFY(controller.analysisImportMessages().join(' ').contains("Nothing new to add"));
+    QVERIFY(controller.analysisImportMessages().join(' ').contains("Already in this outing; skipped."));
+    QCOMPARE(controller.eventRuns().size(), 2);
+    QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 20000);
+    QVERIFY(drop({QUrl::fromLocalFile(root.filePath("day/later"))}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 2, 20000);
+    QCOMPARE(controller.eventRuns().size(), 3);
+    QCOMPARE(warnings.size(), 0);
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()
