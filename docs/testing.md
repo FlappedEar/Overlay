@@ -287,7 +287,7 @@ has been validated.
 
 `native/src/telemetry/TrackSegmentReview.h/.cpp` (tag
 `track-segment-review-v1`) holds the pure review rules; the controller glue is
-`native/src/app/AppControllerSegmentReview.cpp` and the UI is
+`native/src/app/AnalysisControllerSegmentReview.cpp` and the UI is
 `SegmentReviewPanel.qml` with a static segment layer in `TrackMapPanel.qml`.
 
 - Opening *Review segments* on a clean timed lap builds a progress axis from
@@ -335,7 +335,7 @@ persisted; rejections are persisted since KAN-50.
 
 `native/src/telemetry/TrackSegmentEditing.h/.cpp` (tag
 `track-segment-editing-v1`) holds the pure editing rules; the controller glue
-is in `AppControllerSegmentReview.cpp` and the editor is the approved-segment
+is in `AnalysisControllerSegmentReview.cpp` and the editor is the approved-segment
 list in `SegmentReviewPanel.qml`.
 
 - Every operation takes the run's stored `trackSegments` and returns a
@@ -1434,7 +1434,10 @@ Dump before and after a refactor, then normalise the per-import identities:
 - the time-loss revision, which hashes segment ids.
 
 Diff the results. For KAN-124 step 6 (report assembly moved to core) the
-1,400-line reports were identical apart from those identities.
+1,400-line reports were identical apart from those identities. The same was
+true when `AnalysisController` was extracted from `AppController` (step 8).
+The regression tests reach analysis internals through
+`controller.m_analysis`.
 
 ## Video-free day-result states (KAN-27)
 

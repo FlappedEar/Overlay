@@ -603,13 +603,13 @@ void TelemetryTests::preservesSignedSamplesWithBrakingUpPresentation()
 {
     const auto session = VboParser::parse(
         u"[column names]\ntime longacc-calc latacc-calc velocity\n[data]\n0 -0.8 0.2 90\n1 0.4 -0.3 92\n");
-    const auto longitudinal = AppController::sessionSeries(session, "longacc-calc", 0, 1, 100);
+    const auto longitudinal = AnalysisController::sessionSeries(session, "longacc-calc", 0, 1, 100);
     QVERIFY(longitudinal.value("brakingUp").toBool());
     QCOMPARE(longitudinal.value("minimum").toDouble(), double(float(-0.8)));
     QCOMPARE(longitudinal.value("maximum").toDouble(), double(float(0.4)));
-    QVERIFY(AppController::sessionSeries(session, "longitudinalAcceleration", 0, 1, 100).value("brakingUp").toBool());
-    QVERIFY(!AppController::sessionSeries(session, "latacc-calc", 0, 1, 100).value("brakingUp").toBool());
-    QVERIFY(!AppController::sessionSeries(session, "velocity", 0, 1, 100).value("brakingUp").toBool());
+    QVERIFY(AnalysisController::sessionSeries(session, "longitudinalAcceleration", 0, 1, 100).value("brakingUp").toBool());
+    QVERIFY(!AnalysisController::sessionSeries(session, "latacc-calc", 0, 1, 100).value("brakingUp").toBool());
+    QVERIFY(!AnalysisController::sessionSeries(session, "velocity", 0, 1, 100).value("brakingUp").toBool());
     QCOMPARE(session.valueAt("longitudinalAcceleration", 0).value(), double(float(-0.8)));
 }
 
@@ -1210,7 +1210,7 @@ void TelemetryTests::editsRunMetadataWithoutChangingAnalysis()
         runId = controller.activeRunId();
         QVERIFY(controller.setRunTrackConfiguration(runId, "Full", "clockwise"));
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-        QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+        QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
         QString group;
         for (const auto &value : controller.outingCompatibilityGroups())
             if (value.toMap().value("resolved").toBool()) group = value.toMap().value("id").toString();
@@ -1220,8 +1220,8 @@ void TelemetryTests::editsRunMetadataWithoutChangingAnalysis()
         QVERIFY(controller.selectOutingLapReference(winner));
         QTRY_COMPARE(controller.outingLapDetailState(), QString("ready")); controller.setOutingLapCursor(1);
         const auto cursor = controller.outingLapCursor(); const auto track = controller.outingLapTrack();
-        const auto detail = controller.m_outingLapDetailSession; const auto *session = controller.m_session.get();
-        const auto generation = controller.m_sourceGeneration; const auto key = controller.outingLapKey();
+        const auto detail = controller.m_analysis.m_outingLapDetailSession; const auto *session = controller.m_session.get();
+        const auto generation = controller.m_sourceGeneration; const auto key = controller.m_analysis.outingLapKey();
         const auto config = controller.runTrackConfiguration(runId);
         const auto before = controller.currentProjectObject(); const auto revision = controller.m_documentState.revision();
         const auto metadata = controller.runMetadata(runId); const auto token = metadata.value("editToken").toString();
@@ -1242,8 +1242,8 @@ void TelemetryTests::editsRunMetadataWithoutChangingAnalysis()
         QVERIFY(!controller.updateRunMetadata(runId, token, "Stale overwrite", "", "", ""));
         QCOMPARE(controller.runMetadata(runId).value("name").toString(), QString("Renamed run"));
         QCOMPARE(controller.m_sourceGeneration, generation); QCOMPARE(controller.m_session.get(), session);
-        QCOMPARE(controller.outingLapKey(), key); QCOMPARE(controller.runTrackConfiguration(runId), config);
-        QCOMPARE(controller.m_outingLapDetailSession, detail); QCOMPARE(controller.outingLapTrack(), track);
+        QCOMPARE(controller.m_analysis.outingLapKey(), key); QCOMPARE(controller.runTrackConfiguration(runId), config);
+        QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail); QCOMPARE(controller.outingLapTrack(), track);
         QCOMPARE(controller.outingLapCursor(), cursor); QCOMPARE(controller.outingLapDetailState(), QString("ready"));
         QCOMPARE(controller.selectedOutingLap().value("runName").toString(), QString("Renamed run"));
         QCOMPARE(controller.selectedOutingLap().value("reference").toMap(), winner);
@@ -1306,7 +1306,7 @@ void TelemetryTests::showsRunProgressionWithLiveContext()
     for (const auto &value : controller.eventRuns()) ids.append(value.toMap().value("id").toString());
     QCOMPARE(ids.size(), 2);
     for (const auto &id : ids) QVERIFY(controller.setRunTrackConfiguration(id, "Full", "clockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     const auto group = controller.outingCompatibilityGroups().first().toMap().value("id").toString();
     QVERIFY(controller.selectOutingComparisonGroup(group));
     const auto metadata = controller.runMetadata(ids[0]);
@@ -1367,16 +1367,16 @@ void TelemetryTests::showsRunProgressionWithLiveContext()
     controller.closeOutingLap();
     QCOMPARE(controller.activeRunId(), ids[0]);
     // A stale recording cannot contribute statistics. Restoring the policy recomputes the sample count.
-    controller.m_outingStaleRunIds.insert(ids[0]); controller.refreshOutingCompatibility();
+    controller.m_analysis.m_outingStaleRunIds.insert(ids[0]); controller.m_analysis.refreshOutingCompatibility();
     auto stale = controller.outingProgression().value("runs").toList().first().toMap();
     QCOMPARE(stale.value("eligibleLapCount").toInt(), 0); QVERIFY(stale.value("distribution").isNull());
-    controller.m_outingStaleRunIds.clear(); controller.refreshOutingCompatibility();
+    controller.m_analysis.m_outingStaleRunIds.clear(); controller.m_analysis.refreshOutingCompatibility();
     QVERIFY(controller.setOutingLapExcluded(excluded, false, ""));
     QCOMPARE(controller.outingProgression().value("eligibleLapCount").toInt(), 6);
     QVERIFY(controller.setRunTrackConfiguration(ids[0], "Short", "clockwise"));
     QCOMPARE(controller.outingProgression().value("state").toString(), QString("loading"));
     QVERIFY(controller.outingProgression().value("runs").toList().isEmpty());
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     QCOMPARE(controller.outingProgression().value("runs").toList().size(), 1);
     QCOMPARE(controller.outingProgression().value("runs").toList().first().toMap().value("runId").toString(), ids[1]);
     QVERIFY(controller.selectOutingComparisonGroup(""));
@@ -1394,7 +1394,7 @@ void TelemetryTests::editsRunMetadataThroughQml()
     QVERIFY(controller.importAnalysisRuns("Details", {QUrl::fromLocalFile(path)}));
     QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath("day.fetproject"))));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     const auto before = controller.currentProjectObject();
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
@@ -1651,12 +1651,12 @@ void TelemetryTests::opensOutingLapWithoutChangingEditor()
     QVERIFY(!controller.selectOutingLap(-1));
     QCOMPARE(controller.selectedOutingLap(), selected);
     // Delay an old completion, choose a new row, then release the stale result.
-    AppController::OutingLapDetailResult stale;
-    stale.request = controller.m_outingLapDetailRequest;
-    stale.session = controller.m_outingLapDetailSession;
-    QPromise<AppController::OutingLapDetailResult> promise; promise.start();
-    controller.m_outingLapDetailPending = true;
-    controller.m_outingLapDetailWatcher.setFuture(promise.future());
+    AnalysisController::OutingLapDetailResult stale;
+    stale.request = controller.m_analysis.m_outingLapDetailRequest;
+    stale.session = controller.m_analysis.m_outingLapDetailSession;
+    QPromise<AnalysisController::OutingLapDetailResult> promise; promise.start();
+    controller.m_analysis.m_outingLapDetailPending = true;
+    controller.m_analysis.m_outingLapDetailWatcher.setFuture(promise.future());
     QVERIFY(controller.selectOutingLap(0));
     QVERIFY(controller.selectOutingLap(1));
     promise.addResult(stale); promise.finish();
@@ -1676,7 +1676,7 @@ void TelemetryTests::opensOutingLapWithoutChangingEditor()
     QVERIFY(controller.outingLapDetailError().contains("changed"));
     QVERIFY(controller.selectOutingLap(1));
     controller.closeOutingLap();
-    QTRY_VERIFY(!controller.m_outingLapDetailWatcher.isRunning());
+    QTRY_VERIFY(!controller.m_analysis.m_outingLapDetailWatcher.isRunning());
     QVERIFY(controller.selectedOutingLap().isEmpty());
     QCOMPARE(controller.currentProjectObject(), before);
 }
@@ -1798,13 +1798,13 @@ void TelemetryTests::followsOutingLapVideoPositionWithinLapBounds()
 
     // KAN-124: analysis without a video link (Flapped Ear Telemetry) has no
     // lap video and never follows one; the cursor stays where it is.
-    const auto *link = controller.m_videoLink;
-    controller.m_videoLink = nullptr;
+    const auto *link = controller.m_analysis.m_videoLink;
+    controller.m_analysis.m_videoLink = nullptr;
     QVERIFY(!controller.outingLapVideoAvailable());
     QCOMPARE(controller.outingLapVideoPositionMilliseconds(), qint64(0));
     QVERIFY(!controller.followOutingLapVideoPosition(qRound64((start - 10.0 + 0.5) * 1000.0)));
     QCOMPARE(controller.outingLapCursor(), end);
-    controller.m_videoLink = link;
+    controller.m_analysis.m_videoLink = link;
     QVERIFY(controller.followOutingLapVideoPosition(qRound64((start - 10.0 + 0.5) * 1000.0)));
     QCOMPARE(controller.outingLapCursor(), start + 0.5);
 }
@@ -1884,7 +1884,7 @@ void TelemetryTests::opensRankedLapsAndRecomputesAfterExclusion()
     QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
     QCOMPARE(controller.outingRanking().value("state").toString(), QString("selection-required"));
     QVERIFY(controller.setRunTrackConfiguration(controller.activeRunId(), "Full", "clockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     const auto group = controller.outingCompatibilityGroups()[0].toMap().value("id").toString();
     QVERIFY(controller.selectOutingComparisonGroup(group));
     QCOMPARE(controller.outingRanking().value("state").toString(), QString("available"));
@@ -1937,23 +1937,23 @@ void TelemetryTests::opensRankedLapsAndRecomputesAfterExclusion()
     QVERIFY(day->property("text").toString().contains("No eligible lap"));
     QVERIFY(controller.setOutingLapExcluded(originalRef, false));
     QCOMPARE(controller.outingRanking().value("bestOfDay").toMap().value("reference").toMap(), originalRef);
-    controller.m_outingStaleRunIds.insert(controller.activeRunId());
-    controller.refreshOutingCompatibility();
+    controller.m_analysis.m_outingStaleRunIds.insert(controller.activeRunId());
+    controller.m_analysis.refreshOutingCompatibility();
     QCOMPARE(controller.outingRanking().value("state").toString(), QString("no-eligible-laps"));
     for (const auto &row : controller.outingLaps()) {
         QVERIFY(!row.toMap().value("bestOfRun").toBool());
         QVERIFY(!row.toMap().value("bestOfDay").toBool());
     }
-    controller.m_outingStaleRunIds.clear(); controller.refreshOutingCompatibility();
+    controller.m_analysis.m_outingStaleRunIds.clear(); controller.m_analysis.refreshOutingCompatibility();
     QCOMPARE(controller.outingRanking().value("bestOfDay").toMap().value("reference").toMap(), originalRef);
     // Stale generations cannot expose a former winning result during async refresh.
     QVERIFY(controller.setRunTrackConfiguration(controller.activeRunId(), "Changed", "clockwise"));
     QCOMPARE(controller.outingRanking().value("state").toString(), QString("loading"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     QCOMPARE(controller.outingRanking().value("state").toString(), QString("selection-required"));
     const auto savedPath = directory.filePath("day.fetproject");
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     controller.requestNewProject();
     QTRY_VERIFY(controller.eventRuns().isEmpty());
     QTRY_COMPARE(controller.outingRanking().value("state").toString(), QString("selection-required"));
@@ -1989,7 +1989,7 @@ void TelemetryTests::groupsOutingLapsAfterExplicitConfiguration()
     QVERIFY(confirm(run1, "Circuit", "clockwise"));
     QVERIFY(!controller.confirmRunTrackConfiguration(run1, previous.value("derivationKey").toString(), "Other", "clockwise"));
     QVERIFY(confirm(run2, "Circuit", "clockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     QCOMPARE(controller.outingCompatibilityGroups().size(), 1);
     const auto group = controller.outingCompatibilityGroups()[0].toMap();
     const auto groupId = group.value("id").toString();
@@ -2012,14 +2012,14 @@ void TelemetryTests::groupsOutingLapsAfterExplicitConfiguration()
     QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
     QVERIFY(controller.selectedOutingLap().value("compatibilityReasons").toStringList().contains("user-exclusion"));
     // GPS and user restrictions coexist rather than replacing one another.
-    for (auto &row : controller.m_outingRawLapRows)
+    for (auto &row : controller.m_analysis.m_outingRawLapRows)
         if (row.reference.toVariantMap() == excludedReference) { row.referenceIssue = LapReferenceIssue::GpsGap; row.referenceEligible = false; }
-    controller.refreshLapExclusionPolicy();
+    controller.m_analysis.refreshLapExclusionPolicy();
     const auto reasons = controller.selectedOutingLap().value("compatibilityReasons").toStringList();
     QVERIFY(reasons.contains("incomplete-gps")); QVERIFY(reasons.contains("user-exclusion"));
     // Opposite direction creates a distinct group, even with identical gates/layout.
     QVERIFY(confirm(run2, "Circuit", "counterclockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     QCOMPARE(controller.outingCompatibilityGroups().size(), 2);
     QVERIFY(controller.selectOutingComparisonGroup(groupId));
     for (const auto &value : controller.outingLaps()) {
@@ -2032,7 +2032,7 @@ void TelemetryTests::groupsOutingLapsAfterExplicitConfiguration()
     // Save As/reopen retains the explicit group decision as well as run configuration.
     const auto savedPath = directory.filePath("day.fetproject");
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     const auto groups = controller.outingCompatibilityGroups();
     AppController reopened(nullptr, directory.filePath("reopened.json"));
     QTRY_COMPARE(reopened.outingCompatibilityGroups(), groups);
@@ -2041,7 +2041,7 @@ void TelemetryTests::groupsOutingLapsAfterExplicitConfiguration()
     QVERIFY(confirm(run1, "Changed circuit", "clockwise"));
     QVERIFY(controller.outingCompatibilityGroups().isEmpty());
     QVERIFY(!controller.selectOutingComparisonGroup(groupId));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     QVERIFY(controller.outingComparisonGroupId().isEmpty());
 }
 
@@ -2060,11 +2060,11 @@ void TelemetryTests::persistsDayDecisionsAndKeepsIndependentDetail()
     const auto runB = controller.eventRuns()[1].toMap().value("id").toString();
     QVERIFY(controller.setRunTrackConfiguration(runA, "Circuit", "clockwise"));
     QVERIFY(controller.setRunTrackConfiguration(runB, "Circuit", "clockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     const auto group = controller.outingCompatibilityGroups().first().toMap().value("id").toString();
     const auto savedPath = directory.filePath("day.fetproject");
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     QVERIFY(controller.selectOutingComparisonGroup(group));
     QVERIFY(controller.dirty());
     const auto revision = controller.m_documentState.revision();
@@ -2079,33 +2079,33 @@ void TelemetryTests::persistsDayDecisionsAndKeepsIndependentDetail()
     QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
     QCOMPARE(controller.m_documentState.revision(), revision); // Inspection is not a comparison decision.
     controller.setOutingLapCursor(controller.selectedOutingLap().value("startTime").toDouble() + .1);
-    const auto detail = controller.m_outingLapDetailSession;
+    const auto detail = controller.m_analysis.m_outingLapDetailSession;
     const auto track = controller.outingLapTrack(); const auto cursor = controller.outingLapCursor();
-    const auto serialB = controller.m_outingRunCache.value(runB).derivationSerial;
+    const auto serialB = controller.m_analysis.m_outingRunCache.value(runB).derivationSerial;
     QVERIFY(controller.setRunTrackConfiguration(runA, "Other", "counterclockwise"));
-    QCOMPARE(controller.m_outingLapDetailSession, detail);
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
     QCOMPARE(controller.outingLapTrack(), track); QCOMPARE(controller.outingLapCursor(), cursor);
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
-    QCOMPARE(controller.m_outingLapDetailSession, detail);
-    QCOMPARE(controller.m_outingRunCache.value(runB).derivationSerial, serialB);
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
+    QCOMPARE(controller.m_analysis.m_outingRunCache.value(runB).derivationSerial, serialB);
     QCOMPARE(controller.outingRanking().value("runs").toList().size(), 1);
     const auto metadata = controller.runMetadata(runA);
-    const auto serialA = controller.m_outingRunCache.value(runA).derivationSerial;
+    const auto serialA = controller.m_analysis.m_outingRunCache.value(runA).derivationSerial;
     QVERIFY(controller.updateRunMetadata(runA, metadata.value("editToken").toString(), "Morning", "Traffic", "Dry", "Tyres"));
     QCoreApplication::processEvents();
-    QCOMPARE(controller.m_outingRunCache.value(runA).derivationSerial, serialA);
-    QCOMPARE(controller.m_outingRunCache.value(runB).derivationSerial, serialB);
-    QCOMPARE(controller.m_outingLapDetailSession, detail);
+    QCOMPARE(controller.m_analysis.m_outingRunCache.value(runA).derivationSerial, serialA);
+    QCOMPARE(controller.m_analysis.m_outingRunCache.value(runB).derivationSerial, serialB);
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
     // Replacing A cancels only its dependent detail; B's session/cursor survive.
     const auto replacement = directory.filePath("replacement.vbo");
     QVERIFY(writeBytes(replacement, EventProjectFixture::lapsVbo().replace("52.0008", "52.0006")));
     controller.loadVbo(QUrl::fromLocalFile(replacement));
-    QCOMPARE(controller.m_outingLapDetailSession, detail);
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
     QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
-    QCOMPARE(controller.m_outingLapDetailSession, detail);
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
     QCOMPARE(controller.outingLapTrack(), track); QCOMPARE(controller.outingLapCursor(), cursor);
-    QCOMPARE(controller.m_outingRunCache.value(runB).derivationSerial, serialB);
+    QCOMPARE(controller.m_analysis.m_outingRunCache.value(runB).derivationSerial, serialB);
     QVERIFY(controller.runTrackConfiguration(runA).value("layoutId").isNull());
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
     AppController reopened(nullptr, directory.filePath("reopened.json"));
@@ -2134,7 +2134,7 @@ void TelemetryTests::restoresDayDecisionsAfterMoveMissingRelinkAndRecovery()
         runA = controller.activeRunId(); runB = controller.eventRuns()[1].toMap().value("id").toString();
         QVERIFY(controller.setRunTrackConfiguration(runA, "Circuit A", "clockwise"));
         QVERIFY(controller.setRunTrackConfiguration(runB, "Circuit B", "counterclockwise"));
-        QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+        QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
         for (const auto &value : controller.outingLaps()) {
             const auto row = value.toMap(); if (row.value("type") != "LAP") continue;
             if (row.value("runId") == runA) { excludedA = row.value("reference").toMap(); group = row.value("compatibilityGroupId").toString(); }
@@ -2244,19 +2244,19 @@ void TelemetryTests::rejectsStaleDayDetailCompletion()
     QVERIFY(controller.importAnalysisRuns("Stale detail", {QUrl::fromLocalFile(path)}));
     QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
     QVERIFY(controller.selectOutingLap(1));
-    controller.m_outingLapDetailTimer.stop();
-    AppController::OutingLapDetailResult late; late.request = controller.m_outingLapDetailRequest;
+    controller.m_analysis.m_outingLapDetailTimer.stop();
+    AnalysisController::OutingLapDetailResult late; late.request = controller.m_analysis.m_outingLapDetailRequest;
     late.session = std::make_shared<TelemetrySession>(TelemetrySource::load(path));
-    QPromise<AppController::OutingLapDetailResult> pending; pending.start();
-    controller.m_outingLapDetailPending = true;
-    controller.m_outingLapDetailCancellation = std::make_shared<std::atomic_bool>(false);
-    const auto cancellation = controller.m_outingLapDetailCancellation;
-    controller.m_outingLapDetailWatcher.setFuture(pending.future());
+    QPromise<AnalysisController::OutingLapDetailResult> pending; pending.start();
+    controller.m_analysis.m_outingLapDetailPending = true;
+    controller.m_analysis.m_outingLapDetailCancellation = std::make_shared<std::atomic_bool>(false);
+    const auto cancellation = controller.m_analysis.m_outingLapDetailCancellation;
+    controller.m_analysis.m_outingLapDetailWatcher.setFuture(pending.future());
     QVERIFY(controller.setRunTrackConfiguration(controller.activeRunId(), "Changed", "clockwise"));
     QVERIFY(cancellation->load()); QCOMPARE(controller.outingLapDetailState(), QString("idle"));
     pending.addResult(late); pending.finish();
-    QTRY_VERIFY(!controller.m_outingLapDetailPending);
-    QVERIFY(!controller.m_outingLapDetailSession); QVERIFY(controller.selectedOutingLap().isEmpty());
+    QTRY_VERIFY(!controller.m_analysis.m_outingLapDetailPending);
+    QVERIFY(!controller.m_analysis.m_outingLapDetailSession); QVERIFY(controller.selectedOutingLap().isEmpty());
 }
 
 void TelemetryTests::infersRoutesFromOrderedCompleteLaps()
@@ -2384,7 +2384,7 @@ void TelemetryTests::automaticallyGroupsRunsThroughProductionQml()
         QCOMPARE(inference.value("sourceRevision").toString().size(), 64);
     }
     const auto revision = controller.m_documentState.revision();
-    controller.m_outingLapRequestedKey.clear(); controller.refreshOutingLaps();
+    controller.m_analysis.m_outingLapRequestedKey.clear(); controller.m_analysis.refreshOutingLaps();
     QTRY_COMPARE(controller.outingRanking().value("state").toString(), QString("available"));
     QVERIFY(!controller.dirty()); QCOMPARE(controller.m_documentState.revision(), revision);
     AppController reopened(nullptr, directory.filePath("reopened.json"));
@@ -2408,7 +2408,7 @@ void TelemetryTests::automaticallyGroupsRunsThroughProductionQml()
     QVERIFY(controller.confirmRunTrackConfiguration(runA, controller.runTrackConfiguration(runA).value("derivationKey").toString(),
         "Owner corrected layout", "counterclockwise", true));
     QCOMPARE(controller.m_documentState.revision(), beforeCorrection + 1); // One atomic matching-run correction.
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     QCOMPARE(controller.runTrackConfiguration(runB).value("layoutId").toString(), QString("Owner corrected layout"));
     QVERIFY(controller.runTrackConfiguration(controller.eventRuns()[2].toMap().value("id").toString()).value("layoutId").isNull());
     QVariantMap referenceB, referenceA; QString correctedGroup;
@@ -2422,15 +2422,15 @@ void TelemetryTests::automaticallyGroupsRunsThroughProductionQml()
     QVERIFY(controller.selectOutingLapReference(referenceB));
     QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
     controller.setOutingLapCursor(controller.selectedOutingLap().value("startTime").toDouble() + 1);
-    const auto detailB = controller.m_outingLapDetailSession; const auto trackB = controller.outingLapTrack();
-    const auto cursorB = controller.outingLapCursor(); const auto serialB = controller.m_outingRunCache.value(runB).derivationSerial;
+    const auto detailB = controller.m_analysis.m_outingLapDetailSession; const auto trackB = controller.outingLapTrack();
+    const auto cursorB = controller.outingLapCursor(); const auto serialB = controller.m_analysis.m_outingRunCache.value(runB).derivationSerial;
     const auto replacement = directory.filePath("changed-a.vbo");
     QVERIFY(writeBytes(replacement, EventProjectFixture::routeVbo(200, -1.2, 1, false, 450)));
     controller.loadVbo(QUrl::fromLocalFile(replacement));
     QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
-    QCOMPARE(controller.m_outingLapDetailSession, detailB); QCOMPARE(controller.outingLapTrack(), trackB);
-    QCOMPARE(controller.outingLapCursor(), cursorB); QCOMPARE(controller.m_outingRunCache.value(runB).derivationSerial, serialB);
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detailB); QCOMPARE(controller.outingLapTrack(), trackB);
+    QCOMPARE(controller.outingLapCursor(), cursorB); QCOMPARE(controller.m_analysis.m_outingRunCache.value(runB).derivationSerial, serialB);
     QCOMPARE(controller.outingComparisonGroupId(), correctedGroup);
     QCOMPARE(controller.outingRanking().value("runs").toList().size(), 1);
     QCOMPARE(controller.resolveOutingLapReference(referenceA).value("state").toString(), QString("stale"));
@@ -2456,14 +2456,14 @@ void TelemetryTests::separatesAutomaticGroupsAfterSourceReplacement()
     QCOMPARE(controller.outingRanking().value("eligibleLapCount").toInt(), 5);
     QCOMPARE(controller.outingRanking().value("lapCount").toInt(), 6);
     QCOMPARE(controller.outingCompatibilityGroups().first().toMap().value("eligibleLapCount").toInt(), 5);
-    auto ids = controller.m_outingRunCache.keys(); std::sort(ids.begin(), ids.end());
+    auto ids = controller.m_analysis.m_outingRunCache.keys(); std::sort(ids.begin(), ids.end());
     QCOMPARE(ids.size(), 2);
     const auto oldGroup = controller.outingComparisonGroupId();
     QVERIFY(controller.selectOutingComparisonGroup(oldGroup));
     QVERIFY(controller.selectEventRun(ids.first()));
     QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
     QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto otherSerial = controller.m_outingRunCache.value(ids.last()).derivationSerial;
+    const auto otherSerial = controller.m_analysis.m_outingRunCache.value(ids.last()).derivationSerial;
     const auto changed = directory.filePath("different-route.vbo");
     QVERIFY(writeBytes(changed, EventProjectFixture::routeVbo(240, -1, 0, false, 450)));
     controller.loadVbo(QUrl::fromLocalFile(changed));
@@ -2473,7 +2473,7 @@ void TelemetryTests::separatesAutomaticGroupsAfterSourceReplacement()
     QCOMPARE(controller.outingComparisonGroupId(), oldGroup);
     QCOMPARE(controller.outingRanking().value("runs").toList().size(), 1);
     QCOMPARE(controller.outingRanking().value("runs").toList().first().toMap().value("runId").toString(), ids.last());
-    QCOMPARE(controller.m_outingRunCache.value(ids.last()).derivationSerial, otherSerial);
+    QCOMPARE(controller.m_analysis.m_outingRunCache.value(ids.last()).derivationSerial, otherSerial);
     for (const auto &value : controller.outingCompatibilityGroups())
         QCOMPARE(value.toMap().value("ranking").toMap().value("runs").toList().size(), 1);
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath("day.fetproject"))));
@@ -2494,8 +2494,8 @@ void TelemetryTests::automaticallyGroupsPrivateTrackDay()
     AppController controller(nullptr, directory.filePath("recovery.json"));
     QVERIFY(controller.importAnalysisRuns("Local track day", recordings));
     QTRY_COMPARE_WITH_TIMEOUT(controller.eventRuns().size(), recordings.size(), 120000);
-    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey(), 120000);
-    for (auto it = controller.m_outingRunCache.cbegin(); it != controller.m_outingRunCache.cend(); ++it)
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey(), 120000);
+    for (auto it = controller.m_analysis.m_outingRunCache.cbegin(); it != controller.m_analysis.m_outingRunCache.cend(); ++it)
         qInfo() << "Run route:" << it->inference.route.lengthMeters << it->inference.route.direction
             << "supported laps:" << it->inference.matchingLaps.size() << it->inference.reason;
     qInfo() << "Groups:" << controller.outingCompatibilityGroups().size() << "Ranking:" << controller.outingRanking().value("state")
@@ -2588,7 +2588,7 @@ void TelemetryTests::confirmsTrackConfigurationThroughQml()
     QVERIFY(confirm->isEnabled());
     confirm->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
     QTRY_VERIFY(!dialog->property("visible").toBool());
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     const auto config = controller.runTrackConfiguration(controller.activeRunId());
     QCOMPARE(config.value("layoutId").toString(), QString("Jastrzab full circuit"));
     QCOMPARE(config.value("direction").toString(), QString("counterclockwise"));
@@ -2686,7 +2686,7 @@ void TelemetryTests::excludesAndRestoresLapThroughQml()
     QVERIFY(controller.selectOutingLapReference(reference));
     QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
     const auto track = controller.outingLapTrack(); const auto cursor = controller.outingLapCursor();
-    const auto detailSession = controller.m_outingLapDetailSession;
+    const auto detailSession = controller.m_analysis.m_outingLapDetailSession;
     const auto before = controller.currentProjectObject();
     QVERIFY(!controller.setOutingLapExcluded(reference, true, " "));
     QVERIFY(!controller.setOutingLapExcluded(controller.outingLaps()[0].toMap().value("reference").toMap(), true, "Traffic"));
@@ -2711,7 +2711,7 @@ void TelemetryTests::excludesAndRestoresLapThroughQml()
     QVERIFY(!controller.selectedOutingLap().value("bestOfRun").toBool());
     QCOMPARE(controller.outingLapDetailState(), QString("ready"));
     QCOMPARE(controller.outingLapTrack(), track); QCOMPARE(controller.outingLapCursor(), cursor);
-    QCOMPARE(controller.m_outingLapDetailSession, detailSession);
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detailSession);
     QCOMPARE(controller.outingLaps().size(), 5);
     const auto bestIndex = best.value("lapNumber").toInt() - 1;
     QVERIFY(!controller.m_lapSession.timedLaps[bestIndex].referenceEligible());
@@ -2756,7 +2756,7 @@ void TelemetryTests::lapExclusionsSurviveSaveRecoveryAndInvalidateSafely()
         QVERIFY(!controller.m_lapSession.timedLaps[0].referenceEligible());
         QVERIFY(controller.setRunTrackConfiguration(controller.activeRunId(), "other-layout", "unknown"));
         QTRY_COMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("stale"));
-        QTRY_VERIFY(controller.m_outingLapRequestedKey == controller.outingLapKey()
+        QTRY_VERIFY(controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey()
             && !controller.outingLapsLoading() && controller.outingLaps().size() == 5);
         QVERIFY(!controller.outingLaps()[1].toMap().value("excluded").toBool());
         QVERIFY(controller.m_lapSession.timedLaps[0].referenceEligible());
@@ -2800,8 +2800,8 @@ void TelemetryTests::lapReferencesSurviveReopenAndReordering()
     QTRY_COMPARE(reopened.outingLaps().size(), 5);
     QCOMPARE(reopened.outingLaps()[1].toMap().value("reference").toMap(), portable);
     // The reference remains valid after ordering and display numbering changes.
-    std::reverse(reopened.m_outingLapRows.begin(), reopened.m_outingLapRows.end());
-    auto row = reopened.m_outingLapRows[3].toMap(); row.insert("lapNumber", 99); reopened.m_outingLapRows[3] = row;
+    std::reverse(reopened.m_analysis.m_outingLapRows.begin(), reopened.m_analysis.m_outingLapRows.end());
+    auto row = reopened.m_analysis.m_outingLapRows[3].toMap(); row.insert("lapNumber", 99); reopened.m_analysis.m_outingLapRows[3] = row;
     QCOMPARE(reopened.resolveOutingLapReference(portable).value("index").toInt(), 3);
     QVERIFY(reopened.selectOutingLapReference(portable));
     QTRY_COMPARE(reopened.outingLapDetailState(), QString("ready"));
@@ -2818,7 +2818,7 @@ void TelemetryTests::lapReferencesSurviveReopenAndReordering()
         QCOMPARE(reopened.selectedOutingLap().value("reference").toMap(), portable);
     }
     // Two identical candidates are ambiguous, never selected arbitrarily.
-    reopened.m_outingLapRows.append(reopened.m_outingLapRows[3]);
+    reopened.m_analysis.m_outingLapRows.append(reopened.m_analysis.m_outingLapRows[3]);
     QCOMPARE(reopened.resolveOutingLapReference(portable).value("state").toString(), QString("stale"));
     QVERIFY(!reopened.selectOutingLapReference(portable));
 }
@@ -2840,7 +2840,7 @@ void TelemetryTests::lapReferencesRejectSourceAndGateChanges()
     QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("stale"));
     QVERIFY(!controller.selectOutingLapReference(reference)); QVERIFY(!controller.selectOutingLap(1));
     QTRY_VERIFY(!controller.outingLapsLoading() && !controller.outingLaps().isEmpty()
-        && controller.m_outingLapRequestedKey == controller.outingLapKey());
+        && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     auto project = controller.currentProjectObject(); auto runs = EventProjectFixture::runs(project); auto run = runs[0].toObject();
     const auto configuredReference = controller.outingLaps()[1].toMap().value("reference").toMap();
     auto config = EventProjectCodec::trackConfiguration(run); config.insert("gateRevision", "gates-v1:" + QString(64, '0'));
@@ -2886,19 +2886,19 @@ void TelemetryTests::lapReferencesDetectUnsampledContentChanges()
     QVERIFY(controller.importAnalysisRuns("Content identity", {QUrl::fromLocalFile(path)}));
     QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
     QVERIFY(controller.setRunTrackConfiguration(controller.activeRunId(), "Circuit", "clockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     const auto group = controller.outingCompatibilityGroups().first().toMap().value("id").toString();
     QVERIFY(controller.selectOutingComparisonGroup(group));
     const auto reference = controller.outingLaps()[1].toMap().value("reference").toMap();
     QVERIFY(controller.setOutingLapExcluded(reference, true, "Traffic"));
     const auto savedPath = directory.filePath("content.fetproject");
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey());
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
     const auto saved = QJsonDocument::fromJson(readBytes(savedPath)).object();
     QCOMPARE(reference.value("sourceRevision").toString().toLatin1(), full.toHex());
     QVERIFY(controller.selectOutingLapReference(reference));
     QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    QVERIFY(controller.m_analysisSourceCache->usedBytes() > 0); // Prime the verified cache before mutation.
+    QVERIFY(controller.m_analysis.m_analysisSourceCache->usedBytes() > 0); // Prime the verified cache before mutation.
     bytes[100000] = 'b'; QVERIFY(writeBytes(path, bytes));
     QCOMPARE(ProjectSourceReferenceCodec::telemetryFingerprint(path, TelemetrySource::load(path)), sampled);
     QVERIFY(TelemetrySource::contentSha256(path, bytes.size()) != full);
@@ -2909,7 +2909,7 @@ void TelemetryTests::lapReferencesDetectUnsampledContentChanges()
     QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("stale"));
     QVERIFY(!controller.selectOutingLapReference(reference));
     // An unchanged sampled fingerprint cannot authorize changed complete content.
-    controller.m_outingLapRequestedKey.clear(); controller.refreshOutingLaps();
+    controller.m_analysis.m_outingLapRequestedKey.clear(); controller.m_analysis.refreshOutingLaps();
     QTRY_VERIFY(!controller.outingLapsLoading());
     QVERIFY(controller.outingLaps().isEmpty());
     QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("unavailable"));
@@ -3022,15 +3022,15 @@ void TelemetryTests::ordersWholeOutingAndReopensSources()
     QVERIFY(controller.outingLaps().isEmpty());
     QVERIFY(controller.outingLapMessages().join(' ').contains("identity"));
     // A completed old worker result must not repopulate a newly cleared document.
-    AppController::OutingLapResult stale;
-    stale.key = controller.outingLapKey(); stale.generation = controller.m_sourceGeneration;
+    AnalysisController::OutingLapResult stale;
+    stale.key = controller.m_analysis.outingLapKey(); stale.generation = controller.m_sourceGeneration;
     stale.rows = {{"stale", "Stale", LapSectionType::Lap, 1, 0, 10, {}, 0}};
-    QPromise<AppController::OutingLapResult> promise; promise.start();
-    controller.m_outingLapWatcher.setFuture(promise.future());
+    QPromise<AnalysisController::OutingLapResult> promise; promise.start();
+    controller.m_analysis.m_outingLapWatcher.setFuture(promise.future());
     controller.requestNewProject();
     promise.addResult(stale); promise.finish();
     QTRY_VERIFY(controller.outingLaps().isEmpty());
-    QTRY_VERIFY(!controller.m_outingLapWatcher.isRunning());
+    QTRY_VERIFY(!controller.m_analysis.m_outingLapWatcher.isRunning());
     QVERIFY(controller.eventRuns().isEmpty());
 }
 
@@ -3091,8 +3091,8 @@ void TelemetryTests::selectsIndependentComparisonLapsThroughQml()
     QVERIFY(bIndex >= 0);
     QVERIFY(QMetaObject::invokeMethod(pickerB, "activated", Q_ARG(int, bIndex)));
     QTRY_VERIFY(controller.comparisonPairReady());
-    const auto sessionA = controller.m_comparisonSlots[0].session;
-    const auto sessionB = controller.m_comparisonSlots[1].session;
+    const auto sessionA = controller.m_analysis.m_comparisonSlots[0].session;
+    const auto sessionB = controller.m_analysis.m_comparisonSlots[1].session;
     QVERIFY(sessionA && sessionB && sessionA != sessionB);
     QVERIFY2(!controller.comparisonLapTrack(0).isEmpty(), "comparison slot 0 track should not be empty");
     QVERIFY2(!controller.comparisonLapTrack(1).isEmpty(), "comparison slot 1 track should not be empty");
@@ -3107,22 +3107,22 @@ void TelemetryTests::selectsIndependentComparisonLapsThroughQml()
             "TrackMapPanel.pathSegments should not be empty for a ready comparison slot");
     }
     QVERIFY(!controller.selectComparisonLap(1, incompatible.value("reference").toMap()));
-    QCOMPARE(controller.m_comparisonSlots[1].session, sessionB);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, sessionB);
     auto *swap = window->findChild<QQuickItem *>("swapComparisonLaps"); QVERIFY(swap);
     swap->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
-    QCOMPARE(controller.m_comparisonSlots[0].session, sessionB);
-    QCOMPARE(controller.m_comparisonSlots[1].session, sessionA);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, sessionB);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, sessionA);
     auto *bestRun = window->findChild<QQuickItem *>("bestRunAsComparisonB"); QVERIFY(bestRun);
     bestRun->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
     QTRY_VERIFY(controller.comparisonPairReady());
-    QCOMPARE(controller.m_comparisonSlots[1].row.value("runId"), b.value("runId"));
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].row.value("runId"), b.value("runId"));
     for (const auto &groupValue : controller.outingCompatibilityGroups()) {
         const auto group = groupValue.toMap();
         if (group.value("id") != b.value("compatibilityGroupId")) continue;
         for (const auto &runValue : group.value("ranking").toMap().value("runs").toList()) {
             const auto run = runValue.toMap();
             if (run.value("runId") == b.value("runId"))
-                QCOMPARE(controller.m_comparisonSlots[1].row.value("reference"), run.value("bestLap").toMap().value("reference"));
+                QCOMPARE(controller.m_analysis.m_comparisonSlots[1].row.value("reference"), run.value("bestLap").toMap().value("reference"));
         }
     }
     auto *bestDay = window->findChild<QQuickItem *>("bestDayAsComparisonB"); QVERIFY(bestDay);
@@ -3131,13 +3131,13 @@ void TelemetryTests::selectsIndependentComparisonLapsThroughQml()
     for (const auto &groupValue : controller.outingCompatibilityGroups()) {
         const auto group = groupValue.toMap();
         if (group.value("id") == b.value("compatibilityGroupId"))
-            QCOMPARE(controller.m_comparisonSlots[1].row.value("reference"), group.value("ranking").toMap().value("bestOfDay").toMap().value("reference"));
+            QCOMPARE(controller.m_analysis.m_comparisonSlots[1].row.value("reference"), group.value("ranking").toMap().value("bestOfDay").toMap().value("reference"));
     }
     auto *inspect = entryA->findChild<QQuickItem *>("inspectComparison0"); QVERIFY(inspect);
     inspect->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
     QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
     QCOMPARE(controller.selectedOutingLap().value("reference"), b.value("reference"));
-    QCOMPARE(controller.m_comparisonSlots[0].session, sessionB);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, sessionB);
     QCOMPARE(controller.activeRunId(), active); QCOMPARE(controller.syncOffset(), 19.0); QCOMPARE(controller.timeScale(), 1.3);
     // Selecting/swapping/inspecting comparison laps must not touch sync, active
     // run or editor state, but the A/B pick itself is now a persisted analysis
@@ -3146,8 +3146,8 @@ void TelemetryTests::selectsIndependentComparisonLapsThroughQml()
     auto afterEvent = before.value("event").toObject();
     auto afterDecisions = afterEvent.value("analysisDecisions").toObject();
     afterDecisions.insert("comparisonSlots", QJsonArray{
-        QJsonObject::fromVariantMap(controller.m_comparisonSlots[0].row).value("reference"),
-        QJsonObject::fromVariantMap(controller.m_comparisonSlots[1].row).value("reference")});
+        QJsonObject::fromVariantMap(controller.m_analysis.m_comparisonSlots[0].row).value("reference"),
+        QJsonObject::fromVariantMap(controller.m_analysis.m_comparisonSlots[1].row).value("reference")});
     afterEvent.insert("analysisDecisions", afterDecisions);
     auto after = before; after.insert("event", afterEvent);
     QCOMPARE(controller.currentProjectObject(), after);
@@ -3155,7 +3155,7 @@ void TelemetryTests::selectsIndependentComparisonLapsThroughQml()
     QVERIFY(controller.dirty());
     controller.closeOutingLap();
     QVERIFY(controller.setOutingLapExcluded(b.value("reference").toMap(), true, "Traffic"));
-    QCOMPARE(controller.m_comparisonSlots[0].state, QString("error"));
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("error"));
     QVERIFY(!controller.comparisonPairReady());
     QCOMPARE(warnings.size(), 0);
 }
@@ -3277,59 +3277,59 @@ void TelemetryTests::preservesComparisonSlotAcrossFailuresAndReplacement()
     }
     QVERIFY(!a.isEmpty() && !b.isEmpty());
     QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_comparisonSlots[0].state, QString("ready"));
-    const auto sessionA = controller.m_comparisonSlots[0].session;
-    const auto trackA = controller.m_comparisonSlots[0].track;
+    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
+    const auto sessionA = controller.m_analysis.m_comparisonSlots[0].session;
+    const auto trackA = controller.m_analysis.m_comparisonSlots[0].track;
     // Missing B fails through the shared verified-source loader without disturbing A.
     QVERIFY(QFile::remove(second));
     QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_comparisonSlots[1].state, QString("error"));
-    QVERIFY(!controller.m_comparisonSlots[1].error.isEmpty());
-    QCOMPARE(controller.m_comparisonSlots[0].session, sessionA); QCOMPARE(controller.m_comparisonSlots[0].track, trackA);
+    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("error"));
+    QVERIFY(!controller.m_analysis.m_comparisonSlots[1].error.isEmpty());
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, sessionA); QCOMPARE(controller.m_analysis.m_comparisonSlots[0].track, trackA);
     QVERIFY(writeBytes(second, secondBytes));
     QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
     QTRY_VERIFY(controller.comparisonPairReady());
-    const auto sessionB = controller.m_comparisonSlots[1].session;
+    const auto sessionB = controller.m_analysis.m_comparisonSlots[1].session;
     // Hold one completion so swap/replacement races are deterministic.
-    QTRY_VERIFY(!controller.m_comparisonPending);
-    AppController::OutingLapDetailResult stale;
-    stale.request = controller.m_comparisonSlots[1].request;
+    QTRY_VERIFY(!controller.m_analysis.m_comparisonPending);
+    AnalysisController::OutingLapDetailResult stale;
+    stale.request = controller.m_analysis.m_comparisonSlots[1].request;
     stale.session = sessionB; stale.error = "Obsolete worker result";
-    controller.m_comparisonSlots[1].state = "loading";
-    controller.m_comparisonPending = true; controller.m_comparisonLoadingSlot = 1;
-    QPromise<AppController::OutingLapDetailResult> promise; promise.start();
-    controller.m_comparisonWatcher.setFuture(promise.future());
+    controller.m_analysis.m_comparisonSlots[1].state = "loading";
+    controller.m_analysis.m_comparisonPending = true; controller.m_analysis.m_comparisonLoadingSlot = 1;
+    QPromise<AnalysisController::OutingLapDetailResult> promise; promise.start();
+    controller.m_analysis.m_comparisonWatcher.setFuture(promise.future());
     QVERIFY(controller.swapComparisonLaps());
-    QCOMPARE(controller.m_comparisonSlots[1].session, sessionA);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, sessionA);
     promise.addResult(stale); promise.finish();
     QTRY_VERIFY(controller.comparisonPairReady());
-    QCOMPARE(controller.m_comparisonSlots[1].session, sessionA);
-    QVERIFY(controller.m_comparisonSlots[0].error.isEmpty());
-    QCOMPARE(controller.m_comparisonSlots[0].row.value("reference"), b.value("reference"));
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, sessionA);
+    QVERIFY(controller.m_analysis.m_comparisonSlots[0].error.isEmpty());
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].row.value("reference"), b.value("reference"));
     // Replacing editor run A invalidates only its B slot, retaining the other run.
-    const auto retained = controller.m_comparisonSlots[0].session;
+    const auto retained = controller.m_analysis.m_comparisonSlots[0].session;
     const auto replacement = directory.filePath("replacement.vbo");
     QVERIFY(writeBytes(replacement, EventProjectFixture::routeVbo(200, -1.2, 1, false, 450)));
     QCOMPARE(controller.activeRunId(), runA);
     controller.loadVbo(QUrl::fromLocalFile(replacement));
     QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_VERIFY(!controller.outingLapsLoading());
-    QCOMPARE(controller.m_comparisonSlots[1].state, QString("error"));
-    QCOMPARE(controller.m_comparisonSlots[0].state, QString("ready"));
-    QCOMPARE(controller.m_comparisonSlots[0].session, retained);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("error"));
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, retained);
     // Starting another document clears both and cannot accept a late pair result.
-    QTRY_VERIFY(!controller.m_comparisonPending);
-    stale.request = controller.m_comparisonSlots[0].request;
-    controller.m_comparisonSlots[0].state = "loading";
-    controller.m_comparisonPending = true; controller.m_comparisonLoadingSlot = 0;
-    QPromise<AppController::OutingLapDetailResult> late; late.start();
-    controller.m_comparisonWatcher.setFuture(late.future());
+    QTRY_VERIFY(!controller.m_analysis.m_comparisonPending);
+    stale.request = controller.m_analysis.m_comparisonSlots[0].request;
+    controller.m_analysis.m_comparisonSlots[0].state = "loading";
+    controller.m_analysis.m_comparisonPending = true; controller.m_analysis.m_comparisonLoadingSlot = 0;
+    QPromise<AnalysisController::OutingLapDetailResult> late; late.start();
+    controller.m_analysis.m_comparisonWatcher.setFuture(late.future());
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath("day.fetproject"))));
     controller.requestNewProject();
     late.addResult(stale); late.finish();
-    QTRY_VERIFY(!controller.m_comparisonPending);
-    QCOMPARE(controller.m_comparisonSlots[0].state, QString("empty"));
-    QCOMPARE(controller.m_comparisonSlots[1].state, QString("empty"));
-    QVERIFY(!controller.m_comparisonSlots[0].session && !controller.m_comparisonSlots[1].session);
+    QTRY_VERIFY(!controller.m_analysis.m_comparisonPending);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("empty"));
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("empty"));
+    QVERIFY(!controller.m_analysis.m_comparisonSlots[0].session && !controller.m_analysis.m_comparisonSlots[1].session);
 }
 
 void TelemetryTests::comparesTwoLapsFromTheSameRun()
@@ -3429,7 +3429,7 @@ void TelemetryTests::reviewsSegmentProposalsForTheOpenLap()
     QCOMPARE(controller.segmentReviewState(), QString("loading"));
     controller.closeOutingLap();
     QCOMPARE(controller.segmentReviewState(), QString("idle"));
-    QTRY_VERIFY(!controller.m_segmentReviewWatcher.isRunning());
+    QTRY_VERIFY(!controller.m_analysis.m_segmentReviewWatcher.isRunning());
     QCoreApplication::processEvents();
     QCOMPARE(controller.segmentReviewState(), QString("idle"));
     QVERIFY(controller.segmentReviewItems().isEmpty());
@@ -3594,7 +3594,7 @@ void TelemetryTests::editsApprovedSegmentsWithUndo()
     QTRY_COMPARE(controller.segmentReviewState(), QString("ready"));
     const double length = controller.segmentReviewAxisLength();
     QVERIFY(controller.segmentReviewItems().size() >= 3);
-    const auto stored = [&] { return controller.storedRunTrackSegments(runId).toArray(); };
+    const auto stored = [&] { return controller.m_analysis.storedRunTrackSegments(runId).toArray(); };
     const auto find = [&](const QString &id) {
         for (const auto &value : stored())
             if (value.toObject().value("id").toString() == id) return value.toObject();
@@ -3696,7 +3696,7 @@ void TelemetryTests::editsApprovedSegmentsWithUndo()
     QVERIFY(!controller.redoSegmentEdit().isEmpty());
 
     // A change made outside the history is never overwritten by undo.
-    QVERIFY(controller.replaceRunTrackSegments(runId, QJsonArray{}, false));
+    QVERIFY(controller.m_analysis.replaceRunTrackSegments(runId, QJsonArray{}, false));
     QVERIFY(controller.undoSegmentEdit().contains("changed outside"));
     QVERIFY(stored().isEmpty());
     QVERIFY(!controller.segmentReviewApproved().value("canUndo").toBool());
@@ -3741,20 +3741,20 @@ void TelemetryTests::persistsSegmentationAcrossSaveRecoveryAndReopen()
         configuration = controller.selectedOutingLap().value("compatibilityGroupId").toString();
         QCOMPARE(controller.approveSegmentProposal(0), QString());
         QVERIFY(controller.setSegmentProposalRejected(1, true));
-        QVERIFY(validTrackSegmentReview(controller.storedRunValue(runId, "trackSegmentReview")));
-        QVERIFY(controller.storedRunValue(runId, "trackSegmentReview").isObject());
-        const auto first = controller.storedRunTrackSegments(runId).toArray().first().toObject();
+        QVERIFY(validTrackSegmentReview(controller.m_analysis.storedRunValue(runId, "trackSegmentReview")));
+        QVERIFY(controller.m_analysis.storedRunValue(runId, "trackSegmentReview").isObject());
+        const auto first = controller.m_analysis.storedRunTrackSegments(runId).toArray().first().toObject();
         firstId = first.value("id").toString();
         firstStart = first.value("startProgressMeters").toDouble();
         firstEnd = first.value("endProgressMeters").toDouble();
         firstName = QStringLiteral("Turn A");
         QCOMPARE(controller.editApprovedSegment(firstId, firstName, first.value("type").toString(), firstStart, firstEnd, true),
             QString());
-        stamp = segmentationResultStamp(controller.currentApprovedSegmentation(), calculation);
-        QVERIFY(segmentationResultCurrent(stamp, controller.currentApprovedSegmentation(), calculation));
+        stamp = segmentationResultStamp(controller.m_analysis.currentApprovedSegmentation(), calculation);
+        QVERIFY(segmentationResultCurrent(stamp, controller.m_analysis.currentApprovedSegmentation(), calculation));
         // Restoring a rejection removes it from the document; rejecting again stores it.
         QVERIFY(controller.setSegmentProposalRejected(1, false));
-        QVERIFY(controller.storedRunValue(runId, "trackSegmentReview").isUndefined());
+        QVERIFY(controller.m_analysis.storedRunValue(runId, "trackSegmentReview").isUndefined());
         QVERIFY(controller.setSegmentProposalRejected(1, true));
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
         QVERIFY(!controller.dirty());
@@ -3769,12 +3769,12 @@ void TelemetryTests::persistsSegmentationAcrossSaveRecoveryAndReopen()
         QCOMPARE(items[0].toMap().value("state").toString(), QString("approved"));
         QCOMPARE(items[0].toMap().value("approvedSegmentId").toString(), firstId);
         QCOMPARE(items[1].toMap().value("state").toString(), QString("rejected"));
-        const auto reopenedFirst = reopened.storedRunTrackSegments(runId).toArray().first().toObject();
+        const auto reopenedFirst = reopened.m_analysis.storedRunTrackSegments(runId).toArray().first().toObject();
         QCOMPARE(reopenedFirst.value("name").toString(), firstName);
         QCOMPARE(reopenedFirst.value("startProgressMeters").toDouble(), firstStart);
         QCOMPARE(reopenedFirst.value("endProgressMeters").toDouble(), firstEnd);
-        QVERIFY(segmentationResultCurrent(stamp, reopened.currentApprovedSegmentation(), calculation));
-        QVERIFY(!segmentationResultCurrent(stamp, reopened.currentApprovedSegmentation(), "sector-times-test-v2"));
+        QVERIFY(segmentationResultCurrent(stamp, reopened.m_analysis.currentApprovedSegmentation(), calculation));
+        QVERIFY(!segmentationResultCurrent(stamp, reopened.m_analysis.currentApprovedSegmentation(), "sector-times-test-v2"));
 
         // Unsaved changes survive through the recovery snapshot, not the saved file.
         QCOMPARE(reopened.approveSegmentProposal(2), QString());
@@ -3794,16 +3794,16 @@ void TelemetryTests::persistsSegmentationAcrossSaveRecoveryAndReopen()
         QCOMPARE(items[0].toMap().value("approvedSegmentId").toString(), firstId);
         QCOMPARE(items[1].toMap().value("state").toString(), QString("rejected"));
         QCOMPARE(items[2].toMap().value("state").toString(), QString("approved"));
-        QCOMPARE(recovered.storedRunTrackSegments(runId).toArray().size(), 2);
+        QCOMPARE(recovered.m_analysis.storedRunTrackSegments(runId).toArray().size(), 2);
         // The unsaved approval is a segment edit: the earlier stamp is stale.
-        QVERIFY(!segmentationResultCurrent(stamp, recovered.currentApprovedSegmentation(), calculation));
-        const auto recoveredStamp = segmentationResultStamp(recovered.currentApprovedSegmentation(), calculation);
-        QVERIFY(segmentationResultCurrent(recoveredStamp, recovered.currentApprovedSegmentation(), calculation));
+        QVERIFY(!segmentationResultCurrent(stamp, recovered.m_analysis.currentApprovedSegmentation(), calculation));
+        const auto recoveredStamp = segmentationResultStamp(recovered.m_analysis.currentApprovedSegmentation(), calculation);
+        QVERIFY(segmentationResultCurrent(recoveredStamp, recovered.m_analysis.currentApprovedSegmentation(), calculation));
 
         // A layout change produces a different configuration: the stored segments are
         // kept (IDs intact) but no longer apply, so no result stays current.
         QVERIFY(recovered.setRunTrackConfiguration(runId, "Changed", "clockwise"));
-        QTRY_VERIFY(!recovered.outingLapsLoading() && recovered.m_outingLapRequestedKey == recovered.outingLapKey());
+        QTRY_VERIFY(!recovered.outingLapsLoading() && recovered.m_analysis.m_outingLapRequestedKey == recovered.m_analysis.outingLapKey());
         QString changedConfiguration;
         for (const auto &row : recovered.outingLaps()) {
             const auto map = row.toMap();
@@ -3811,7 +3811,7 @@ void TelemetryTests::persistsSegmentationAcrossSaveRecoveryAndReopen()
                 changedConfiguration = map.value("compatibilityGroupId").toString();
         }
         QVERIFY(changedConfiguration != configuration);
-        const auto stored = recovered.storedRunTrackSegments(runId);
+        const auto stored = recovered.m_analysis.storedRunTrackSegments(runId);
         QCOMPARE(stored.toArray().size(), 2);
         QCOMPARE(stored.toArray().first().toObject().value("id").toString(), firstId);
         const auto afterLayout = approvedSegmentation(stored, changedConfiguration);
@@ -3856,7 +3856,7 @@ void TelemetryTests::timesApprovedSectorsForTheOpenLap()
     const auto count = controller.segmentReviewItems().size();
     for (int i = 0; i < count; ++i) QCOMPARE(controller.approveSegmentProposal(i), QString());
     QString wrappingId;
-    for (const auto &value : controller.storedRunTrackSegments(runId).toArray()) {
+    for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray()) {
         const auto segment = value.toObject();
         if (segment.value("endProgressMeters").toDouble() < segment.value("startProgressMeters").toDouble())
             wrappingId = segment.value("id").toString();
@@ -3877,7 +3877,7 @@ void TelemetryTests::timesApprovedSectorsForTheOpenLap()
     QCOMPARE(times.value("revision").toString(), controller.segmentReviewApproved().value("revision").toString());
     QCOMPARE(times.value("calculationAlgorithm").toString(), QString(sectorTimingAlgorithm));
     const auto sectors = times.value("sectors").toList();
-    QCOMPARE(sectors.size(), controller.storedRunTrackSegments(runId).toArray().size());
+    QCOMPARE(sectors.size(), controller.m_analysis.storedRunTrackSegments(runId).toArray().size());
     for (const auto &value : sectors) {
         const auto sector = value.toMap();
         QVERIFY2(sector.contains("seconds"), qPrintable(sector.value("name").toString() + ": "
@@ -3974,7 +3974,7 @@ void TelemetryTests::overlaysComparisonLapsOnASharedProgressAxis()
     QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
     QTRY_VERIFY(controller.comparisonPairReady());
 
-    QCOMPARE(controller.comparisonAvailableChannels(), controller.m_comparisonSlots[0].session->channelNames());
+    QCOMPARE(controller.comparisonAvailableChannels(), controller.m_analysis.m_comparisonSlots[0].session->channelNames());
     QVERIFY2(controller.comparisonProgressAxisLength() > 0.0, "the shared progress axis should build from slot 0's lap");
 
     QVERIFY2(!controller.comparisonOverlayTrack(0).isEmpty(), "overlay track 0 should not be empty");
@@ -4062,14 +4062,14 @@ void TelemetryTests::showsCornerAnalyzerSegmentMetricsForBothLaps()
     const auto count = controller.segmentReviewItems().size();
     for (int i = 0; i < count; ++i) QCOMPARE(controller.approveSegmentProposal(i), QString());
     QString wrappingId;
-    for (const auto &value : controller.storedRunTrackSegments(runId).toArray()) {
+    for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray()) {
         const auto segment = value.toObject();
         if (segment.value("endProgressMeters").toDouble() < segment.value("startProgressMeters").toDouble())
             wrappingId = segment.value("id").toString();
     }
     if (!wrappingId.isEmpty())
         QCOMPARE(controller.splitApprovedSegment(wrappingId, controller.segmentReviewAxisLength()), QString());
-    const auto approvedSegments = controller.storedRunTrackSegments(runId).toArray();
+    const auto approvedSegments = controller.m_analysis.storedRunTrackSegments(runId).toArray();
     QVERIFY(!approvedSegments.isEmpty());
     controller.closeOutingLap();
 
@@ -4167,14 +4167,14 @@ void TelemetryTests::calculatesOutingTheoreticalBestAcrossPopulation()
     const auto count = controller.segmentReviewItems().size();
     for (int i = 0; i < count; ++i) QCOMPARE(controller.approveSegmentProposal(i), QString());
     QString wrappingId;
-    for (const auto &value : controller.storedRunTrackSegments(runId).toArray()) {
+    for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray()) {
         const auto segment = value.toObject();
         if (segment.value("endProgressMeters").toDouble() < segment.value("startProgressMeters").toDouble())
             wrappingId = segment.value("id").toString();
     }
     if (!wrappingId.isEmpty())
         QCOMPARE(controller.splitApprovedSegment(wrappingId, controller.segmentReviewAxisLength()), QString());
-    const auto approvedSegments = controller.storedRunTrackSegments(runId).toArray();
+    const auto approvedSegments = controller.m_analysis.storedRunTrackSegments(runId).toArray();
     QVERIFY(!approvedSegments.isEmpty());
     controller.closeOutingLap();
 
@@ -4348,13 +4348,13 @@ QJsonArray TelemetryTests::approveAllSegmentsOnRun(AppController &controller, co
     const auto runId = controller.selectedOutingLap().value("runId").toString();
     const auto count = controller.segmentReviewItems().size();
     for (int i = 0; i < count; ++i) if (!controller.approveSegmentProposal(i).isEmpty()) return {};
-    for (const auto &value : controller.storedRunTrackSegments(runId).toArray()) {
+    for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray()) {
         const auto segment = value.toObject();
         if (segment.value("endProgressMeters").toDouble() < segment.value("startProgressMeters").toDouble()
             && !controller.splitApprovedSegment(segment.value("id").toString(), controller.segmentReviewAxisLength()).isEmpty())
             return {};
     }
-    const auto approved = controller.storedRunTrackSegments(runId).toArray();
+    const auto approved = controller.m_analysis.storedRunTrackSegments(runId).toArray();
     controller.closeOutingLap();
     return approved;
 }
@@ -4561,7 +4561,7 @@ void TelemetryTests::acceptsM3SegmentationCornerAndTheoreticalBestWorkflow()
         QCOMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("ready"));
         const auto runId = controller.selectedOutingLap().value("runId").toString();
         QJsonObject splittable;
-        for (const auto &value : controller.storedRunTrackSegments(runId).toArray())
+        for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray())
             if (splittable.isEmpty() && value.toObject().value("endProgressMeters").toDouble()
                     > value.toObject().value("startProgressMeters").toDouble() + 40.0) splittable = value.toObject();
         QVERIFY(!splittable.isEmpty());
@@ -4616,7 +4616,7 @@ void TelemetryTests::acceptsM3SegmentationCornerAndTheoreticalBestWorkflow()
         for (const auto &value : reopened.outingLaps())
             if (value.toMap().value("runName") == "Session 1") runId = value.toMap().value("runId").toString();
         QVERIFY(reopened.setRunTrackConfiguration(runId, "Changed", "clockwise"));
-        QTRY_VERIFY(!reopened.outingLapsLoading() && reopened.m_outingLapRequestedKey == reopened.outingLapKey());
+        QTRY_VERIFY(!reopened.outingLapsLoading() && reopened.m_analysis.m_outingLapRequestedKey == reopened.m_analysis.outingLapKey());
         QTRY_COMPARE(reopened.outingTheoreticalBest().value("state").toString(), QString("idle"));
         reopened.requestOutingTheoreticalBest();
         QTRY_VERIFY(reopened.outingTheoreticalBest().value("state") != "loading");
@@ -5365,7 +5365,7 @@ void TelemetryTests::showsHeartRateByRunAndSegmentInQml()
         if (a.isEmpty() && row.value("runName") == "Session 1") a = row;
         if (b.isEmpty() && row.value("runName") == "Session 2") b = row;
     }
-    QVERIFY(controller.openComparisonEvidence(a.value("reference").toMap(), b.value("reference").toMap(), segmentId));
+    QVERIFY(controller.m_analysis.openComparisonEvidence(a.value("reference").toMap(), b.value("reference").toMap(), segmentId));
     QTRY_VERIFY(controller.comparisonPairReady());
     QVERIFY(!controller.comparisonApprovedSegments().isEmpty());
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
@@ -5857,7 +5857,7 @@ void TelemetryTests::acceptsM4ReportLossCornerEvidenceWorkflow()
         QTRY_COMPARE(controller.segmentReviewState(), QString("ready"));
         const auto runId = controller.selectedOutingLap().value("runId").toString();
         QJsonObject splittable;
-        for (const auto &value : controller.storedRunTrackSegments(runId).toArray())
+        for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray())
             if (splittable.isEmpty() && value.toObject().value("endProgressMeters").toDouble()
                     > value.toObject().value("startProgressMeters").toDouble() + 40.0) splittable = value.toObject();
         QVERIFY(!splittable.isEmpty());
@@ -5937,7 +5937,7 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
     AppController controller(nullptr, directory.filePath("recovery.json"));
     QVERIFY(controller.importAnalysisRuns("Private corners", recordings));
     QTRY_COMPARE_WITH_TIMEOUT(controller.eventRuns().size(), recordings.size(), 120000);
-    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && controller.m_outingLapRequestedKey == controller.outingLapKey(), 120000);
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey(), 120000);
     QTRY_VERIFY_WITH_TIMEOUT(!controller.outingComparisonGroupId().isEmpty(), 60000);
 
     // Review the best lap's run so its proposals come from a clean lap.
@@ -6118,7 +6118,7 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
     QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 60000);
     // KAN-65: G-G pairs for lap A of the pair on the real recording.
     {
-        const auto &slot = controller.m_comparisonSlots[0];
+        const auto &slot = controller.m_analysis.m_comparisonSlots[0];
         const auto pairs = buildGgPairs(*slot.session, slot.row.value("startTime").toDouble(), slot.row.value("endTime").toDouble());
         qInfo().noquote() << "G-G pairs:" << pairs.points.size() << "of" << pairs.candidateCount << "channels"
             << pairs.longitudinalChannel << pairs.lateralChannel << "shared clock" << pairs.sharedClock
@@ -6261,7 +6261,7 @@ void TelemetryTests::selectsCornerAnalyzerSegmentThroughQml()
     for (int i = 0; i < count; ++i) QCOMPARE(controller.approveSegmentProposal(i), QString());
     QString wrappingId;
     const auto runId = controller.selectedOutingLap().value("runId").toString();
-    for (const auto &value : controller.storedRunTrackSegments(runId).toArray()) {
+    for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray()) {
         const auto segment = value.toObject();
         if (segment.value("endProgressMeters").toDouble() < segment.value("startProgressMeters").toDouble())
             wrappingId = segment.value("id").toString();
@@ -6367,8 +6367,8 @@ void TelemetryTests::showsComparisonSlotCompatibilityAndCoverageContext()
     // Excluding the underlying lap while the view is open surfaces the
     // resulting error reason directly, not just a blank "not ready" screen.
     QVERIFY(controller.setOutingLapExcluded(a.value("reference").toMap(), true, "Traffic"));
-    QTRY_COMPARE(controller.m_comparisonSlots[0].state, QString("error"));
-    const auto reason = controller.m_comparisonSlots[0].error;
+    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("error"));
+    const auto reason = controller.m_analysis.m_comparisonSlots[0].error;
     QVERIFY(!reason.isEmpty());
     QTRY_VERIFY(statusA->property("text").toString().contains(reason));
     QCOMPARE(qvariant_cast<QColor>(statusA->property("color")), QColor("#ffb84d"));
@@ -6389,37 +6389,37 @@ void TelemetryTests::sharesComparisonCacheAndRevalidatesSources()
     const auto choices = controller.comparisonLaps(); QVERIFY(choices.size() >= 2);
     const auto a = choices[0].toMap(), b = choices[1].toMap();
     QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_comparisonSlots[0].state, QString("ready"));
-    const auto session = controller.m_comparisonSlots[0].session;
-    const auto cost = controller.m_analysisSourceCache->usedBytes();
+    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
+    const auto session = controller.m_analysis.m_comparisonSlots[0].session;
+    const auto cost = controller.m_analysis.m_analysisSourceCache->usedBytes();
     QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
     QTRY_VERIFY(controller.comparisonPairReady());
-    QCOMPARE(controller.m_comparisonSlots[1].session, session);
-    QCOMPARE(controller.m_comparisonSlots[1].row.value("reference"), b.value("reference"));
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, session);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].row.value("reference"), b.value("reference"));
     QVERIFY(controller.inspectComparisonLap(1));
     QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    QCOMPARE(controller.m_outingLapDetailSession, session);
-    QCOMPARE(controller.m_analysisSourceCache->usedBytes(), cost);
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, session);
+    QCOMPARE(controller.m_analysis.m_analysisSourceCache->usedBytes(), cost);
     // The cache is source-wide; a different derivation cannot reuse its entry.
-    const auto source = controller.m_comparisonSlots[0].source;
+    const auto source = controller.m_analysis.m_comparisonSlots[0].source;
     auto revised = a; auto reference = a.value("reference").toMap();
     reference.insert("derivationKey", QString(64, 'b')); revised.insert("reference", reference);
     const auto token = std::make_shared<std::atomic_bool>(false);
-    const auto changedRevision = FlappedEar::loadOutingLapDetail(source, {}, revised, 1, token, controller.m_analysisSourceCache);
+    const auto changedRevision = FlappedEar::loadOutingLapDetail(source, {}, revised, 1, token, controller.m_analysis.m_analysisSourceCache);
     QVERIFY2(changedRevision.session != nullptr, qPrintable(changedRevision.error));
     QVERIFY(changedRevision.session != session);
     // Even a cached source must still exist and match its full content digest.
     QVERIFY(QFile::remove(path));
-    const auto missing = FlappedEar::loadOutingLapDetail(source, {}, a, 2, token, controller.m_analysisSourceCache);
+    const auto missing = FlappedEar::loadOutingLapDetail(source, {}, a, 2, token, controller.m_analysis.m_analysisSourceCache);
     QVERIFY(!missing.session); QVERIFY(missing.track.isEmpty()); QVERIFY(!missing.error.isEmpty());
     QVERIFY(writeBytes(path, bytes));
-    const auto restored = FlappedEar::loadOutingLapDetail(source, {}, a, 3, token, controller.m_analysisSourceCache);
+    const auto restored = FlappedEar::loadOutingLapDetail(source, {}, a, 3, token, controller.m_analysis.m_analysisSourceCache);
     QCOMPARE(restored.session, session);
     auto changed = bytes; changed.replace("coordinate units = degrees", "coordinate units = degreeS");
     QCOMPARE(changed.size(), bytes.size()); QVERIFY(changed != bytes); QVERIFY(writeBytes(path, changed));
-    const auto stale = FlappedEar::loadOutingLapDetail(source, {}, a, 4, token, controller.m_analysisSourceCache);
+    const auto stale = FlappedEar::loadOutingLapDetail(source, {}, a, 4, token, controller.m_analysis.m_analysisSourceCache);
     QVERIFY(!stale.session); QVERIFY(stale.track.isEmpty()); QVERIFY(stale.staleReference);
-    QCOMPARE(controller.m_comparisonSlots[0].session, session); // Read-only worker cannot mutate GUI state.
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, session); // Read-only worker cannot mutate GUI state.
 }
 
 void TelemetryTests::rejectsComparisonBeyondSharedBudget()
@@ -6432,7 +6432,7 @@ void TelemetryTests::rejectsComparisonBeyondSharedBudget()
     constexpr qint64 budget = 2 * 1024 * 1024;
     QVERIFY(TelemetrySource::load(second, {}, budget).sampleCount > 0); // B fits alone.
     AppController controller(nullptr, directory.filePath("recovery.json"));
-    controller.m_analysisSourceCache = std::make_shared<TelemetrySessionCache>(budget);
+    controller.m_analysis.m_analysisSourceCache = std::make_shared<TelemetrySessionCache>(budget);
     QVERIFY(controller.importAnalysisRuns("Shared budget", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
     QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_VERIFY(!controller.outingLapsLoading());
     const auto runA = controller.eventRuns()[0].toMap().value("id");
@@ -6443,19 +6443,19 @@ void TelemetryTests::rejectsComparisonBeyondSharedBudget()
     }
     QVERIFY(!a.isEmpty() && !b.isEmpty());
     QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_comparisonSlots[0].state, QString("ready"));
-    const auto track = controller.m_comparisonSlots[0].track;
-    const auto retained = controller.m_comparisonSlots[0].session.get();
+    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
+    const auto track = controller.m_analysis.m_comparisonSlots[0].track;
+    const auto retained = controller.m_analysis.m_comparisonSlots[0].session.get();
     QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_comparisonSlots[1].state, QString("error"));
-    QVERIFY(controller.m_comparisonSlots[1].error.contains("memory budget"));
-    QCOMPARE(controller.m_comparisonSlots[0].session.get(), retained);
-    QCOMPARE(controller.m_comparisonSlots[0].track, track);
-    QVERIFY(controller.m_analysisSourceCache->usedBytes() <= budget);
+    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("error"));
+    QVERIFY(controller.m_analysis.m_comparisonSlots[1].error.contains("memory budget"));
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session.get(), retained);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].track, track);
+    QVERIFY(controller.m_analysis.m_analysisSourceCache->usedBytes() <= budget);
     controller.clearComparisonLap(0);
     QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_comparisonSlots[1].state, QString("ready"));
-    QVERIFY(controller.m_analysisSourceCache->usedBytes() <= budget);
+    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("ready"));
+    QVERIFY(controller.m_analysis.m_analysisSourceCache->usedBytes() <= budget);
 }
 
 void TelemetryTests::cancelsSupersededComparisonWaitingForCache()
@@ -6471,22 +6471,22 @@ void TelemetryTests::cancelsSupersededComparisonWaitingForCache()
     const auto b = choices[1].toMap().value("reference").toMap();
     QSemaphore entered, release;
     std::thread blocker([&] {
-        (void)controller.m_analysisSourceCache->load("held-test-decoder", {}, [&](qint64) {
+        (void)controller.m_analysis.m_analysisSourceCache->load("held-test-decoder", {}, [&](qint64) {
             entered.release(); release.acquire(); return TelemetrySession{};
         }, [](const TelemetrySession &) {});
     });
     const auto unblock = qScopeGuard([&] { release.release(); if (blocker.joinable()) blocker.join(); });
     QVERIFY(entered.tryAcquire(1, 5000));
-    QVERIFY(controller.selectComparisonLap(0, a)); QTRY_VERIFY(controller.m_comparisonPending);
-    const auto obsolete = controller.m_comparisonCancellation;
+    QVERIFY(controller.selectComparisonLap(0, a)); QTRY_VERIFY(controller.m_analysis.m_comparisonPending);
+    const auto obsolete = controller.m_analysis.m_comparisonCancellation;
     QVERIFY(controller.selectComparisonLap(0, b)); QVERIFY(obsolete->load());
     QVERIFY(controller.selectComparisonLap(0, a)); QVERIFY(controller.selectComparisonLap(0, b));
     release.release(); blocker.join();
-    QTRY_COMPARE(controller.m_comparisonSlots[0].state, QString("ready"));
-    QCOMPARE(controller.m_comparisonSlots[0].row.value("reference").toMap(), b);
-    QCOMPARE(controller.m_comparisonSlots[1].state, QString("empty"));
-    QVERIFY(controller.m_comparisonSlots[0].error.isEmpty());
-    QVERIFY(controller.m_analysisSourceCache->usedBytes() <= controller.m_analysisSourceCache->limitBytes());
+    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].row.value("reference").toMap(), b);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("empty"));
+    QVERIFY(controller.m_analysis.m_comparisonSlots[0].error.isEmpty());
+    QVERIFY(controller.m_analysis.m_analysisSourceCache->usedBytes() <= controller.m_analysis.m_analysisSourceCache->limitBytes());
 }
 
 void TelemetryTests::excludesChannelMissingFromOneComparisonSlot()
@@ -6519,8 +6519,8 @@ void TelemetryTests::excludesChannelMissingFromOneComparisonSlot()
     QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
     QTRY_VERIFY(controller.comparisonPairReady());
 
-    QVERIFY(controller.m_comparisonSlots[0].session->channels.contains("speed"));
-    QVERIFY(!controller.m_comparisonSlots[1].session->channels.contains("speed"));
+    QVERIFY(controller.m_analysis.m_comparisonSlots[0].session->channels.contains("speed"));
+    QVERIFY(!controller.m_analysis.m_comparisonSlots[1].session->channels.contains("speed"));
     const auto available = controller.comparisonAvailableChannels();
     QVERIFY(available.contains("latitude"));
     QVERIFY2(!available.contains("speed"), "a channel missing from one recording must not appear as shared");
@@ -6637,8 +6637,8 @@ void TelemetryTests::keepsComparisonAndOutingLapVideoIndependent()
     QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
     QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
     QTRY_VERIFY(controller.comparisonPairReady());
-    const auto sessionA = controller.m_comparisonSlots[0].session;
-    const auto sessionB = controller.m_comparisonSlots[1].session;
+    const auto sessionA = controller.m_analysis.m_comparisonSlots[0].session;
+    const auto sessionB = controller.m_analysis.m_comparisonSlots[1].session;
     const auto axisLength = controller.comparisonProgressAxisLength();
     const auto deltaBefore = controller.comparisonDeltaSeriesByProgress(0, axisLength, 50);
 
@@ -6662,16 +6662,16 @@ void TelemetryTests::keepsComparisonAndOutingLapVideoIndependent()
     QCOMPARE(controller.outingLapVideoPositionMilliseconds(), qRound64(midpoint * 1000.0));
 
     // The comparison pair must not have moved at all while video state changed.
-    QCOMPARE(controller.m_comparisonSlots[0].session, sessionA);
-    QCOMPARE(controller.m_comparisonSlots[1].session, sessionB);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, sessionA);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, sessionB);
     QVERIFY(controller.comparisonPairReady());
     QCOMPARE(controller.comparisonDeltaSeriesByProgress(0, axisLength, 50), deltaBefore);
 
     // Advancing the video-driven cursor further must still not touch the
     // comparison slots.
     QVERIFY(controller.followOutingLapVideoPosition(qRound64((midpoint + 1.0) * 1000.0)));
-    QCOMPARE(controller.m_comparisonSlots[0].session, sessionA);
-    QCOMPARE(controller.m_comparisonSlots[1].session, sessionB);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, sessionA);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, sessionB);
 
     // Conversely, clearing/reselecting a comparison slot must not disturb the
     // still-open outing lap's video availability or cursor.
@@ -6687,8 +6687,8 @@ void TelemetryTests::keepsComparisonAndOutingLapVideoIndependent()
     // Closing the outing lap detail (and its video) leaves the comparison
     // pair fully intact.
     controller.closeOutingLap();
-    QCOMPARE(controller.m_comparisonSlots[0].session, sessionA);
-    QCOMPARE(controller.m_comparisonSlots[1].session, sessionB);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, sessionA);
+    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, sessionB);
     QVERIFY(controller.comparisonPairReady());
 }
 
@@ -6752,7 +6752,7 @@ void TelemetryTests::presentsDayResultStatesWithoutVideo()
         }
     }
     QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    const auto detail = controller.m_outingLapDetailSession;
+    const auto detail = controller.m_analysis.m_outingLapDetailSession;
     const auto track = controller.outingLapTrack();
     const auto cursor = controller.outingLapCursor();
 
@@ -6766,7 +6766,7 @@ void TelemetryTests::presentsDayResultStatesWithoutVideo()
     QCOMPARE(runStatus(runB).value("state").toString(), QString("missing-source"));
     QCOMPARE(runStatus(runA).value("state").toString(), QString("ready"));
     QCOMPARE(controller.outingRanking().value("runs").toList().size(), 1);
-    QCOMPARE(controller.m_outingLapDetailSession, detail);
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
     QCOMPARE(controller.outingLapTrack(), track); QCOMPARE(controller.outingLapCursor(), cursor);
     QTRY_VERIFY(retry->isVisible() && retry->isEnabled());
     auto *runStatuses = window->findChild<QObject *>("outingRunStatuses"); QVERIFY(runStatuses);
@@ -6786,7 +6786,7 @@ void TelemetryTests::presentsDayResultStatesWithoutVideo()
     QTRY_COMPARE(controller.outingAnalysisStatus().value("readyRunCount").toInt(), 2);
     QTRY_VERIFY(!retry->isVisible());
     QVERIFY(!controller.outingAnalysisStatus().value("partial").toBool());
-    QCOMPARE(controller.m_outingLapDetailSession, detail);
+    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
 
     // A different file at the same path is an identity error, never an empty
     // result or a silently accepted replacement. The other run stays usable.
@@ -6815,14 +6815,14 @@ void TelemetryTests::presentsDayResultStatesWithoutVideo()
     QCOMPARE(controller.syncOffset(), 19.0); QCOMPARE(controller.timeScale(), 1.3);
 
     // A superseded worker must publish neither obsolete errors nor run names.
-    AppController::OutingLapResult stale;
-    stale.key = controller.outingLapKey(); stale.generation = controller.m_sourceGeneration;
+    AnalysisController::OutingLapResult stale;
+    stale.key = controller.m_analysis.outingLapKey(); stale.generation = controller.m_sourceGeneration;
     stale.messages.append({runB, "Obsolete source error", "error"});
-    QPromise<AppController::OutingLapResult> promise; promise.start();
-    controller.m_outingLapWatcher.setFuture(promise.future());
+    QPromise<AnalysisController::OutingLapResult> promise; promise.start();
+    controller.m_analysis.m_outingLapWatcher.setFuture(promise.future());
     controller.requestNewProject();
     promise.addResult(stale); promise.finish();
-    QTRY_VERIFY(!controller.m_outingLapWatcher.isRunning());
+    QTRY_VERIFY(!controller.m_analysis.m_outingLapWatcher.isRunning());
     QTRY_COMPARE(controller.outingAnalysisStatus().value("state").toString(), QString("empty"));
     QVERIFY(controller.outingAnalysisStatus().value("runs").toList().isEmpty());
     QVERIFY(controller.outingAnalysisStatus().value("notices").toStringList().isEmpty());
@@ -9385,10 +9385,10 @@ void TelemetryTests::persistsAndInvalidatesRunTrackConfiguration()
     QVERIFY(controller.selectOutingLap(0));
     QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
     const auto generation = controller.m_sourceGeneration;
-    const auto oldKey = controller.outingLapKey();
+    const auto oldKey = controller.m_analysis.outingLapKey();
     QVERIFY(controller.setRunTrackConfiguration(runId, "jastrzab-full", "clockwise"));
     QCOMPARE(controller.outingLapDetailState(), QString("idle"));
-    QVERIFY(controller.outingLapKey() != oldKey);
+    QVERIFY(controller.m_analysis.outingLapKey() != oldKey);
     QCOMPARE(controller.m_sourceGeneration, generation); // Metadata edits do not reload the editor.
     QTRY_VERIFY(!controller.outingLapsLoading() && !controller.outingLaps().isEmpty());
     QVERIFY(controller.dirty());
@@ -9412,9 +9412,9 @@ void TelemetryTests::persistsAndInvalidatesRunTrackConfiguration()
     run = runs[0].toObject(); auto staleConfig = config;
     staleConfig.insert("gateRevision", "gates-v1:" + QString(64, '0'));
     run.insert("trackConfiguration", staleConfig); runs[0] = run; EventProjectFixture::setRuns(stale, runs);
-    const auto oldGateKey = reopened.outingLapKey();
+    const auto oldGateKey = reopened.m_analysis.outingLapKey();
     reopened.m_projectTemplate = stale; reopened.markPersistentChange();
-    QVERIFY(reopened.outingLapKey() != oldGateKey);
+    QVERIFY(reopened.m_analysis.outingLapKey() != oldGateKey);
     QTRY_VERIFY(!reopened.outingLapsLoading() && reopened.outingLapMessages().join(" ").contains("Timing-gate revision"));
     QVERIFY(reopened.outingLaps().isEmpty());
     // Replacing the source clears the source-bound assertions in the real editor path.

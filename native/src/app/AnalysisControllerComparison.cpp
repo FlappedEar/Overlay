@@ -1,4 +1,4 @@
-#include "AppController.h"
+#include "app/AnalysisController.h"
 #include "project/EventProjectCodec.h"
 #include "project/ProjectLimits.h"
 #include "telemetry/TrackProgress.h"
@@ -55,7 +55,7 @@ bool comparisonSlotStatusIsWarning(const QString &state, const QVariantMap &row)
 }
 }
 
-QVariantList AppController::comparisonSlots() const
+QVariantList AnalysisController::comparisonSlots() const
 {
     QVariantList result;
     for (int i = 0; i < 2; ++i) {
@@ -67,7 +67,7 @@ QVariantList AppController::comparisonSlots() const
     return result;
 }
 
-QString AppController::formatElapsedTime(const double seconds)
+QString AnalysisController::formatElapsedTime(const double seconds)
 {
     if (!std::isfinite(seconds)) return QStringLiteral("—");
     const auto milliseconds = static_cast<qint64>(std::llround(std::abs(seconds) * 1000.0));
@@ -78,7 +78,7 @@ QString AppController::formatElapsedTime(const double seconds)
         .arg(milliseconds % 1000, 3, 10, QLatin1Char('0'));
 }
 
-QVariantList AppController::comparisonLaps() const
+QVariantList AnalysisController::comparisonLaps() const
 {
     QVariantList result;
     if (outingLapsLoading()) return result;
@@ -92,7 +92,7 @@ QVariantList AppController::comparisonLaps() const
     return result;
 }
 
-QStringList AppController::comparisonAvailableChannels() const
+QStringList AnalysisController::comparisonAvailableChannels() const
 {
     if (m_comparisonSlots[0].state != "ready" || m_comparisonSlots[1].state != "ready"
         || !m_comparisonSlots[0].session || !m_comparisonSlots[1].session) return {};
@@ -104,16 +104,16 @@ QStringList AppController::comparisonAvailableChannels() const
     return shared;
 }
 
-bool AppController::comparisonPairReady() const
+bool AnalysisController::comparisonPairReady() const
 {
     return !outingLapsLoading() && m_comparisonSlots[0].state == "ready" && m_comparisonSlots[1].state == "ready"
         && m_comparisonSlots[0].row.value("compatibilityGroupId") == m_comparisonSlots[1].row.value("compatibilityGroupId");
 }
 
-bool AppController::selectComparisonLap(const int index, const QVariantMap &reference)
+bool AnalysisController::selectComparisonLap(const int index, const QVariantMap &reference)
 {
-    if (index < 0 || index > 1 || recoveryPending()
-        || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) return false;
+    if (index < 0 || index > 1 || m_document.recoveryPending()
+        || m_document.destructiveActionPending()) return false;
     const auto resolved = resolveOutingLapReference(reference);
     if (resolved.value("state") != "resolved") return false;
     const auto row = m_outingLapRows[resolved.value("index").toInt()].toMap();
@@ -136,7 +136,7 @@ bool AppController::selectComparisonLap(const int index, const QVariantMap &refe
     return true;
 }
 
-void AppController::resetComparisonSlot(const int index)
+void AnalysisController::resetComparisonSlot(const int index)
 {
     if (index < 0 || index > 1) return;
     if (m_comparisonPending && m_comparisonLoadingSlot == index && m_comparisonCancellation)
@@ -146,7 +146,7 @@ void AppController::resetComparisonSlot(const int index)
     emit comparisonSlotsChanged();
 }
 
-void AppController::clearComparisonLap(const int index)
+void AnalysisController::clearComparisonLap(const int index)
 {
     if (index < 0 || index > 1) return;
     resetComparisonSlot(index);
@@ -157,10 +157,10 @@ void AppController::clearComparisonLap(const int index)
     persistComparisonSlot(index, QJsonValue(QJsonValue::Null));
 }
 
-void AppController::persistComparisonSlot(const int index, const QJsonValue &reference)
+void AnalysisController::persistComparisonSlot(const int index, const QJsonValue &reference)
 {
-    if (index < 0 || index > 1 || !EventProjectCodec::isEvent(m_projectTemplate)) return;
-    auto project = currentProjectObject();
+    if (index < 0 || index > 1 || !m_document.isEventDocument()) return;
+    auto project = m_document.analysisProject();
     auto event = project.value("event").toObject();
     auto decisions = event.value("analysisDecisions").toObject();
     auto savedComparisonSlots = decisions.value("comparisonSlots").toArray();
@@ -171,15 +171,14 @@ void AppController::persistComparisonSlot(const int index, const QJsonValue &ref
     event.insert("analysisDecisions", decisions);
     project.insert("event", event);
     if (!ProjectLimits::validateProject(project)) return;
-    m_projectTemplate = project;
-    markPersistentChange();
+    m_document.commitAnalysisProject(project);
 }
 
-void AppController::restorePersistedComparisonSlots()
+void AnalysisController::restorePersistedComparisonSlots()
 {
-    if (m_comparisonRestoreAttempted || outingLapsLoading() || !EventProjectCodec::isEvent(m_projectTemplate)) return;
+    if (m_comparisonRestoreAttempted || outingLapsLoading() || !m_document.isEventDocument()) return;
     m_comparisonRestoreAttempted = true;
-    const auto savedComparisonSlots = currentProjectObject().value("event").toObject()
+    const auto savedComparisonSlots = m_document.analysisProject().value("event").toObject()
         .value("analysisDecisions").toObject().value("comparisonSlots").toArray();
     for (int i = 0; i < 2 && i < savedComparisonSlots.size(); ++i) {
         if (!m_comparisonSlots[i].row.isEmpty() || !savedComparisonSlots[i].isObject()) continue;
@@ -189,29 +188,29 @@ void AppController::restorePersistedComparisonSlots()
     }
 }
 
-QVariantMap AppController::comparisonPersistedRangeMeters() const
+QVariantMap AnalysisController::comparisonPersistedRangeMeters() const
 {
-    const auto range = currentProjectObject().value("event").toObject()
+    const auto range = m_document.analysisProject().value("event").toObject()
         .value("analysisDecisions").toObject().value("comparisonRange").toObject();
     if (!range.value("startMeters").isDouble() || !range.value("endMeters").isDouble()) return {};
     return {{"startMeters", range.value("startMeters").toDouble()}, {"endMeters", range.value("endMeters").toDouble()}};
 }
 
-QStringList AppController::comparisonPersistedChannels() const
+QStringList AnalysisController::comparisonPersistedChannels() const
 {
     QStringList result;
-    for (const auto &value : currentProjectObject().value("event").toObject()
+    for (const auto &value : m_document.analysisProject().value("event").toObject()
              .value("analysisDecisions").toObject().value("comparisonChannels").toArray())
         result.append(value.toString());
     return result;
 }
 
-void AppController::persistComparisonRange(const double startMeters, const double endMeters)
+void AnalysisController::persistComparisonRange(const double startMeters, const double endMeters)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || !std::isfinite(startMeters) || !std::isfinite(endMeters)
+    if (!m_document.isEventDocument() || !std::isfinite(startMeters) || !std::isfinite(endMeters)
         || startMeters < 0.0 || endMeters <= startMeters
         || endMeters > ProjectLimits::maximumComparisonRangeMeters) return;
-    auto project = currentProjectObject();
+    auto project = m_document.analysisProject();
     auto event = project.value("event").toObject();
     auto decisions = event.value("analysisDecisions").toObject();
     const QJsonObject range{{"startMeters", startMeters}, {"endMeters", endMeters}};
@@ -220,14 +219,13 @@ void AppController::persistComparisonRange(const double startMeters, const doubl
     event.insert("analysisDecisions", decisions);
     project.insert("event", event);
     if (!ProjectLimits::validateProject(project)) return;
-    m_projectTemplate = project;
-    markPersistentChange();
+    m_document.commitAnalysisProject(project);
 }
 
-void AppController::persistComparisonChannels(const QStringList &channels)
+void AnalysisController::persistComparisonChannels(const QStringList &channels)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || channels.size() > ProjectLimits::maximumComparisonChannels) return;
-    auto project = currentProjectObject();
+    if (!m_document.isEventDocument() || channels.size() > ProjectLimits::maximumComparisonChannels) return;
+    auto project = m_document.analysisProject();
     auto event = project.value("event").toObject();
     auto decisions = event.value("analysisDecisions").toObject();
     QJsonArray array;
@@ -237,11 +235,10 @@ void AppController::persistComparisonChannels(const QStringList &channels)
     event.insert("analysisDecisions", decisions);
     project.insert("event", event);
     if (!ProjectLimits::validateProject(project)) return;
-    m_projectTemplate = project;
-    markPersistentChange();
+    m_document.commitAnalysisProject(project);
 }
 
-void AppController::failComparisonLap(const int index, const QString &reason)
+void AnalysisController::failComparisonLap(const int index, const QString &reason)
 {
     auto &slot = m_comparisonSlots[index];
     if (slot.state == "error" && slot.error == reason) return;
@@ -253,7 +250,7 @@ void AppController::failComparisonLap(const int index, const QString &reason)
     slot.state = "error"; slot.error = reason;
 }
 
-void AppController::invalidateComparisonLaps()
+void AnalysisController::invalidateComparisonLaps()
 {
     restorePersistedComparisonSlots();
     for (int i = 0; i < 2; ++i) {
@@ -280,7 +277,7 @@ void AppController::invalidateComparisonLaps()
     emit comparisonSlotsChanged();
 }
 
-bool AppController::swapComparisonLaps()
+bool AnalysisController::swapComparisonLaps()
 {
     if (m_comparisonSlots[0].row.isEmpty() || m_comparisonSlots[1].row.isEmpty()) return false;
     if (m_comparisonCancellation) m_comparisonCancellation->store(true);
@@ -294,7 +291,7 @@ bool AppController::swapComparisonLaps()
     return true;
 }
 
-bool AppController::useBestComparisonLap(const bool wholeDay)
+bool AnalysisController::useBestComparisonLap(const bool wholeDay)
 {
     if (outingLapsLoading()) return false;
     const auto &a = m_comparisonSlots[0];
@@ -314,13 +311,13 @@ bool AppController::useBestComparisonLap(const bool wholeDay)
     return false;
 }
 
-bool AppController::inspectComparisonLap(const int index)
+bool AnalysisController::inspectComparisonLap(const int index)
 {
     return index >= 0 && index < 2 && m_comparisonSlots[index].state == "ready"
         && selectOutingLapReference(m_comparisonSlots[index].row.value("reference").toMap());
 }
 
-void AppController::setComparisonViewOpen(const bool open)
+void AnalysisController::setComparisonViewOpen(const bool open)
 {
     if (m_comparisonViewOpen == open) return;
     m_comparisonViewOpen = open;
@@ -331,7 +328,7 @@ void AppController::setComparisonViewOpen(const bool open)
     emit comparisonViewOpenChanged();
 }
 
-QVariantMap AppController::comparisonLapSeries(
+QVariantMap AnalysisController::comparisonLapSeries(
     const int slot, const QString &channel, const double startTime, const double endTime,
     const int maximumPoints) const
 {
@@ -341,13 +338,13 @@ QVariantMap AppController::comparisonLapSeries(
     return sessionSeries(*comparisonSlot.session, channel, startTime, endTime, maximumPoints);
 }
 
-QVariantList AppController::comparisonLapTrack(const int slot) const
+QVariantList AnalysisController::comparisonLapTrack(const int slot) const
 {
     if (slot < 0 || slot > 1) return {};
     return m_comparisonSlots[slot].track;
 }
 
-void AppController::ensureComparisonSharedGeometry() const
+void AnalysisController::ensureComparisonSharedGeometry() const
 {
     const auto &a = m_comparisonSlots[0];
     const auto &b = m_comparisonSlots[1];
@@ -376,7 +373,7 @@ void AppController::ensureComparisonSharedGeometry() const
     m_comparisonSharedGeometryRequestB = b.request;
 }
 
-QVariantList AppController::comparisonOverlayTrack(const int slot) const
+QVariantList AnalysisController::comparisonOverlayTrack(const int slot) const
 {
     if (slot < 0 || slot > 1) return {};
     ensureComparisonSharedGeometry();
@@ -398,7 +395,7 @@ bool isDiscreteChannel(const QString &channel)
 }
 }
 
-void AppController::ensureComparisonProgressAxis() const
+void AnalysisController::ensureComparisonProgressAxis() const
 {
     const auto &a = m_comparisonSlots[0];
     const auto &b = m_comparisonSlots[1];
@@ -431,7 +428,7 @@ void AppController::ensureComparisonProgressAxis() const
     m_comparisonProgressAxisRequestB = b.request;
 }
 
-QVariantMap AppController::comparisonPositionAtProgress(const int slot, const double progressMeters) const
+QVariantMap AnalysisController::comparisonPositionAtProgress(const int slot, const double progressMeters) const
 {
     if (slot < 0 || slot > 1) return {};
     const auto &comparisonSlot = m_comparisonSlots[slot];
@@ -447,7 +444,7 @@ QVariantMap AppController::comparisonPositionAtProgress(const int slot, const do
     return {{"x", point->x()}, {"y", point->y()}};
 }
 
-bool AppController::openComparisonLapAtProgress(const int slot, const double progressMeters)
+bool AnalysisController::openComparisonLapAtProgress(const int slot, const double progressMeters)
 {
     if (slot < 0 || slot > 1 || !comparisonPairReady()) return false;
     ensureComparisonProgressAxis();
@@ -464,13 +461,13 @@ bool AppController::openComparisonLapAtProgress(const int slot, const double pro
     return true;
 }
 
-double AppController::comparisonProgressAxisLength() const
+double AnalysisController::comparisonProgressAxisLength() const
 {
     ensureComparisonProgressAxis();
     return m_comparisonProgressAxis.valid ? m_comparisonProgressAxis.lengthMeters : 0.0;
 }
 
-QVariantMap AppController::comparisonDeltaSeriesByProgress(
+QVariantMap AnalysisController::comparisonDeltaSeriesByProgress(
     const double startProgress, const double endProgress, const int maximumPoints) const
 {
     if (maximumPoints < 2) return {};
@@ -503,7 +500,7 @@ QVariantMap AppController::comparisonDeltaSeriesByProgress(
     };
 }
 
-QVariantMap AppController::comparisonChannelSeriesByProgress(const int slot, const QString &channel,
+QVariantMap AnalysisController::comparisonChannelSeriesByProgress(const int slot, const QString &channel,
     const double startProgress, const double endProgress, const int maximumPoints) const
 {
     if (slot < 0 || slot > 1 || maximumPoints < 2) return {};
@@ -551,14 +548,14 @@ QVariantMap AppController::comparisonChannelSeriesByProgress(const int slot, con
     };
 }
 
-void AppController::initializeComparisonLaps()
+void AnalysisController::initializeComparisonLaps()
 {
     m_comparisonTimer.setSingleShot(true);
     m_comparisonTimer.setInterval(0);
-    connect(&m_comparisonTimer, &QTimer::timeout, this, &AppController::loadComparisonLap);
-    connect(this, &AppController::documentStateChanged, this, &AppController::invalidateComparisonLaps);
-    connect(this, &AppController::sourceLoadStateChanged, this, &AppController::invalidateComparisonLaps);
-    connect(this, &AppController::outingLapsChanged, this, &AppController::invalidateComparisonLaps);
+    connect(&m_comparisonTimer, &QTimer::timeout, this, &AnalysisController::loadComparisonLap);
+    connect(this, &AnalysisController::documentStateChanged, this, &AnalysisController::invalidateComparisonLaps);
+    connect(this, &AnalysisController::sourceLoadStateChanged, this, &AnalysisController::invalidateComparisonLaps);
+    connect(this, &AnalysisController::outingLapsChanged, this, &AnalysisController::invalidateComparisonLaps);
     connect(&m_comparisonWatcher, &QFutureWatcher<OutingLapDetailResult>::finished, this, [this] {
         auto result = m_comparisonWatcher.future().takeResult();
         const int index = m_comparisonLoadingSlot;
@@ -591,7 +588,7 @@ void AppController::initializeComparisonLaps()
     });
 }
 
-void AppController::loadComparisonLap()
+void AnalysisController::loadComparisonLap()
 {
     // One bounded parser for the pair. Repeated selections cancel and coalesce;
     // the other slot's verified session is retained throughout.
@@ -602,7 +599,7 @@ void AppController::loadComparisonLap()
         const auto source = slot.source;
         const auto row = slot.row;
         const auto request = slot.request;
-        const auto projectPath = m_documentState.projectPath();
+        const auto projectPath = m_document.documentProjectPath();
         m_comparisonCancellation = std::make_shared<std::atomic_bool>(false);
         const auto cancellation = m_comparisonCancellation;
         m_comparisonPending = true;

@@ -319,14 +319,7 @@ AppController::AppController(QObject *parent, QString recoveryPath,
         }
     });
     initializeBatchImport();
-    initializeOutingLaps();
-    initializeOutingLapDetail();
-    initializeSegmentReview();
-    initializeComparisonLaps();
-    initializeOutingTheoreticalBest();
-    initializeOutingChannelSummaries();
-    initializeOutingDayReport();
-    m_videoLink = this;
+    initializeAnalysis();
     retireLegacyDocumentSettings();
     restoreStartupState();
 }
@@ -340,14 +333,12 @@ AppController::~AppController()
     while (sourceShutdown.elapsed() < 2'000
            && (m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning()
                || m_projectLoadWatcher.isRunning() || m_syncWatcher.isRunning() || m_batchWatcher.isRunning()
-               || m_outingLapWatcher.isRunning() || m_outingLapDetailWatcher.isRunning() || m_comparisonWatcher.isRunning()
-               || m_segmentReviewWatcher.isRunning())) {
+               || m_analysis.workRunning())) {
         QThread::msleep(10);
     }
     if (m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning()
         || m_projectLoadWatcher.isRunning() || m_syncWatcher.isRunning() || m_batchWatcher.isRunning()
-        || m_outingLapWatcher.isRunning() || m_outingLapDetailWatcher.isRunning() || m_comparisonWatcher.isRunning()
-        || m_segmentReviewWatcher.isRunning()) {
+        || m_analysis.workRunning()) {
         AppLog::warn(QStringLiteral("Source worker shutdown exceeded the bounded wait"));
     }
     bool exportStopped = true;
@@ -862,9 +853,7 @@ quint64 AppController::beginSourceReplacement(const bool replacingVideo)
     const bool restartOther = (replacingVideo ? m_vboLoadState : m_videoLoadState) == QStringLiteral("loading");
     const auto request = replacingVideo ? m_vboLoadRequest : m_videoLoadRequest;
     if (!replacingVideo) {
-        ++m_outingRunGenerations[activeRunId()];
-        invalidateOutingLapDetail();
-        invalidateComparisonLaps();
+        m_analysis.activeRunSourceReplaced(activeRunId());
     }
     const quint64 generation = beginSourceGeneration(true);
     if (restartOther && !request.path.isEmpty()) {
@@ -879,15 +868,7 @@ quint64 AppController::beginSourceReplacement(const bool replacingVideo)
 quint64 AppController::beginSourceGeneration(const bool preserveOuting)
 {
     if (!preserveOuting) {
-        ++m_outingDocumentGeneration;
-        m_outingRunCache.clear();
-        m_outingInferredGroups = {};
-        m_outingRunGenerations.clear();
-        closeOutingLap();
-        resetComparisonSlot(0);
-        resetComparisonSlot(1);
-        setComparisonViewOpen(false);
-        m_comparisonRestoreAttempted = false;
+        m_analysis.resetForNewSources();
     }
     ++m_sourceGeneration;
     if (!m_sourceMismatchType.isEmpty()) {
@@ -913,11 +894,9 @@ quint64 AppController::beginSourceGeneration(const bool preserveOuting)
 
 void AppController::cancelSourceJobs(const bool cancelOutingDetail)
 {
-    if (cancelOutingDetail && m_comparisonCancellation) m_comparisonCancellation->store(true);
-    if (cancelOutingDetail && m_outingLapDetailCancellation) m_outingLapDetailCancellation->store(true);
-    if (cancelOutingDetail && m_segmentReviewCancellation) m_segmentReviewCancellation->store(true);
+    m_analysis.cancelWork(cancelOutingDetail);
     for (const auto &cancellation : {m_videoProbeCancellation, m_vboLoadCancellation,
-                                     m_projectLoadCancellation, m_syncCancellation, m_outingLapCancellation}) {
+                                     m_projectLoadCancellation, m_syncCancellation}) {
         if (cancellation) {
             cancellation->store(true);
         }
@@ -976,7 +955,7 @@ void AppController::startVboLoad(
     emit sourceLoadStateChanged();
     QByteArray expectedRevision;
     if (!expectedFingerprint.isEmpty()) {
-        for (const auto &value : outingLapSources()) {
+        for (const auto &value : m_analysis.outingLapSources()) {
             const auto source = value.toObject();
             if (source.value("runId").toString() == activeRunId()
                 && source.value("reference").toObject().value("fingerprint").toObject() == expectedFingerprint)
@@ -1080,7 +1059,7 @@ void AppController::commitVboLoad(const VboLoadResult &result, const bool markDo
         }
         event.insert("runs", runs); project.insert("event", event); m_projectTemplate = project;
     }
-    refreshLapExclusionPolicy();
+    m_analysis.refreshLapExclusionPolicy();
     reconcileAnalysisChannels();
     emit telemetryChanged();
     emit lapNavigationChanged();
@@ -1274,64 +1253,7 @@ QVariantMap AppController::telemetrySeries(
     const auto telemetryStart = videoToTelemetryTime(videoStart, m_sync);
     const auto telemetryEnd = videoToTelemetryTime(videoEnd, m_sync);
     if (!telemetryStart || !telemetryEnd) return {};
-    return sessionSeries(*m_session, channelName, *telemetryStart, *telemetryEnd, maximumPoints);
-}
-
-QVariantMap AppController::sessionSeries(const TelemetrySession &session, const QString &channelName,
-    double telemetryStart, double telemetryEnd, int maximumPoints)
-{
-    SampledSegmentsStatus status = SampledSegmentsStatus::Ok;
-    const QVector<QVector<QPointF>> sampledSegments = session.sampledSegments(
-        channelName, telemetryStart, telemetryEnd, qBound(2, maximumPoints, 2000), &status);
-    if (sampledSegments.isEmpty()) {
-        // A genuinely empty overlap (status Ok) stays the plain "no data" shape
-        // callers already expect; only a real range/channel problem gets a reason
-        // so QML can tell "no data" apart from a rendering/data-shape failure.
-        if (status == SampledSegmentsStatus::Ok) return {};
-        QString reason;
-        switch (status) {
-        case SampledSegmentsStatus::InvalidRange: reason = QStringLiteral("invalidRange"); break;
-        case SampledSegmentsStatus::ChannelMissing: reason = QStringLiteral("channelMissing"); break;
-        case SampledSegmentsStatus::ChannelMalformed: reason = QStringLiteral("channelMalformed"); break;
-        case SampledSegmentsStatus::Ok: break;
-        }
-        return {{"reason", reason}};
-    }
-    double minimum = sampledSegments.front().front().y();
-    double maximum = minimum;
-    for (const QVector<QPointF> &segment : sampledSegments) {
-        for (const QPointF &sample : segment) {
-            minimum = std::min(minimum, sample.y());
-            maximum = std::max(maximum, sample.y());
-        }
-    }
-    const double telemetrySpan = telemetryEnd - telemetryStart;
-    QVariantList segments;
-    segments.reserve(sampledSegments.size());
-    for (const QVector<QPointF> &sampledSegment : sampledSegments) {
-        QVariantList points;
-        points.reserve(sampledSegment.size());
-        for (const QPointF &sample : sampledSegment) {
-            const double normalizedTime = telemetrySpan == 0.0
-                ? 0.0
-                : (sample.x() - telemetryStart) / telemetrySpan;
-            points.append(QVariantMap{{"x", normalizedTime}, {"y", sample.y()}});
-        }
-        // QVariantList has an overload that appends another list's elements.
-        // Wrap the points list explicitly so QML receives segments -> points,
-        // preserving telemetry gaps as separate polylines.
-        segments.append(QVariant::fromValue(points));
-    }
-    const QString resolved = session.aliases.value(channelName, channelName);
-    const auto channel = session.channels.constFind(resolved);
-    return {
-        {"segments", segments},
-        // Presentation only: retain signed samples and units for inspection.
-        {"brakingUp", resolved == session.aliases.value("longitudinalAcceleration")},
-        {"minimum", minimum},
-        {"maximum", maximum},
-        {"unit", channel == session.channels.cend() ? QString() : channel->unit},
-    };
+    return AnalysisController::sessionSeries(*m_session, channelName, *telemetryStart, *telemetryEnd, maximumPoints);
 }
 
 qint64 AppController::videoMillisecondsForTelemetryTime(const double telemetryTime) const
@@ -1747,7 +1669,7 @@ QJsonObject AppController::currentProjectObject(
         ? EventProjectCodec::withEditorState(m_projectTemplate, project, m_documentState.projectPath(), targetProjectPath,
             m_vboLoadState == "ready" ? m_loadedSourceRevision : QByteArray{})
         : project;
-    return savedRevision ? projectWithOutingInference(project) : project;
+    return savedRevision ? m_analysis.projectWithOutingInference(project) : project;
 }
 
 bool AppController::saveProject(const QUrl &url)

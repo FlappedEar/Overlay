@@ -9,7 +9,7 @@
 // from a theoretical-best sector (KAN-57), against the canonical run's
 // segmentation that result used, labelled via comparisonSegmentationNote().
 
-#include "app/AppController.h"
+#include "app/AnalysisController.h"
 #include "telemetry/MetricProvenance.h"
 #include "telemetry/GgPairs.h"
 
@@ -98,7 +98,7 @@ SegmentSpeeds segmentSpeeds(const TelemetrySession &session, const QVector<Progr
 
 } // namespace
 
-QStringList AppController::comparisonPreferredChannels() const
+QStringList AnalysisController::comparisonPreferredChannels() const
 {
     // The recording's own names for the speed, throttle and brake aliases
     // (for example "velocity", "throttle_pos", "brake_pos").
@@ -113,13 +113,13 @@ QStringList AppController::comparisonPreferredChannels() const
     return preferred;
 }
 
-ApprovedSegmentation AppController::comparisonApprovedSegmentation(const int slot) const
+ApprovedSegmentation AnalysisController::comparisonApprovedSegmentation(const int slot) const
 {
     if (slot < 0 || slot > 1) return {};
     const auto &row = m_comparisonSlots[slot].row;
     const auto runId = row.value("runId").toString();
     const auto configuration = row.value("compatibilityGroupId").toString();
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray()) {
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray()) {
         const auto run = value.toObject();
         if (run.value("id").toString() == runId)
             return approvedSegmentation(run.value("trackSegments"), configuration);
@@ -127,7 +127,7 @@ ApprovedSegmentation AppController::comparisonApprovedSegmentation(const int slo
     return {};
 }
 
-std::optional<ApprovedSegmentation> AppController::comparisonSharedSegmentation() const
+std::optional<ApprovedSegmentation> AnalysisController::comparisonSharedSegmentation() const
 {
     if (!comparisonPairReady()) return std::nullopt;
     const auto approvedA = comparisonApprovedSegmentation(0);
@@ -143,7 +143,7 @@ std::optional<ApprovedSegmentation> AppController::comparisonSharedSegmentation(
     const auto group = m_comparisonSlots[0].row.value("compatibilityGroupId").toString();
     if (group.isEmpty() || m_comparisonSlots[1].row.value("compatibilityGroupId").toString() != group)
         return std::nullopt;
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray()) {
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray()) {
         const auto run = value.toObject();
         if (run.value("id").toString() != m_comparisonSegmentationRunId) continue;
         auto canonical = approvedSegmentation(run.value("trackSegments"), group);
@@ -152,7 +152,7 @@ std::optional<ApprovedSegmentation> AppController::comparisonSharedSegmentation(
     return std::nullopt;
 }
 
-QString AppController::comparisonSegmentationNote() const
+QString AnalysisController::comparisonSegmentationNote() const
 {
     if (!comparisonPairReady() || m_comparisonSegmentationRunId.isEmpty()) return {};
     const auto approvedA = comparisonApprovedSegmentation(0);
@@ -160,14 +160,14 @@ QString AppController::comparisonSegmentationNote() const
     if (approvedA.valid && !approvedA.revision.isEmpty() && approvedA.revision == approvedB.revision) return {};
     if (!comparisonSharedSegmentation()) return {};
     QString runName = m_comparisonSegmentationRunId;
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray())
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray())
         if (value.toObject().value("id").toString() == m_comparisonSegmentationRunId)
             runName = value.toObject().value("name").toString();
     return tr("Segments approved on %1, as used by the sector theoretical best. Boundaries are distances along "
               "that run's axis, so they can shift by a few metres on these laps.").arg(runName);
 }
 
-QVariantList AppController::comparisonApprovedSegments() const
+QVariantList AnalysisController::comparisonApprovedSegments() const
 {
     const auto shared = comparisonSharedSegmentation();
     if (!shared) return {};
@@ -182,7 +182,7 @@ QVariantList AppController::comparisonApprovedSegments() const
     return rows;
 }
 
-QVariantMap AppController::comparisonSegmentMetrics(const QString &segmentId) const
+QVariantMap AnalysisController::comparisonSegmentMetrics(const QString &segmentId) const
 {
     if (!comparisonPairReady() || segmentId.isEmpty()) return {};
     ensureComparisonProgressAxis();
@@ -338,7 +338,7 @@ QVariantMap AppController::comparisonSegmentMetrics(const QString &segmentId) co
     return result;
 }
 
-QVariantMap AppController::comparisonTimeLossObservations() const
+QVariantMap AnalysisController::comparisonTimeLossObservations() const
 {
     const auto shared = comparisonSharedSegmentation();
     if (!shared) return {{"valid", false}};
@@ -373,7 +373,7 @@ QVariantMap AppController::comparisonTimeLossObservations() const
         {"lapDeltaSeconds", (endA - startA) - (endB - startB)}};
 }
 
-QVariantMap AppController::comparisonGgScatter(const double startMeters, const double endMeters, const int maximumPoints) const
+QVariantMap AnalysisController::comparisonGgScatter(const double startMeters, const double endMeters, const int maximumPoints) const
 {
     if (!comparisonPairReady()) return {{"valid", false}};
     ensureComparisonProgressAxis();
