@@ -286,6 +286,8 @@ The floating Analysis window is transient UI state. It starts closed for applica
 
 `ComparisonTileWidget.qml` renders six independent Best/Current/Delta widget types for lap time and speed. Each tile has ordinary persistent widget geometry rather than being a composite group. Its content scale includes both canonical scene scale and per-widget scale, so typography, spacing, gauge strokes, border, and corner radius remain proportional in preview and export.
 
+Lap time tiles (Best and Current) show hundredths by default. **Lap time decimals** in Widget options switches between 1, 2 and 3 decimals (`timingDecimals`); tiles saved before this keep their stored setting (KAN-135).
+
 **Hotlap mode (KAN-134).** The Current lap time tile has a hotlap option: settings `hotlapMode`, and `hotlapLap`, where 0 is the recording's best lap. The inspector offers the option, the lap list and "Use the lap at the playhead" (`AppController::lapNumberAtPlayback`). `TelemetryRenderContext::fixedLapTiming(lap)` supplies the timing, so preview and export show the same:
 - before the lap's start/finish crossing the tile shows 0:00;
 - during the lap it counts;

@@ -1782,6 +1782,22 @@ Rectangle {
                                 onEditingFinished: root.setSetting("warningValue", Number(text))
                             }
                         }
+                        // Lap time precision: tenths, hundredths or thousandths.
+                        RowLayout {
+                            visible: root.selectedWidget.type === "lapCurrent" || root.selectedWidget.type === "lapBest"
+                            Label {
+                                text: qsTr("Lap time decimals")
+                                color: "#8b98a8"
+                                font.pixelSize: 11
+                            }
+                            FeComboBox {
+                                objectName: "lapTimeDecimals"
+                                Layout.fillWidth: true
+                                model: [qsTr("1  (1:40.2)"), qsTr("2  (1:40.23)"), qsTr("3  (1:40.234)")]
+                                currentIndex: Math.max(0, Math.min(2, Number(root.settings.timingDecimals ?? 2) - 1))
+                                onActivated: index => root.setSetting("timingDecimals", index + 1)
+                            }
+                        }
                         // Hotlap: the current lap time of one chosen lap only.
                         FeCheckBox {
                             objectName: "hotlapModeCheck"

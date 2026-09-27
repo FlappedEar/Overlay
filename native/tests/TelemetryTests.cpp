@@ -7814,6 +7814,7 @@ void TelemetryTests::showsOneHotlapAndExportsItByDefault()
     QTRY_VERIFY((hotlapTile = findVisual(findVisual, window->contentItem(),
         [](QQuickItem *item) { return item->property("hotlap").toBool(); })));
     const auto tileValue = [&] { return hotlapTile->property("metricValue").toDouble(); };
+    QVariant formatted;
     const auto tileState = [&] { return hotlapTile->property("hotlapTiming").toMap().value("state").toString(); };
     // Before the lap: 0:00; during: counting; after, even through the next lap: the final time.
     controller.setPlaybackTime(start - 0.5);
@@ -7826,6 +7827,16 @@ void TelemetryTests::showsOneHotlapAndExportsItByDefault()
     QTRY_COMPARE(tileState(), QString("finished"));
     QVERIFY(std::abs(tileValue() - duration) < 1e-6);
     QVERIFY(hotlapTile->property("hotlapFinished").toBool());
+    // Lap times show hundredths by default; the inspector offers tenths to thousandths.
+    QCOMPARE(model->widget(tile).value("settings").toMap().value("timingDecimals").toInt(), 2);
+    QCOMPARE(hotlapTile->property("decimals").toInt(), 2);
+    QVERIFY(QMetaObject::invokeMethod(hotlapTile, "formatTime", Q_RETURN_ARG(QVariant, formatted), Q_ARG(QVariant, 100.234)));
+    QCOMPARE(formatted.toString(), QString("1:40.23"));
+    model->setSetting(tile, "timingDecimals", 3);
+    QTRY_COMPARE(hotlapTile->property("decimals").toInt(), 3);
+    QVERIFY(QMetaObject::invokeMethod(hotlapTile, "formatTime", Q_RETURN_ARG(QVariant, formatted), Q_ARG(QVariant, 100.234)));
+    QCOMPARE(formatted.toString(), QString("1:40.234"));
+    model->setSetting(tile, "timingDecimals", 2);
 
     // The inspector for the tile.
     window->setProperty("selectedWidgetIndex", tile);
@@ -7837,6 +7848,13 @@ void TelemetryTests::showsOneHotlapAndExportsItByDefault()
         [](QQuickItem *item) { return item->objectName() == "hotlapLapPicker"; });
     QVERIFY(picker && picker->isVisible());
     QCOMPARE(picker->property("currentIndex").toInt(), 2); // "best", then lap 1, then lap 2
+    auto *decimalsPicker = findVisual(findVisual, window->contentItem(),
+        [](QQuickItem *item) { return item->objectName() == "lapTimeDecimals"; });
+    QVERIFY(decimalsPicker && decimalsPicker->isVisible());
+    QCOMPARE(decimalsPicker->property("currentIndex").toInt(), 1); // hundredths
+    QVERIFY(QMetaObject::invokeMethod(decimalsPicker, "activated", Q_ARG(int, 2)));
+    QTRY_COMPARE(model->widget(tile).value("settings").toMap().value("timingDecimals").toInt(), 3);
+    model->setSetting(tile, "timingDecimals", 2);
     if (const QString shots = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR"); !shots.isEmpty()) {
         QTest::qWait(500); // the inspector lays out the newly selected widget first
         for (auto *item = check->parentItem(); item; item = item->parentItem())
