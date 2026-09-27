@@ -22,6 +22,37 @@ Item {
             if (run.heartRate.run.valid) { low = Math.min(low, run.heartRate.run.minimum); high = Math.max(high, run.heartRate.run.maximum); }
         return isFinite(low) ? {low: low - 5, high: high + 5} : null;
     }
+    // KAN-100: each temperature against lap time and strong acceleration over
+    // the comparison group's eligible laps. Rebuilt when summaries or the
+    // eligible laps (exclusions) change.
+    readonly property var associations: root.summaries.state === "ready"
+        ? (root.summaries, appController.outingLapConsistency, appController.outingTemperatureAssociations()) : ({})
+    function associationOf(name) {
+        return (root.associations.channels || []).find(channel => channel.channel === name) || null;
+    }
+    function lapTimeText(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        return minutes + ":" + (seconds - minutes * 60).toFixed(1).padStart(4, "0");
+    }
+    // One line per metric: the coefficient, its strength, the laps behind it,
+    // and what the sign means in these laps. Never a cause.
+    function associationText(metric, correlation) {
+        if (!correlation) return "";
+        const label = metric === "lapTime" ? qsTr("Lap time") : qsTr("Strong acceleration");
+        if (!correlation.available) {
+            if (correlation.unavailableReason === "noSpread")
+                return qsTr("%1: the temperature (or the metric) did not vary over %2 laps.").arg(label).arg(correlation.count);
+            return qsTr("%1: %2 comparable laps with this temperature; at least %3 are needed.")
+                .arg(label).arg(correlation.count).arg(root.associations.minimumLaps);
+        }
+        const rho = Number(correlation.coefficient);
+        let meaning;
+        if (correlation.strength === "weak") meaning = qsTr("little association");
+        else if (metric === "lapTime") meaning = rho < 0 ? qsTr("hotter laps were quicker") : qsTr("hotter laps were slower");
+        else meaning = rho > 0 ? qsTr("hotter laps accelerated harder") : qsTr("hotter laps accelerated less");
+        return qsTr("%1: ρ %2 · %3 · %4 laps — %5").arg(label).arg((rho > 0 ? "+" : "") + rho.toFixed(2))
+            .arg(correlation.strength).arg(correlation.count).arg(meaning);
+    }
     readonly property var channelNames: {
         const names = [];
         for (const run of root.runs)
@@ -81,6 +112,7 @@ Item {
 
     Flickable {
         id: scroller
+        objectName: "carDriverScroll"
         anchors.fill: parent
         contentWidth: width
         contentHeight: content.implicitHeight
@@ -324,6 +356,136 @@ Item {
                                         if (cell.column === 2) return Number(cell.whole.minimum).toFixed(0) + " – " + root.valueText(cell.whole.maximum, cell.channel.unit);
                                         if (cell.column === 3) return Math.round(cell.whole.coverage * 100) + "%";
                                         return root.coolingText(cell.channel);
+                                    }
+                                }
+                            }
+                        }
+                        // KAN-100: with lap performance, over comparable laps.
+                        ColumnLayout {
+                            id: associationBlock
+                            objectName: "carDriverAssociation" + card.index
+                            readonly property var association: root.associationOf(card.modelData)
+                            property bool showingLaps: false
+                            visible: !!associationBlock.association
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Label {
+                                text: qsTr("WITH LAP PERFORMANCE")
+                                font.pixelSize: 9; font.letterSpacing: 1; font.weight: Font.DemiBold
+                                color: "#8d9aaa"
+                                Layout.topMargin: 4
+                            }
+                            Label {
+                                objectName: "carDriverAssociationLapTime" + card.index
+                                Layout.fillWidth: true
+                                text: associationBlock.association ? root.associationText("lapTime", associationBlock.association.lapTime) : ""
+                                wrapMode: Text.WordWrap
+                                font.pixelSize: 12
+                                color: "#f2f6fb"
+                            }
+                            Label {
+                                objectName: "carDriverAssociationAcceleration" + card.index
+                                Layout.fillWidth: true
+                                text: associationBlock.association ? root.associationText("acceleration", associationBlock.association.acceleration) : ""
+                                wrapMode: Text.WordWrap
+                                font.pixelSize: 12
+                                color: "#f2f6fb"
+                            }
+                            Label {
+                                objectName: "carDriverAssociationConfound" + card.index
+                                Layout.fillWidth: true
+                                visible: !!associationBlock.association && associationBlock.association.confoundedByOrder
+                                text: associationBlock.association && associationBlock.association.order.available
+                                    ? (associationBlock.association.order.coefficient > 0
+                                        ? qsTr("The temperature also rose through the day (ρ %1 with the order of laps), so this cannot be told apart from everything else that changed over the day: the driver, tyres, track and fuel.")
+                                        : qsTr("The temperature also fell through the day (ρ %1 with the order of laps), so this cannot be told apart from everything else that changed over the day: the driver, tyres, track and fuel."))
+                                        .arg(Number(associationBlock.association.order.coefficient).toFixed(2)) : ""
+                                wrapMode: Text.WordWrap
+                                font.pixelSize: 11
+                                color: "#d6a457"
+                            }
+                            // Each comparable lap: temperature across, lap time down.
+                            Canvas {
+                                id: scatter
+                                objectName: "carDriverAssociationScatter" + card.index
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 130
+                                readonly property var points: associationBlock.association ? associationBlock.association.observations : []
+                                visible: scatter.points.length >= 2
+                                onPointsChanged: requestPaint()
+                                onWidthChanged: requestPaint()
+                                onPaint: {
+                                    const context = getContext("2d");
+                                    context.reset();
+                                    context.fillStyle = "#0b121a";
+                                    context.fillRect(0, 0, width, height);
+                                    if (points.length < 2) return;
+                                    const xs = points.map(point => Number(point.temperature)), ys = points.map(point => Number(point.lapTime));
+                                    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+                                    // Room for the corner labels above and below the points.
+                                    const padX = 10, padY = 18;
+                                    context.fillStyle = "#58bfff";
+                                    for (let index = 0; index < points.length; ++index) {
+                                        const x = padX + (x1 > x0 ? (xs[index] - x0) / (x1 - x0) : 0.5) * (width - 2 * padX);
+                                        const y = padY + (y1 > y0 ? (ys[index] - y0) / (y1 - y0) : 0.5) * (height - 2 * padY);
+                                        context.beginPath();
+                                        context.arc(x, y, 3.5, 0, 2 * Math.PI);
+                                        context.fill();
+                                    }
+                                }
+                                Label {
+                                    anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 4
+                                    text: scatter.points.length ? qsTr("quicker ↑ %1").arg(root.lapTimeText(Math.min(...scatter.points.map(point => point.lapTime)))) : ""
+                                    font.pixelSize: 9; color: "#657386"
+                                }
+                                Label {
+                                    anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 4
+                                    text: scatter.points.length ? root.lapTimeText(Math.max(...scatter.points.map(point => point.lapTime))) + " · " + root.valueText(Math.min(...scatter.points.map(point => point.temperature)), card.unit) : ""
+                                    font.pixelSize: 9; color: "#657386"
+                                }
+                                Label {
+                                    anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 4
+                                    text: scatter.points.length ? qsTr("hotter → %1").arg(root.valueText(Math.max(...scatter.points.map(point => point.temperature)), card.unit)) : ""
+                                    font.pixelSize: 9; color: "#657386"
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: associationBlock.association
+                                        ? qsTr("Spearman rank correlation over the day's comparable laps (same layout and direction, not excluded) whose sensor covered at least %1% of the lap. %2 left out for low coverage, %3 without a valid reading. It describes how the two moved together on this day; it does not establish a critical temperature or a cause.")
+                                            .arg(Math.round(root.associations.minimumCoverage * 100))
+                                            .arg(associationBlock.association.lowCoverageLaps).arg(associationBlock.association.notRecordedLaps)
+                                        : ""
+                                    wrapMode: Text.WordWrap
+                                    font.pixelSize: 10
+                                    color: "#657386"
+                                }
+                                FeButton {
+                                    objectName: "carDriverAssociationShowLaps" + card.index
+                                    compact: true
+                                    text: associationBlock.showingLaps ? qsTr("Hide laps")
+                                        : qsTr("Show laps (%1)").arg(associationBlock.association ? associationBlock.association.observations.length : 0)
+                                    onClicked: associationBlock.showingLaps = !associationBlock.showingLaps
+                                }
+                            }
+                            Column {
+                                objectName: "carDriverAssociationLaps" + card.index
+                                Layout.fillWidth: true
+                                visible: associationBlock.showingLaps
+                                Repeater {
+                                    model: associationBlock.showingLaps && associationBlock.association ? associationBlock.association.observations : []
+                                    Label {
+                                        required property var modelData
+                                        width: parent ? parent.width : 0
+                                        text: qsTr("%1 · lap %2 · %3 · %4%5").arg(modelData.runName).arg(modelData.lapNumber)
+                                            .arg(root.valueText(modelData.temperature, card.unit)).arg(root.lapTimeText(modelData.lapTime))
+                                            .arg(modelData.strongAccelerationG !== undefined ? " · " + Number(modelData.strongAccelerationG).toFixed(2) + " g" : "")
+                                        textFormat: Text.PlainText
+                                        elide: Text.ElideRight
+                                        font.pixelSize: 11
+                                        color: "#b4c0cd"
                                     }
                                 }
                             }

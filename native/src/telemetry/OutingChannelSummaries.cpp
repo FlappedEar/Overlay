@@ -6,6 +6,7 @@
 
 #include "telemetry/OutingLapLoader.h"
 #include "telemetry/SourceOperation.h"
+#include "telemetry/TemperatureAssociation.h"
 
 namespace FlappedEar {
 
@@ -110,6 +111,18 @@ OutingChannelSummariesResult summarizeOutingChannels(const QVector<OutingLapRow>
                     {"cooling", coolingList(session, name, runRows, policy)}});
             }
             run.insert("channels", channels);
+            // KAN-100: each section's strong acceleration (p90 of positive
+            // longitudinal G), in the same order as the channel sections.
+            QVariantList laps;
+            for (const auto &row : runRows) {
+                const auto acceleration = lapStrongAcceleration(session, row.start, row.end);
+                QVariantMap lap{{"type", lapSectionName(row.type)}, {"lapNumber", row.lapNumber},
+                    {"startTime", row.start}, {"endTime", row.end}, {"reference", row.reference.toVariantMap()},
+                    {"accelerationChannel", acceleration.channel}};
+                if (acceleration.strongG) lap.insert("strongAccelerationG", *acceleration.strongG);
+                laps.append(lap);
+            }
+            run.insert("laps", laps);
             // KAN-69: heart rate from the recording's own heart-rate channel
             // (the imported VBO/RCZ; never a separate source).
             const auto heartRate = session.aliases.value("heartRate");

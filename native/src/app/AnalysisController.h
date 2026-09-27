@@ -141,6 +141,11 @@ public:
     [[nodiscard]] QVariantMap outingLapConsistency() const;
     [[nodiscard]] QVariantMap outingChannelSummaries() const;
     Q_INVOKABLE void requestOutingChannelSummaries();
+    // KAN-100: per recorded temperature, its rank correlation with lap time and
+    // with strong acceleration over the comparison group's eligible laps, with
+    // the observations, counts and the time-of-day confound. Built from the
+    // channel summaries; empty until they are ready.
+    Q_INVOKABLE QVariantMap outingTemperatureAssociations() const;
     [[nodiscard]] QVariantMap outingDayReport() const;
     // Starts the background results the report needs (theoretical best with
     // losses and section progression, channel summaries).

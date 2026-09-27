@@ -295,6 +295,7 @@ public:
     [[nodiscard]] QVariantMap outingLapConsistency() const;
     [[nodiscard]] QVariantMap outingChannelSummaries() const;
     Q_INVOKABLE void requestOutingChannelSummaries();
+    Q_INVOKABLE QVariantMap outingTemperatureAssociations() const;
     [[nodiscard]] QVariantMap outingDayReport() const;
     // Starts the background results the report needs (theoretical best with
     // losses and section progression, channel summaries).

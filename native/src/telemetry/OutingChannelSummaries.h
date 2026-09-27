@@ -25,7 +25,8 @@ struct OutingChannelSummariesResult {
 // Per run (in first-seen order of `rows`): every recorded temperature channel
 // with its whole-recording summary, one summary per recorded section, a
 // bounded gap-aware trend trace and the continuously recorded cooling
-// intervals; and heart rate from the recording's own channel. Each run's
+// intervals; heart rate from the recording's own channel; and each section's
+// strong acceleration for KAN-100 ("laps", section order). Each run's
 // recording is decoded and verified once (loadOutingLapDetail); a run whose
 // recording is unavailable says why. Cooperatively cancellable.
 [[nodiscard]] OutingChannelSummariesResult summarizeOutingChannels(const QVector<OutingLapRow> &rows,

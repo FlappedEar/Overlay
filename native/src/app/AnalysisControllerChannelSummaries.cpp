@@ -7,6 +7,7 @@
 #include "telemetry/ChannelSummary.h"
 #include "telemetry/OutingChannelSummaries.h"
 #include "telemetry/OutingLaps.h"
+#include "telemetry/TemperatureAssociation.h"
 
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -127,4 +128,98 @@ QVariantMap AnalysisController::comparisonHeartRate(const double startMeters, co
     }
     return {{"valid", true}, {"algorithm", QString::fromLatin1(channelSummaryAlgorithm)}, {"laps", laps},
         {"startMeters", from}, {"endMeters", to}, {"crossesStartFinish", from > to}};
+}
+
+namespace {
+
+QVariantMap correlationMap(const RankCorrelation &correlation)
+{
+    QVariantMap map{{"count", correlation.count}, {"available", correlation.coefficient.has_value()}};
+    if (correlation.coefficient) {
+        map.insert("coefficient", *correlation.coefficient);
+        map.insert("strength", associationStrength(*correlation.coefficient));
+    } else {
+        map.insert("unavailableReason", correlation.unavailableReason);
+    }
+    return map;
+}
+
+} // namespace
+
+QVariantMap AnalysisController::outingTemperatureAssociations() const
+{
+    QVariantMap result{{"algorithm", QString::fromLatin1(temperatureAssociationAlgorithm)},
+        {"minimumLaps", minimumAssociationSamples}, {"minimumCoverage", minimumAssociationCoverage},
+        {"orderConfoundLevel", associationOrderConfoundLevel}, {"channels", QVariantList{}}};
+    if (m_channelSummariesState != QLatin1String("ready") || m_outingComparisonGroupId.isEmpty() || outingLapsLoading())
+        return result;
+    QVector<const OutingLapRow *> eligible;
+    try {
+        eligible = eligibleOutingLaps(m_outingRawLapRows, m_outingComparisonGroupId, m_outingRunConfigurations,
+            m_document.analysisProject().value("event").toObject().value("lapExclusions").toArray(), m_outingStaleRunIds);
+    } catch (const std::exception &) {
+        return result;
+    }
+    QSet<QByteArray> eligibleKeys;
+    for (const auto *row : eligible) eligibleKeys.insert(lapReferenceKey(row->reference));
+    result.insert("eligibleLaps", eligible.size());
+
+    // Channel order: first seen across runs.
+    QStringList names;
+    QHash<QString, QString> units;
+    for (const auto &runValue : m_channelSummariesRuns)
+        for (const auto &channelValue : runValue.toMap().value("channels").toList()) {
+            const auto channel = channelValue.toMap();
+            const auto name = channel.value("channel").toString();
+            if (!names.contains(name)) { names.append(name); units.insert(name, channel.value("unit").toString()); }
+        }
+    QVariantList channels;
+    for (const auto &name : names) {
+        QVector<AssociationObservation> lapTimes, accelerations;
+        QVariantList observations;
+        qsizetype lowCoverage = 0, notRecorded = 0;
+        for (const auto &runValue : m_channelSummariesRuns) {
+            const auto run = runValue.toMap();
+            const auto laps = run.value("laps").toList();
+            QVariantMap channel;
+            for (const auto &channelValue : run.value("channels").toList())
+                if (channelValue.toMap().value("channel") == name) channel = channelValue.toMap();
+            const auto sections = channel.value("sections").toList();
+            for (qsizetype index = 0; index < laps.size(); ++index) {
+                const auto lap = laps[index].toMap();
+                if (!eligibleKeys.contains(lapReferenceKey(QJsonObject::fromVariantMap(lap.value("reference").toMap()))))
+                    continue;
+                const auto section = sections.value(index).toMap();
+                if (section.isEmpty() || !section.value("valid").toBool()) { ++notRecorded; continue; }
+                if (section.value("coverage").toDouble() < minimumAssociationCoverage) { ++lowCoverage; continue; }
+                const double temperature = section.value("mean").toDouble();
+                const double start = lap.value("startTime").toDouble(), end = lap.value("endTime").toDouble();
+                const double lapTime = end - start;
+                // Order through the day: runs are in recording order and laps in
+                // run order (each run's clock only orders its own laps).
+                const auto order = static_cast<double>(observations.size());
+                lapTimes.append({temperature, lapTime, order});
+                QVariantMap observation{{"runName", run.value("runName")}, {"lapNumber", lap.value("lapNumber")},
+                    {"temperature", temperature}, {"lapTime", lapTime}, {"coverage", section.value("coverage")},
+                    {"reference", lap.value("reference")}};
+                if (lap.contains("strongAccelerationG")) {
+                    const double acceleration = lap.value("strongAccelerationG").toDouble();
+                    accelerations.append({temperature, acceleration, order});
+                    observation.insert("strongAccelerationG", acceleration);
+                }
+                observations.append(observation);
+            }
+        }
+        const auto withLapTime = associateTemperature(lapTimes);
+        const auto withAcceleration = associateTemperature(accelerations);
+        channels.append(QVariantMap{{"channel", name}, {"unit", units.value(name)},
+            {"lapTime", correlationMap(withLapTime.withValue)},
+            {"acceleration", correlationMap(withAcceleration.withValue)},
+            {"order", correlationMap(withLapTime.withOrder)},
+            {"confoundedByOrder", withLapTime.confoundedByOrder},
+            {"lowCoverageLaps", lowCoverage}, {"notRecordedLaps", notRecorded},
+            {"observations", observations}});
+    }
+    result.insert("channels", channels);
+    return result;
 }
