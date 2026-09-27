@@ -208,6 +208,7 @@ private:
     void initializeBatchImport();
     void invalidateBatchImport();
     [[nodiscard]] bool batchContextMatches() const;
+    [[nodiscard]] QByteArray eventSourcesSignature() const;
     void publishBatchRows();
     struct RecordingWork {
         enum class Kind { Attach, Confirm, Primary };
@@ -261,6 +262,8 @@ private:
     QString m_batchDocumentId;
     QString m_batchProjectPath;
     quint64 m_batchRevision = 0;
+    QByteArray m_batchSources;
+    bool m_batchAppendsToEvent = false;
     quint64 m_batchGeneration = 0;
     int m_batchProcessed = 0;
     int m_batchTotal = 0;

@@ -135,6 +135,7 @@ private slots:
     void keepsTheEditorStateAnotherAppSaved();
     void importsAFolderOfRecordings();
     void attachesAlternativeRecordingsAndSwitchesThePrimary();
+    void keepsAddingRunsWhileTheDayIsEdited();
     void measuresAPrivateFullDay();
 };
 
@@ -403,6 +404,40 @@ void TelemetryAppTests::attachesAlternativeRecordingsAndSwitchesThePrimary()
     QVERIFY(QFile::rename(alternative, alternative + ".moved"));
     QVERIFY(!document.attachRunRecording(runId, QUrl::fromLocalFile(primary)));
     QVERIFY(document.runRecordingReview().value("message").toString().contains("primary recording is missing"));
+}
+
+void TelemetryAppTests::keepsAddingRunsWhileTheDayIsEdited()
+{
+    // Adding runs to an open day is not made stale by edits that leave its
+    // recordings alone -- the analysis writing its verified track inference
+    // while laps derive, or a note -- and those edits survive the import.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
+    QVERIFY(writeFile(first, warpedRouteVbo(true)));
+    QVERIFY(writeFile(second, warpedRouteVbo(false)));
+    TelemetryController controller(directory.filePath("recovery.json"));
+    auto &document = *controller.document();
+    auto &analysis = *controller.analysis();
+    QSignalSpy committed(&document, &DocumentController::batchImportCommitted);
+    QVERIFY(document.importAnalysisRuns("Growing day", {QUrl::fromLocalFile(first)}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    // Immediately, while the first run's laps are still deriving.
+    QVERIFY(document.importAnalysisRuns({}, {QUrl::fromLocalFile(second)}));
+    // User edits wait for the import; the analysis's own bookkeeping does
+    // not. Commit such a change (as the verified inference is written) now.
+    const auto runId = document.activeRunId();
+    auto project = document.analysisProject();
+    auto event = project.value("event").toObject();
+    auto runs = event.value("runs").toArray();
+    auto run = runs[0].toObject(); run.insert("notes", "Written during the import"); runs[0] = run;
+    event.insert("runs", runs); project.insert("event", event);
+    document.commitAnalysisProject(project);
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 2, 20000);
+    QVERIFY2(document.batchImportError().isEmpty(), qPrintable(document.batchImportError()));
+    QCOMPARE(document.eventRuns().size(), 2);
+    QCOMPARE(analysis.runMetadata(runId).value("notes").toString(), QString("Written during the import"));
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading(), 20000);
+    QCOMPARE(analysis.outingAnalysisStatus().value("state").toString(), QString("ready"));
 }
 
 void TelemetryAppTests::measuresAPrivateFullDay()
