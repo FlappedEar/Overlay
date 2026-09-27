@@ -28,7 +28,7 @@ Item {
         ? Number(isDelta ? frame.widgetSettings.speedDeltaDecimals ?? 1
                          : frame.widgetSettings.speedDecimals ?? 0)
         : Number(isDelta ? frame.widgetSettings.deltaDecimals ?? 2
-                         : frame.widgetSettings.timingDecimals ?? 1)
+                         : frame.widgetSettings.timingDecimals ?? 2)
     readonly property real metricValue: Number(isSpeed
         ? (isBest ? timing.referenceSpeedKmh
                   : isCurrent ? timing.currentSpeedKmh : timing.speedDeltaKmh)
