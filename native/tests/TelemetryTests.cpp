@@ -195,6 +195,7 @@ private slots:
     void publishesCurrentLapAfterFirstAcceptedPass();
     void publishesAndClearsLapStateWithController();
     void derivesNavigableLapFragmentsAndHotlapExportRange();
+    void showsOneHotlapAndExportsItByDefault();
     void protectsEveryDaySourceFromExport();
     void keepsOutputSafeWhenTheDestinationFills_data();
     void keepsOutputSafeWhenTheDestinationFills();
@@ -7744,6 +7745,129 @@ void TelemetryTests::publishesAndClearsLapStateWithController()
     QVERIFY(controller.lapSummaries().isEmpty());
     QCOMPARE(controller.renderContext()->lapTiming().value(QStringLiteral("state")).toString(),
              QStringLiteral("unavailable"));
+}
+
+void TelemetryTests::showsOneHotlapAndExportsItByDefault()
+{
+    // The Current lap tile's hotlap option: one chosen lap only -- 0:00 until
+    // its start/finish crossing, running during the lap, the final time held
+    // after it -- chosen from a list or from the lap at the playhead; the
+    // export dialog then opens on that lap.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the hotlap test.");
+    QSettings settings; settings.clear(); settings.sync();
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QString videoPath = directory.filePath(QStringLiteral("laps.mp4"));
+    QProcess encoder;
+    encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                           "color=c=black:s=32x32:r=30:d=25", "-c:v", "mpeg4", "-q:v", "3", videoPath});
+    QVERIFY(encoder.waitForFinished(30'000) && encoder.exitCode() == 0);
+    const QString vboPath = directory.filePath(QStringLiteral("laps.vbo"));
+    QVERIFY(writeBytes(vboPath,
+        "[header]\ncoordinate units = degrees\n[laptiming]\n"
+        "Start 21.0000 52.0000 21.0000 52.0002 start\n"
+        "[column names]\ntime latitude longitude\n[data]\n"
+        "0 52.0001 21.0002\n1 52.0001 21.0002\n2 52.0001 20.9998\n"
+        "3 52.0008 20.9998\n4 52.0008 21.0002\n5 52.0001 21.0002\n"
+        "6 52.0001 20.9998\n7 52.0008 20.9998\n8 52.0008 21.0002\n"
+        "10 52.0001 21.0002\n11 52.0001 20.9998\n12 52.0008 20.9998\n"
+        "13 52.0008 21.0002\n14 52.0001 21.0002\n15 52.0001 20.9998\n"));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.loadVideo(QUrl::fromLocalFile(videoPath));
+    QTRY_COMPARE(controller.videoLoadState(), QStringLiteral("ready"));
+    controller.loadVbo(QUrl::fromLocalFile(vboPath));
+    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+    const auto laps = controller.lapSummaries();
+    QVERIFY(laps.size() >= 2);
+    const auto second = laps[1].toMap();
+    const int lapNumber = second.value("number").toInt();
+    const double start = second.value("startTelemetryTime").toDouble();
+    const double duration = second.value("durationSeconds").toDouble();
+
+    auto *model = controller.widgetModel();
+    const int tile = model->addWidget("lapCurrent");
+    QVERIFY(tile >= 0);
+    model->setSetting(tile, "hotlapMode", true);
+    // The lap at the playhead, then that lap's timing through the preview.
+    controller.setPlaybackTime(start + 0.5);
+    QCOMPARE(controller.lapNumberAtPlayback(), lapNumber);
+    model->setSetting(tile, "hotlapLap", controller.lapNumberAtPlayback());
+    QCOMPARE(model->widget(tile).value("settings").toMap().value("hotlapLap").toInt(), lapNumber);
+    model->setSetting(tile, "hotlapLap", -5.0); // malformed input is bounded, never negative
+    QCOMPARE(model->widget(tile).value("settings").toMap().value("hotlapLap").toInt(), 0);
+    model->setSetting(tile, "hotlapLap", lapNumber);
+
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create());
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    const auto findVisual = [](auto &&self, QQuickItem *item, const std::function<bool(QQuickItem *)> &match) -> QQuickItem * {
+        if (match(item)) return item;
+        for (auto *child : item->childItems()) if (auto *found = self(self, child, match)) return found;
+        return nullptr;
+    };
+    QQuickItem *hotlapTile = nullptr;
+    QTRY_VERIFY((hotlapTile = findVisual(findVisual, window->contentItem(),
+        [](QQuickItem *item) { return item->property("hotlap").toBool(); })));
+    const auto tileValue = [&] { return hotlapTile->property("metricValue").toDouble(); };
+    const auto tileState = [&] { return hotlapTile->property("hotlapTiming").toMap().value("state").toString(); };
+    // Before the lap: 0:00; during: counting; after, even through the next lap: the final time.
+    controller.setPlaybackTime(start - 0.5);
+    QTRY_COMPARE(tileState(), QString("before"));
+    QCOMPARE(tileValue(), 0.0);
+    controller.setPlaybackTime(start + 1.0);
+    QTRY_COMPARE(tileState(), QString("running"));
+    QVERIFY(std::abs(tileValue() - 1.0) < 1e-6);
+    controller.setPlaybackTime(start + duration + 3.0);
+    QTRY_COMPARE(tileState(), QString("finished"));
+    QVERIFY(std::abs(tileValue() - duration) < 1e-6);
+    QVERIFY(hotlapTile->property("hotlapFinished").toBool());
+
+    // The inspector for the tile.
+    window->setProperty("selectedWidgetIndex", tile);
+    QQuickItem *check = nullptr;
+    QTRY_VERIFY((check = findVisual(findVisual, window->contentItem(),
+        [](QQuickItem *item) { return item->objectName() == "hotlapModeCheck" && item->isVisible(); })));
+    QVERIFY(check->property("checked").toBool());
+    auto *picker = findVisual(findVisual, window->contentItem(),
+        [](QQuickItem *item) { return item->objectName() == "hotlapLapPicker"; });
+    QVERIFY(picker && picker->isVisible());
+    QCOMPARE(picker->property("currentIndex").toInt(), 2); // "best", then lap 1, then lap 2
+    if (const QString shots = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR"); !shots.isEmpty()) {
+        QTest::qWait(500); // the inspector lays out the newly selected widget first
+        for (auto *item = check->parentItem(); item; item = item->parentItem())
+            if (item->inherits("QQuickFlickable")) {
+                auto *content = item->property("contentItem").value<QQuickItem *>();
+                item->setProperty("contentY", std::max(0.0, check->mapToItem(content, QPointF()).y() - 120.0));
+                break;
+            }
+        QTest::qWait(300);
+        static_cast<void>(window->grabWindow().save(QDir(shots).filePath("hotlap-inspector.png")));
+    }
+    controller.setPlaybackTime(laps[0].toMap().value("startTelemetryTime").toDouble() + 0.5);
+    auto *usePlayhead = findVisual(findVisual, window->contentItem(),
+        [](QQuickItem *item) { return item->objectName() == "hotlapUsePlayhead"; });
+    QTRY_VERIFY(usePlayhead && usePlayhead->isEnabled());
+    QVERIFY(QMetaObject::invokeMethod(usePlayhead, "clicked"));
+    QTRY_COMPARE(model->widget(tile).value("settings").toMap().value("hotlapLap").toInt(), laps[0].toMap().value("number").toInt());
+    QTRY_COMPARE(picker->property("currentIndex").toInt(), 1);
+
+    // Export opens on Single lap with the hotlap tile's lap.
+    auto *dialog = window->findChild<QObject *>("exportDialog"); QVERIFY(dialog);
+    QVERIFY(QMetaObject::invokeMethod(dialog, "open"));
+    QTRY_VERIFY(dialog->property("opened").toBool());
+    QCOMPARE(window->findChild<QObject *>("exportRangeMode")->property("currentIndex").toInt(), 2);
+    QCOMPARE(window->findChild<QObject *>("exportLapPicker")->property("currentIndex").toInt(), 0);
+    QVERIFY(dialog->property("singleLapRange").toMap().value("valid").toBool());
+    const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!review.isEmpty()) { QTest::qWait(300); static_cast<void>(window->grabWindow().save(QDir(review).filePath("hotlap-export.png"))); }
+    for (const auto &arguments : warnings)
+        for (const auto &error : arguments.first().value<QList<QQmlError>>())
+            QVERIFY2(error.toString().contains("Cannot open: qrc:"), qPrintable(error.toString()));
 }
 
 void TelemetryTests::derivesNavigableLapFragmentsAndHotlapExportRange()

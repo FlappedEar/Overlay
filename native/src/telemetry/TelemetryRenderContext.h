@@ -41,6 +41,12 @@ public:
     Q_INVOKABLE QVariant telemetryValue(const QString &channelName) const;
     Q_INVOKABLE QString valueText(const QString &channelName, int decimals = 2) const;
     Q_INVOKABLE QVariant telemetryTime() const;
+    // Hotlap mode: one chosen lap only. `lapNumber` 0 picks the recording's
+    // best eligible lap. {state: "before" | "running" | "finished" |
+    // "unavailable", lapNumber, elapsedSeconds, durationSeconds, isBest}:
+    // before the lap's start-line crossing the elapsed time is 0, during it
+    // runs, and after the lap ends it stays at the lap's final time.
+    Q_INVOKABLE QVariantMap fixedLapTiming(int lapNumber) const;
 
 public slots:
     void setTime(double time);

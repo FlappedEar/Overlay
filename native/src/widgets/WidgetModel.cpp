@@ -196,7 +196,7 @@ bool knownBooleanSetting(const QString &name)
 {
     return name.startsWith(QStringLiteral("show")) || name.startsWith(QStringLiteral("invert"))
         || name == QStringLiteral("clampValue") || name == QStringLiteral("mirrorX")
-        || name == QStringLiteral("mirrorY");
+        || name == QStringLiteral("mirrorY") || name == QStringLiteral("hotlapMode");
 }
 
 QVariant normalizeSettingValue(
@@ -238,6 +238,10 @@ QVariant normalizeSettingValue(
         || name == QStringLiteral("dotSize") || name == QStringLiteral("arcWidth")
         || name == QStringLiteral("trackPadding")) {
         return finiteNumber(value, &number) ? bounded(number, 0.0, 200.0) : fallback();
+    }
+    if (name == QStringLiteral("hotlapLap")) {
+        // 0 is the recording's best lap; otherwise a lap number.
+        return finiteNumber(value, &number) ? qBound(0, qRound(number), 9999) : fallback();
     }
     if (name == QStringLiteral("segments")) {
         return finiteNumber(value, &number) ? qBound(5, qRound(number), 40) : fallback();
