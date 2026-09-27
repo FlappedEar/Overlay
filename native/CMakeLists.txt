@@ -122,6 +122,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/TelemetrySessionCache.cpp
     src/telemetry/TelemetrySource.cpp
     src/telemetry/TelemetrySource.h
+    src/telemetry/DrivingStates.cpp
+    src/telemetry/DrivingStates.h
     src/telemetry/TelemetryFolderScan.cpp
     src/telemetry/TelemetryFolderScan.h
     src/telemetry/TelemetryImportPlan.cpp

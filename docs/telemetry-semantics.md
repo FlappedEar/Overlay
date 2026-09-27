@@ -262,3 +262,43 @@ The existing global ambiguity and minimum-overlap evidence still bound fine-sear
 confidence. An ambiguous result remains reviewable without changing the confirmed
 transform. Source identity and timing-edit revision guards still reject stale
 results. Search failure likewise leaves the confirmed transform in place.
+
+## Driving states (KAN-91)
+
+`classifyDrivingStates` (`telemetry/DrivingStates`, algorithm
+`driving-states-v1`) says when a lap is braking, accelerating, cornering and
+coasting, and how each was obtained.
+
+| State | From | Thresholds (on / off) | Provenance |
+|---|---|---|---|
+| Braking | the `brake` channel | 10 / 5 % | measured |
+| | otherwise negative longitudinal G | 0.15 / 0.08 g | inferred |
+| Accelerating | the `throttle` channel (the accelerator pedal when recorded, KAN-118) | 15 / 8 % | measured |
+| | otherwise positive longitudinal G | 0.10 / 0.05 g | inferred |
+| Cornering | abs(lateral G) | 0.30 / 0.20 g | measured; *calculated* for RaceChrono's GPS-derived `-calc` channel |
+| Coasting | moving (at least 10 km/h) with both pedal states known and neither active | — | measured only when both pedals are measured, otherwise inferred |
+
+Rules:
+- An episode must last at least 0.2 s; shorter ones are counted as spikes.
+- A state is never bridged across a gap or a missing sample. Each state
+  reports the spans where it is *known*, so the time between them is
+  unknown.
+- A pedal channel that is present is never replaced by acceleration, even
+  where its data is missing.
+- A channel whose declared unit differs from its threshold's (a brake in bar,
+  say) leaves the state unknown with `unitMismatch`. It is never rescaled.
+- States overlap where driving does:
+  - cornering overlaps braking (trail braking), accelerating or coasting;
+  - braking and accelerating overlap only when both pedals are measured
+    (left-foot braking). One acceleration channel cannot show both;
+  - coasting never overlaps either pedal.
+- Inferred pedal activity is labelled `inferred` and is never presented as
+  a measurement.
+
+**On the Jastrząb day** (each session's best lap, opt-in
+`DrivingStatesTests::classifiesPrivateBestLaps`):
+- all states except cornering are measured, and cornering is calculated;
+- the states are known for 99.8–99.9 % of each lap;
+- coasting falls from 21 % of the lap in Session 1 to 8–14 % in the faster
+  later sessions;
+- time on the accelerator rises from 59 % to 63–67 %.
