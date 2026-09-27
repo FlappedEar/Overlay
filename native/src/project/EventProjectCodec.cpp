@@ -73,6 +73,49 @@ bool validConfiguration(const QJsonObject &run)
         && config.value("sourceFingerprint").toObject() == primaryFingerprint(run);
 }
 
+// KAN-103: an approved source fusion, bound to the exact content of both
+// recordings it was reviewed against.
+bool validFusion(const QJsonObject &run)
+{
+    if (!run.contains("fusion")) return true;
+    if (!run.value("fusion").isObject()) return false;
+    const auto fusion = run.value("fusion").toObject();
+    static const QRegularExpression digest("^[0-9a-f]{64}$");
+    const auto alternative = fusion.value("alternativeSourceId").toString();
+    if (fusion.value("algorithm").toString() != QLatin1String("channel-fusion-v1")
+        || !validText(fusion.value("alternativeSourceId"), ProjectLimits::maximumIdCharacters)
+        || alternative == run.value("primaryTelemetrySourceId").toString())
+        return false;
+    bool found = false;
+    for (const auto &value : run.value("sources").toObject().value("telemetry").toArray())
+        found |= value.toObject().value("id").toString() == alternative;
+    if (!found) return false;
+    for (const auto *key : {"primarySourceRevision", "alternativeSourceRevision"}) {
+        const auto revision = fusion.value(key).toString();
+        if (revision.size() != 64 || !digest.match(revision).hasMatch()) return false;
+    }
+    const auto clock = fusion.value("clock").toObject();
+    const auto offset = clock.value("offsetSeconds"), drift = clock.value("driftPpm"), uncertainty = clock.value("uncertaintySeconds");
+    if (!fusion.value("clock").isObject() || !offset.isDouble() || !drift.isDouble() || !uncertainty.isDouble()
+        || !std::isfinite(offset.toDouble()) || std::abs(offset.toDouble()) > ProjectLimits::maximumFusionOffsetSeconds
+        || !std::isfinite(drift.toDouble()) || std::abs(drift.toDouble()) > ProjectLimits::maximumFusionDriftPpm
+        || !std::isfinite(uncertainty.toDouble()) || uncertainty.toDouble() < 0.0
+        || uncertainty.toDouble() > ProjectLimits::maximumFusionOffsetSeconds)
+        return false;
+    const auto rules = fusion.value("rules");
+    if (!rules.isArray() || rules.toArray().size() > ProjectLimits::maximumFusionRules) return false;
+    QSet<QString> keys;
+    for (const auto &value : rules.toArray()) {
+        const auto rule = value.toObject();
+        const auto key = rule.value("key").toString();
+        if (!value.isObject() || !validText(rule.value("key"), ProjectLimits::maximumIdCharacters) || keys.contains(key)
+            || !QStringList{"primaryOnly", "fillGaps", "preferAlternative"}.contains(rule.value("rule").toString()))
+            return false;
+        keys.insert(key);
+    }
+    return true;
+}
+
 ProjectSourceReference sourceReference(const QJsonObject &object)
 {
     return {object.value(QStringLiteral("relativePath")).toString(),
@@ -236,6 +279,9 @@ bool EventProjectCodec::validate(const QJsonObject &project, QString *error)
                 || !inference.value("layoutId").toString().startsWith("gps-route-v1:")
                 || !QStringList{"clockwise", "counterclockwise"}.contains(inference.value("direction").toString()))
                 return fail(error, "Track inference provenance is malformed.");
+        }
+        if (!validFusion(run)) {
+            return fail(error, QStringLiteral("Source fusion decision is malformed or not bound to this run's recordings."));
         }
         if (sources.contains(QStringLiteral("video")) && !validReference(sources.value(QStringLiteral("video")))) {
             return fail(error, QStringLiteral("Run video reference is invalid."));

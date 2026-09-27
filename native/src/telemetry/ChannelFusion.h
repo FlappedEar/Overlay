@@ -84,6 +84,12 @@ struct ChannelFusionResult {
 // range in the overlap.
 [[nodiscard]] double fusionConflictTolerance(const QString &unit, double overlapRange);
 
+// The primary session with the fusion applied: merged channels replace the
+// primary's, added channels join it (under their alias when the primary has
+// none by that name). Unresolved and primary-only channels stay the
+// primary's. Metadata "fusedChannels" lists the channels that changed.
+[[nodiscard]] TelemetrySession fusedSession(const TelemetrySession &primary, const ChannelFusionResult &fusion);
+
 [[nodiscard]] ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString &primarySourceId,
     const QVector<FusionSource> &alternatives, const FusionPolicy &policy = {}, const CancellationCheck &cancelled = {});
 

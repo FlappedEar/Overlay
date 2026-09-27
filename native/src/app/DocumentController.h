@@ -121,6 +121,14 @@ public:
     // evidence). Read-only: nothing is applied or fused. The result arrives
     // as runRecordingReview state "alignment".
     Q_INVOKABLE bool checkRunRecordingAlignment(const QString &runId, const QString &sourceId);
+    // KAN-103: review fusing an alternative into the run's analysis: its clock
+    // alignment, the resulting channels with coverage, and every conflict. The
+    // result is runRecordingReview state "fusionReview"; approving needs an
+    // aligned clock and a rule for every conflicting channel, and binds the
+    // decision to both recordings' content.
+    Q_INVOKABLE bool reviewRunFusion(const QString &runId, const QString &sourceId);
+    Q_INVOKABLE bool approveRunFusion(const QVariantMap &rules);
+    Q_INVOKABLE bool removeRunFusion(const QString &runId);
     [[nodiscard]] QVariantMap runRecordingReview() const { return m_recordingReview; }
 
     // For the host's editor state.
@@ -216,7 +224,7 @@ private:
     [[nodiscard]] QByteArray eventSourcesSignature() const;
     void publishBatchRows();
     struct RecordingWork {
-        enum class Kind { Attach, Confirm, Primary, Align };
+        enum class Kind { Attach, Confirm, Primary, Align, FusionReview };
         Kind kind = Kind::Attach;
         QString sourceId;
         QString path;
@@ -226,6 +234,8 @@ private:
         QString gateRevision;
         QVariantMap evidence;
         QVariantMap alignment;
+        QVariantMap fusionPreview;
+        QJsonObject fusionDecision; // clock and both revisions, rules added on approval
         QString error;
         bool cancelled = false;
     };

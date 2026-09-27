@@ -527,10 +527,8 @@ recording, so there is no real-data result yet.
 ## Channel fusion policy (KAN-102)
 
 `fuseChannels` (`telemetry/ChannelFusion`, algorithm `channel-fusion-v1`)
-defines how channels from a run's alternative recordings would join its
-primary recording. It is the core policy that the review and persistence
-of fusion decisions (KAN-103) will use. No screen uses it yet, and nothing
-is fused in a project today.
+defines how channels from a run's alternative recordings join its primary
+recording. The fusion review in Run details (KAN-103, below) applies it.
 
 Every output channel says:
 - which source each stretch of samples came from (its source ID);
@@ -577,3 +575,35 @@ preferred source's sample is kept, so timestamps stay strictly increasing.
 
 **Tested on synthetic data only.** The private day has no alternative
 recording, so there is no real-data result yet.
+
+### Reviewing and approving a fusion (KAN-103)
+
+In **Run details → Recordings**, **Fuse…** on an alternative recording
+loads both recordings, checking that each is still the content that was
+attached. It then aligns their clocks and previews the fusion with no rules.
+The review shows:
+- the clock alignment, in the same words as Check clock;
+- every resulting channel: the ones added, with how much of the run they
+  cover and their own sample spacing, and each channel both recordings
+  have, with its median difference over the compared samples;
+- the channels left out because their units differ.
+
+**Approving.**
+- For a channel both recordings have, you can choose to keep the primary,
+  fill the primary's gaps, or prefer the alternative.
+- A conflicting channel must have one of these rules before **Approve
+  fusion** is enabled.
+- The fusion cannot be approved unless the clocks are "aligned".
+- Approving stores the decision in the run, bound to both recordings'
+  content (see the event project format). The recording is then marked
+  **Fused** and the run's analysis includes its channels.
+
+A later change of either recording's content turns the mark into "Fusion
+needs review", and the analysis goes back to the primary. The laps always
+come from the primary. Heart rate is fused like any other recorded channel;
+there is no separate heart-rate workflow.
+
+Clock drift is reported only when it moves the offset across the overlap by
+more than twice the windows' uncertainty. Otherwise the offset is the
+windows' mean, and the review says that no drift is resolvable. Two
+recordings of 3 minutes on the same clock therefore show no spurious drift.

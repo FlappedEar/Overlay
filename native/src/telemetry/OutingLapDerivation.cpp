@@ -21,6 +21,12 @@ QByteArray outingSourceDependencyKey(QJsonObject source)
     source.remove("name");
     source.remove("inference");
     source.insert("reference", source.value("reference").toObject().value("fingerprint"));
+    // A fused alternative's paths may be rebased on save; its identity is its fingerprint.
+    if (source.contains("fusion")) {
+        auto fusion = source.value("fusion").toObject();
+        fusion.insert("alternativeReference", fusion.value("alternativeReference").toObject().value("fingerprint"));
+        source.insert("fusion", fusion);
+    }
     return QJsonDocument(source).toJson(QJsonDocument::Compact);
 }
 

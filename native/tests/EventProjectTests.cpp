@@ -28,6 +28,7 @@ private slots:
     void bindsFullContentWithoutMigratingOnLoad();
     void boundsInferenceProvenanceAndRecoversIt();
     void boundsAndPreservesRunMetadata();
+    void boundsSourceFusionAndRecoversIt();
     void persistsTrackConfigurationAndUnknownLegacyState();
     void rejectsInvalidTrackConfigurations_data();
     void rejectsInvalidTrackConfigurations();
@@ -237,6 +238,59 @@ void EventProjectTests::boundsAndPreservesRunMetadata()
         run.insert("name", name); runs[0] = run; Fixture::setRuns(project, runs);
         QVERIFY(!ProjectLimits::validateProject(project));
     }
+}
+
+void EventProjectTests::boundsSourceFusionAndRecoversIt()
+{
+    // KAN-103: an approved fusion names an alternative of the same run, the
+    // content revisions of both recordings, a finite bounded clock and at
+    // most 64 unique per-channel rules; it round-trips through recovery.
+    auto project = Fixture::project(); auto runs = Fixture::runs(project); auto run = runs[0].toObject();
+    const QJsonObject fusion{{"algorithm", "channel-fusion-v1"}, {"alternativeSourceId", "run-a-alternative"},
+        {"primarySourceRevision", QString(64, 'a')}, {"alternativeSourceRevision", QString(64, 'b')},
+        {"clock", QJsonObject{{"offsetSeconds", 12.5}, {"driftPpm", -40.0}, {"uncertaintySeconds", 0.05},
+            {"alignmentAlgorithm", "recording-alignment-v1"}}},
+        {"rules", QJsonArray{QJsonObject{{"key", "speed"}, {"rule", "fillGaps"}}}}};
+    run.insert("fusion", fusion); runs[0] = run; Fixture::setRuns(project, runs);
+    QVERIFY(ProjectLimits::validateProject(project));
+    QTemporaryDir directory; ProjectRecoveryStore store(directory.filePath("recovery.json")); QString error;
+    QVERIFY2(store.write({{}, "event-document", 5, 4, "2026-09-27T00:00:00.000Z", project, true}, &error), qPrintable(error));
+    ProjectRecoverySnapshot restored; QVERIFY2(store.load(&restored, &error), qPrintable(error));
+    QCOMPARE(restored.project, project);
+
+    const auto rejected = [&](const QJsonObject &candidate) {
+        auto copy = Fixture::project(); auto copyRuns = Fixture::runs(copy); auto copyRun = copyRuns[0].toObject();
+        copyRun.insert("fusion", candidate); copyRuns[0] = copyRun; Fixture::setRuns(copy, copyRuns);
+        return !ProjectLimits::validateProject(copy);
+    };
+    const auto with = [&](const QString &key, const QJsonValue &value) { auto copy = fusion; copy.insert(key, value); return copy; };
+    const auto withClock = [&](const QString &key, const QJsonValue &value) {
+        auto clock = fusion.value("clock").toObject(); clock.insert(key, value); return with("clock", clock);
+    };
+    QVERIFY(rejected(with("algorithm", "channel-fusion-v0")));
+    QVERIFY(rejected(with("alternativeSourceId", "run-a-source")));      // the primary itself
+    QVERIFY(rejected(with("alternativeSourceId", "run-b-source")));      // another run's source
+    QVERIFY(rejected(with("alternativeSourceId", QString(129, 'x'))));
+    QVERIFY(rejected(with("primarySourceRevision", QString(63, 'a'))));
+    QVERIFY(rejected(with("alternativeSourceRevision", QString(64, 'G'))));
+    QVERIFY(rejected(withClock("offsetSeconds", 1e9)));
+    QVERIFY(rejected(withClock("offsetSeconds", "12")));
+    QVERIFY(rejected(withClock("driftPpm", 5000.0)));
+    QVERIFY(rejected(withClock("uncertaintySeconds", -1.0)));
+    QVERIFY(rejected(with("clock", 3)));
+    QVERIFY(rejected(with("rules", QJsonObject{})));
+    QVERIFY(rejected(with("rules", QJsonArray{QJsonObject{{"key", "speed"}, {"rule", "overwrite"}}})));
+    QVERIFY(rejected(with("rules", QJsonArray{QJsonObject{{"key", "speed"}, {"rule", "fillGaps"}},
+                                              QJsonObject{{"key", "speed"}, {"rule", "primaryOnly"}}})));
+    QJsonArray many;
+    for (int index = 0; index < 65; ++index) many.append(QJsonObject{{"key", QString("c%1").arg(index)}, {"rule", "fillGaps"}});
+    QVERIFY(rejected(with("rules", many)));
+    many.removeLast();
+    QVERIFY(!rejected(with("rules", many)));
+    QVERIFY(rejected(QJsonObject{}));
+    auto notObject = Fixture::project(); auto notRuns = Fixture::runs(notObject); auto notRun = notRuns[0].toObject();
+    notRun.insert("fusion", 7); notRuns[0] = notRun; Fixture::setRuns(notObject, notRuns);
+    QVERIFY(!ProjectLimits::validateProject(notObject));
 }
 
 void EventProjectTests::persistsTrackConfigurationAndUnknownLegacyState()

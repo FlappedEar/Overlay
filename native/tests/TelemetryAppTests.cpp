@@ -19,6 +19,7 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <cmath>
 #include <mach/mach.h>
 #include <sys/resource.h>
 #include <sys/sysctl.h>
@@ -51,6 +52,23 @@ QByteArray warpedRouteVbo(const bool fastFirstHalf, const int samplesPerLap = 24
         fields[0] = QString::number(time, 'f', 6);
         out << fields.join(' ');
         ++index;
+    }
+    return out.join('\n').toUtf8();
+}
+
+// KAN-103: a recording of the same session with a non-periodic speed trace
+// (the loggers' clocks then align uniquely) and, for an alternative logger,
+// an OBD coolant channel. `speedBias` makes its speed disagree.
+QByteArray withSpeed(const QByteArray &vbo, const bool coolant, const double speedBias = 0.0)
+{
+    QStringList out;
+    bool data = false;
+    for (const auto &line : QString::fromUtf8(vbo).split('\n')) {
+        if (line.startsWith("time latitude longitude")) { out << line + " velocity" + (coolant ? " coolant_temp-obd" : ""); continue; }
+        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
+        const double t = line.split(' ').first().toDouble();
+        const double speed = 90.0 + 25.0 * std::sin(0.11 * t) + 12.0 * std::sin(0.0007 * t * t) + speedBias;
+        out << line + QString(" %1").arg(speed, 0, 'f', 3) + (coolant ? QString(" %1").arg(88.0 + 0.02 * t, 0, 'f', 3) : "");
     }
     return out.join('\n').toUtf8();
 }
@@ -135,6 +153,7 @@ private slots:
     void keepsTheEditorStateAnotherAppSaved();
     void importsAFolderOfRecordings();
     void attachesAlternativeRecordingsAndSwitchesThePrimary();
+    void reviewsApprovesAndReopensSourceFusion();
     void keepsAddingRunsWhileTheDayIsEdited();
     void measuresAPrivateFullDay();
 };
@@ -422,6 +441,116 @@ void TelemetryAppTests::attachesAlternativeRecordingsAndSwitchesThePrimary()
     QVERIFY(QFile::rename(alternative, alternative + ".moved"));
     QVERIFY(!document.attachRunRecording(runId, QUrl::fromLocalFile(primary)));
     QVERIFY(document.runRecordingReview().value("message").toString().contains("primary recording is missing"));
+}
+
+void TelemetryAppTests::reviewsApprovesAndReopensSourceFusion()
+{
+    // KAN-103: fusing an alternative recording into a run's analysis is
+    // reviewed (alignment, resulting channels, coverage, conflicts), needs a
+    // rule for every conflict, is saved and reopened, and stops applying when
+    // a recording no longer has the content it was approved with.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto primaryPath = directory.filePath("session.vbo"), obdPath = directory.filePath("session-obd.vbo"),
+        biasedPath = directory.filePath("session-biased.vbo");
+    QVERIFY(writeFile(primaryPath, withSpeed(warpedRouteVbo(true), false)));
+    QVERIFY(writeFile(obdPath, withSpeed(warpedRouteVbo(true), true)));
+    QVERIFY(writeFile(biasedPath, withSpeed(warpedRouteVbo(true), true, 8.0)));
+    TelemetryController controller(directory.filePath("recovery.json"));
+    auto &document = *controller.document();
+    auto &analysis = *controller.analysis();
+    QSignalSpy committed(&document, &DocumentController::batchImportCommitted);
+    QVERIFY(document.importAnalysisRuns("Fusion", {QUrl::fromLocalFile(primaryPath)}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading(), 20000);
+    const auto runId = document.activeRunId();
+    for (const auto &path : {obdPath, biasedPath}) {
+        QVERIFY(document.attachRunRecording(runId, QUrl::fromLocalFile(path)));
+        QTRY_COMPARE_WITH_TIMEOUT(document.runRecordingReview().value("state").toString(), QString("review"), 20000);
+        QVERIFY(document.confirmRunRecording());
+        QTRY_VERIFY_WITH_TIMEOUT(document.runRecordingReview().isEmpty(), 20000);
+    }
+    const auto recordings = document.runRecordings(runId);
+    QCOMPARE(recordings.size(), 3);
+    const auto obdId = recordings[1].toMap().value("sourceId").toString();
+    const auto biasedId = recordings[2].toMap().value("sourceId").toString();
+
+    // The biased logger: aligned, but its speed disagrees -- approval needs a rule.
+    QVERIFY(document.reviewRunFusion(runId, biasedId));
+    QTRY_COMPARE_WITH_TIMEOUT(document.runRecordingReview().value("state").toString(), QString("fusionReview"), 30000);
+    auto review = document.runRecordingReview();
+    QCOMPARE(review.value("alignment").toMap().value("status").toString(), QString("aligned"));
+    auto preview = review.value("preview").toMap();
+    QVERIFY(preview.value("approvable").toBool());
+    QCOMPARE(preview.value("conflicts").toStringList(), QStringList{"speed"});
+    QVERIFY(!document.approveRunFusion({}));                              // the conflict has no rule
+    QVERIFY(!document.approveRunFusion({{"speed", "overwrite"}}));         // not a rule
+    document.cancelRunRecording();
+
+    // The OBD logger: speed agrees, coolant is added.
+    QVERIFY(document.reviewRunFusion(runId, obdId));
+    QTRY_COMPARE_WITH_TIMEOUT(document.runRecordingReview().value("state").toString(), QString("fusionReview"), 30000);
+    preview = document.runRecordingReview().value("preview").toMap();
+    QVERIFY(preview.value("approvable").toBool());
+    QVERIFY(preview.value("conflicts").toStringList().isEmpty());
+    QVariantMap coolant, speed;
+    for (const auto &value : preview.value("channels").toList()) {
+        if (value.toMap().value("name") == "coolant_temp-obd") coolant = value.toMap();
+        if (value.toMap().value("key") == "speed") speed = value.toMap();
+    }
+    QVERIFY(coolant.value("added").toBool());
+    QVERIFY(coolant.value("coverage").toDouble() > 0.95);
+    QVERIFY(!speed.value("added").toBool() && !speed.value("conflicting").toBool());
+    QVERIFY(speed.value("comparedSamples").toInt() > 100);
+    QVERIFY(document.approveRunFusion({}));
+    auto run = document.currentProjectObject().value("event").toObject().value("runs").toArray().first().toObject();
+    QCOMPARE(run.value("fusion").toObject().value("alternativeSourceId").toString(), obdId);
+    QVERIFY(document.dirty());
+    QCOMPARE(document.runRecordings(runId)[1].toMap().value("fusion").toString(), QString("applied"));
+
+    // The run's analysis now carries the fused coolant channel.
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading() && !analysis.outingLaps().isEmpty(), 20000);
+    int lapIndex = -1;
+    const auto laps = analysis.outingLaps();
+    for (int index = 0; index < laps.size(); ++index)
+        if (laps[index].toMap().value("type") == "LAP") { lapIndex = index; break; }
+    QVERIFY(lapIndex >= 0);
+    QVERIFY(analysis.selectOutingLap(lapIndex));
+    QTRY_COMPARE_WITH_TIMEOUT(analysis.outingLapDetailState(), QString("ready"), 20000);
+    const auto series = analysis.outingLapSeries("coolant_temp-obd", 200);
+    QVERIFY2(!series.contains("reason") && !series.value("segments").toList().isEmpty(), qPrintable(series.value("reason").toString()));
+
+    // Saved and reopened: the decision is kept and applies again.
+    const auto projectPath = directory.filePath("fusion.fetproject");
+    QVERIFY(document.saveProject(QUrl::fromLocalFile(projectPath)));
+    {
+        TelemetryController reopened(directory.filePath("recovery-2.json"));
+        reopened.document()->requestOpenProject(QUrl::fromLocalFile(projectPath));
+        QTRY_VERIFY_WITH_TIMEOUT(!reopened.document()->projectLoading() && reopened.document()->runRecordings(runId).size() == 3, 20000);
+        QCOMPARE(reopened.document()->runRecordings(runId)[1].toMap().value("fusion").toString(), QString("applied"));
+    }
+
+    // The fused file changes on disk: the lap no longer opens with it.
+    QVERIFY(writeFile(obdPath, withSpeed(warpedRouteVbo(true), true, 0.5)));
+    QVERIFY(analysis.selectOutingLap(lapIndex == 0 ? 1 : 0));
+    QTRY_VERIFY_WITH_TIMEOUT(analysis.outingLapDetailState() != "loading", 20000);
+    QVERIFY(analysis.selectOutingLap(lapIndex));
+    QTRY_VERIFY_WITH_TIMEOUT(analysis.outingLapDetailState() == "error" || analysis.outingLapDetailState() == "stale", 20000);
+
+    // Removing the fusion returns the run to its primary alone; so does a new primary.
+    QVERIFY(document.removeRunFusion(runId));
+    QVERIFY(!document.currentProjectObject().value("event").toObject().value("runs").toArray().first().toObject().contains("fusion"));
+    QVERIFY(!document.runRecordings(runId)[1].toMap().contains("fusion"));
+    QVERIFY(!document.removeRunFusion(runId));
+    // A conflicting logger approved with an explicit rule, then a new primary.
+    QVERIFY(document.reviewRunFusion(runId, biasedId));
+    QTRY_COMPARE_WITH_TIMEOUT(document.runRecordingReview().value("state").toString(), QString("fusionReview"), 30000);
+    QVERIFY(document.approveRunFusion({{"speed", "fillGaps"}}));
+    run = document.currentProjectObject().value("event").toObject().value("runs").toArray().first().toObject();
+    QCOMPARE(run.value("fusion").toObject().value("rules").toArray().first().toObject().value("rule").toString(), QString("fillGaps"));
+    QVERIFY(document.setRunPrimarySource(runId, biasedId));
+    QTRY_VERIFY_WITH_TIMEOUT(document.runRecordingReview().isEmpty()
+        && document.runRecordings(runId)[2].toMap().value("primary").toBool(), 20000);
+    QVERIFY(!document.currentProjectObject().value("event").toObject().value("runs").toArray().first().toObject().contains("fusion"));
 }
 
 void TelemetryAppTests::keepsAddingRunsWhileTheDayIsEdited()

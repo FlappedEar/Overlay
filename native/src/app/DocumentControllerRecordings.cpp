@@ -4,6 +4,7 @@
 #include "project/ProjectSourceReference.h"
 #include "telemetry/LapTiming.h"
 #include "telemetry/OutingLaps.h"
+#include "telemetry/ChannelFusion.h"
 #include "telemetry/RecordingAlignment.h"
 #include "telemetry/TelemetryImportPlan.h"
 #include "telemetry/TelemetrySource.h"
@@ -70,9 +71,21 @@ QVariantList DocumentController::runRecordings(const QString &runId) const
         const auto path = ProjectSourceReferenceCodec::resolve(reference, m_documentState.projectPath());
         const auto name = QFileInfo(reference.absolutePath.isEmpty() ? reference.relativePath : reference.absolutePath).fileName();
         const auto format = source.value("importProvenance").toObject().value("format").toString();
-        result.append(QVariantMap{{"sourceId", source.value("id").toString()}, {"name", name},
+        QVariantMap row{{"sourceId", source.value("id").toString()}, {"name", name},
             {"format", format.isEmpty() ? QFileInfo(name).suffix().toUpper() : format.toUpper()},
-            {"primary", source.value("id").toString() == primary}, {"available", !path.isEmpty()}});
+            {"primary", source.value("id").toString() == primary}, {"available", !path.isEmpty()}};
+        // KAN-103: whether this alternative is fused, and still the content it was approved with.
+        const auto fusion = run.value("fusion").toObject();
+        if (fusion.value("alternativeSourceId").toString() == source.value("id").toString()) {
+            QJsonObject primarySource;
+            for (const auto &other : run.value("sources").toObject().value("telemetry").toArray())
+                if (other.toObject().value("id").toString() == primary) primarySource = other.toObject();
+            const bool current = EventProjectCodec::sourceContentRevision(source) == fusion.value("alternativeSourceRevision").toString().toLatin1()
+                && EventProjectCodec::sourceContentRevision(primarySource) == fusion.value("primarySourceRevision").toString().toLatin1();
+            row.insert("fusion", current ? QStringLiteral("applied") : QStringLiteral("needsRevalidation"));
+            row.insert("fusionRules", fusion.value("rules").toArray().size());
+        }
+        result.append(row);
     }
     return result;
 }
@@ -316,11 +329,169 @@ bool DocumentController::checkRunRecordingAlignment(const QString &runId, const 
     return true;
 }
 
+bool DocumentController::reviewRunFusion(const QString &runId, const QString &sourceId)
+{
+    if (!recordingEditAllowed()) return false;
+    const auto run = runById(m_projectTemplate, runId);
+    const auto primaryId = run.value("primaryTelemetrySourceId").toString();
+    if (run.isEmpty() || sourceId == primaryId) return false;
+    QString primaryPath, candidatePath, candidateName;
+    QByteArray primarySha, candidateSha;
+    for (const auto &value : run.value("sources").toObject().value("telemetry").toArray()) {
+        const auto source = value.toObject();
+        const auto reference = referenceOf(source.value("reference").toObject());
+        const auto path = ProjectSourceReferenceCodec::resolve(reference, m_documentState.projectPath());
+        if (source.value("id").toString() == primaryId) {
+            primaryPath = path; primarySha = EventProjectCodec::sourceContentRevision(source);
+        } else if (source.value("id").toString() == sourceId) {
+            candidatePath = path; candidateSha = EventProjectCodec::sourceContentRevision(source);
+            candidateName = QFileInfo(reference.absolutePath.isEmpty() ? reference.relativePath : reference.absolutePath).fileName();
+        }
+    }
+    if (primaryPath.isEmpty() || candidatePath.isEmpty() || primarySha.isEmpty() || candidateSha.isEmpty()) {
+        setRecordingReview({{"state", "error"}, {"runId", runId},
+            {"message", tr("Both recordings must be available, with a known content identity, to review a fusion. Relink the missing one.")}});
+        return false;
+    }
+    m_recordingRunId = runId;
+    m_recordingRevision = m_documentState.revision();
+    m_recordingDocumentId = m_documentId;
+    m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
+    const auto cancellation = m_recordingCancellation;
+    setRecordingReview({{"state", "aligning"}, {"runId", runId}, {"sourceId", sourceId},
+        {"message", tr("Comparing the recordings and their channels…")}});
+    m_recordingWatcher.setFuture(QtConcurrent::run([primaryPath, primarySha, candidatePath, candidateSha, candidateName,
+                                                        primaryId, sourceId, cancellation] {
+        RecordingWork work;
+        work.kind = RecordingWork::Kind::FusionReview;
+        work.sourceId = sourceId;
+        work.path = candidateName;
+        const auto cancelled = [cancellation] { return cancellation->load(); };
+        try {
+            const auto primary = loadVerified(primaryPath, primarySha, cancelled);
+            const auto candidate = loadVerified(candidatePath, candidateSha, cancelled);
+            const auto alignment = alignRecordings(primary, candidate, cancelled);
+            work.alignment = alignmentMap(alignment);
+            QVariantMap preview{{"approvable", false}};
+            if (alignment.status == QLatin1String(alignmentAligned)) {
+                const SourceClock clock{*alignment.offset, alignment.driftPpm.value_or(0.0)};
+                const auto fused = fuseChannels(primary, primaryId, {{sourceId, &candidate, clock, alignment.status}}, {}, cancelled);
+                const double duration = std::max(primary.duration, 1e-9);
+                QVariantList channels;
+                for (const auto &channel : fused.channels) {
+                    if (channel.rule == QLatin1String("primary") && channel.comparedSourceId.isEmpty()) continue;
+                    double covered = 0.0, interval = 0.0;
+                    for (const auto &segment : channel.segments)
+                        if (segment.sourceId == sourceId) { covered += segment.end - segment.start; interval = segment.sampleIntervalSeconds; }
+                    if (channel.rule != QLatin1String("added")) {
+                        // Overlapping channels: the alternative's own coverage on the primary clock.
+                        const auto &raw = candidate.channels.value(candidate.aliases.value(channel.key, channel.key));
+                        covered = raw.timestamps.isEmpty() ? 0.0 : (raw.timestamps.last() - raw.timestamps.first()) * (1.0 + clock.driftPpm * 1e-6);
+                    }
+                    channels.append(QVariantMap{{"key", channel.key}, {"name", channel.name}, {"unit", channel.unit},
+                        {"rule", channel.rule}, {"added", channel.rule == QLatin1String("added")},
+                        {"conflicting", channel.conflicting}, {"comparedSamples", channel.comparedSamples},
+                        {"medianDifference", channel.medianDifference},
+                        {"coverage", std::clamp(covered / duration, 0.0, 1.0)}, {"sampleIntervalSeconds", interval}});
+                }
+                preview = {{"approvable", true}, {"channels", channels}, {"unitMismatches", fused.unitMismatches},
+                    {"conflicts", fused.unresolved}};
+                work.fusionDecision = {{"algorithm", QString::fromLatin1(channelFusionAlgorithm)},
+                    {"alternativeSourceId", sourceId}, {"primarySourceRevision", QString::fromLatin1(primarySha)},
+                    {"alternativeSourceRevision", QString::fromLatin1(candidateSha)},
+                    {"clock", QJsonObject{{"offsetSeconds", *alignment.offset}, {"driftPpm", alignment.driftPpm.value_or(0.0)},
+                        {"uncertaintySeconds", alignment.uncertaintySeconds.value_or(0.0)},
+                        {"alignmentAlgorithm", QString::fromLatin1(recordingAlignmentAlgorithm)},
+                        {"resolvedByDeclaredClock", alignment.resolvedByDeclaredClock}}}};
+            }
+            work.fusionPreview = preview;
+        } catch (const OperationCancelled &) {
+            work.cancelled = true;
+        } catch (const std::exception &error) {
+            work.error = QString::fromUtf8(error.what());
+        }
+        return work;
+    }));
+    return true;
+}
+
+bool DocumentController::approveRunFusion(const QVariantMap &rules)
+{
+    if (m_recordingReview.value("state") != "fusionReview" || m_recordingWatcher.isRunning()
+        || !m_recordingReview.value("preview").toMap().value("approvable").toBool())
+        return false;
+    if (m_recordingDocumentId != m_documentId || m_recordingRevision != m_documentState.revision()) {
+        setRecordingReview({{"state", "error"}, {"runId", m_recordingRunId},
+            {"message", tr("The project changed. Review the fusion again.")}});
+        return false;
+    }
+    // Every conflicting channel needs an explicit rule.
+    QJsonArray chosen;
+    for (auto it = rules.cbegin(); it != rules.cend(); ++it) {
+        const auto rule = it.value().toString();
+        if (!QStringList{"primaryOnly", "fillGaps", "preferAlternative"}.contains(rule)) return false;
+        chosen.append(QJsonObject{{"key", it.key()}, {"rule", rule}});
+    }
+    for (const auto &key : m_recordingReview.value("preview").toMap().value("conflicts").toStringList())
+        if (!rules.contains(key)) return false;
+    auto decision = m_recordingCandidate.fusionDecision;
+    decision.insert("rules", chosen);
+    auto project = currentProjectObject();
+    auto event = project.value("event").toObject();
+    auto runs = event.value("runs").toArray();
+    for (qsizetype i = 0; i < runs.size(); ++i) {
+        auto run = runs[i].toObject();
+        if (run.value("id").toString() != m_recordingRunId) continue;
+        run.insert("fusion", decision);
+        runs[i] = run;
+    }
+    event.insert("runs", runs);
+    project.insert("event", event);
+    QString error;
+    if (!ProjectLimits::validateProject(project, &error)) {
+        setRecordingReview({{"state", "error"}, {"runId", m_recordingRunId}, {"message", error}});
+        return false;
+    }
+    m_projectTemplate = project;
+    m_recordingCandidate = {};
+    markPersistentChange();
+    setRecordingReview({});
+    m_host.showStatus(tr("Fusion approved: this run's analysis now includes the other recording's channels. Save to keep it."));
+    emit runRecordingsChanged();
+    return true;
+}
+
+bool DocumentController::removeRunFusion(const QString &runId)
+{
+    if (!recordingEditAllowed()) return false;
+    auto project = currentProjectObject();
+    auto event = project.value("event").toObject();
+    auto runs = event.value("runs").toArray();
+    bool removed = false;
+    for (qsizetype i = 0; i < runs.size(); ++i) {
+        auto run = runs[i].toObject();
+        if (run.value("id").toString() != runId || !run.contains("fusion")) continue;
+        run.remove("fusion");
+        runs[i] = run;
+        removed = true;
+    }
+    if (!removed) return false;
+    event.insert("runs", runs);
+    project.insert("event", event);
+    if (!ProjectLimits::validateProject(project)) return false;
+    m_projectTemplate = project;
+    markPersistentChange();
+    m_host.showStatus(tr("Fusion removed: this run's analysis uses its primary recording only."));
+    emit runRecordingsChanged();
+    return true;
+}
+
 void DocumentController::initializeRunRecordings()
 {
     connect(this, &DocumentController::documentStateChanged, this, [this] {
         // A review is for the document it was made against.
-        if (!m_recordingReview.isEmpty() && !m_recordingWatcher.isRunning() && m_recordingReview.value("state") == "review"
+        if (!m_recordingReview.isEmpty() && !m_recordingWatcher.isRunning()
+            && (m_recordingReview.value("state") == "review" || m_recordingReview.value("state") == "fusionReview")
             && (m_recordingDocumentId != m_documentId || m_recordingRevision != m_documentState.revision()))
             cancelRunRecording();
     });
@@ -335,6 +506,12 @@ void DocumentController::initializeRunRecordings()
         }
         if (!work.error.isEmpty()) {
             setRecordingReview({{"state", "error"}, {"runId", runId}, {"message", work.error}});
+            return;
+        }
+        if (work.kind == RecordingWork::Kind::FusionReview) {
+            m_recordingCandidate = work;
+            setRecordingReview({{"state", "fusionReview"}, {"runId", runId}, {"sourceId", work.sourceId},
+                {"name", work.path}, {"alignment", work.alignment}, {"preview", work.fusionPreview}});
             return;
         }
         if (work.kind == RecordingWork::Kind::Align) {
@@ -372,6 +549,8 @@ void DocumentController::initializeRunRecordings()
                     if (value.toObject().value("id").toString() == work.sourceId)
                         fingerprint = value.toObject().value("reference").toObject().value("fingerprint").toObject();
                 run.insert("primaryTelemetrySourceId", work.sourceId);
+                // A fusion was reviewed against the old primary: it no longer applies.
+                run.remove("fusion");
                 // A new primary cannot inherit the old one's asserted layout or
                 // verified inference; the gates it actually records are kept.
                 run.insert("trackConfiguration", EventProjectCodec::unknownTrackConfiguration(work.sourceId, fingerprint, work.gateRevision));

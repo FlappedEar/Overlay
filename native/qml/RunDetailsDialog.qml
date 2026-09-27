@@ -22,6 +22,24 @@ Dialog {
     readonly property bool recordingBusy: ["checking", "attaching", "switching", "aligning"].indexOf(review.state || "") >= 0
     // KAN-101: how an alternative recording's clock lines up with the primary.
     // Described only: nothing is applied, and ambiguity is said as such.
+    // KAN-103: the rules chosen in a fusion review, by channel key.
+    property var fusionRules: ({})
+    readonly property var fusionPreview: review.state === "fusionReview" ? (review.preview || {}) : ({})
+    readonly property bool fusionRulesComplete: (root.fusionPreview.conflicts || []).every(key => !!root.fusionRules[key])
+    onReviewChanged: if (review.state === "fusionReview") root.fusionRules = ({})
+    readonly property var fusionRuleNames: ["", "primaryOnly", "fillGaps", "preferAlternative"]
+    readonly property var fusionRuleLabels: [qsTr("Keep the primary (default)"), qsTr("Keep the primary"),
+        qsTr("Fill the primary's gaps"), qsTr("Prefer this recording")]
+    function fusionChannelText(channel) {
+        const coverage = Math.round(channel.coverage * 100) + "%";
+        const rate = channel.sampleIntervalSeconds > 0 ? " · " + qsTr("every %1 s").arg(Number(channel.sampleIntervalSeconds).toFixed(2)) : "";
+        const unit = channel.unit ? " (" + channel.unit + ")" : "";
+        if (channel.added) return qsTr("%1%2 — added · covers %3 of the run%4").arg(channel.name).arg(unit).arg(coverage).arg(rate);
+        const difference = qsTr("median difference %1 over %2 samples").arg(Number(channel.medianDifference).toFixed(2)).arg(channel.comparedSamples);
+        return channel.conflicting
+            ? qsTr("%1%2 — both recorded and they disagree: %3. Choose a rule.").arg(channel.name).arg(unit).arg(difference)
+            : qsTr("%1%2 — both recorded and they agree: %3").arg(channel.name).arg(unit).arg(difference);
+    }
     function secondsText(value) { return (value >= 0 ? "+" : "−") + Math.abs(Number(value)).toFixed(2) + " s"; }
     function alignmentText(name, alignment) {
         if (!alignment) return "";
@@ -36,7 +54,8 @@ Dialog {
         if (alignment.offsetSeconds !== undefined)
             lines.push(qsTr("Measured from the speed traces: primary time = this recording's time %1 ± %2 s%3.")
                 .arg(root.secondsText(alignment.offsetSeconds)).arg(Number(alignment.uncertaintySeconds).toFixed(2))
-                .arg(alignment.driftPpm !== undefined ? qsTr(", drift %1 ppm").arg(Math.round(alignment.driftPpm)) : ""));
+                .arg(alignment.driftPpm !== undefined ? qsTr(", drift %1 ppm").arg(Math.round(alignment.driftPpm))
+                    : alignment.usedWindows >= 3 ? qsTr(", no clock drift resolvable over this overlap") : ""));
         if (alignment.correlation > -1)
             lines.push(qsTr("Speed correlation %1 over %2 of overlap; %3 of %4 windows agree.")
                 .arg(Number(alignment.correlation).toFixed(3)).arg(Math.round(alignment.overlapSeconds) + " s")
@@ -188,7 +207,7 @@ Dialog {
                         wrapMode: Text.WordWrap
                         color: "#91a0b2"
                         font.pixelSize: 11
-                        text: qsTr("The primary recording supplies this run's laps and channels. Alternatives are kept beside it, never merged: a VBO carries RaceChrono's calculated G, an RCZ keeps the logger's own clock. Changing the primary derives the laps again, so results based on the old laps need recomputing; check this run's video sync too.")
+                        text: qsTr("The primary recording supplies this run's laps and channels. Alternatives are kept beside it: a VBO carries RaceChrono's calculated G, an RCZ keeps the logger's own clock. Fusing one adds its channels to this run's analysis, only after you review its clock and every conflict. Changing the primary derives the laps again and removes the fusion, so results based on the old laps need recomputing; check this run's video sync too.")
                     }
                     Repeater {
                         objectName: "runRecordingList"
@@ -207,6 +226,28 @@ Dialog {
                                 visible: recordingRow.modelData.primary || !recordingRow.modelData.available
                                 text: recordingRow.modelData.primary ? qsTr("Primary") : qsTr("Missing")
                                 color: recordingRow.modelData.primary ? "#55e6a5" : "#ff9585"
+                            }
+                            Label {
+                                objectName: "recordingFusionState"
+                                visible: !!recordingRow.modelData.fusion
+                                text: recordingRow.modelData.fusion === "applied" ? qsTr("Fused") : qsTr("Fusion needs review")
+                                color: recordingRow.modelData.fusion === "applied" ? "#58bfff" : "#d6a457"
+                            }
+                            FeButton {
+                                objectName: "reviewRunFusion"
+                                visible: !recordingRow.modelData.primary && recordingRow.modelData.fusion !== "applied"
+                                compact: true
+                                text: qsTr("Fuse…")
+                                enabled: recordingRow.modelData.available && !root.recordingBusy && !root.draftChanged
+                                onClicked: appController.reviewRunFusion(root.editingRunId, recordingRow.modelData.sourceId)
+                            }
+                            FeButton {
+                                objectName: "removeRunFusion"
+                                visible: !!recordingRow.modelData.fusion
+                                compact: true
+                                text: qsTr("Remove fusion")
+                                enabled: !root.recordingBusy && !root.draftChanged
+                                onClicked: appController.removeRunFusion(root.editingRunId)
                             }
                             FeButton {
                                 objectName: "checkRecordingClock"
@@ -238,11 +279,84 @@ Dialog {
                         visible: root.reviewForThisRun
                         wrapMode: Text.WordWrap
                         color: root.review.state === "error" ? "#ff9585"
-                            : root.review.state === "alignment" && root.review.alignment.status !== "aligned" ? "#d6a457" : "#dce4ee"
+                            : (root.review.state === "alignment" || root.review.state === "fusionReview")
+                                && root.review.alignment.status !== "aligned" ? "#d6a457" : "#dce4ee"
                         text: root.review.state === "review"
                             ? qsTr("Review %1:").arg(root.review.name || "") + "\n" + root.evidenceText(root.review.evidence)
                             : root.review.state === "alignment" ? root.alignmentText(root.review.name || "", root.review.alignment)
+                            : root.review.state === "fusionReview" ? qsTr("Fuse %1 into this run's analysis?").arg(root.review.name || "")
+                                + "\n" + root.alignmentText(root.review.name || "", root.review.alignment)
+                                + (root.fusionPreview.approvable ? "" : "\n" + qsTr("Fusion needs an aligned clock, so it cannot be approved."))
                             : (root.review.message || "")
+                    }
+                    ColumnLayout {
+                        objectName: "runFusionChannels"
+                        Layout.fillWidth: true
+                        visible: root.reviewForThisRun && root.review.state === "fusionReview" && !!root.fusionPreview.approvable
+                        spacing: 4
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            font.pixelSize: 11
+                            color: "#91a0b2"
+                            text: qsTr("Resulting channels. The primary keeps its laps and channels; nothing is resampled, and a channel both recordings have stays the primary's unless you choose otherwise.")
+                        }
+                        Repeater {
+                            model: root.fusionPreview.channels || []
+                            delegate: RowLayout {
+                                id: fusionRow
+                                required property var modelData
+                                required property int index
+                                Layout.fillWidth: true
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    font.pixelSize: 12
+                                    text: root.fusionChannelText(fusionRow.modelData)
+                                    color: fusionRow.modelData.conflicting && !root.fusionRules[fusionRow.modelData.key] ? "#d6a457" : "#dce4ee"
+                                }
+                                FeComboBox {
+                                    objectName: "runFusionRule-" + fusionRow.modelData.key
+                                    visible: !fusionRow.modelData.added
+                                    implicitHeight: 28
+                                    Layout.preferredWidth: 190
+                                    model: fusionRow.modelData.conflicting ? root.fusionRuleLabels.slice(1) : root.fusionRuleLabels
+                                    onActivated: index => {
+                                        const rules = Object.assign({}, root.fusionRules);
+                                        const name = root.fusionRuleNames[fusionRow.modelData.conflicting ? index + 1 : index];
+                                        if (name) rules[fusionRow.modelData.key] = name; else delete rules[fusionRow.modelData.key];
+                                        root.fusionRules = rules;
+                                    }
+                                    currentIndex: -1
+                                    displayText: root.fusionRules[fusionRow.modelData.key]
+                                        ? root.fusionRuleLabels[root.fusionRuleNames.indexOf(root.fusionRules[fusionRow.modelData.key])]
+                                        : (fusionRow.modelData.conflicting ? qsTr("Choose a rule…") : root.fusionRuleLabels[0])
+                                }
+                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            visible: (root.fusionPreview.unitMismatches || []).length > 0
+                            wrapMode: Text.WordWrap
+                            font.pixelSize: 11
+                            color: "#d6a457"
+                            text: qsTr("Not fused, units differ: %1.").arg((root.fusionPreview.unitMismatches || []).join(", "))
+                        }
+                    }
+                    RowLayout {
+                        visible: root.reviewForThisRun && root.review.state === "fusionReview"
+                        FeButton {
+                            objectName: "approveRunFusion"
+                            accent: true
+                            text: qsTr("Approve fusion")
+                            enabled: !!root.fusionPreview.approvable && root.fusionRulesComplete
+                            onClicked: appController.approveRunFusion(root.fusionRules)
+                        }
+                        FeButton {
+                            objectName: "cancelRunFusion"
+                            text: qsTr("Cancel")
+                            onClicked: appController.cancelRunRecording()
+                        }
                     }
                     RowLayout {
                         visible: root.reviewForThisRun && ["review", "error", "alignment"].indexOf(root.review.state) >= 0

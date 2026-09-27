@@ -252,4 +252,42 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
     return result;
 }
 
+TelemetrySession fusedSession(const TelemetrySession &primary, const ChannelFusionResult &fusion)
+{
+    TelemetrySession session;
+    session.metadata = primary.metadata;
+    session.aliases = primary.aliases;
+    session.warnings = primary.warnings;
+    session.timingGates = primary.timingGates;
+    session.duration = primary.duration;
+    session.startTime = primary.startTime;
+    session.sampleCount = primary.sampleCount;
+    for (auto it = primary.channels.cbegin(); it != primary.channels.cend(); ++it) {
+        // Fresh copies: the published session's cadence caches are frozen anew.
+        TelemetryChannel channel;
+        channel.name = it->name;
+        channel.unit = it->unit;
+        channel.timestamps = it->timestamps;
+        channel.values = it->values;
+        session.channels.insert(it.key(), channel);
+    }
+    QStringList changed;
+    for (const auto &fused : fusion.channels) {
+        if (fused.rule != QLatin1String("added") && fused.rule != QLatin1String("fillGaps")
+            && fused.rule != QLatin1String("preferAlternative"))
+            continue;
+        TelemetryChannel channel;
+        channel.name = fused.channel.name;
+        channel.unit = fused.channel.unit;
+        channel.timestamps = fused.channel.timestamps;
+        channel.values = fused.channel.values;
+        session.channels.insert(fused.name, channel);
+        if (fused.key != fused.name && !session.aliases.contains(fused.key)) session.aliases.insert(fused.key, fused.name);
+        changed.append(fused.name);
+    }
+    changed.sort();
+    session.metadata.insert(QStringLiteral("fusedChannels"), changed.join(QLatin1Char(',')));
+    return session;
+}
+
 } // namespace FlappedEar
