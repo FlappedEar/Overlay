@@ -176,8 +176,11 @@ void AnalysisController::persistComparisonSlot(const int index, const QJsonValue
 
 void AnalysisController::restorePersistedComparisonSlots()
 {
-    if (m_comparisonRestoreAttempted || outingLapsLoading() || !m_document.isEventDocument()) return;
-    m_comparisonRestoreAttempted = true;
+    // Retried whenever the day's laps change, not only once per document
+    // (KAN-82): a saved lap whose recording was missing at open comes back
+    // once it is relinked. An explicit clear saves null and choosing another
+    // lap fills the slot, so neither is ever overridden.
+    if (outingLapsLoading() || !m_document.isEventDocument()) return;
     const auto savedComparisonSlots = m_document.analysisProject().value("event").toObject()
         .value("analysisDecisions").toObject().value("comparisonSlots").toArray();
     for (int i = 0; i < 2 && i < savedComparisonSlots.size(); ++i) {

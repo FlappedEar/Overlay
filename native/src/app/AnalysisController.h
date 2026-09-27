@@ -387,7 +387,6 @@ private:
     // lookup as AppController::currentApprovedSegmentation() but parameterized
     // by slot instead of the single open outing lap.
     FlappedEar::ApprovedSegmentation comparisonApprovedSegmentation(int slot) const;
-    bool m_comparisonRestoreAttempted = false;
     std::shared_ptr<TelemetrySessionCache> m_analysisSourceCache = std::make_shared<TelemetrySessionCache>();
     std::array<ComparisonSlot, 2> m_comparisonSlots;
     QFutureWatcher<OutingLapDetailResult> m_comparisonWatcher;

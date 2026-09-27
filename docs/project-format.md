@@ -57,6 +57,8 @@ The project document is valid independently of external assets. After JSON, scen
 
 Locate uses the ordinary bounded, cancellable, generation-guarded video probe or shared VBO/RCZ loader. A matching fingerprint is accepted. A candidate that parses successfully but clearly differs is not committed until the user confirms intentional replacement. An invalid candidate remains an error and cannot replace the current source. Projects without a fingerprint accept a compatible candidate and acquire identity metadata in memory for the next save.
 
+A saved A/B pair whose lap belongs to a missing recording stays saved. The lap comes back into its slot as soon as the recording is relinked, without reopening the project (KAN-82). It is restored by its exact reference, never by lap number. An explicit clear, or choosing another lap, is never overridden.
+
 Successful relinking or intentional source replacement updates document source metadata and marks the project dirty. Resolving the same persisted relative reference after moving the complete folder does not mark it dirty. Recovery snapshots serialize the same complete source objects and remain unsaved document state; they never replace the saved project as authoritative clean state.
 
 ## Analysis state

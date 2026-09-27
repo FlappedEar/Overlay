@@ -1463,6 +1463,40 @@ true when `AnalysisController` (step 8) and `DocumentController` (step 9)
 were extracted from `AppController`. The regression tests reach their
 internals through `controller.m_analysis` and `controller.m_document`.
 
+## A complete day through move, relink and recovery (KAN-82)
+
+`TelemetryTests::keepsACompleteDayThroughMoveRelinkAndRecovery` takes one
+analysed day through its whole life. The day has two M4 recordings in the
+project's `media/` folder, run notes, approved segments, an A/B pair from
+the largest loss with a saved range, and the computed report. Each step
+compares the notes, the report's decisions key, best lap, theoretical best
+and sector count, the A/B lap references, and the saved range:
+
+1. **Save.** The results settle again after Save As, because the lap key
+   follows the project path.
+2. **Move** the project folder with its recordings. On reopen it is clean
+   and identical.
+3. **Missing recording.** Rename the active run's recording.
+   - On reopen that run shows `missing-source` and the other stays
+     inspectable.
+   - Relinking the other session's recording is refused by identity (a
+     telemetry mismatch, declined).
+   - Relinking the right file brings everything back. The day is dirty
+     until saved, and after saving it is identical.
+4. **Crash** with an unsaved note: the recovery file is written and the
+   controller ends without saving.
+   - Recover brings the note back, with the document dirty, and everything
+     else identical.
+   - Discard returns to the saved project, which is clean.
+
+**Defect found and fixed.** After step 3's relink, lap A of the saved pair
+did not come back until the project was reopened. The saved pair was
+restored only once per document, and at open time lap A's recording was
+missing. Now any empty slot with a saved reference is retried when the
+day's laps change. The saved reference was never lost. Dirty New, Open and
+Quit decisions keep their own tests (`gatesDirtyDestructiveActions`,
+`resolvesDirtyDecisionsSafely`).
+
 ## Minimum layout and keyboard workflows (KAN-78)
 
 `TelemetryTests::keepsAnalysisControlsReachableAtMinimumSize` opens the

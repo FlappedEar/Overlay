@@ -201,6 +201,7 @@ private slots:
     void describesOutOfSpaceExportFailures();
     void keepsAnalysisControlsReachableAtMinimumSize_data();
     void keepsAnalysisControlsReachableAtMinimumSize();
+    void keepsACompleteDayThroughMoveRelinkAndRecovery();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -8092,6 +8093,188 @@ void TelemetryTests::keepsAnalysisControlsReachableAtMinimumSize()
     }
     QVERIFY(QMetaObject::invokeMethod(progression, "close"));
     QVERIFY2(failures.isEmpty(), qPrintable(failures.join('\n')));
+}
+
+void TelemetryTests::keepsACompleteDayThroughMoveRelinkAndRecovery()
+{
+    // KAN-82: one analysed day -- run notes, approved segments, an A/B pair
+    // with its range, and the computed report -- through Save, a move of the
+    // project with its recordings, a missing and relinked recording, a
+    // refused wrong relink, crash recovery and discard. The saved project
+    // stays the authoritative clean state throughout.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const QString day = directory.filePath("TrackDay");
+    QVERIFY(QDir().mkpath(QDir(day).filePath("media")));
+    const auto fullA = QDir(day).filePath("media/full-a.vbo"), fullB = QDir(day).filePath("media/full-b.vbo");
+    QVERIFY(writeBytes(fullA, fullM4Vbo(true, 140, 80, 1.0)));
+    QVERIFY(writeBytes(fullB, fullM4Vbo(false, 150, 85, 0.9)));
+    const QString recovery = directory.filePath("recovery.json");
+    const auto result = [](const QVariantMap &report, const QString &id) {
+        for (const auto &value : report.value("results").toList())
+            if (value.toMap().value("id") == id) return value.toMap();
+        return QVariantMap{};
+    };
+    const auto settle = [&](AppController &controller) {
+        controller.requestOutingDayReport();
+        return QTest::qWaitFor([&] {
+            const auto results = controller.outingDayReport().value("results").toList();
+            if (results.isEmpty()) return false;
+            for (const auto &value : results) {
+                const auto status = value.toMap().value("status").toString();
+                if (status == "notComputed" || status == "computing" || status == "stale") return false;
+            }
+            return true;
+        }, 60000);
+    };
+    // What must survive: notes, segmentation, the pair and its range, the report.
+    struct Snapshot {
+        QString notes, decisions, bestLabel; double theoretical = 0; int sectors = 0;
+        QVariantMap lapA, lapB; double rangeStart = 0, rangeEnd = 0;
+        bool operator==(const Snapshot &other) const {
+            return notes == other.notes && decisions == other.decisions && bestLabel == other.bestLabel
+                && qFuzzyCompare(theoretical, other.theoretical) && sectors == other.sectors
+                && lapA == other.lapA && lapB == other.lapB
+                && qFuzzyCompare(rangeStart + 1, other.rangeStart + 1) && qFuzzyCompare(rangeEnd, other.rangeEnd);
+        }
+    };
+    const auto snapshot = [&](AppController &controller, const QString &runId) {
+        Snapshot s;
+        s.notes = controller.runMetadata(runId).value("notes").toString();
+        const auto report = controller.outingDayReport();
+        s.decisions = report.value("decisionsKey").toString();
+        s.bestLabel = result(report, "bestLap").value("value").toMap().value("label").toString();
+        s.theoretical = result(report, "theoreticalBest").value("value").toMap().value("totalSeconds").toDouble();
+        s.sectors = result(report, "theoreticalBest").value("value").toMap().value("sectors").toList().size();
+        s.lapA = controller.comparisonSlots()[0].toMap().value("lap").toMap().value("reference").toMap();
+        s.lapB = controller.comparisonSlots()[1].toMap().value("lap").toMap().value("reference").toMap();
+        s.rangeStart = controller.comparisonPersistedRangeMeters().value("startMeters").toDouble();
+        s.rangeEnd = controller.comparisonPersistedRangeMeters().value("endMeters").toDouble();
+        return s;
+    };
+    const auto describe = [](const Snapshot &s) {
+        return QString("notes=%1 decisions=%2 best=%3 theoretical=%4 sectors=%5 A=%6 B=%7 range=%8-%9")
+            .arg(s.notes, s.decisions.left(12), s.bestLabel).arg(s.theoretical).arg(s.sectors)
+            .arg(s.lapA.value("lapNumber").toInt()).arg(s.lapB.value("lapNumber").toInt()).arg(s.rangeStart).arg(s.rangeEnd);
+    };
+    const auto openDay = [&](AppController &controller, const QString &project) {
+        controller.requestOpenProject(QUrl::fromLocalFile(project));
+        return QTest::qWaitFor([&] { return controller.eventRuns().size() == 2 && !controller.projectLoading()
+            && !controller.outingLapsLoading(); }, 30000);
+    };
+
+    // 1. Analyse and save.
+    const QString project = QDir(day).filePath("day.fetproject");
+    QString runB;
+    Snapshot saved;
+    {
+        AppController controller(nullptr, recovery);
+        QVERIFY(controller.importAnalysisRuns("Complete day", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
+        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+        QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+        QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
+        runB = controller.eventRuns()[1].toMap().value("id").toString();
+        const auto metadata = controller.runMetadata(runB);
+        QVERIFY(controller.updateRunMetadata(runB, metadata.value("editToken").toString(), metadata.value("name").toString(),
+            "Soft tyres, 1.9 bar hot", "Dry, 24 °C", "Front bar +1"));
+        QVERIFY(settle(controller));
+        const auto losses = result(controller.outingDayReport(), "timeLosses").value("evidence").toList();
+        QVERIFY(!losses.isEmpty());
+        QVERIFY(controller.openTimeLoss({{"segmentId", losses.first().toMap().value("segmentId")},
+                                         {"lapReference", losses.first().toMap().value("reference")}}));
+        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
+        controller.persistComparisonRange(100.0, 600.0);
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(project)));
+        QVERIFY(!controller.dirty());
+        // Save As keys the day to its new path: let the results settle again.
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
+        QVERIFY(settle(controller));
+        QVERIFY(!controller.dirty());
+        saved = snapshot(controller, runB);
+        QVERIFY2(!saved.lapA.isEmpty() && !saved.lapB.isEmpty() && saved.sectors > 0, qPrintable(describe(saved)));
+    }
+
+    // 2. Move the project with its recordings; reopen: clean and identical.
+    const QString archive = directory.filePath("Archive");
+    QVERIFY(QDir().mkpath(archive));
+    QVERIFY(QDir().rename(day, QDir(archive).filePath("TrackDay")));
+    const QString movedDay = QDir(archive).filePath("TrackDay"), movedProject = QDir(movedDay).filePath("day.fetproject");
+    {
+        AppController controller(nullptr, recovery);
+        QVERIFY(openDay(controller, movedProject));
+        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
+        QVERIFY(settle(controller));
+        QVERIFY(!controller.dirty());
+        const auto reopened = snapshot(controller, runB);
+        QVERIFY2(reopened == saved, qPrintable(describe(saved) + " vs " + describe(reopened)));
+    }
+
+    // 3. A recording goes missing; the other run stays usable. A wrong file is
+    // refused by identity; the right one relinks and the day is whole again.
+    const QString activeRecording = QDir(movedDay).filePath("media/full-a.vbo");
+    const QString renamed = QDir(movedDay).filePath("media/renamed.vbo");
+    QVERIFY(QFile::rename(activeRecording, renamed));
+    {
+        AppController controller(nullptr, recovery);
+        controller.requestOpenProject(QUrl::fromLocalFile(movedProject));
+        QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("missing"), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 30000);
+        QVariantMap missingRun;
+        for (const auto &value : controller.outingAnalysisStatus().value("runs").toList())
+            if (value.toMap().value("state") != "ready") missingRun = value.toMap();
+        QCOMPARE(missingRun.value("state").toString(), QString("missing-source"));
+        QVERIFY(!controller.outingLaps().isEmpty()); // the other session remains inspectable
+        controller.relinkVbo(QUrl::fromLocalFile(QDir(movedDay).filePath("media/full-b.vbo")));
+        QTRY_COMPARE_WITH_TIMEOUT(controller.sourceMismatchType(), QString("telemetry"), 30000);
+        controller.resolveSourceMismatch(false);
+        QVERIFY(controller.vboLoadState() != "ready");
+        controller.relinkVbo(QUrl::fromLocalFile(renamed));
+        QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
+        QVERIFY(settle(controller));
+        QVERIFY(controller.dirty()); // the new location is a change to save
+        QVERIFY(controller.saveCurrentProject());
+        const auto relinked = snapshot(controller, runB);
+        QVERIFY2(relinked == saved, qPrintable(describe(saved) + " vs " + describe(relinked)));
+    }
+
+    // 4. Crash with an unsaved edit: recovery offers it back; discard keeps
+    // the saved project, which stays authoritative and clean.
+    {
+        AppController controller(nullptr, recovery);
+        QVERIFY(openDay(controller, movedProject));
+        const auto metadata = controller.runMetadata(runB);
+        QVERIFY(controller.updateRunMetadata(runB, metadata.value("editToken").toString(), metadata.value("name").toString(),
+            "Unsaved note", "Dry, 24 °C", "Front bar +1"));
+        QVERIFY(controller.dirty());
+        controller.m_document.writeRecoverySnapshot();
+        // The controller ends without saving, as after a crash.
+    }
+    {
+        AppController controller(nullptr, recovery);
+        QVERIFY(controller.recoveryPending());
+        controller.resolveStartupRecovery("recover");
+        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+        QCOMPARE(controller.runMetadata(runB).value("notes").toString(), QString("Unsaved note"));
+        QVERIFY(controller.dirty());
+        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
+        QVERIFY(settle(controller));
+        auto recovered = snapshot(controller, runB);
+        recovered.notes = saved.notes; // everything but the unsaved note is the saved day
+        QVERIFY2(recovered == saved, qPrintable(describe(saved) + " vs " + describe(recovered)));
+        controller.m_document.writeRecoverySnapshot();
+    }
+    {
+        AppController controller(nullptr, recovery);
+        QVERIFY(controller.recoveryPending());
+        controller.resolveStartupRecovery("discard");
+        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+        QCOMPARE(controller.runMetadata(runB).value("notes").toString(), saved.notes);
+        QVERIFY(!controller.dirty());
+        QVERIFY(!controller.recoveryPending());
+    }
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()
