@@ -38,7 +38,6 @@ void AnalysisController::resetForNewSources()
     resetComparisonSlot(0);
     resetComparisonSlot(1);
     setComparisonViewOpen(false);
-    m_comparisonRestoreAttempted = false;
 }
 
 void AnalysisController::activeRunSourceReplaced(const QString &runId)
