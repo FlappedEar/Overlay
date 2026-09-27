@@ -133,6 +133,7 @@ private slots:
     void initTestCase();
     void importsAnalysesSavesAndReopensWithoutTheEditor();
     void keepsTheEditorStateAnotherAppSaved();
+    void importsAFolderOfRecordings();
     void measuresAPrivateFullDay();
 };
 
@@ -280,6 +281,59 @@ void TelemetryAppTests::keepsTheEditorStateAnotherAppSaved()
     QTRY_VERIFY_WITH_TIMEOUT(!reopened.analysis()->outingLapsLoading(), 20000);
     QCOMPARE(reopened.analysis()->outingAnalysisStatus().value("state").toString(), QString("ready"));
     QVERIFY(reopened.analysis()->outingLaps().size() >= 3);
+}
+
+void TelemetryAppTests::importsAFolderOfRecordings()
+{
+    // KAN-87: a folder of recordings goes through the same review and event
+    // as picked files. Subfolders only when asked; other files are reported,
+    // not imported; cancelling leaves the document as it was.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QDir day(directory.filePath("day"));
+    QVERIFY(day.mkpath("afternoon"));
+    QVERIFY(writeFile(day.filePath("session-1.vbo"), warpedRouteVbo(true)));
+    QVERIFY(writeFile(day.filePath("session-2.VBO"), warpedRouteVbo(false)));
+    QVERIFY(writeFile(day.filePath("notes.txt"), "tyres 1.9 bar"));
+    QVERIFY(writeFile(day.filePath("afternoon/session-3.vbo"), warpedRouteVbo(true, 200)));
+    QVERIFY(QDir(directory.path()).mkpath("empty"));
+
+    TelemetryController controller(directory.filePath("recovery.json"));
+    auto &document = *controller.document();
+    QSignalSpy committed(&document, &DocumentController::batchImportCommitted);
+
+    // A folder without recordings is an explicit outcome, not a silent no-op.
+    QVERIFY(document.importAnalysisFolder("Folder day", QUrl::fromLocalFile(directory.filePath("empty")), true));
+    QTRY_COMPARE_WITH_TIMEOUT(document.batchImportState(), QString("error"), 20000);
+    QVERIFY(document.batchImportError().contains("No VBO or RCZ recordings were found"));
+
+    // Cancelling while scanning changes nothing.
+    QVERIFY(document.importAnalysisFolder("Folder day", QUrl::fromLocalFile(day.path()), true));
+    QCOMPARE(document.batchImportState(), QString("scanning"));
+    document.cancelBatchImport();
+    QTRY_COMPARE_WITH_TIMEOUT(document.batchImportState(), QString("idle"), 20000);
+    QVERIFY(document.eventRuns().isEmpty());
+    QVERIFY(!document.dirty());
+
+    // Top level only: the two sessions, and the ignored note is reported.
+    QVERIFY(document.importAnalysisFolder("Folder day", QUrl::fromLocalFile(day.path()), false));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    QCOMPARE(document.eventRuns().size(), 2);
+    QVERIFY(document.analysisImportMessages().join(' ').contains("1 other file(s) were ignored"));
+    // Let the day settle first: deriving its laps records the verified track
+    // inference in the project, and an import started meanwhile is
+    // invalidated as stale (the project changed).
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.analysis()->outingLapsLoading(), 20000);
+    QTest::qWait(200);
+
+    // Again with subfolders: the sessions already imported are skipped and
+    // the afternoon one is appended to the same event.
+    QVERIFY(document.importAnalysisFolder({}, QUrl::fromLocalFile(day.path()), true));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 2, 20000);
+    QCOMPARE(document.eventRuns().size(), 3);
+    QCOMPARE(document.eventName(), QString("Folder day"));
+    QVERIFY(document.analysisImportMessages().join(' ').contains("Already in this outing; skipped."));
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.analysis()->outingLapsLoading(), 20000);
+    QCOMPARE(controller.analysis()->outingAnalysisStatus().value("state").toString(), QString("ready"));
 }
 
 void TelemetryAppTests::measuresAPrivateFullDay()

@@ -89,6 +89,28 @@ void DocumentController::invalidateBatchImport()
 
 void DocumentController::initializeBatchImport()
 {
+    connect(&m_folderScanWatcher, &QFutureWatcher<TelemetryFolderScan>::finished, this, [this] {
+        const auto scan = m_folderScanWatcher.future().takeResult();
+        m_batchPending = false;
+        const bool cancelled = scan.cancelled || m_batchState == "cancelling" || (m_batchCancellation && m_batchCancellation->load());
+        if (cancelled || !batchContextMatches()) {
+            m_batchState = m_batchError.isEmpty() ? QStringLiteral("idle") : QStringLiteral("error");
+            emit batchImportChanged();
+            return;
+        }
+        if (!scan.error.isEmpty()) {
+            m_batchState = QStringLiteral("error");
+            m_batchError = scan.error;
+            m_analysisImportMessages = scan.notes;
+            emit batchImportChanged();
+            return;
+        }
+        QList<QUrl> urls;
+        for (const auto &path : scan.files) urls.append(QUrl::fromLocalFile(path));
+        m_batchState = QStringLiteral("idle");
+        if (importAnalysisRuns(m_folderImportName, urls)) m_analysisImportMessages.append(scan.notes);
+        emit batchImportChanged();
+    });
     connect(this, &DocumentController::documentStateChanged, this, &DocumentController::invalidateBatchImport);
     connect(this, &DocumentController::sourceLoadStateChanged, this, &DocumentController::invalidateBatchImport);
     m_batchProgressTimer.setInterval(100);
@@ -209,6 +231,42 @@ bool DocumentController::importAnalysisRuns(const QString &name, const QList<QUr
     m_analysisImportAutomatic = true;
     m_analysisImportAppend = append;
     m_analysisImportName = name.trimmed();
+    return true;
+}
+
+bool DocumentController::importAnalysisFolder(const QString &name, const QUrl &folder, const bool includeSubfolders)
+{
+    if (m_batchPending || m_host.documentBusy() || projectLoading() || recoveryPending()
+        || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) return false;
+    const bool append = EventProjectCodec::isEvent(m_projectTemplate);
+    cancelBatchImport();
+    if (!append && (dirty() || name.trimmed().isEmpty() || name.size() > 160)) {
+        m_batchState = QStringLiteral("error");
+        m_batchError = dirty() ? QStringLiteral("Save your current project before starting an outing.")
+                              : QStringLiteral("Enter an outing name (1–160 characters).");
+        emit batchImportChanged();
+        return false;
+    }
+    if (!folder.isLocalFile() || folder.toLocalFile().size() > ProjectLimits::maximumStringCharacters) {
+        m_batchState = QStringLiteral("error");
+        m_batchError = QStringLiteral("Only a bounded local folder path is supported.");
+        emit batchImportChanged();
+        return false;
+    }
+    m_folderImportName = name;
+    m_batchDocumentId = m_documentId;
+    m_batchProjectPath = m_documentState.projectPath();
+    m_batchRevision = m_documentState.revision();
+    m_batchGeneration = m_sourceGeneration;
+    m_batchError.clear();
+    m_batchState = QStringLiteral("scanning");
+    m_batchCancellation = std::make_shared<std::atomic_bool>(false);
+    m_batchPending = true;
+    emit batchImportChanged();
+    const auto cancellation = m_batchCancellation;
+    m_folderScanWatcher.setFuture(QtConcurrent::run([path = folder.toLocalFile(), includeSubfolders, cancellation] {
+        return scanTelemetryFolder(path, includeSubfolders, [cancellation] { return cancellation->load(); });
+    }));
     return true;
 }
 

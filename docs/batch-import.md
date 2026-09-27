@@ -93,6 +93,34 @@ are reported individually; a valid project still opens. Stale results are guarde
 by source generation, document identity, path and the full primary-source reference
 set. Only derived rows are retained; the native project schema is unchanged.
 
+## A folder of recordings (KAN-87)
+
+"Add a folder…" on the start panel imports every VBO and RCZ recording in a
+folder. "Include subfolders" (off by default) also takes the folders below.
+In an open day, the header's "Add folder…" asks each time: "This folder
+only…" or "Folder and subfolders…".
+
+The scan (`scanTelemetryFolder`, telemetry core) runs off the interface
+thread. The window shows "Looking for recordings in the folder…" and Cancel
+stops it. The scan:
+- takes `.vbo` and `.rcz` files, in any letter case, sorted by path, and
+  reports how many other files it ignored;
+- never follows a symbolic link, to a file or a folder, and says how many
+  it skipped. A folder is visited once by its canonical path, so no link
+  or mount can loop;
+- skips hidden entries;
+- stops at 8 subfolder levels and 20,000 inspected files and folders, and
+  says so;
+- refuses a folder holding more than 64 recordings, the batch limit, and
+  asks for a smaller folder rather than silently taking some of them;
+- reports "No VBO or RCZ recordings were found" when there are none, and
+  whether subfolders were included.
+
+The files it finds go through exactly the same review, duplicate and
+source-group policy, and event transaction as picked files. Recordings
+already in the outing are skipped when appending. A document or source
+change during the scan cancels it, like any import.
+
 ## Advanced import review
 
 1. Choose **File → Import telemetry runs…** and select multiple VBO/RCZ files

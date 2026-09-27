@@ -30,7 +30,7 @@ Window {
     readonly property bool hasWorkspace: appController.eventRuns.length > 0 || appController.sampleCount > 0
     readonly property bool showingLap: Object.keys(appController.selectedOutingLap).length > 0
     readonly property bool showingComparison: !root.showingLap && appController.comparisonViewOpen
-    readonly property bool importing: ["preparing", "validating", "cancelling"].indexOf(appController.batchImportState) >= 0
+    readonly property bool importing: ["scanning", "preparing", "validating", "cancelling"].indexOf(appController.batchImportState) >= 0
     readonly property bool canImport: !importing && !appController.projectLoading && !appController.exporting
         && !appController.recoveryPending && appController.pendingDestructiveAction === ""
 
@@ -43,6 +43,14 @@ Window {
         fileMode: FileDialog.OpenFiles
         nameFilters: [qsTr("Telemetry (*.rcz *.vbo *.RCZ *.VBO)")]
         onAccepted: root.importFiles(selectedFiles)
+    }
+    FolderDialog {
+        id: outingFolder
+        // Chosen explicitly each time: the start panel's checkbox, or the
+        // header menu's entry (KAN-87).
+        property bool includeSubfolders: false
+        title: includeSubfolders ? qsTr("Add a folder and its subfolders") : qsTr("Add a folder of recordings")
+        onAccepted: appController.importAnalysisFolder(startPanel.outingName, selectedFolder, includeSubfolders)
     }
 
     function saveLayout() {
@@ -150,6 +158,28 @@ Window {
                     compact: true
                     onClicked: outingFiles.open()
                 }
+                FeButton {
+                    id: addFolder
+                    objectName: "analysisAddFolder"
+                    visible: appController.eventRuns.length > 0
+                    enabled: root.canImport
+                    text: qsTr("Add folder…")
+                    compact: true
+                    onClicked: folderMenu.popup(addFolder, 0, addFolder.height)
+                    Menu {
+                        id: folderMenu
+                        MenuItem {
+                            objectName: "analysisAddFolderOnly"
+                            text: qsTr("This folder only…")
+                            onTriggered: { outingFolder.includeSubfolders = false; outingFolder.open(); }
+                        }
+                        MenuItem {
+                            objectName: "analysisAddFolderWithSubfolders"
+                            text: qsTr("Folder and subfolders…")
+                            onTriggered: { outingFolder.includeSubfolders = true; outingFolder.open(); }
+                        }
+                    }
+                }
                 Label {
                     visible: root.hasWorkspace && appController.eventRuns.length === 0
                     text: Math.floor(root.playbackPosition / 60000).toString().padStart(2, "0") + ":" + Math.floor((root.playbackPosition / 1000) % 60).toString().padStart(2, "0")
@@ -177,7 +207,8 @@ Window {
                 visible: root.importing
                 Label {
                     Layout.fillWidth: true
-                    text: qsTr("Importing runs · %1/%2 files").arg(appController.batchImportProcessed).arg(appController.batchImportTotal)
+                    text: appController.batchImportState === "scanning" ? qsTr("Looking for recordings in the folder…")
+                        : qsTr("Importing runs · %1/%2 files").arg(appController.batchImportProcessed).arg(appController.batchImportTotal)
                     color: "#aab6c4"
                 }
                 FeButton { text: qsTr("Cancel"); compact: true; enabled: appController.batchImportState !== "cancelling"; onClicked: appController.cancelBatchImport() }
@@ -224,6 +255,7 @@ Window {
             visible: !root.hasWorkspace
             importEnabled: root.canImport
             onChooseFiles: outingFiles.open()
+            onChooseFolder: { outingFolder.includeSubfolders = startPanel.includeSubfolders; outingFolder.open(); }
         }
 
         OutingLapDetailPanel {

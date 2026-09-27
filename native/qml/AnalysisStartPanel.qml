@@ -6,7 +6,9 @@ Item {
     id: root
     property alias outingName: nameField.text
     property bool importEnabled: true
+    property alias includeSubfolders: subfolders.checked
     signal chooseFiles()
+    signal chooseFolder()
 
     ColumnLayout {
         anchors.centerIn: parent
@@ -57,6 +59,24 @@ Item {
             accent: true
             enabled: root.importEnabled && nameField.text.trim().length > 0
             onClicked: root.chooseFiles()
+        }
+        // KAN-87: a whole folder of recordings, with subfolders only when asked.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+            FeButton {
+                objectName: "analysisChooseFolder"
+                text: qsTr("Add a folder…")
+                enabled: importFiles.enabled
+                onClicked: root.chooseFolder()
+            }
+            FeCheckBox {
+                id: subfolders
+                objectName: "analysisIncludeSubfolders"
+                text: qsTr("Include subfolders")
+                enabled: root.importEnabled
+            }
+            Item { Layout.fillWidth: true }
         }
         Label {
             Layout.fillWidth: true
