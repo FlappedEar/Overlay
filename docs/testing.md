@@ -1463,6 +1463,65 @@ true when `AnalysisController` (step 8) and `DocumentController` (step 9)
 were extracted from `AppController`. The regression tests reach their
 internals through `controller.m_analysis` and `controller.m_document`.
 
+## Full-day responsiveness and memory (KAN-77)
+
+`TelemetryAppTests::measuresAPrivateFullDay` measures a real day through
+`TelemetryController`, headless, with no editor and no Gui. It runs only
+when `FLAPPEDEAR_REAL_DAY` names a directory of private VBO recordings:
+
+```bash
+FLAPPEDEAR_REAL_DAY=/path/to/day ./build-native/native/tests/flappedear_telemetry_app_tests measuresAPrivateFullDay
+```
+
+It prints the hardware, the dataset, each phase's time and the process's
+resident and peak memory, and fails when a budget is exceeded.
+
+**Measured (27 September 2026):**
+- Machine: Mac mini (Mac16,10), Apple M4, 10 threads, macOS 27.0.
+- Dataset: the owner's Jastrząb day, 6 VBO recordings (33.6 MiB, 25 timed
+  laps), with 14 segments approved on the best lap.
+- Three runs of each build. Times show the range; memory is the largest
+  reading. Release is what users run; the Debug build is the local test
+  build.
+
+| Phase | Release | Debug | Resident / peak (Release) |
+|---|---|---|---|
+| Import (digest, grouping, event) | 1.76–1.82 s | 4.69–4.73 s | 85 / 89 MiB |
+| Lap derivation, all runs | 1.44–1.45 s | 4.21–4.24 s | 103 / 116 MiB |
+| Open a lap (verified detail) | 0.27 s | 0.80–0.81 s | 104 MiB |
+| Segment review and approval | 0.13–0.14 s | 0.16 s | 104 MiB |
+| Lap cursor, 1,000 steps (slowest step) | < 1 ms (< 0.01 ms) | 4 ms (0.01 ms) | 104 MiB |
+| A/B pair selection (both laps loaded) | 0.60–0.61 s | 1.71–1.75 s | 96 MiB |
+| A/B cursor, 1,000 steps (slowest step) | 2 ms (1.1 ms) | 23–24 ms (11.7 ms) | 96 MiB |
+| A/B chart data (delta, speed, G-G) | 1 ms | 8–9 ms | 97 MiB |
+| Day report (theoretical best, losses, summaries) | 2.4–2.9 s | 7.1–7.9 s | 150 MiB peak |
+| Save | 6–7 ms | 6–8 ms | — |
+
+A full day, from import to report, takes about 7 s in Release. The
+slowest A/B cursor step is the first one: it builds the pair's shared
+progress axis lazily. Every later step takes about 0.01 ms (Debug).
+
+**Budgets** (enforced by the test). They hold in the Debug build at about
+3–4× its measurements, and one frame where the user drags a cursor:
+- every cursor step, lap or A/B: under 16 ms (one 60 Hz frame);
+- open a lap: under 3 s;
+- load an A/B pair: under 6 s;
+- A/B chart data: under 250 ms;
+- import to laps: under 30 s;
+- day report: under 30 s;
+- peak memory: under 512 MiB.
+
+No budget was exceeded, so no fix was needed.
+
+**Limitations:**
+- QML painting in the editor's Analysis window is not in these numbers.
+  Playback does not rebuild static geometry on each tick; that is covered
+  by `cachesStaticTrackGeometry` and `keepsStaticTrackIndependentFromTime`.
+- The combined editor process adds the Qt Quick scene and video on top of
+  this baseline.
+- Phone and tablet budgets (KAN-129) need measuring on the device; these
+  desktop figures are the reference for that work.
+
 ## Video-free day-result states (KAN-27)
 
 `presentsDayResultStatesWithoutVideo` uses two distinct synthetic route recordings
