@@ -3382,7 +3382,7 @@ void TelemetryTests::reviewsSegmentProposalsForTheOpenLap()
     QCOMPARE(storedSegments().size(), 2);
     const auto secondRevision = controller.segmentReviewApproved().value("revision").toString();
     QVERIFY(secondRevision != firstRevision);
-    QVERIFY(!segmentationResultCurrent({configuration, firstRevision}, approvedSegmentation(storedSegments(), configuration)));
+    QVERIFY(!segmentationResultCurrent({configuration, firstRevision, {}}, approvedSegmentation(storedSegments(), configuration)));
 
     // Revoking restores the proposal and yields yet another revision.
     QVERIFY(controller.revokeApprovedSegment(storedSegments().first().toObject().value("id").toString()));
@@ -12773,8 +12773,8 @@ void TelemetryTests::checksCompositionFiltersBeforeRendering()
         FfmpegTools::ffmpegPath(), "[0:v]this_filter_does_not_exist[video]");
     QVERIFY(error.contains("required overlay filters"));
     QVERIFY(error.contains("this_filter_does_not_exist"));
-    QVERIFY_EXCEPTION_THROWN(ExportEngine::verifyCompositionFilters(
-        FfmpegTools::ffmpegPath(), {}, [] { return true; }), OperationCancelled);
+    QVERIFY_THROWS_EXCEPTION(OperationCancelled, static_cast<void>(ExportEngine::verifyCompositionFilters(
+        FfmpegTools::ffmpegPath(), {}, [] { return true; })));
 }
 
 void TelemetryTests::preservesFramesWithPositiveSourcePts_data()
@@ -12886,6 +12886,10 @@ void TelemetryTests::resolvesExplicitExportFormats()
     QVERIFY(!ExportFormat::validCustomBitrate(501'000'000));
     QVERIFY(ExportFormat::validCustomBitrate(10'000'000));
     QVERIFY(ExportFormat::estimatedBytes(10'000'000, true, 60) > 75'000'000);
+    // KAN-133: an estimate past qint64 saturates exactly; one just below it still rounds.
+    QCOMPARE(ExportFormat::estimatedBytes(500'000'000, true, 1e15), std::numeric_limits<qint64>::max());
+    QVERIFY(ExportFormat::estimatedBytes(500'000'000, true, 1e11) > 0);
+    QCOMPARE(ExportFormat::estimatedBytes(10'000'000, true, std::numeric_limits<double>::infinity()), qint64(0));
     QCOMPARE(ExportFormat::formatEstimatedSize(qint64(850) * 1024 * 1024), QStringLiteral("~850 MiB"));
     QCOMPARE(ExportFormat::formatEstimatedSize(qint64(46) * 1024 * 1024 * 1024 / 10), QStringLiteral("~4.60 GiB"));
     QCOMPARE(ExportEngine::frameRangeFromInclusiveFrames(0, 299)->frameCount(), qint64(300));

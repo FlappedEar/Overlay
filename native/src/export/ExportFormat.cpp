@@ -95,7 +95,8 @@ qint64 ExportFormat::estimatedBytes(const qint64 videoBitrate, const bool audioE
     if (!validCustomBitrate(videoBitrate) || !std::isfinite(seconds) || seconds < 0) return 0;
     const long double estimate = (static_cast<long double>(videoBitrate)
         + (audioEnabled ? audioBitrate : 0)) * seconds / 8.0L * 1.03L;
-    return estimate >= std::numeric_limits<qint64>::max()
+    // 2^63 exactly: every smaller estimate rounds into qint64.
+    return estimate >= std::ldexp(1.0L, 63)
         ? std::numeric_limits<qint64>::max() : static_cast<qint64>(std::llround(estimate));
 }
 

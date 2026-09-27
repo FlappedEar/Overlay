@@ -603,8 +603,11 @@ QString AnalysisController::applySegmentHistoryStep(const bool undo)
         return QStringLiteral("The segments changed outside this editor, so the edit history was cleared.");
     }
     if (!replaceRunTrackSegments(runId, target, false)) return QStringLiteral("The project cannot be changed right now.");
-    if (undo) m_segmentEditHistory.commitUndo();
-    else m_segmentEditHistory.commitRedo();
+    if (undo) {
+        m_segmentEditHistory.commitUndo();
+    } else {
+        m_segmentEditHistory.commitRedo();
+    }
     emit segmentReviewChanged();
     return {};
 }

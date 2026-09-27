@@ -496,7 +496,7 @@ void EventProjectTests::revisionsReflectPhysicalGatesWithoutInferringDirection()
     QVERIFY(timingGateRevision(changed) != withSplit);
     changed.timingGates.resize(129); QVERIFY(timingGateRevision(changed).isEmpty());
     QVERIFY(timingGateRevision(TelemetrySession{}).isEmpty());
-    QVERIFY_EXCEPTION_THROWN(timingGateRevision(east, [] { return true; }), OperationCancelled);
+    QVERIFY_THROWS_EXCEPTION(OperationCancelled, static_cast<void>(timingGateRevision(east, [] { return true; })));
 }
 
 void EventProjectTests::preservesFiniteExtremeSyncForGuardedConsumers()
