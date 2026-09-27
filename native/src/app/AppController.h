@@ -203,6 +203,7 @@ class AppController final : public QObject, private VideoLink, private DocumentH
     Q_PROPERTY(QString sourceMismatchCandidateName READ sourceMismatchCandidateName NOTIFY sourceMismatchChanged)
     Q_PROPERTY(QString selectedTemplateId READ selectedTemplateId NOTIFY templateUiStateChanged)
     Q_PROPERTY(QString activeTemplateId READ activeTemplateId NOTIFY templateUiStateChanged)
+    Q_PROPERTY(QVariantMap runRecordingReview READ runRecordingReview NOTIFY runRecordingsChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr, QString recoveryPath = {},
@@ -455,6 +456,12 @@ public:
     Q_INVOKABLE bool importAnalysisRuns(const QString &name, const QList<QUrl> &urls) { return m_document.importAnalysisRuns(name, urls); }
     Q_INVOKABLE bool importAnalysisFolder(const QString &name, const QUrl &folder, bool includeSubfolders) { return m_document.importAnalysisFolder(name, folder, includeSubfolders); }
     Q_INVOKABLE bool importAnalysisSources(const QString &name, const QList<QUrl> &urls, bool includeSubfolders) { return m_document.importAnalysisSources(name, urls, includeSubfolders); }
+    Q_INVOKABLE QVariantList runRecordings(const QString &runId) const { return m_document.runRecordings(runId); }
+    Q_INVOKABLE bool attachRunRecording(const QString &runId, const QUrl &url) { return m_document.attachRunRecording(runId, url); }
+    Q_INVOKABLE bool confirmRunRecording() { return m_document.confirmRunRecording(); }
+    Q_INVOKABLE void cancelRunRecording() { m_document.cancelRunRecording(); }
+    Q_INVOKABLE bool setRunPrimarySource(const QString &runId, const QString &sourceId) { return m_document.setRunPrimarySource(runId, sourceId); }
+    [[nodiscard]] QVariantMap runRecordingReview() const { return m_document.runRecordingReview(); }
     Q_INVOKABLE void cancelBatchImport() { m_document.cancelBatchImport(); }
     Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices) { return m_document.confirmBatchImport(name, append, choices); }
     Q_INVOKABLE void relinkVideo(const QUrl &url);
@@ -561,6 +568,7 @@ signals:
     void templateUiStateChanged();
     void saveAsRequested();
     void quitApproved();
+    void runRecordingsChanged();
 
 private:
     friend class ::TelemetryTests; // Controlled asynchronous completion in regression tests.

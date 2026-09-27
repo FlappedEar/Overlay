@@ -203,6 +203,7 @@ private slots:
     void keepsAnalysisControlsReachableAtMinimumSize();
     void keepsACompleteDayThroughMoveRelinkAndRecovery();
     void importsDroppedFilesAndFolders();
+    void switchesTheActiveRunPrimaryWithoutStaleEditorState();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -8356,6 +8357,78 @@ void TelemetryTests::importsDroppedFilesAndFolders()
     QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 2, 20000);
     QCOMPARE(controller.eventRuns().size(), 3);
     QCOMPARE(warnings.size(), 0);
+}
+
+void TelemetryTests::switchesTheActiveRunPrimaryWithoutStaleEditorState()
+{
+    // KAN-90: the editor holds the active run's primary recording. Switching
+    // the primary reloads the editor from the new one, so a save cannot write
+    // the old reference back over it.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto primary = directory.filePath("session.vbo"), alternative = directory.filePath("session-copy.vbo");
+    QVERIFY(writeBytes(primary, warpedRouteVbo(true)));
+    QVERIFY(writeBytes(alternative, warpedRouteVbo(true, 200)));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QSignalSpy committed(&controller, &AppController::batchImportCommitted);
+    QVERIFY(controller.importAnalysisRuns("Active primary", {QUrl::fromLocalFile(primary)}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 20000);
+    QCOMPARE(controller.telemetryName(), QString("session.vbo"));
+    const auto runId = controller.activeRunId();
+    QVERIFY(controller.attachRunRecording(runId, QUrl::fromLocalFile(alternative)));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.runRecordingReview().value("state").toString(), QString("review"), 20000);
+    QVERIFY(controller.confirmRunRecording());
+    QTRY_VERIFY_WITH_TIMEOUT(controller.runRecordingReview().isEmpty(), 20000);
+    const auto newPrimary = controller.runRecordings(runId)[1].toMap().value("sourceId").toString();
+    // Through the run details dialog, as the driver does it.
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
+        {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->resize(1180, 720);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    auto *dialog = window->findChild<QObject *>("runDetailsDialog"); QVERIFY(dialog);
+    QVERIFY(QMetaObject::invokeMethod(dialog, "open"));
+    QTRY_VERIFY(dialog->property("opened").toBool());
+    QCOMPARE(dialog->property("recordings").toList().size(), 2);
+    QQuickItem *makePrimary = nullptr;
+    std::function<void(QQuickItem *)> find = [&](QQuickItem *item) {
+        if (makePrimary || !item->isVisible()) return;
+        if (item->objectName() == "makePrimaryRecording") { makePrimary = item; return; }
+        for (auto *child : item->childItems()) find(child);
+    };
+    find(window->contentItem());
+    QVERIFY(makePrimary && makePrimary->isEnabled());
+    const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!review.isEmpty()) {
+        auto *scroll = window->findChild<QQuickItem *>("runDetailsScroll");
+        auto *flick = scroll ? scroll->property("contentItem").value<QQuickItem *>() : nullptr;
+        if (flick) flick->setProperty("contentY", flick->property("contentHeight").toDouble() - flick->height());
+        QTest::qWait(300);
+        static_cast<void>(window->grabWindow().save(QDir(review).filePath("run-recordings.png")));
+    }
+    makePrimary->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY_WITH_TIMEOUT(controller.runRecordingReview().isEmpty()
+        && controller.runRecordings(runId)[1].toMap().value("primary").toBool(), 20000);
+    QTRY_COMPARE(dialog->property("recordings").toList()[1].toMap().value("primary").toBool(), true);
+    QCOMPARE(warnings.size(), 0);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.telemetryName(), QString("session-copy.vbo"), 20000);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 20000);
+    const auto path = directory.filePath("day.fetproject");
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(path)));
+    const auto run = QJsonDocument::fromJson(readBytes(path)).object().value("event").toObject()
+        .value("runs").toArray().first().toObject();
+    QCOMPARE(run.value("primaryTelemetrySourceId").toString(), newPrimary);
+    for (const auto &value : run.value("sources").toObject().value("telemetry").toArray()) {
+        const auto source = value.toObject();
+        const auto file = QFileInfo(source.value("reference").toObject().value("absolutePath").toString()).fileName();
+        QCOMPARE(file, source.value("id").toString() == newPrimary ? QString("session-copy.vbo") : QString("session.vbo"));
+    }
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()

@@ -205,6 +205,43 @@ Links whose backing file has a different format extension are reported as errors
 project reopening resolves the backing path, so import a correctly named regular
 copy instead. Ordinary same-format links retain the normal project behavior.
 
+## Recordings of an existing run (KAN-90)
+
+Run details lists a run's recordings, with the primary marked.
+
+**Attach a recording…**
+- Reads the new file and the run's primary off the interface thread.
+- Shows the match evidence for review:
+  - the formats;
+  - whether the GPS traces agree: samples compared, largest separation,
+    duration difference;
+  - how far apart the recordings start.
+- With no GPS match it says so, and adding it is the user's call.
+- "Add as an alternative" rechecks the file's content before adding it.
+
+An attached recording never becomes the primary by itself; there is no
+automatic format preference. A recording already in the run is refused.
+Attaching needs the primary present, so there is something to compare with.
+A run holds at most 8 recordings.
+
+**Make primary**
+- Reads the chosen recording off the thread and checks that its content and
+  fingerprint are the attached ones.
+- Records the timing gates it contains; its layout and direction start
+  unresolved.
+- Derives the run's laps again from it. Every source and run keeps its
+  identity.
+- Results tied to the old laps (exclusions, comparison slots, segment work)
+  are kept but no longer match. The day reports them as unmatched rather
+  than applying them to different laps.
+- For the run open in the editor, the editor reloads the new primary, so a
+  save cannot write the old reference back.
+- Changing the primary can change the telemetry clock, so check the run's
+  video sync.
+
+Alternatives are never merged. A VBO carries RaceChrono's calculated G; an
+RCZ keeps the logger's own clock.
+
 ## Transaction, cancellation and limits
 
 Preparation and final full-digest verification run off the GUI thread and check

@@ -134,6 +134,7 @@ private slots:
     void importsAnalysesSavesAndReopensWithoutTheEditor();
     void keepsTheEditorStateAnotherAppSaved();
     void importsAFolderOfRecordings();
+    void attachesAlternativeRecordingsAndSwitchesThePrimary();
     void measuresAPrivateFullDay();
 };
 
@@ -334,6 +335,74 @@ void TelemetryAppTests::importsAFolderOfRecordings()
     QVERIFY(document.analysisImportMessages().join(' ').contains("Already in this outing; skipped."));
     QTRY_VERIFY_WITH_TIMEOUT(!controller.analysis()->outingLapsLoading(), 20000);
     QCOMPARE(controller.analysis()->outingAnalysisStatus().value("state").toString(), QString("ready"));
+}
+
+void TelemetryAppTests::attachesAlternativeRecordingsAndSwitchesThePrimary()
+{
+    // KAN-90: an alternative recording is attached to an existing run only
+    // after its match evidence is reviewed, never becomes the primary by
+    // itself, and a primary chosen explicitly re-derives the run's laps.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto primary = directory.filePath("session.vbo"), alternative = directory.filePath("session-copy.vbo");
+    QVERIFY(writeFile(primary, warpedRouteVbo(true)));
+    QVERIFY(writeFile(alternative, warpedRouteVbo(true, 200)));
+    TelemetryController controller(directory.filePath("recovery.json"));
+    auto &document = *controller.document();
+    auto &analysis = *controller.analysis();
+    QSignalSpy committed(&document, &DocumentController::batchImportCommitted);
+    QVERIFY(document.importAnalysisRuns("Alternatives", {QUrl::fromLocalFile(primary)}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading(), 20000);
+    const auto runId = document.activeRunId();
+    QCOMPARE(document.runRecordings(runId).size(), 1);
+    QVERIFY(document.runRecordings(runId).first().toMap().value("primary").toBool());
+    // An exclusion on the current laps, to see what a primary change does to it.
+    QVariantMap excluded;
+    for (const auto &value : analysis.outingLaps())
+        if (value.toMap().value("type") == "LAP") { excluded = value.toMap().value("reference").toMap(); break; }
+    QVERIFY(analysis.setOutingLapExcluded(excluded, true, "Traffic"));
+
+    // The same recording again is refused.
+    QVERIFY(document.attachRunRecording(runId, QUrl::fromLocalFile(primary)));
+    QTRY_COMPARE_WITH_TIMEOUT(document.runRecordingReview().value("state").toString(), QString("error"), 20000);
+    QVERIFY(document.runRecordingReview().value("message").toString().contains("already in the run"));
+
+    // A different recording of the session: reviewed with its evidence first.
+    QVERIFY(document.attachRunRecording(runId, QUrl::fromLocalFile(alternative)));
+    QTRY_COMPARE_WITH_TIMEOUT(document.runRecordingReview().value("state").toString(), QString("review"), 20000);
+    const auto evidence = document.runRecordingReview().value("evidence").toMap();
+    QCOMPARE(evidence.value("format").toString(), QString("VBO"));
+    QVERIFY(evidence.contains("matched"));
+    QCOMPARE(document.runRecordings(runId).size(), 1); // nothing added before confirming
+    QVERIFY(document.confirmRunRecording());
+    QTRY_VERIFY_WITH_TIMEOUT(document.runRecordingReview().isEmpty(), 20000);
+    const auto recordings = document.runRecordings(runId);
+    QCOMPARE(recordings.size(), 2);
+    QVERIFY(recordings[0].toMap().value("primary").toBool());   // unchanged: no automatic preference
+    QVERIFY(!recordings[1].toMap().value("primary").toBool());
+    QVERIFY(document.dirty());
+
+    // Choosing the alternative as primary re-derives the run from it.
+    const auto previousPrimary = recordings[0].toMap().value("sourceId").toString();
+    const auto newPrimary = recordings[1].toMap().value("sourceId").toString();
+    QVERIFY(document.setRunPrimarySource(runId, newPrimary));
+    QTRY_VERIFY_WITH_TIMEOUT(document.runRecordingReview().isEmpty(), 20000);
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading() && !analysis.outingLaps().isEmpty(), 20000);
+    const auto after = document.runRecordings(runId);
+    QVERIFY(!after[0].toMap().value("primary").toBool());
+    QVERIFY(after[1].toMap().value("primary").toBool());
+    QCOMPARE(after[0].toMap().value("sourceId").toString(), previousPrimary); // identities kept
+    for (const auto &value : analysis.outingLaps())
+        QCOMPARE(value.toMap().value("reference").toMap().value("sourceId").toString(), newPrimary);
+    const auto run = document.currentProjectObject().value("event").toObject().value("runs").toArray().first().toObject();
+    QVERIFY(run.value("trackConfiguration").toObject().value("gateRevision").toString().startsWith("gates-v1:"));
+    // The exclusion referred to the old primary's laps: kept, reported, not applied.
+    QVERIFY(analysis.outingLapMessages().join(' ').contains("could not be matched"));
+
+    // With the primary missing, attaching explains why it cannot compare.
+    QVERIFY(QFile::rename(alternative, alternative + ".moved"));
+    QVERIFY(!document.attachRunRecording(runId, QUrl::fromLocalFile(primary)));
+    QVERIFY(document.runRecordingReview().value("message").toString().contains("primary recording is missing"));
 }
 
 void TelemetryAppTests::measuresAPrivateFullDay()
