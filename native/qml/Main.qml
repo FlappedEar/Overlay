@@ -794,9 +794,19 @@ ApplicationWindow {
     FileDialog {
         id: videoDialog
         title: qsTr("Open motorsport video")
-        nameFilters: [qsTr("Video files (*.mp4 *.mov)")]
-        onAccepted: appController.loadVideo(selectedFile)
+        nameFilters: [qsTr("Video files (*.mp4 *.mov *.MP4 *.MOV)")]
+        // KAN-104: several files, or a GoPro chapter, are reviewed as chapter groups first.
+        fileMode: FileDialog.OpenFiles
+        onAccepted: {
+            if (appController.videoFilesNeedReview(selectedFiles)) {
+                appController.videoChapters.review(selectedFiles);
+                videoChaptersDialog.open();
+            } else {
+                appController.loadVideo(selectedFiles[0]);
+            }
+        }
     }
+    VideoChaptersDialog { id: videoChaptersDialog }
     FileDialog {
         id: vboDialog
         title: qsTr("Open telemetry")

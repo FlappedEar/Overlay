@@ -214,6 +214,30 @@ Replacing one source restarts the other pending load with its complete request, 
 
 Manual offset/scale changes advance a synchronization revision, cancel the pending match and clear its candidate. A queued result must match that revision before it can apply; changing a value and restoring it also invalidates the older result.
 
+### GoPro chapter groups (KAN-104)
+
+`gopro/GoProChapters` (`gopro-chapters-v1`) turns chosen video files into proposed recordings.
+
+**Names.** GoPro's file names give the recording and chapter:
+- HERO6 and later: `GXccnnnn`, `GHccnnnn`, `GLccnnnn` or `GSccnnnn.MP4`;
+- HERO5 and earlier: `GOPRnnnn.MP4` is chapter 1 and `GPccnnnn.MP4` is chapter cc + 1.
+
+Files are grouped by recording and ordered by chapter. A file without a GoPro name is an ordinary video on its own.
+
+**Metadata checks.** Each file is probed off the UI thread (`MediaProbe::probeSummary`, which now also reads the container's `creation_time` tag). The metadata then checks the proposal. Every mismatch is reported as an explicit issue and never corrected silently:
+- a missing chapter, including a missing first chapter;
+- a duplicate chapter, where the copies are left out;
+- an unreadable file, which blocks using the group;
+- a codec, size or frame-rate difference from the first chapter;
+- a chapter created before the previous one ended (`orderConflict`);
+- a chapter created more than 3 s after the previous one ended (`timingGap`).
+
+Chapters without usable creation times, or all stamped alike, are ordered by their names alone and say so.
+
+**Review.** `app/VideoChapterReview` runs the probing. It is guarded by a request number and cooperatively cancellable. The user can move chapters, and the moved group is checked again.
+
+**Current limitation.** Opening video in the editor now accepts several files. One ordinary file loads directly as before; anything else goes through the Video chapters review. A chosen group still loads only its first chapter, and the status says so. Continuous playback of a chapter group is KAN-105.
+
 ## Widgets and QML
 
 The floating Analysis window is transient UI state. It starts closed for application startup, New, and Open. A QML `Loader` creates `AnalysisWindow` and its secondary `MediaPlayer` only after the user opens Analysis; closing it deactivates the loader and releases the secondary decoder. Channel selection remains persistent project configuration.

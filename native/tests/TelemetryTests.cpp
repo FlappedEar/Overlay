@@ -205,6 +205,7 @@ private slots:
     void importsDroppedFilesAndFolders();
     void switchesTheActiveRunPrimaryWithoutStaleEditorState();
     void reviewsSourceFusionInRunDetails();
+    void reviewsGoProChapterGroups();
     void showsCoastingOnTheOpenLap();
     void showsTrailBrakingInTheCornerAnalyzer();
     void coloursTheComparisonMapByAChannel();
@@ -9083,6 +9084,95 @@ void TelemetryTests::reviewsSourceFusionInRunDetails()
     QVERIFY(findVisible("removeRunFusion"));
     capture("fusion-approved.png");
     QCOMPARE(warnings.size(), 0);
+}
+
+void TelemetryTests::reviewsGoProChapterGroups()
+{
+    // KAN-104: GoPro chapter files are grouped and ordered by name, checked
+    // against their probed metadata (the creation times here follow each
+    // chapter's end, except where noted), reviewable and reorderable; an
+    // ordinary video still loads directly.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the chapter review test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto encode = [&](const QString &name, const int seconds, const QString &created) {
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+            QString("testsrc2=s=320x180:r=30:d=%1").arg(seconds), "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-metadata", "creation_time=" + created, directory.filePath(name)});
+        return encoder.waitForFinished(30'000) && encoder.exitCode() == 0;
+    };
+    QVERIFY(encode("GX010123.MP4", 3, "2026-08-29T10:00:00Z"));
+    QVERIFY(encode("GX020123.MP4", 2, "2026-08-29T10:00:03Z"));
+    QVERIFY(encode("GX030123.MP4", 2, "2026-08-29T10:01:00Z")); // a minute later: something is missing between
+    QVERIFY(encode("onboard.mp4", 2, "2026-08-29T11:00:00Z"));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    const auto url = [&](const QString &name) { return QUrl::fromLocalFile(directory.filePath(name)); };
+    QVERIFY(!controller.videoFilesNeedReview({url("onboard.mp4")}));
+    QVERIFY(controller.videoFilesNeedReview({url("GX010123.MP4")}));
+    QVERIFY(controller.videoFilesNeedReview({url("onboard.mp4"), url("GX010123.MP4")}));
+
+    auto *review = controller.videoChapters();
+    QVERIFY(review->review({url("GX030123.MP4"), url("onboard.mp4"), url("GX020123.MP4"), url("GX010123.MP4")}));
+    QCOMPARE(review->state(), QString("probing"));
+    QTRY_COMPARE_WITH_TIMEOUT(review->state(), QString("ready"), 30000);
+    const auto groups = review->groups();
+    QCOMPARE(groups.size(), 2);
+    const auto gopro = groups[0].toMap();
+    QCOMPARE(gopro.value("key").toString(), QString("GX0123"));
+    QStringList names;
+    for (const auto &value : gopro.value("chapters").toList()) names.append(value.toMap().value("name").toString());
+    QCOMPARE(names, (QStringList{"GX010123.MP4", "GX020123.MP4", "GX030123.MP4"}));
+    QCOMPARE(gopro.value("issues").toStringList(), QStringList{"timingGap"});
+    QVERIFY(gopro.value("needsReview").toBool());
+    QVERIFY(std::abs(gopro.value("totalDuration").toDouble() - 7.0) < 0.2);
+    QCOMPARE(groups[1].toMap().value("key").toString(), QString("onboard.mp4"));
+
+    // The dialog: issues shown, a chapter moved, the group used.
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick\nWindow { width: 900; height: 640; visible: true; VideoChaptersDialog { id: d } Component.onCompleted: d.open() }",
+        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    const auto findVisible = [&](const QString &name) {
+        QQuickItem *found = nullptr;
+        std::function<void(QQuickItem *)> search = [&](QQuickItem *item) {
+            if (found || !item->isVisible()) return;
+            if (item->objectName() == name) { found = item; return; }
+            for (auto *child : item->childItems()) search(child);
+        };
+        search(window->contentItem());
+        return found;
+    };
+    QQuickItem *issues = nullptr;
+    QTRY_VERIFY((issues = findVisible("videoChapterIssues-0")));
+    QVERIFY(issues->property("text").toString().contains("well after the previous one ended"));
+    const QString layoutReview = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!layoutReview.isEmpty()) { QTest::qWait(300); static_cast<void>(window->grabWindow().save(QDir(layoutReview).filePath("video-chapters.png"))); }
+    auto *down = findVisible("videoChapterDown-0-1"); QVERIFY(down && down->isEnabled());
+    down->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(review->groups().value(0).toMap().value("manualOrder").toBool());
+    QTRY_VERIFY(findVisible("videoChapterIssues-0")->property("text").toString().contains("Order changed by you"));
+    auto *use = findVisible("useVideoChapterGroup-0"); QVERIFY(use && use->isEnabled());
+    use->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_COMPARE(review->state(), QString("idle"));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.videoLoadState() == "ready", 30000);
+    QCOMPARE(QFileInfo(controller.videoSource().toLocalFile()).fileName(), QString("GX010123.MP4"));
+    QVERIFY(controller.statusText().contains("chapter 1 of 3"));
+    QCOMPARE(warnings.size(), 0);
+
+    // Stale probing never lands: a second review supersedes the first.
+    QVERIFY(review->review({url("GX010123.MP4")}));
+    QVERIFY(review->review({url("onboard.mp4"), url("GX020123.MP4")}));
+    QTRY_COMPARE_WITH_TIMEOUT(review->state(), QString("ready"), 30000);
+    QCOMPARE(review->groups().size(), 2);
+    review->cancel();
+    QCOMPARE(review->state(), QString("idle"));
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()

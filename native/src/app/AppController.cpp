@@ -72,6 +72,16 @@ AppController::AppController(QObject *parent, QString recoveryPath,
 {
     m_sync = {};
     m_previewRenderContext.setSyncTransform(m_sync);
+    // KAN-104: a reviewed chapter group. Until chapters play as one timeline,
+    // only its first file is loaded, and the status says so.
+    connect(&m_videoChapters, &VideoChapterReview::groupChosen, this, [this](const QList<QUrl> &files, bool) {
+        // Shown once the video is open, so the load's own status cannot hide it.
+        m_videoChapterNotice = files.size() > 1
+            ? tr("Loaded chapter 1 of %1. Playing a chapter group as one continuous video is not available yet; "
+                 "the other chapters are not loaded.").arg(files.size())
+            : QString();
+        loadVideo(files.first());
+    });
     m_widgetModel.resetDefaults();
     connect(&m_widgetModel, &WidgetModel::revisionChanged, this, [this] {
         markPersistentChange();
@@ -854,7 +864,9 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     if (markDocumentDirty) {
         markPersistentChange();
     }
-    setStatus(QStringLiteral("Video opened: %1").arg(QFileInfo(result.path).fileName()));
+    setStatus(QStringLiteral("Video opened: %1").arg(QFileInfo(result.path).fileName())
+        + (m_videoChapterNotice.isEmpty() ? QString() : QStringLiteral(". ") + m_videoChapterNotice));
+    m_videoChapterNotice.clear();
 }
 
 void AppController::commitVboLoad(const VboLoadResult &result, const bool markDocumentDirty)

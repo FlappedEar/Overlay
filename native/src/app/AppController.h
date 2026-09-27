@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/VideoChapterReview.h"
 #include "app/VideoLink.h"
 #include "app/AnalysisController.h"
 #include "app/DocumentController.h"
@@ -190,6 +191,8 @@ class AppController final : public QObject, private VideoLink, private DocumentH
     Q_PROPERTY(quint64 lastSavedRevision READ lastSavedRevision NOTIFY documentStateChanged)
     Q_PROPERTY(QString pendingDestructiveAction READ pendingDestructiveAction NOTIFY destructiveActionChanged)
     Q_PROPERTY(QString videoLoadState READ videoLoadState NOTIFY sourceLoadStateChanged)
+    // KAN-104: GoPro chapter-group review before a video is loaded.
+    Q_PROPERTY(FlappedEar::VideoChapterReview *videoChapters READ videoChapters CONSTANT)
     Q_PROPERTY(QString vboLoadState READ vboLoadState NOTIFY sourceLoadStateChanged)
     Q_PROPERTY(qint64 previewEndPositionMilliseconds READ previewEndPositionMilliseconds NOTIFY previewMetadataChanged)
     Q_PROPERTY(QString previewEndTimecode READ previewEndTimecode NOTIFY previewMetadataChanged)
@@ -279,6 +282,9 @@ public:
     [[nodiscard]] QString activeTemplateId() const;
 
     Q_INVOKABLE void loadVideo(const QUrl &url);
+    [[nodiscard]] VideoChapterReview *videoChapters() { return &m_videoChapters; }
+    // True when the chosen files need a chapter review rather than a direct load.
+    Q_INVOKABLE bool videoFilesNeedReview(const QList<QUrl> &urls) const { return VideoChapterReview::needsReview(urls); }
     Q_INVOKABLE void loadVbo(const QUrl &url);
     Q_INVOKABLE bool selectEventRun(const QString &runId) { return m_document.selectEventRun(runId); }
     Q_INVOKABLE QVariantMap runMetadata(const QString &runId) const;
@@ -695,6 +701,8 @@ private:
     SyncTransform m_sync;
     QFutureWatcher<AutoSyncResult> m_syncWatcher;
     QFutureWatcher<VideoProbeResult> m_videoProbeWatcher;
+    VideoChapterReview m_videoChapters;
+    QString m_videoChapterNotice;
     QFutureWatcher<VboLoadResult> m_vboLoadWatcher;
     quint64 m_syncRevision = 0;
     std::shared_ptr<std::atomic_bool> m_videoProbeCancellation;

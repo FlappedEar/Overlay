@@ -2,6 +2,7 @@
 
 #include "telemetry/SourceOperation.h"
 
+#include <QDateTime>
 #include <QSize>
 #include <QString>
 #include <QStringList>
@@ -64,6 +65,9 @@ struct MediaInfo {
     MediaRational audioTimeBase;
     int audioSampleRate = 0;
     bool likelyVariableFrameRate = false;
+    // The container's creation_time tag (UTC) when present and parseable;
+    // cameras write it, and it is only as correct as the camera's clock.
+    QDateTime creationTime;
 };
 
 struct MediaProbeEvent {
