@@ -26,6 +26,10 @@ Rectangle {
     readonly property bool ready: appController.outingLapDetailState === "ready"
     // KAN-48: swaps the charts for the segment-proposal review of this lap.
     property bool reviewingSegments: false
+    // KAN-92: the right pane shows charts, segment review or coasting.
+    property bool showingCoasting: false
+    onReviewingSegmentsChanged: if (reviewingSegments) showingCoasting = false
+    onShowingCoastingChanged: if (showingCoasting) reviewingSegments = false
     onLapChanged: if (!root.lap.reference) root.reviewingSegments = false
     function duration(seconds) {
         return Math.floor(seconds / 60) + ":" + (seconds % 60).toFixed(3).padStart(6, "0");
@@ -127,6 +131,12 @@ Rectangle {
                     color: "#91a0b2"
                     font.pixelSize: 11
                 }
+            }
+            FeButton {
+                objectName: "toggleCoasting"
+                visible: root.ready && root.lap.type === "LAP"
+                text: root.showingCoasting ? qsTr("Show charts") : qsTr("Coasting")
+                onClicked: root.showingCoasting = !root.showingCoasting
             }
             FeButton {
                 objectName: "toggleSegmentReview"
@@ -236,6 +246,7 @@ Rectangle {
                 TrackMapPanel {
                     lapDetail: true
                     segmentReview: root.reviewingSegments
+                    coastingLayers: coastingLoader.item ? coastingLoader.item.mapLayers : []
                     selectedSegmentIndex: segmentReviewLoader.item ? segmentReviewLoader.item.selectedIndex : -1
                     pickingProgress: segmentReviewLoader.item ? segmentReviewLoader.item.pickTarget !== "" : false
                     onProgressPicked: (x, y) => {
@@ -247,7 +258,7 @@ Rectangle {
             }
             AnalysisPanel {
                 objectName: "outingLapCharts"
-                visible: !root.reviewingSegments
+                visible: !root.reviewingSegments && !root.showingCoasting
                 lapDetail: true
                 mediaDuration: 0
                 Layout.fillWidth: true
@@ -261,6 +272,14 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 sourceComponent: SegmentReviewPanel { objectName: "segmentReviewPanel" }
+            }
+            Loader {
+                id: coastingLoader
+                active: root.showingCoasting && root.ready
+                visible: active
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                sourceComponent: CoastingPanel {}
             }
         }
         RowLayout {

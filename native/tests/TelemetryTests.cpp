@@ -204,6 +204,7 @@ private slots:
     void keepsACompleteDayThroughMoveRelinkAndRecovery();
     void importsDroppedFilesAndFolders();
     void switchesTheActiveRunPrimaryWithoutStaleEditorState();
+    void showsCoastingOnTheOpenLap();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -6112,6 +6113,28 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
             QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("day-report-end.png")));
         }
     }
+    // KAN-92: the best lap's coasting, with both pedals recorded.
+    if (auto *reportDialog = window->findChild<QObject *>("dayReportDialog")) QMetaObject::invokeMethod(reportDialog, "close");
+    QVERIFY(controller.selectOutingLapReference(controller.outingRanking().value("bestOfDay").toMap().value("reference").toMap()));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingLapDetailState(), QString("ready"), 60000);
+    if (auto *coastingToggle = window->findChild<QQuickItem *>("toggleCoasting")) {
+        coastingToggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY_WITH_TIMEOUT(window->findChild<QQuickItem *>("coastingPanel")
+            && window->findChild<QQuickItem *>("coastingPanel")->property("coasting").toMap().value("segmentsReady").toBool(), 60000);
+        const auto coasting = window->findChild<QQuickItem *>("coastingPanel")->property("coasting").toMap();
+        QCOMPARE(coasting.value("provenance").toString(), QString("measured"));
+        qInfo().noquote() << QString("Coasting on the best lap: %1 s, %2 m, %3 episodes")
+            .arg(coasting.value("coastingSeconds").toDouble(), 0, 'f', 1).arg(coasting.value("coastingMeters").toDouble(), 0, 'f', 0)
+            .arg(coasting.value("episodes").toList().size());
+        for (const auto &value : coasting.value("segments").toList()) {
+            const auto segment = value.toMap();
+            if (segment.value("seconds").toDouble() > 0.05)
+                qInfo().noquote() << QString("  %1 %2 s %3 m").arg(segment.value("name").toString(), -14)
+                    .arg(segment.value("seconds").toDouble(), 0, 'f', 1).arg(segment.value("meters").toDouble(), 0, 'f', 0);
+        }
+        QTest::qWait(500);
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("coasting.png"))); reachable("coasting");
+    }
     for (const auto &warning : warnings) qInfo() << "QML warning" << warning;
     QVERIFY2(unreachable.isEmpty(), qPrintable(unreachable.join('\n')));
 }
@@ -8429,6 +8452,78 @@ void TelemetryTests::switchesTheActiveRunPrimaryWithoutStaleEditorState()
         const auto file = QFileInfo(source.value("reference").toObject().value("absolutePath").toString()).fileName();
         QCOMPARE(file, source.value("id").toString() == newPrimary ? QString("session-copy.vbo") : QString("session.vbo"));
     }
+}
+
+void TelemetryTests::showsCoastingOnTheOpenLap()
+{
+    // KAN-92: the lap view's Coasting pane -- totals, provenance, segment
+    // rows and episodes, drawn on the map; selecting an episode moves the
+    // lap cursor there. The fixture has no pedal channels: inferred.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
+    // Coasting needs speed; the route fixture has none, so add a velocity column.
+    const auto withSpeed = [](const QByteArray &vbo) {
+        QStringList out;
+        bool data = false;
+        for (const auto &line : QString::fromUtf8(vbo).split('\n')) {
+            if (line.startsWith("time latitude longitude")) { out << line + " velocity"; continue; }
+            if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
+            out << line + " 100.0";
+        }
+        return out.join('\n').toUtf8();
+    };
+    QVERIFY(writeBytes(fullA, withSpeed(fullM4Vbo(true, 140, 80, 1.0))));
+    QVERIFY(writeBytes(fullB, withSpeed(fullM4Vbo(false, 150, 85, 0.9))));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Coasting day", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
+        {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->resize(1180, 720);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    int lapIndex = -1;
+    const auto rows = controller.outingLaps();
+    for (int i = 0; i < rows.size() && lapIndex < 0; ++i)
+        if (rows[i].toMap().value("type") == "LAP" && rows[i].toMap().value("runName") == "Session 1") lapIndex = i;
+    QVERIFY(controller.selectOutingLap(lapIndex));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingLapDetailState(), QString("ready"), 20000);
+    auto *toggle = window->findChild<QQuickItem *>("toggleCoasting"); QVERIFY(toggle);
+    toggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(window->findChild<QQuickItem *>("coastingPanel"));
+    auto *panel = window->findChild<QQuickItem *>("coastingPanel");
+    QTRY_VERIFY_WITH_TIMEOUT(panel->property("coasting").toMap().value("segmentsReady").toBool(), 20000);
+    const auto coasting = panel->property("coasting").toMap();
+    QCOMPARE(coasting.value("provenance").toString(), QString("inferred"));
+    QVERIFY(window->findChild<QQuickItem *>("coastingProvenance")->property("text").toString().contains("Inferred"));
+    const auto episodes = coasting.value("episodes").toList();
+    QVERIFY(!episodes.isEmpty());
+    QVERIFY(!coasting.value("segments").toList().isEmpty());
+    QCOMPARE(panel->property("mapLayers").toList().size(), episodes.size());
+    QVERIFY(window->findChild<QQuickItem *>("coastingMapLayer")->isVisible());
+    // Selecting an episode puts the lap cursor at its start.
+    QQuickItem *first = nullptr;
+    std::function<void(QQuickItem *)> find = [&](QQuickItem *item) {
+        if (first || !item->isVisible()) return;
+        if (item->objectName() == "coastingEpisode0") { first = item; return; }
+        for (auto *child : item->childItems()) find(child);
+    };
+    find(window->contentItem());
+    QVERIFY(first);
+    first->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(std::abs(controller.outingLapCursor() - episodes.first().toMap().value("startTime").toDouble()) < 1e-6);
+    const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!review.isEmpty()) static_cast<void>(window->grabWindow().save(QDir(review).filePath("coasting.png")));
+    QVERIFY(unreachableControls(window).isEmpty());
+    QCOMPARE(warnings.size(), 0);
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()

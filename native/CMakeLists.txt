@@ -122,6 +122,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/TelemetrySessionCache.cpp
     src/telemetry/TelemetrySource.cpp
     src/telemetry/TelemetrySource.h
+    src/telemetry/CoastingAnalysis.cpp
+    src/telemetry/CoastingAnalysis.h
     src/telemetry/DrivingStates.cpp
     src/telemetry/DrivingStates.h
     src/telemetry/TelemetryFolderScan.cpp
@@ -315,6 +317,7 @@ qt_add_qml_module(flappedear_native
         qml/Main.qml
         qml/SectionTitle.qml
         qml/SegmentReviewPanel.qml
+        qml/CoastingPanel.qml
         qml/TrackMapPanel.qml
         qml/TelemetryScene.qml
         qml/VisualSmokeScene.qml

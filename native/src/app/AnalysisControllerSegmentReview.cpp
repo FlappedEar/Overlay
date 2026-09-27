@@ -4,6 +4,7 @@
 // approved revision every downstream consumer must use.
 
 #include "app/AnalysisController.h"
+#include "telemetry/CoastingAnalysis.h"
 #include "project/EventProjectCodec.h"
 #include "project/ProjectLimits.h"
 #include "telemetry/TrackSegmentReview.h"
@@ -773,4 +774,39 @@ QVariantList AnalysisController::outingLapExitMetrics() const
         rows.append(row);
     }
     return rows;
+}
+
+QVariantMap AnalysisController::outingLapCoasting() const
+{
+    if (m_outingLapDetailState != "ready" || !m_outingLapDetailSession) return {{"state", "unavailable"}};
+    const bool axisReady = m_segmentReviewState == "ready" && m_segmentReviewAxis.valid;
+    const auto approved = axisReady ? currentApprovedSegmentation() : ApprovedSegmentation{};
+    const auto summary = summarizeCoasting(*m_outingLapDetailSession, m_selectedOutingLap.value("startTime").toDouble(),
+        m_selectedOutingLap.value("endTime").toDouble(), axisReady ? &m_segmentReviewLapTrace : nullptr,
+        axisReady && approved.valid ? &approved : nullptr);
+    if (!summary.valid) return {{"state", "unavailable"}};
+    QHash<QString, QString> names;
+    QVariantList segments;
+    for (const auto &segment : summary.segments) {
+        names.insert(segment.segmentId, segment.name);
+        segments.append(QVariantMap{{"segmentId", segment.segmentId}, {"name", segment.name}, {"type", segment.type},
+            {"seconds", segment.seconds}, {"meters", segment.meters}, {"episodes", segment.episodes}});
+    }
+    QVariantList episodes, layers;
+    for (const auto &episode : summary.episodes) {
+        QVariantMap row{{"startTime", episode.startTime}, {"endTime", episode.endTime}, {"seconds", episode.seconds},
+            {"meters", episode.meters}, {"segmentId", episode.segmentId}, {"segmentName", names.value(episode.segmentId)}};
+        if (episode.startProgressMeters && episode.endProgressMeters) {
+            row.insert("startMeters", *episode.startProgressMeters);
+            row.insert("endMeters", *episode.endProgressMeters);
+            layers.append(QVariantMap{{"kind", "coasting"},
+                {"polylines", mapPolylines(*episode.startProgressMeters, *episode.endProgressMeters)}});
+        }
+        episodes.append(row);
+    }
+    return {{"state", "ready"}, {"algorithm", summary.algorithm}, {"provenance", summary.provenance},
+        {"unresolvedReason", summary.unresolvedReason}, {"lapSeconds", summary.lapSeconds},
+        {"knownSeconds", summary.knownSeconds}, {"coastingSeconds", summary.coastingSeconds},
+        {"coastingMeters", summary.coastingMeters}, {"episodes", episodes}, {"segments", segments},
+        {"mapLayers", layers}, {"segmentsReady", axisReady && approved.valid && !summary.segments.isEmpty()}};
 }

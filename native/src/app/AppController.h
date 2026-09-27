@@ -415,6 +415,7 @@ public:
     Q_INVOKABLE QVariantList outingLapBrakingMetrics() const;
     // KAN-54: throttle pickup and the following-straight interval per approved corner.
     Q_INVOKABLE QVariantList outingLapExitMetrics() const;
+    Q_INVOKABLE QVariantMap outingLapCoasting() const;
     Q_INVOKABLE QVariantMap outingLapSeries(const QString &channel, int maximumPoints) const;
     Q_INVOKABLE QVariantMap outingLapSeries(
         const QString &channel, double startTime, double endTime, int maximumPoints) const;
