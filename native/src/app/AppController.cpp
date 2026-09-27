@@ -841,7 +841,7 @@ void AppController::startVboLoad(
     AppLog::info(QStringLiteral("Telemetry load started: %1").arg(path));
     m_vboLoadCancellation = std::make_shared<std::atomic_bool>(false);
     const std::shared_ptr<std::atomic_bool> cancellation = m_vboLoadCancellation;
-    m_vboLoadRequest = {path, markDocumentDirty, expectedFingerprint, relink};
+    m_vboLoadRequest = {path, markDocumentDirty, expectedFingerprint, relink, {}};
     m_pendingVboPath = path;
     m_vboLoadMarksDocumentDirty = markDocumentDirty;
     m_vboLoadState = QStringLiteral("loading");
