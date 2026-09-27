@@ -222,7 +222,7 @@ MediaInfo MediaProbe::probeSummary(
     const QStringList arguments{
         "-v", "error",
         "-show_entries",
-        "format=duration,start_time:stream=index,codec_type,codec_name,profile,width,height,coded_width,coded_height,r_frame_rate,avg_frame_rate,time_base,start_time,start_pts,duration,duration_ts,nb_frames,nb_read_frames,nb_packets,nb_read_packets,sample_rate,pix_fmt,bits_per_raw_sample,bit_rate,sample_aspect_ratio,color_range,color_space,color_transfer,color_primaries:stream_side_data=rotation,side_data_type,max_content,mastering_display_metadata",
+        "format=duration,start_time:format_tags=creation_time:stream=index,codec_type,codec_name,profile,width,height,coded_width,coded_height,r_frame_rate,avg_frame_rate,time_base,start_time,start_pts,duration,duration_ts,nb_frames,nb_read_frames,nb_packets,nb_read_packets,sample_rate,pix_fmt,bits_per_raw_sample,bit_rate,sample_aspect_ratio,color_range,color_space,color_transfer,color_primaries:stream_side_data=rotation,side_data_type,max_content,mastering_display_metadata",
         "-of", "json",
         path,
     };
@@ -241,6 +241,8 @@ MediaInfo MediaProbe::parseJson(const QByteArray &json, const QString &path)
     const QJsonObject format = document.object().value("format").toObject();
     info.duration = jsonNumber(format.value("duration"));
     info.startTime = jsonNumber(format.value("start_time"));
+    const auto creation = QDateTime::fromString(format.value("tags").toObject().value("creation_time").toString(), Qt::ISODateWithMs);
+    if (creation.isValid()) info.creationTime = creation.toUTC();
     for (const QJsonValue &value : document.object().value("streams").toArray()) {
         const QJsonObject stream = value.toObject();
         if (stream.value("codec_type").toString() == "video" && info.videoCodec.isEmpty()) {

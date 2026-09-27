@@ -187,6 +187,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/app/GuiSessionLock.cpp
     src/app/GuiSessionLock.h
     src/app/PreviewPlayback.cpp
+    src/app/VideoChapterReview.cpp
+    src/app/VideoChapterReview.h
     src/app/PreviewPlayback.h
     src/export/EncoderDetector.cpp
     src/export/EncoderDetector.h
@@ -230,6 +232,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/export/TelemetryFrameRenderer.h
     src/export/TemporaryOverlayValidation.cpp
     src/export/TemporaryOverlayValidation.h
+    src/gopro/GoProChapters.cpp
+    src/gopro/GoProChapters.h
     src/gopro/GoProTelemetrySource.cpp
     src/gopro/GoProTelemetrySource.h
     src/widgets/WidgetModel.cpp
@@ -307,6 +311,7 @@ qt_add_qml_module(flappedear_native
         qml/DayTrendChart.qml
         qml/DayReportDialog.qml
         qml/RunDetailsDialog.qml
+        qml/VideoChaptersDialog.qml
         qml/OutingLapPanel.qml
         qml/OutingLapDetailPanel.qml
         qml/ComparisonDetailPanel.qml
