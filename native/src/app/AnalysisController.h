@@ -51,6 +51,8 @@ namespace FlappedEar {
 class AnalysisController final : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList comparisonSlots READ comparisonSlots NOTIFY comparisonSlotsChanged)
+    // KAN-107: bumps when a run's footage finishes verifying.
+    Q_PROPERTY(int comparisonVideoRevision READ comparisonVideoRevision NOTIFY comparisonVideoChanged)
     Q_PROPERTY(QVariantList comparisonLaps READ comparisonLaps NOTIFY comparisonSlotsChanged)
     Q_PROPERTY(bool comparisonPairReady READ comparisonPairReady NOTIFY comparisonSlotsChanged)
     Q_PROPERTY(QStringList comparisonAvailableChannels READ comparisonAvailableChannels NOTIFY comparisonSlotsChanged)
@@ -125,7 +127,9 @@ public:
     ~AnalysisController() override;
 
     // Null when there is no video support (Flapped Ear Telemetry).
-    void setVideoLink(const VideoLink *link) { m_videoLink = link; }
+    void setVideoLink(VideoLink *link) { m_videoLink = link; }
+    // KAN-107: a run's footage finished verifying (or changed).
+    void runVideoChanged() { ++m_comparisonVideoRevision; emit comparisonVideoChanged(); }
 
     Q_INVOKABLE QVariantMap runMetadata(const QString &runId) const;
     Q_INVOKABLE bool updateRunMetadata(const QString &runId, const QString &expectedToken,
@@ -183,6 +187,17 @@ public:
     Q_INVOKABLE QVariantMap comparisonLapSeries(
         int slot, const QString &channel, double startTime, double endTime, int maximumPoints) const;
     Q_INVOKABLE QVariantList comparisonLapTrack(int slot) const;
+    // KAN-107: side-by-side A/B video. The slot's run footage state
+    // ({state, message}); asking starts verification of another run's video.
+    [[nodiscard]] int comparisonVideoRevision() const { return m_comparisonVideoRevision; }
+    Q_INVOKABLE QVariantMap comparisonVideo(int slot);
+    // Where the slot's footage shows the lap at `progressMeters` of the
+    // shared axis: {url, chapter, localMilliseconds}, {gap: true} inside a
+    // missing chapter, or {} when the footage does not cover that point.
+    Q_INVOKABLE QVariantMap comparisonVideoAtProgress(int slot, double progressMeters) const;
+    // The shared-axis progress the slot's footage shows at a chapter's local
+    // time; -1 when that frame is outside the lap or its projection.
+    Q_INVOKABLE double comparisonProgressForVideo(int slot, int chapter, double localMilliseconds) const;
     // Overlay comparison: both slots' GPS traces sharing one normalization
     // (so they draw to scale on one map), and channel/delta series
     // parameterized by the shared cross-lap track-progress axis (KAN-31/32/33)
@@ -344,6 +359,7 @@ signals:
     void outingDayReportChanged();
     void comparisonFocusSegmentIdChanged();
     void comparisonSlotsChanged();
+    void comparisonVideoChanged();
     void comparisonViewOpenChanged();
     void outingLapCursorChanged();
     void segmentReviewChanged();
@@ -449,7 +465,8 @@ private:
     QVariantList m_channelSummariesRuns;
     QByteArray m_channelSummariesKey;
     // KAN-124: video as the analysis side sees it; null without video support.
-    const VideoLink *m_videoLink = nullptr;
+    VideoLink *m_videoLink = nullptr;
+    int m_comparisonVideoRevision = 0;
     [[nodiscard]] QByteArray channelSummariesInputKey() const;
     [[nodiscard]] QString outingLapLabel(const QJsonObject &reference) const;
     // What the theoretical best and loss ranking depend on; a document change

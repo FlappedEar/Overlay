@@ -231,6 +231,7 @@ AppController::~AppController()
 {
     m_document.cancelImport();
     cancelSourceJobs();
+    m_runVideoCancellation->store(true);
     QElapsedTimer sourceShutdown;
     sourceShutdown.start();
     while (sourceShutdown.elapsed() < 2'000

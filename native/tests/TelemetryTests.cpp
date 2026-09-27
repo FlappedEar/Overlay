@@ -208,6 +208,7 @@ private slots:
     void reviewsGoProChapterGroups();
     void keepsVideoChaptersAsOneTimeline();
     void playsVideoChaptersAcrossBoundaries();
+    void showsSideBySideLapVideo();
     void showsCoastingOnTheOpenLap();
     void showsTrailBrakingInTheCornerAnalyzer();
     void coloursTheComparisonMapByAChannel();
@@ -1844,7 +1845,7 @@ void TelemetryTests::followsOutingLapVideoPositionWithinLapBounds()
 
     // KAN-124: analysis without a video link (Flapped Ear Telemetry) has no
     // lap video and never follows one; the cursor stays where it is.
-    const auto *link = controller.m_analysis.m_videoLink;
+    auto *link = controller.m_analysis.m_videoLink;
     controller.m_analysis.m_videoLink = nullptr;
     QVERIFY(!controller.outingLapVideoAvailable());
     QCOMPARE(controller.outingLapVideoPositionMilliseconds(), qint64(0));
@@ -9319,6 +9320,146 @@ void TelemetryTests::playsVideoChaptersAcrossBoundaries()
             // The branding image is not bundled into the test binary.
             QVERIFY2(!error.toString().contains("Main.qml") || error.toString().contains("Cannot open: qrc:"),
                 qPrintable(error.toString()));
+}
+
+void TelemetryTests::showsSideBySideLapVideo()
+{
+    // KAN-107: each lap of an A/B pair from different runs is shown on its
+    // own run's footage at the same track point: the active run's loaded
+    // video, the other run's saved video verified in the background (here in
+    // two chapters). A run without footage says so and never blocks the other.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the side-by-side video test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto encode = [&](const QString &name, const int seconds) {
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+            QString("testsrc2=s=160x90:r=5:d=%1").arg(seconds), "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+            directory.filePath(name)});
+        return encoder.waitForFinished(60'000) && encoder.exitCode() == 0;
+    };
+    QVERIFY(encode("run-a.mp4", 220));
+    QVERIFY(encode("GX010400.MP4", 110));
+    QVERIFY(encode("GX020400.MP4", 110));
+    const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
+    QVERIFY(writeBytes(fullA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
+    QVERIFY(writeBytes(fullB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Video day", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 30000);
+    const auto runs = controller.eventRuns();
+    const auto runA = runs[0].toMap().value("id").toString(), runB = runs[1].toMap().value("id").toString();
+    // Run A (active) gets an ordinary video.
+    QCOMPARE(controller.activeRunId(), runA);
+    controller.loadVideo(QUrl::fromLocalFile(directory.filePath("run-a.mp4")));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 30000);
+    const auto projectPath = directory.filePath("video-day.fetproject");
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
+
+    // A comparable lap from each run, once the laps have settled.
+    QVariantMap lapA, lapB;
+    const auto openPair = [&] {
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && !controller.outingComparisonGroupId().isEmpty(), 30000);
+        lapA.clear(); lapB.clear();
+        for (const auto &value : controller.outingLaps()) {
+            const auto lap = value.toMap();
+            if (lap.value("type") != "LAP" || !lap.value("referenceEligible").toBool() || !lap.value("compatibilityResolved").toBool())
+                continue;
+            if (lap.value("runId") == runA && lapA.isEmpty()) lapA = lap;
+            if (lap.value("runId") == runB && lapB.isEmpty()) lapB = lap;
+        }
+        QVERIFY(!lapA.isEmpty() && !lapB.isEmpty());
+        QVERIFY(controller.selectComparisonLap(0, lapA.value("reference").toMap()));
+        QVERIFY(controller.selectComparisonLap(1, lapB.value("reference").toMap()));
+        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 30000);
+    };
+    openPair();
+    // Run B has no footage yet: said so, and A still maps.
+    QTRY_COMPARE_WITH_TIMEOUT(controller.comparisonVideo(1).value("state").toString(), QString("novideo"), 20000);
+    QCOMPARE(controller.comparisonVideo(0).value("state").toString(), QString("ready"));
+    const double axis = controller.comparisonProgressAxisLength();
+    QVERIFY(axis > 100.0);
+    const auto atA = controller.comparisonVideoAtProgress(0, axis / 2);
+    QCOMPARE(QFileInfo(atA.value("url").toUrl().toLocalFile()).fileName(), QString("run-a.mp4"));
+    QVERIFY(std::abs(controller.comparisonProgressForVideo(0, 0, atA.value("localMilliseconds").toDouble()) - axis / 2) < 2.0);
+    QVERIFY(controller.comparisonVideoAtProgress(1, axis / 2).isEmpty());
+
+    // Run B gets its footage in two chapters.
+    QVERIFY(controller.selectEventRun(runB));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.activeRunId(), runB, 20000);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 30000);
+    controller.loadVideoChapters({QUrl::fromLocalFile(directory.filePath("GX010400.MP4")),
+        QUrl::fromLocalFile(directory.filePath("GX020400.MP4"))});
+    QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 30000);
+    QVERIFY(controller.videoChaptered());
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 30000);
+    openPair();
+    // Now run A is the inactive one: its saved video is verified in the background.
+    QTRY_COMPARE_WITH_TIMEOUT(controller.comparisonVideo(0).value("state").toString(), QString("ready"), 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.comparisonVideo(1).value("state").toString(), QString("ready"), 30000);
+    QCOMPARE(controller.comparisonVideo(1).value("chapters").toInt(), 2);
+    // Every point of B's lap maps to the right chapter and back to the same progress.
+    for (double meters = axis * 0.1; meters < axis * 0.95; meters += axis * 0.2) {
+        for (int slot = 0; slot < 2; ++slot) {
+            const auto at = controller.comparisonVideoAtProgress(slot, meters);
+            if (at.isEmpty()) continue; // this lap's projection may not reach every point
+            const double back = controller.comparisonProgressForVideo(slot, at.value("chapter").toInt(), at.value("localMilliseconds").toDouble());
+            QVERIFY2(std::abs(back - meters) < 2.0, qPrintable(QString("slot %1 at %2 m came back at %3 m").arg(slot).arg(meters).arg(back)));
+            if (slot == 1) QVERIFY(at.value("localMilliseconds").toDouble() <= 110'500.0);
+        }
+    }
+
+    // In the comparison view: the Video column with both panes.
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
+        {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->resize(1180, 720);
+    controller.setAnalysisVisible(true);
+    controller.setComparisonViewOpen(true);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    auto *toggle = window->findChild<QQuickItem *>("comparisonToggleVideo");
+    QTRY_VERIFY(toggle && toggle->isVisible());
+    toggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    auto *panel = window->findChild<QQuickItem *>("comparisonVideoPanel"); QVERIFY(panel);
+    QTRY_VERIFY(panel->isVisible());
+    const auto findVisual = [](auto &&self, QQuickItem *item, const QString &name) -> QQuickItem * {
+        if (item->objectName() == name) return item;
+        for (auto *child : item->childItems()) if (auto *found = self(self, child, name)) return found;
+        return nullptr;
+    };
+    QQuickItem *paneB = nullptr;
+    QTRY_VERIFY((paneB = findVisual(findVisual, window->contentItem(), "comparisonVideoPane1")));
+    auto *detail = window->findChild<QQuickItem *>("comparisonDetailPanel"); QVERIFY(detail);
+    detail->setProperty("hoverDistanceMeters", axis / 2);
+    QTRY_VERIFY_WITH_TIMEOUT(paneB->property("covered").toBool(), 15000);
+    QVERIFY(findVisual(findVisual, window->contentItem(), "comparisonVideoPlay")->isEnabled());
+    // Both panes show a real frame of their own footage.
+    for (int slot = 0; slot < 2; ++slot) {
+        auto *output = findVisual(findVisual, window->contentItem(), QString("comparisonVideoOutput%1").arg(slot));
+        QVERIFY(output);
+        auto *sink = output->property("videoSink").value<QVideoSink *>();
+        QVERIFY(sink);
+        if (!QTest::qWaitFor([&] { return sink->videoFrame().isValid(); }, 15000))
+            QSKIP("Media playback is unavailable here.");
+    }
+    const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!review.isEmpty()) { QTest::qWait(1500); static_cast<void>(window->grabWindow().save(QDir(review).filePath("ab-video.png"))); }
+    QVERIFY(unreachableControls(window).isEmpty());
+    // Play: lap A runs in real time and the shared cursor (charts, map, lap B) follows its track position.
+    auto *play = findVisual(findVisual, window->contentItem(), "comparisonVideoPlay");
+    play->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY_WITH_TIMEOUT(detail->property("hoverDistanceMeters").toDouble() > axis / 2 + 20.0, 10000);
+    play->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(!detail->property("videoPlaying").toBool());
+    QCOMPARE(warnings.size(), 0);
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()
