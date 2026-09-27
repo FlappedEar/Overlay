@@ -59,7 +59,7 @@ Merged later on 26 September 2026, which completes **M4**:
 | KAN-73 | "Where to look next": observations apart from hypotheses (`FocusAreas.h`) | #83 |
 | KAN-74 | M4 acceptance `docs/kan74-m4-acceptance.md`, plus a fix: Save As no longer discards computed results | #84 |
 
-KAN-124 (split phase 2) steps 1–10 are merged (#85, #87–#92, #94–#96):
+KAN-124 (split phase 2) steps 1–11 are merged (#85, #87–#92, #94–#97):
 - **Step 1:** analysis reaches video only through `VideoLink`, and its guards
   use `documentBusy()`.
 - **Steps 2–7:** these moved into `flappedear_telemetry_core`:
@@ -83,6 +83,9 @@ KAN-124 (split phase 2) steps 1–10 are merged (#85, #87–#92, #94–#96):
   only; boundary test), and `flappedear_telemetry_app_tests` runs a whole
   day through it headless. This is the controller the Telemetry app
   (KAN-125) builds its UI on.
+- **Step 11 (tests):** 42 pure telemetry-core test functions moved from
+  `TelemetryTests.cpp` to `TelemetryCoreTests.cpp`
+  (`flappedear_telemetry_core_tests`, core only).
 
 To verify a refactor, set `FLAPPEDEAR_REPORT_DUMP` on the private real-day
 test and diff the dumps after normalising identities (see
@@ -101,8 +104,13 @@ never showed, so develop against real data. See "Real data" below.
   `docs/kan74-m4-acceptance.md`, which are still to be filled in.
 
 Next: finish KAN-124 in behaviour-preserving steps.
-- Extract `OverlayController`.
-- Split `TelemetryTests.cpp` to match.
+- Move the document and analysis tests that need no editor from
+  `TelemetryTests.cpp` to `TelemetryController`-based tests (see
+  `TelemetryAppTests.cpp`). Most of the 246 left there drive the editor, QML
+  panels or export.
+- Extract `OverlayController`, or decide that `AppController` itself is the
+  Overlays controller. After steps 8–10 it holds only the editor, sources,
+  sync, preview and export, plus forwarding.
 
 Before and after each step, run the private real-day check. Its report
 key values must stay identical.

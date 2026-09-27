@@ -1,0 +1,1079 @@
+// Telemetry-core behaviour -- VBO parsing and its resource bounds, lap
+// timing, coordinates, track geometry, lap references and exclusions -- in a
+// test binary that links only flappedear_telemetry_core (KAN-124): no
+// controller, overlay, video or Gui code.
+
+#include "EventProjectFixture.h"
+#include "project/BoundedJsonLoader.h"
+#include "project/ProjectLimits.h"
+#include "telemetry/LapTiming.h"
+#include "telemetry/OutingLaps.h"
+#include "telemetry/TelemetryGeometry.h"
+#include "telemetry/TelemetryImportPlan.h"
+#include "telemetry/TelemetrySession.h"
+#include "telemetry/TelemetrySource.h"
+#include "telemetry/TrackGeometry.h"
+#include "telemetry/TrackInference.h"
+#include "telemetry/VboParser.h"
+
+#include <QElapsedTimer>
+#include <QFile>
+#include <QJsonDocument>
+#include <QTemporaryDir>
+#include <QtTest>
+#include <atomic>
+#include <cmath>
+#include <limits>
+#include <numbers>
+
+using namespace FlappedEar;
+
+namespace {
+bool writeBytes(const QString &path, const QByteArray &bytes)
+{
+    QFile file(path);
+    return file.open(QIODevice::WriteOnly | QIODevice::Truncate)
+        && file.write(bytes) == bytes.size();
+}
+} // namespace
+
+class TelemetryCoreTests final : public QObject {
+    Q_OBJECT
+private slots:
+    void derivesOutingLapSections();
+    void rejectsMalformedLapReferences_data();
+    void rejectsMalformedLapReferences();
+    void infersRoutesFromOrderedCompleteLaps();
+    void rejectsMalformedLapExclusions_data();
+    void rejectsMalformedLapExclusions();
+    void groupsOnlyDatedUnambiguousAlternatives();
+    void prefersRaceChronoCalculatedAcceleration();
+    void parsesRealisticFixture();
+    void toleratesMalformedRows();
+    void preservesRepeatedDataSections();
+    void rejectsMissingSections();
+    void interpolatesByTime();
+    void parsesTextFirstVboTimeFormats();
+    void keepsVboTimestampsStrictlyMonotonic();
+    void rejectsUnsafeVboDerivedTimes_data();
+    void rejectsUnsafeVboDerivedTimes();
+    void preservesMixedVboClocksAcrossMidnight();
+    void rejectsOverflowingTelemetryChartRanges();
+    void cancelsVboParsingDeterministically();
+    void cachesTelemetryChannelCadence();
+    void enforcesVboResourceLimits();
+    void preservesVboScannerFormats();
+    void boundsSeparatorHeavyVboRows();
+    void enforcesVboScannerBoundaries();
+    void cancelsVboScanningBeforeLimitFailures_data();
+    void cancelsVboScanningBeforeLimitFailures();
+    void cancelsVboFieldScanningAtEveryCheckpoint();
+    void convertsArcMinuteCoordinates();
+    void resolvesCoordinateEvidence_data();
+    void resolvesCoordinateEvidence();
+    void withholdsUnresolvedCoordinates_data();
+    void withholdsUnresolvedCoordinates();
+    void validatesDeclaredCoordinateBounds();
+    void parsesBoundedRaceChronoTimingGates();
+    void derivesDirectionalPassesAndCompleteLaps();
+    void finalizesGatePassWhenTelemetryEndsInsideCorridor();
+    void parsesOptionalRealVbo();
+    void derivesOptionalRealVboLaps();
+    void buildsTrackGeometry();
+    void cancelsTrackGeometryConstruction();
+    void boundsExternalJsonDocuments();
+};
+
+void TelemetryCoreTests::derivesOutingLapSections()
+{
+    auto session = VboParser::parse(QString::fromUtf8(EventProjectFixture::lapsVbo()));
+    session.metadata.insert("firstTimestampMilliseconds", "1780000000000");
+    const auto laps = deriveSourceLapSession(session);
+    QCOMPARE(laps.timedLaps.size(), 3);
+    const auto rows = outingLapRows(session, laps, "run", "Morning", 0);
+    QCOMPARE(rows.size(), 5);
+    QCOMPARE(rows.first().type, LapSectionType::Out);
+    QCOMPARE(rows.first().start, 0.0);
+    QCOMPARE(rows.first().end, laps.acceptedPasses.first().telemetryTime);
+    for (int i = 1; i <= 3; ++i) {
+        QCOMPARE(rows[i].type, LapSectionType::Lap);
+        QCOMPARE(rows[i].lapNumber, i);
+        QCOMPARE(rows[i].start, laps.timedLaps[i - 1].startTelemetryTime);
+        QCOMPARE(rows[i].end, laps.timedLaps[i - 1].endTelemetryTime);
+    }
+    QCOMPARE(rows.last().type, LapSectionType::In);
+    QCOMPARE(rows.last().end, session.duration);
+    const auto unknown = outingLapRows(session, {}, "unknown", "Unknown", 1);
+    QCOMPARE(unknown.size(), 1); QCOMPARE(unknown[0].type, LapSectionType::Unknown);
+    auto one = laps; one.acceptedPasses.resize(1); one.timedLaps.clear();
+    const auto fragments = outingLapRows(session, one, "one", "One crossing", 2);
+    QCOMPARE(fragments.size(), 2);
+    QCOMPARE(fragments[0].type, LapSectionType::Out); QCOMPARE(fragments[1].type, LapSectionType::In);
+    QVERIFY_THROWS_EXCEPTION(OperationCancelled, static_cast<void>(outingLapRows(session, laps, {}, {}, 0, [] { return true; })));
+    auto tooMany = laps; tooMany.timedLaps.resize(maximumOutingLapRows);
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError, static_cast<void>(outingLapRows(session, tooMany, {}, {}, 0)));
+    auto mixed = rows;
+    auto withoutClock = session; withoutClock.metadata.clear();
+    mixed += outingLapRows(withoutClock, laps, "undated", "Undated", 1);
+    std::reverse(mixed.begin(), mixed.end());
+    sortOutingLaps(mixed);
+    QCOMPARE(mixed.first().type, LapSectionType::Out);
+    QVERIFY(mixed.first().timestampMilliseconds.has_value());
+    QVERIFY(!mixed.last().timestampMilliseconds.has_value());
+}
+
+void TelemetryCoreTests::rejectsMalformedLapReferences_data()
+{
+    QTest::addColumn<QString>("field"); QTest::addColumn<QJsonValue>("value");
+    QTest::newRow("old-number-only") << QString("version") << QJsonValue(QJsonValue::Undefined);
+    QTest::newRow("future-version") << QString("version") << QJsonValue(2);
+    QTest::newRow("fractional-version") << QString("version") << QJsonValue(1.1);
+    QTest::newRow("missing-event") << QString("eventId") << QJsonValue("");
+    QTest::newRow("long-run") << QString("runId") << QJsonValue(QString(129, 'r'));
+    QTest::newRow("null-source") << QString("sourceId") << QJsonValue(QJsonValue::Null);
+    QTest::newRow("bad-content-revision") << QString("sourceRevision") << QJsonValue("abc");
+    QTest::newRow("bad-derivation") << QString("derivationKey") << QJsonValue(QString(64, 'z'));
+    QTest::newRow("wrong-type") << QString("type") << QJsonValue("lap");
+    QTest::newRow("negative-start") << QString("startTime") << QJsonValue(-1);
+    QTest::newRow("empty-range") << QString("endTime") << QJsonValue(1.5);
+    QTest::newRow("string-end") << QString("endTime") << QJsonValue("3.5");
+    QTest::newRow("nonfinite-end") << QString("endTime") << QJsonValue(std::numeric_limits<double>::infinity());
+}
+
+void TelemetryCoreTests::rejectsMalformedLapReferences()
+{
+    QFETCH(QString, field); QFETCH(QJsonValue, value);
+    OutingLapRow row; row.runId = "run"; row.type = LapSectionType::Lap; row.start = 1.5; row.end = 3.5;
+    auto reference = makeLapReference(row, "event", "source", QByteArray(64, 'a'), QByteArray(64, 'b'));
+    QVERIFY(validLapReference(reference)); reference.insert(field, value);
+    QVERIFY(!validLapReference(reference));
+}
+
+void TelemetryCoreTests::infersRoutesFromOrderedCompleteLaps()
+{
+    const auto derive = [](const QByteArray &bytes) { return deriveSourceLapSession(VboParser::parse(QString::fromUtf8(bytes))); };
+    const auto laps = derive(EventProjectFixture::routeVbo());
+    const auto base = inferTrack(laps); QVERIFY2(base.supported(), qPrintable(base.reason));
+    QCOMPARE(base.route.direction, QString("counterclockwise")); QVERIFY(base.matchingLaps.size() >= 2);
+    const auto noisy = inferTrack(derive(EventProjectFixture::routeVbo(130, -2, 2)));
+    QVERIFY2(noisy.supported(), qPrintable(noisy.reason)); QVERIFY(routesMatch(base.route, noisy.route));
+    const auto reverse = inferTrack(derive(EventProjectFixture::routeVbo(240, 1, 0, true)));
+    QVERIFY(reverse.supported()); QCOMPARE(reverse.route.direction, QString("clockwise"));
+    QVERIFY(!routesMatch(base.route, reverse.route));
+    const auto alternative = inferTrack(derive(EventProjectFixture::routeVbo(240, -1, 0, false, 450)));
+    QVERIFY(alternative.supported()); QVERIFY(!routesMatch(base.route, alternative.route));
+    QVERIFY(!inferTrack(derive(EventProjectFixture::routeVbo(240, -1, 0, false, 300, 1))).supported());
+    QVERIFY(!inferTrack(derive(EventProjectFixture::lapsVbo())).supported()); // Sparse evidence never invents a route.
+    auto mixed = laps;
+    const auto alternateLaps = derive(EventProjectFixture::routeVbo(240, -1, 0, false, 450));
+    mixed.lapTraces = {laps.lapTraces[0], alternateLaps.lapTraces[0]};
+    QVERIFY(!inferTrack(mixed).supported());
+    mixed.lapTraces = {laps.lapTraces[0], laps.lapTraces[1], alternateLaps.lapTraces[2]};
+    const auto pit = inferTrack(mixed); QVERIFY(pit.supported()); QVERIFY(!pit.matchingLaps.contains(alternateLaps.lapTraces[2].lapNumber));
+    auto mirrored = laps;
+    mirrored.selectedStartGate->endpointA.longitudeDegrees *= -1;
+    mirrored.selectedStartGate->endpointB.longitudeDegrees *= -1;
+    for (auto &trace : mirrored.lapTraces) for (auto &point : trace.points) point.eastMeters *= -1;
+    QVERIFY(routesMatch(base.route, inferTrack(mirrored, true).route));
+    QVERIFY_THROWS_EXCEPTION(OperationCancelled, static_cast<void>(inferTrack(laps, false, [] { return true; })));
+    auto oversized = laps; oversized.lapTraces.resize(20'001);
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError, static_cast<void>(inferTrack(oversized)));
+    const QJsonObject config{{"layoutId", QJsonValue::Null}, {"direction", "unknown"}, {"gateRevision", "gates-v1:" + QString(64, 'a')}};
+    const auto stableLayout = "gps-route-v1:" + QString(64, 'd');
+    const QJsonObject provenance{{"algorithm", trackInferenceVersion}, {"sourceRevision", QString(64, 'b')},
+        {"gateRevision", config.value("gateRevision")}, {"layoutId", stableLayout}, {"direction", "counterclockwise"}};
+    QJsonArray sources{QJsonObject{{"runId", "a"}, {"trackConfiguration", config}, {"expectedRevision", QString(64, 'a')}},
+        QJsonObject{{"runId", "b"}, {"trackConfiguration", config}, {"expectedRevision", QString(64, 'b')}, {"inference", provenance}}};
+    const auto grouped = groupInferredTracks({{"a", base}, {"b", noisy}}, sources);
+    QCOMPARE(grouped.configurations.value("a").value("layoutId").toString(), stableLayout);
+    QCOMPARE(grouped.configurations.value("b").value("layoutId").toString(), stableLayout);
+    const auto changed = groupInferredTracks({{"a", alternative}, {"b", noisy}}, sources);
+    QCOMPARE(changed.configurations.value("b").value("layoutId").toString(), stableLayout);
+    QVERIFY(changed.configurations.value("a").value("layoutId").toString() != stableLayout);
+    sources.removeFirst();
+    QCOMPARE(groupInferredTracks({{"b", noisy}}, sources).configurations.value("b").value("layoutId").toString(), stableLayout);
+    auto stale = sources[0].toObject(); auto old = provenance; old.insert("algorithm", "old-version");
+    stale.insert("inference", old); sources[0] = stale;
+    QVERIFY(groupInferredTracks({{"b", noisy}}, sources).configurations.value("b").value("layoutId").toString() != stableLayout);
+    // Spatial matching does not collapse distinct recorded timing definitions.
+    auto timingConfig = config; timingConfig.insert("gateRevision", "gates-v1:" + QString(64, 'e'));
+    stale.insert("trackConfiguration", timingConfig); sources.append(QJsonObject{{"runId", "a"}, {"trackConfiguration", config}});
+    sources[0] = stale;
+    const auto timingGroups = groupInferredTracks({{"a", base}, {"b", noisy}}, sources);
+    QVERIFY(lapCompatibilityGroupId(timingGroups.configurations.value("a")) != lapCompatibilityGroupId(timingGroups.configurations.value("b")));
+    auto middle = base, distant = base;
+    for (auto &point : middle.route.points) point.rx() += 8;
+    for (auto &point : distant.route.points) point.rx() += 16;
+    QVERIFY(routesMatch(base.route, middle.route)); QVERIFY(routesMatch(middle.route, distant.route));
+    QVERIFY(!routesMatch(base.route, distant.route));
+    QJsonArray bridgeSources;
+    for (const auto *id : {"a", "b", "c"}) bridgeSources.append(QJsonObject{{"runId", id}, {"trackConfiguration", config}});
+    const auto bridge = groupInferredTracks({{"a", base}, {"b", middle}, {"c", distant}}, bridgeSources);
+    QVERIFY(bridge.reasons.contains("b")); QVERIFY(bridge.configurations.value("b").value("layoutId").isNull());
+    QJsonArray beforeReplacement;
+    for (const auto *id : {"a", "b"}) beforeReplacement.append(QJsonObject{{"runId", id},
+        {"trackConfiguration", config}, {"expectedRevision", QString(64, 'a')}});
+    const auto before = groupInferredTracks({{"a", base}, {"b", noisy}}, beforeReplacement);
+    for (qsizetype i = 0; i < beforeReplacement.size(); ++i) {
+        auto source = beforeReplacement[i].toObject();
+        source.insert("inference", before.provenance.value(source.value("runId").toString()));
+        if (i == 0) source.insert("expectedRevision", QString(64, 'c'));
+        beforeReplacement[i] = source;
+    }
+    const auto after = groupInferredTracks({{"a", alternative}, {"b", noisy}}, beforeReplacement);
+    QCOMPARE(after.configurations.value("b"), before.configurations.value("b"));
+    QVERIFY(lapCompatibilityGroupId(after.configurations.value("a"))
+        != lapCompatibilityGroupId(after.configurations.value("b")));
+    // Even conflicting persisted IDs cannot collapse two verified route shapes.
+    auto forged = beforeReplacement[0].toObject();
+    auto previous = forged.value("inference").toObject(); previous.insert("sourceRevision", QString(64, 'c'));
+    forged.insert("inference", previous); beforeReplacement[0] = forged;
+    const auto conflicting = groupInferredTracks({{"a", alternative}, {"b", noisy}}, beforeReplacement);
+    QVERIFY(lapCompatibilityGroupId(conflicting.configurations.value("a"))
+        != lapCompatibilityGroupId(conflicting.configurations.value("b")));
+}
+
+void TelemetryCoreTests::rejectsMalformedLapExclusions_data()
+{
+    QTest::addColumn<QString>("kind");
+    for (const auto *kind : {"non-array", "duplicate", "blank", "long", "null-byte", "number-reason", "foreign-event", "out-section", "malformed-reference", "extra-field", "too-many"})
+        QTest::newRow(kind) << QString(kind);
+}
+
+void TelemetryCoreTests::rejectsMalformedLapExclusions()
+{
+    QFETCH(QString, kind);
+    auto project = EventProjectFixture::project(); auto event = project.value("event").toObject();
+    OutingLapRow row; row.runId = "run-a"; row.type = LapSectionType::Lap; row.start = 1; row.end = 5;
+    auto reference = makeLapReference(row, event.value("id").toString(), "run-a-source", QByteArray(64, 'a'), QByteArray(64, 'b'));
+    QJsonObject entry{{"reference", reference}, {"reason", "Traffic"}};
+    event.insert("lapExclusions", QJsonArray{entry}); project.insert("event", event);
+    QString error; QVERIFY2(ProjectLimits::validateProject(project, &error), qPrintable(error));
+    if (kind == "blank") entry.insert("reason", "  ");
+    if (kind == "long") entry.insert("reason", QString(257, 'a'));
+    if (kind == "null-byte") entry.insert("reason", QString("a") + QChar::Null);
+    if (kind == "number-reason") entry.insert("reason", 42);
+    if (kind == "foreign-event") reference.insert("eventId", "elsewhere");
+    if (kind == "out-section") reference.insert("type", "OUT");
+    if (kind == "malformed-reference") reference.remove("sourceRevision");
+    entry.insert("reference", reference);
+    if (kind == "extra-field") entry.insert("unknown", true);
+    QJsonArray exclusions{entry};
+    if (kind == "duplicate") exclusions.append(entry);
+    if (kind == "too-many") for (int i = 0; i < maximumOutingLapRows; ++i) exclusions.append(entry);
+    event.insert("lapExclusions", kind == "non-array" ? QJsonValue(QJsonObject{}) : QJsonValue(exclusions));
+    project.insert("event", event);
+    QVERIFY(!ProjectLimits::validateProject(project, &error));
+}
+
+void TelemetryCoreTests::groupsOnlyDatedUnambiguousAlternatives()
+{
+    TelemetryImportPlan plan;
+    auto a = std::make_shared<TelemetrySession>(); a->duration = 600; a->metadata.insert("firstTimestampMilliseconds", "1780000000000");
+    auto b = std::make_shared<TelemetrySession>(*a);
+    TelemetryRunProposal vbo; vbo.id = "vbo"; vbo.format = "vbo"; vbo.telemetry = a;
+    TelemetryRunProposal rcz; rcz.id = "rcz"; rcz.format = "rcz"; rcz.telemetry = b;
+    plan.runs = {vbo, rcz}; plan.possibleSameRuns = {{"vbo", "rcz", 32, 1.0, 0.2, {}}};
+    QCOMPARE(automaticVboPrimaries(plan).value("rcz"), QStringLiteral("vbo"));
+    b->metadata.insert("firstTimestampMilliseconds", "1780086400000");
+    QCOMPARE(automaticVboPrimaries(plan).value("rcz"), QStringLiteral("rcz"));
+    b->metadata.clear();
+    QCOMPARE(automaticVboPrimaries(plan).value("rcz"), QStringLiteral("rcz"));
+    b->metadata = a->metadata;
+    auto alternative = vbo; alternative.id = "other"; plan.runs.append(alternative);
+    plan.possibleSameRuns.append({"other", "rcz", 32, 1.0, 0.2, {}});
+    QCOMPARE(automaticVboPrimaries(plan).value("rcz"), QStringLiteral("rcz"));
+}
+
+void TelemetryCoreTests::prefersRaceChronoCalculatedAcceleration()
+{
+    const auto session = VboParser::parse(u"[column names]\ntime latacc longacc latacc-calc longacc-calc\n[data]\n"
+        "0 0 0 0.5 -0.75\n1 0 0 invalid nan\n2 0 0 -0.25 0.125\n");
+    QCOMPARE(session.valueAt("lateralAcceleration", 0).value(), 0.5);
+    QCOMPARE(session.valueAt("longitudinalAcceleration", 0).value(), -0.75);
+    QCOMPARE(session.valueAt("latacc", 0).value(), 0.0);
+    QVERIFY(!session.valueAt("lateralAcceleration", 1));
+    QVERIFY(!session.valueAt("longitudinalAcceleration", 1));
+    QCOMPARE(session.valueAt("lateralAcceleration", 2).value(), -0.25);
+    const auto calculatedOnly = VboParser::parse(u"[column names]\ntime latacc-calc longacc-calc\n[data]\n0 0.5 -0.75\n1 0.5 -0.75\n");
+    QCOMPARE(calculatedOnly.valueAt("lateralAcceleration", 0).value(), 0.5);
+    QCOMPARE(calculatedOnly.valueAt("longitudinalAcceleration", 0).value(), -0.75);
+}
+
+void TelemetryCoreTests::parsesRealisticFixture()
+{
+    const TelemetrySession session = VboParser::parseFile(TEST_FIXTURE_PATH);
+    QCOMPARE(session.sampleCount, 3);
+    QCOMPARE(session.duration, 1.0);
+    QCOMPARE(session.metadata.value("vehicle"), QString("Test Car"));
+    QVERIFY(session.channels.contains("mystery"));
+    QCOMPARE(session.aliases.value("speed"), QString("velocity"));
+    QCOMPARE(session.aliases.value("rpm"), QString("rpm"));
+    QCOMPARE(session.aliases.value("throttle"), QString("throttle"));
+    QCOMPARE(session.aliases.value("brake"), QString("brake"));
+    QCOMPARE(session.aliases.value("heartRate"), QString("heart_rate"));
+    QCOMPARE(session.channels.value("velocity").values, QVector<float>({0.0F, 50.0F, 100.0F}));
+}
+
+void TelemetryCoreTests::toleratesMalformedRows()
+{
+    const auto session = VboParser::parse(
+        u"[column names]\ntime speed unknown\n[data]\n0   10  1\n1 bad\n2 30 3 extra");
+    QCOMPARE(session.sampleCount, 3);
+    QVERIFY(std::isnan(session.channels.value("speed").values[1]));
+    QVERIFY(!session.valueAt("speed", 0.5));
+    QVERIFY(!session.valueAt("speed", 1.0));
+    QVERIFY(!session.valueAt("speed", 1.5));
+    QCOMPARE(session.warnings.size(), 2);
+}
+
+void TelemetryCoreTests::preservesRepeatedDataSections()
+{
+    const TelemetrySession session = VboParser::parse(
+        u"[column names]\ntime speed\n[data]\n0 10\n[data]\n1 20");
+    QCOMPARE(session.sampleCount, 2);
+    QCOMPARE(session.channels.value("speed").values, QVector<float>({10.0F, 20.0F}));
+}
+
+void TelemetryCoreTests::rejectsMissingSections()
+{
+    QVERIFY_THROWS_EXCEPTION(VboParseError, (void) VboParser::parse(u"[header]\nfoo=bar"));
+}
+
+void TelemetryCoreTests::interpolatesByTime()
+{
+    const auto session = VboParser::parse(u"[column names]\ntime speed\n[data]\n0 0\n1 10\n2 30");
+    QCOMPARE(session.valueAt("speed", 0).value(), 0.0);
+    QCOMPARE(session.valueAt("speed", 1).value(), 10.0);
+    QCOMPARE(session.valueAt("speed", 2).value(), 30.0);
+    QCOMPARE(session.valueAt("speed", 1.5).value(), 20.0);
+    QCOMPARE(session.valueAt("speed", 1.6, InterpolationMode::Previous).value(), 10.0);
+    QCOMPARE(session.valueAt("speed", 1.6, InterpolationMode::Nearest).value(), 30.0);
+    QVERIFY(!session.valueAt("speed", -1));
+    QVERIFY(!session.valueAt("speed", 9));
+    QVERIFY(!session.valueAt("rpm", 1));
+    QCOMPARE(videoToTelemetryTime(10, {2.5, 1.01}).value(), 12.6);
+}
+
+void TelemetryCoreTests::parsesTextFirstVboTimeFormats()
+{
+    const auto timestampsFor = [](QStringView rows) {
+        return VboParser::parse(QStringLiteral("[column names]\ntime speed\n[data]\n")
+                                    + rows.toString())
+            .channels.value(QStringLiteral("speed")).timestamps;
+    };
+    const auto verifyTimes = [](const QVector<double> &actual, const QVector<double> &expected) {
+        QCOMPARE(actual.size(), expected.size());
+        for (qsizetype index = 0; index < expected.size(); ++index) {
+            QVERIFY2(qAbs(actual[index] - expected[index]) < 0.000001,
+                     qPrintable(QStringLiteral("timestamp %1: %2 != %3")
+                                    .arg(index).arg(actual[index], 0, 'f', 6)
+                                    .arg(expected[index], 0, 'f', 6)));
+        }
+    };
+
+    verifyTimes(timestampsFor(u"00:00:00.000 1\n00:00:00.100 2\n00:00:00.200 3"),
+                {0.0, 0.1, 0.2});
+    verifyTimes(timestampsFor(u"003059.500 1\n003100.500 2\n003101.500 3"),
+                {0.0, 1.0, 2.0});
+    verifyTimes(timestampsFor(u"091428.380 1\n091428.480 2\n091428.580 3"),
+                {0.0, 0.1, 0.2});
+    verifyTimes(timestampsFor(u"0 1\n0.1 2\n0.2 3\n10.5 4"), {0.0, 0.1, 0.2, 10.5});
+}
+
+void TelemetryCoreTests::keepsVboTimestampsStrictlyMonotonic()
+{
+    const TelemetrySession midnight = VboParser::parse(
+        u"[column names]\ntime speed rpm\n[data]\n"
+        "235959.800 1 10\n235959.900 2 20\n000000.000 3 30\n000000.100 4 40");
+    const TelemetryChannel midnightSpeed = midnight.channels.value(QStringLiteral("speed"));
+    QCOMPARE(midnightSpeed.timestamps.size(), 4);
+    QVERIFY(qAbs(midnightSpeed.timestamps[0]) < 0.000001);
+    QVERIFY(qAbs(midnightSpeed.timestamps[1] - 0.1) < 0.000001);
+    QVERIFY(qAbs(midnightSpeed.timestamps[2] - 0.2) < 0.000001);
+    QVERIFY(qAbs(midnightSpeed.timestamps[3] - 0.3) < 0.000001);
+    QCOMPARE(midnight.channels.value(QStringLiteral("rpm")).timestamps.size(), 4);
+    QVERIFY(std::any_of(midnight.warnings.cbegin(), midnight.warnings.cend(), [](const QString &warning) {
+        return warning.contains(QStringLiteral("midnight rollover"));
+    }));
+
+    const TelemetrySession guarded = VboParser::parse(
+        u"[column names]\ntime speed rpm\n[data]\n"
+        "120000.000 1 10\n120000.100 2 20\n120000.100 3 30\n115959.900 4 40\n"
+        "126199 5 50\n246000 6 60\n12:61:00 7 70\n12:00:60 8 80\n120000.200 9 90");
+    const TelemetryChannel speed = guarded.channels.value(QStringLiteral("speed"));
+    QCOMPARE(speed.timestamps.size(), 3);
+    QCOMPARE(speed.values, QVector<float>({1.0F, 2.0F, 9.0F}));
+    QCOMPARE(guarded.channels.value(QStringLiteral("rpm")).values.size(), speed.timestamps.size());
+    for (qsizetype index = 1; index < speed.timestamps.size(); ++index) {
+        QVERIFY(speed.timestamps[index] > speed.timestamps[index - 1]);
+    }
+    QVERIFY(guarded.warnings.size() >= 6);
+}
+
+void TelemetryCoreTests::rejectsUnsafeVboDerivedTimes_data()
+{
+    QTest::addColumn<QString>("rows");
+    QTest::newRow("positive-finite-extreme") << QStringLiteral("1e308 1\n1.1e308 2");
+    QTest::newRow("negative-finite-extreme") << QStringLiteral("-1e308 1\n1e308 2");
+    QTest::newRow("finite-elapsed-exceeds-microseconds")
+        << QStringLiteral("-6000000000000 1\n6000000000000 2");
+    QTest::newRow("finite-backward-difference-exceeds-range")
+        << QStringLiteral("6000000000000 1\n-6000000000000 2");
+    QTest::newRow("mixed-clock-extreme-relative")
+        << QStringLiteral("23:59:59 1\n00:00:00 2\n1e308 3");
+    QTest::newRow("elapsed-precision-collapse")
+        << QStringLiteral("-1000000000000 1\n0 2\n0.000001 3");
+    const double boundary = 0x1p63 / 1'000'000.0;
+    QTest::newRow("rounded-up-int64-boundary")
+        << QStringLiteral("0 1\n%1 2").arg(boundary, 0, 'g', 17);
+}
+
+void TelemetryCoreTests::rejectsUnsafeVboDerivedTimes()
+{
+    QFETCH(QString, rows);
+    QVERIFY_THROWS_EXCEPTION(VboParseError,
+        (void) VboParser::parse(QStringLiteral("[column names]\ntime speed\n[data]\n") + rows));
+}
+
+void TelemetryCoreTests::preservesMixedVboClocksAcrossMidnight()
+{
+    const auto session = VboParser::parse(
+        u"[column names]\ntime speed rpm\n[data]\n"
+        "23:59:59 10 100\n0 20 200\n00:00:00 30 300\n"
+        "86401 40 400\n00:00:02 50 500\n00:00:02 60 600\n"
+        "00:00:01 70 700\n00:00:03 80 800");
+    QCOMPARE(session.duration, 4.0);
+    QCOMPARE(session.sampleCount, 5);
+    QCOMPARE(session.channels.value("speed").values, QVector<float>({10, 30, 40, 50, 80}));
+    QCOMPARE(session.channels.value("rpm").values, QVector<float>({100, 300, 400, 500, 800}));
+    for (const auto &channel : session.channels) {
+        QCOMPARE(channel.timestamps, QVector<double>({0, 1, 2, 3, 4}));
+        for (const double timestamp : channel.timestamps) QVERIFY(std::isfinite(timestamp));
+    }
+    QCOMPARE(session.warnings.size(), 4); // Backward, rollover, duplicate, backward.
+}
+
+void TelemetryCoreTests::rejectsOverflowingTelemetryChartRanges()
+{
+    const auto session = VboParser::parse(u"[column names]\ntime speed\n[data]\n0 1\n1 2");
+    QVERIFY(session.sampledSegments("speed", -1e308, 1e308, 10).isEmpty());
+    QVERIFY(session.sampledSegments("speed", 1e308, -1e308, 10).isEmpty());
+    const auto segments = session.sampledSegments("speed", 0, 1, std::numeric_limits<int>::max());
+    QCOMPARE(segments.size(), 1);
+    QCOMPARE(segments[0], QVector<QPointF>({{0, 1}, {1, 2}}));
+    const auto point = session.sampledSegments("speed", 1, 1, 10);
+    QCOMPARE(point.size(), 1);
+    QCOMPARE(point[0], QVector<QPointF>({{1, 2}}));
+}
+
+void TelemetryCoreTests::cancelsVboParsingDeterministically()
+{
+    QString text = QStringLiteral("[column names]\ntime speed\n[data]\n");
+    text.reserve(200'000);
+    for (int row = 0; row < 10'000; ++row) text += QStringLiteral("%1 %2\n").arg(row).arg(row % 200);
+    int checks = 0;
+    QVERIFY_THROWS_EXCEPTION(
+        OperationCancelled,
+        (void) VboParser::parse(text, [&checks] { return ++checks == 4; }));
+    QVERIFY(checks >= 4);
+}
+
+void TelemetryCoreTests::cachesTelemetryChannelCadence()
+{
+    TelemetryChannel regular;
+    regular.timestamps = {0.0, 0.1, 0.2, 0.3, 0.4};
+    QCOMPARE(telemetryGapThreshold(regular, 0.0), 0.3);
+    QCOMPARE(telemetryGapThreshold(regular, 0.75), 0.75);
+    QCOMPARE(regular.cadenceStatisticComputationCount, qsizetype(1));
+
+    TelemetryChannel sparse;
+    sparse.timestamps = {0.0, 0.5, 2.0, 3.5};
+    QCOMPARE(telemetryGapThreshold(sparse, 0.0), 4.5);
+    QCOMPARE(sparse.cadenceStatisticComputationCount, qsizetype(1));
+
+    TelemetryChannel guarded;
+    guarded.timestamps = {0.0, 0.2, 0.2, std::numeric_limits<double>::quiet_NaN(), 0.8};
+    QCOMPARE(telemetryGapThreshold(guarded, 0.4), 0.6);
+    for (int lookup = 0; lookup < 10'000; ++lookup) {
+        QCOMPARE(telemetryGapThreshold(guarded, 0.4), 0.6);
+    }
+    QCOMPARE(guarded.cadenceStatisticComputationCount, qsizetype(1));
+}
+
+void TelemetryCoreTests::enforcesVboResourceLimits()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QFile oversized(directory.filePath(QStringLiteral("oversized.vbo")));
+    QVERIFY(oversized.open(QIODevice::WriteOnly));
+    QVERIFY(oversized.resize(VboParser::kMaximumFileBytes + 1));
+    oversized.close();
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError, (void) VboParser::parseFile(oversized.fileName()));
+
+    QStringList names;
+    QStringList values;
+    for (qsizetype column = 0; column <= VboParser::kMaximumColumns; ++column) {
+        names.append(QStringLiteral("c%1").arg(column));
+        values.append(QStringLiteral("1"));
+    }
+    QVERIFY_THROWS_EXCEPTION(
+        ResourceLimitError,
+        (void) VboParser::parse(QStringLiteral("[column names]\n%1\n[data]\n%2")
+                                    .arg(names.join(' '), values.join(' '))));
+
+    QString rows = QStringLiteral("[column names]\ntime speed\n[data]\n");
+    rows.reserve(static_cast<qsizetype>(VboParser::kMaximumDataRows) * 4);
+    for (qsizetype row = 0; row <= VboParser::kMaximumDataRows; ++row) rows += QStringLiteral("0 1\n");
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError, (void) VboParser::parse(rows));
+
+    const QString longField(VboParser::kMaximumFieldCharacters + 1, QLatin1Char('1'));
+    QVERIFY_THROWS_EXCEPTION(
+        ResourceLimitError,
+        (void) VboParser::parse(
+            QStringLiteral("[column names]\ntime speed\n[data]\n0 %1").arg(longField)));
+}
+
+void TelemetryCoreTests::preservesVboScannerFormats()
+{
+    const auto comma = VboParser::parse(
+        u"\ufeff# ignored\r\n[column names]\r\ntime, 'speed',\r\n"
+        "rpm, sensor\u00a0name\r\n[data]\r\n0, 10, , 7, extra,\r\n"
+        "1, 20, 200, 8\r\n2, 30\r\n");
+    QCOMPARE(comma.sampleCount, 3);
+    QCOMPARE(comma.channels.value("speed").values, QVector<float>({10, 20, 30}));
+    QCOMPARE(comma.channels.value("speed").timestamps, QVector<double>({0, 1, 2}));
+    QVERIFY(std::isnan(comma.channels.value("rpm").values[0]));
+    QCOMPARE(comma.channels.value("rpm").values[1], 200.0F);
+    QVERIFY(std::isnan(comma.channels.value("rpm").values[2]));
+    QCOMPARE(comma.channels.value(QStringLiteral("sensor\u00a0name")).values[0], 7.0F);
+    QCOMPARE(comma.warnings, QStringList({"Row 1: ignored 2 extra value(s).",
+                                        "Row 3: missing 2 value(s)."}));
+
+    const auto whitespace = VboParser::parse(
+        u"[column names]\ntime\tspeed\nrpm\vsensor\u00a0name\n[data]\n"
+        "0\t10\v100\f7\n1 20\r200 8");
+    QCOMPARE(whitespace.sampleCount, 2);
+    QCOMPARE(whitespace.channels.value("rpm").values, QVector<float>({100, 200}));
+    QCOMPARE(whitespace.channels.value(QStringLiteral("sensor\u00a0name")).values,
+             QVector<float>({7, 8}));
+    QVERIFY(whitespace.warnings.isEmpty());
+}
+
+void TelemetryCoreTests::boundsSeparatorHeavyVboRows()
+{
+    const QString separators(200'000, QLatin1Char(','));
+    const QString prefix = QStringLiteral("[column names]\ntime,speed\n[data]\n0,42");
+    const auto parsed = VboParser::parse(prefix + separators);
+    QCOMPARE(parsed.sampleCount, 1);
+    QCOMPARE(parsed.channels.value("speed").values, QVector<float>({42}));
+    QCOMPARE(parsed.warnings, QStringList({"Row 1: ignored 200000 extra value(s)."}));
+    // Ignored values still have to respect the field limit.
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
+        (void) VboParser::parse(prefix + separators
+            + QString(VboParser::kMaximumFieldCharacters + 1, QLatin1Char('x'))));
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
+        (void) VboParser::parse(QStringLiteral("[column names]\n") + separators
+            + QStringLiteral("\n[data]\n0")));
+}
+
+void TelemetryCoreTests::enforcesVboScannerBoundaries()
+{
+    const QString valid = QStringLiteral("[column names]\ntime speed\n[data]\n0 42");
+    const QString comment = QStringLiteral("#")
+        + QString(VboParser::kMaximumLineCharacters - 1, QLatin1Char('x'));
+    QCOMPARE(VboParser::parse(comment + QStringLiteral("\r\n") + valid).sampleCount, 1);
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
+        (void) VboParser::parse(comment + QStringLiteral("x\n") + valid));
+    // A terminal CR is content, unlike CR in CRLF.
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
+        (void) VboParser::parse(valid + QStringLiteral("\n") + comment + QLatin1Char('\r')));
+
+    const QString emptyLines(VboParser::kMaximumLines - 4, QLatin1Char('\n'));
+    QCOMPARE(VboParser::parse(emptyLines + valid).sampleCount, 1);
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
+        (void) VboParser::parse(emptyLines + valid + QLatin1Char('\n')));
+
+    QStringList names{"time"};
+    QStringList values{"0"};
+    for (qsizetype index = 1; index < VboParser::kMaximumColumns; ++index) {
+        names.append(QStringLiteral("c%1").arg(index));
+        values.append("1");
+    }
+    const QString wide = QStringLiteral("[column names]\n%1\n[data]\n%2")
+        .arg(names.join(' '), values.join(' '));
+    QCOMPARE(VboParser::parse(wide).channels.size(), VboParser::kMaximumColumns - 1);
+
+    const QString field(VboParser::kMaximumFieldCharacters, QLatin1Char('x'));
+    const QString header = QStringLiteral("[column names]\ntime,speed,%1\n[data]\n0,42,1");
+    QVERIFY(VboParser::parse(header.arg(field)).channels.contains(field));
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
+        (void) VboParser::parse(header.arg(field + QLatin1Char('x'))));
+    // Trimming must not turn harmless padding into an oversized field.
+    const QString padding(VboParser::kMaximumFieldCharacters + 1, QChar(0x00a0));
+    const QString padded = QStringLiteral("[column names]\ntime,speed\n[data]\n0,")
+        + padding + QStringLiteral("42") + padding + QLatin1Char(',');
+    QCOMPARE(VboParser::parse(padded).channels.value("speed").values[0], 42.0F);
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
+        (void) VboParser::parse(QStringLiteral("[column names]\ntime,speed\n[data]\n0,4")
+            + padding + QStringLiteral("2")));
+    // A logical comma field can span header lines; no unbounded join is needed.
+    const QString half(VboParser::kMaximumFieldCharacters / 2, QLatin1Char('x'));
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
+        (void) VboParser::parse(QStringLiteral("[column names]\ntime,") + half
+            + QLatin1Char('\n') + half + QStringLiteral("\n[data]\n0,1")));
+}
+
+void TelemetryCoreTests::cancelsVboScanningBeforeLimitFailures_data()
+{
+    QTest::addColumn<QString>("source");
+    QTest::newRow("too-many-lines") << QString(VboParser::kMaximumLines, QLatin1Char('\n'));
+    QTest::newRow("oversized-line")
+        << QString(VboParser::kMaximumLineCharacters + 1, QLatin1Char('x'));
+    QTest::newRow("oversized-field")
+        << (QStringLiteral("[column names]\ntime,speed\n[data]\n0,")
+            + QString(VboParser::kMaximumFieldCharacters + 1, QLatin1Char('x')));
+    QTest::newRow("too-many-comma-columns")
+        << (QStringLiteral("[column names]\n") + QString(200'000, QLatin1Char(','))
+            + QStringLiteral("\n[data]\n0"));
+}
+
+void TelemetryCoreTests::cancelsVboScanningBeforeLimitFailures()
+{
+    QFETCH(QString, source);
+    int checks = 0;
+    QVERIFY_THROWS_EXCEPTION(OperationCancelled,
+        (void) VboParser::parse(source, [&checks] { return ++checks == 4; }));
+    QCOMPARE(checks, 4);
+}
+
+void TelemetryCoreTests::cancelsVboFieldScanningAtEveryCheckpoint()
+{
+    const QString source = QStringLiteral("[column names]\ntime,\nspeed\n[data]\n0,42")
+        + QString(16'384, QLatin1Char(','));
+    int totalChecks = 0;
+    QCOMPARE(VboParser::parse(source, [&] { ++totalChecks; return false; }).sampleCount, 1);
+    // Exercise cancellation throughout a successful parse, including scanning
+    // discarded fields. Do not assume a particular number or ordering of polls.
+    for (int stopAt = 1; stopAt <= totalChecks; ++stopAt) {
+        int checks = 0;
+        QVERIFY_THROWS_EXCEPTION(OperationCancelled,
+            (void) VboParser::parse(source, [&] { return ++checks == stopAt; }));
+        QCOMPARE(checks, stopAt);
+    }
+}
+
+void TelemetryCoreTests::convertsArcMinuteCoordinates()
+{
+    const auto session = VboParser::parse(
+        u"[header]\ncoordinate units = arc-minutes\n[column names]\ntime latitude longitude\n[data]\n0 3120 -1260\n1 3126 -1266");
+    QCOMPARE(session.channels.value("latitude").values[0], 52.0F);
+    QCOMPARE(session.channels.value("longitude").values[0], -21.0F);
+}
+
+void TelemetryCoreTests::resolvesCoordinateEvidence_data()
+{
+    QTest::addColumn<int>("format");
+    QTest::addColumn<double>("latitude");
+    QTest::addColumn<double>("longitude");
+    for (int format = 0; format < 3; ++format) {
+        for (const double lat : {-0.25, 0.25}) {
+            for (const double lon : {-0.25, 0.25}) {
+                const auto label = QString("format-%1-lat-%2-lon-%3").arg(format).arg(lat).arg(lon).toUtf8();
+                QTest::newRow(label.constData()) << format << lat << lon;
+            }
+        }
+        QTest::newRow(qPrintable(QString("format-%1-cross-both-zeroes").arg(format)))
+            << format << -0.00009 << -0.00009;
+        QTest::newRow(qPrintable(QString("format-%1-only-one-axis-large").arg(format)))
+            << format << 52.0 << 0.25;
+    }
+}
+
+void TelemetryCoreTests::resolvesCoordinateEvidence()
+{
+    QFETCH(int, format);
+    QFETCH(double, latitude);
+    QFETCH(double, longitude);
+    const double multiplier = format == 0 ? 1.0 : 60.0;
+    const auto number = [multiplier](double degrees) {
+        return QString::number(degrees * multiplier, 'f', 10);
+    };
+    const QString prefix = format == 2
+        ? "[comments]\nGenerated by RaceChrono Pro v10.2.4\n"
+        : QString("[HEADER]\nCoordinate Units : %1\ncoordinate units = %1\n")
+            .arg(format == 0 ? "Degrees" : "Arc-Minutes");
+    const QString text = prefix
+        + QString("[laptiming]\nStart %1 %2 %1 %3 synthetic\n"
+                  "[column names]\ntime lat long speed\n[data]\n0 %2 %1 72\n1 %3 %4 73\n")
+            .arg(number(longitude), number(latitude), number(latitude + .00018), number(longitude + .00018));
+    const auto session = VboParser::parse(text);
+    QVERIFY(session.warnings.isEmpty());
+    QVERIFY(std::abs(session.valueAt("latitude", 0).value() - latitude) < 2e-6);
+    QVERIFY(std::abs(session.valueAt("longitude", 0).value() - longitude) < 2e-6);
+    QCOMPARE(session.metadata.value("gpsCoordinateUnit"), format == 0 ? QString("degrees") : QString("arc-minutes"));
+    QCOMPARE(session.metadata.value("gpsCoordinateEvidence"), format == 2
+        ? QString("racechrono-pro-10.2.4") : QString("header-coordinate-units"));
+    const auto geometry = buildTrackGeometry(session);
+    QVERIFY(geometry.valid);
+    QVERIFY(std::abs(geometry.originLatitude - latitude) < 2e-6);
+    QVERIFY(std::abs(geometry.originLongitude - longitude) < 2e-6);
+    QCOMPARE(currentTrackPoint(session, 0, geometry).value(), geometry.points.first());
+    QCOMPARE(session.timingGates.size(), 1);
+    const auto &gate = session.timingGates.first();
+    if (format == 2) {
+        QVERIFY(std::abs((gate.endpointA.latitudeDegrees + gate.endpointB.latitudeDegrees) / 2 - latitude) < 1e-10);
+        QVERIFY(std::abs((gate.endpointA.longitudeDegrees + gate.endpointB.longitudeDegrees) / 2 - longitude) < 1e-10);
+    } else {
+        QVERIFY(std::abs(gate.endpointA.latitudeDegrees - latitude) < 1e-10);
+        QVERIFY(std::abs(gate.endpointA.longitudeDegrees - longitude) < 1e-10);
+        QVERIFY(std::abs(gate.endpointB.latitudeDegrees - latitude - .00018) < 1e-10);
+    }
+    const auto width = projectCoordinate(gate.endpointB, gate.endpointA);
+    QVERIFY(std::abs(std::hypot(width.eastMeters, width.northMeters) - 20.0151) < .01);
+}
+
+void TelemetryCoreTests::withholdsUnresolvedCoordinates_data()
+{
+    QTest::addColumn<QString>("prefix");
+    QTest::newRow("missing") << "";
+    QTest::newRow("unknown-exporter") << "[comments]\nGenerated by Unknown v1\n";
+    QTest::newRow("unverified-racechrono") << "[comments]\nGenerated by RaceChrono Pro v99.0\n";
+    QTest::newRow("unsupported-unit") << "[header]\ncoordinate units = radians\n";
+    QTest::newRow("empty-unit") << "[header]\ncoordinate units =\n";
+    QTest::newRow("conflicting-units") << "[header]\ncoordinate units = degrees\ncoordinate units = arc-minutes\n";
+    QTest::newRow("invalid-then-valid") << "[header]\ncoordinate units = radians\ncoordinate units = degrees\n";
+    QTest::newRow("exporter-unit-conflict") << "[comments]\nGenerated by RaceChrono Pro v10.2.4\n[header]\ncoordinate units = degrees\n";
+    QTest::newRow("conflicting-exporters") << "[comments]\nGenerated by RaceChrono Pro v10.2.4\nGenerated by Unknown v1\n[header]\ncoordinate units = arc-minutes\n";
+    QTest::newRow("reverse-exporter-conflict") << "[comments]\nGenerated by Unknown v1\nGenerated by RaceChrono Pro v10.2.4\n";
+    QTest::newRow("spoofed-derived-metadata") << "[header]\ngpsCoordinateUnit = degrees\ngpsCoordinateEvidence = racechrono-pro-10.2.4\ntimingGateFormat = fake\ngpsLongitudeConvention = west-positive\n";
+}
+
+void TelemetryCoreTests::withholdsUnresolvedCoordinates()
+{
+    QFETCH(QString, prefix);
+    const auto session = VboParser::parse(prefix
+        + "[laptiming]\nStart 15 15 15 15.01 ambiguous\n"
+          "[column names]\ntime latitude longitude speed\n[data]\n0 15 15 72\n1 3120 1260 73\n");
+    QCOMPARE(session.sampleCount, 2);
+    QCOMPARE(session.valueAt("speed", 0).value(), 72.0);
+    QCOMPARE(session.valueAt("speed", 1).value(), 73.0);
+    QVERIFY(!session.valueAt("latitude", 0));
+    QVERIFY(!session.valueAt("longitude", 1));
+    QVERIFY(!buildTrackGeometry(session).valid);
+    QVERIFY(session.timingGates.isEmpty());
+    QCOMPARE(session.metadata.value("gpsCoordinateUnit"), QString("unresolved"));
+    QCOMPARE(session.metadata.value("gpsCoordinateEvidence"), QString("unresolved"));
+    QVERIFY(!session.metadata.contains("timingGateFormat"));
+    QVERIFY(!session.metadata.contains("gpsLongitudeConvention"));
+    QVERIFY(session.warnings.join(' ').contains("GPS coordinates and timing gates unavailable"));
+}
+
+void TelemetryCoreTests::validatesDeclaredCoordinateBounds()
+{
+    for (const auto unit : {CoordinateUnit::Degrees, CoordinateUnit::ArcMinutes}) {
+        const double multiplier = unit == CoordinateUnit::Degrees ? 1.0 : 60.0;
+        for (const double sign : {-1.0, 1.0}) {
+            QCOMPARE(normalizeCoordinateDegrees(CoordinateAxis::Latitude, sign * 90 * multiplier, unit).value(), sign * 90);
+            QCOMPARE(normalizeCoordinateDegrees(CoordinateAxis::Longitude, sign * 180 * multiplier, unit).value(), sign * 180);
+            QVERIFY(!normalizeCoordinateDegrees(CoordinateAxis::Latitude, sign * 91 * multiplier, unit));
+            QVERIFY(!normalizeCoordinateDegrees(CoordinateAxis::Longitude, sign * 181 * multiplier, unit));
+        }
+        QVERIFY(!normalizeCoordinateDegrees(CoordinateAxis::Latitude, std::numeric_limits<double>::quiet_NaN(), unit));
+        QVERIFY(!normalizeCoordinateDegrees(CoordinateAxis::Longitude, std::numeric_limits<double>::infinity(), unit));
+    }
+    const auto session = VboParser::parse(
+        u"[header]\ncoordinate units = degrees\n[laptiming]\nStart 15 91 15 89 invalid\n"
+        "[column names]\ntime latitude longitude speed\n[data]\n0 0 0 72\n1 91 181 73\n");
+    QVERIFY(!session.valueAt("latitude", 1));
+    QVERIFY(!session.valueAt("longitude", 1));
+    QVERIFY(session.timingGates.isEmpty());
+    const auto geometry = buildTrackGeometry(session);
+    QVERIFY(geometry.valid);
+    QVERIFY(!currentTrackPoint(session, 1, geometry));
+    auto arbitrary = session;
+    arbitrary.channels["latitude"].values[1] = 91;
+    arbitrary.channels["longitude"].values[1] = 181;
+    QVERIFY(!currentTrackPoint(arbitrary, 1, geometry));
+}
+
+void TelemetryCoreTests::parsesBoundedRaceChronoTimingGates()
+{
+    QString source = QStringLiteral(
+        "[header]\ncoordinate units = degrees\n[laptiming]\n"
+        "Start 21.0000 52.0000 21.0000 52.0002 main straight\n"
+        "Split 21.1000 52.1000 21.1000 52.1002 sector one\n"
+        "Start malformed gate\n"
+        "[column names]\n"
+        "time latitude longitude\n"
+        "[data]\n"
+        "0 52.0 21.0\n"
+        "1 52.0001 21.0001\n");
+    const TelemetrySession parsed = VboParser::parse(source);
+    QCOMPARE(parsed.timingGates.size(), qsizetype(2));
+    QCOMPARE(parsed.timingGates[0].type, TimingGateType::Start);
+    QCOMPARE(parsed.timingGates[0].sourceDescription, QStringLiteral("main straight"));
+    QCOMPARE(parsed.timingGates[1].type, TimingGateType::Split);
+    QVERIFY(std::any_of(parsed.warnings.cbegin(), parsed.warnings.cend(), [](const QString &warning) {
+        return warning.contains(QStringLiteral("Timing line 3 ignored"));
+    }));
+
+    QString bounded = QStringLiteral("[header]\ncoordinate units = degrees\n[laptiming]\n");
+    for (int index = 0; index < 129; ++index) {
+        bounded += QStringLiteral("Start 21.0000 52.0000 21.0000 52.0002 gate %1\n").arg(index);
+    }
+    bounded += QStringLiteral("[column names]\ntime latitude longitude\n[data]\n0 52.0 21.0\n");
+    const TelemetrySession limited = VboParser::parse(bounded);
+    QCOMPARE(limited.timingGates.size(), qsizetype(128));
+    QVERIFY(std::any_of(limited.warnings.cbegin(), limited.warnings.cend(), [](const QString &warning) {
+        return warning.contains(QStringLiteral("supported limit of 128"));
+    }));
+}
+
+void TelemetryCoreTests::derivesDirectionalPassesAndCompleteLaps()
+{
+    const TimingGate startGate{TimingGateType::Start, QStringLiteral("Start"),
+                               {52.0, 21.0}, {52.0002, 21.0}, {}};
+    const auto sessionFor = [](const QVector<double> &times,
+                               const QVector<float> &latitudes,
+                               const QVector<float> &longitudes) {
+        TelemetrySession session;
+        TelemetryChannel latitude;
+        latitude.name = QStringLiteral("latitude");
+        latitude.timestamps = times;
+        latitude.values = latitudes;
+        TelemetryChannel longitude;
+        longitude.name = QStringLiteral("longitude");
+        longitude.timestamps = times;
+        longitude.values = longitudes;
+        session.channels.insert(latitude.name, latitude);
+        session.channels.insert(longitude.name, longitude);
+        session.aliases.insert(latitude.name, latitude.name);
+        session.aliases.insert(longitude.name, longitude.name);
+        session.duration = times.constLast();
+        session.sampleCount = times.size();
+        return session;
+    };
+    constexpr float midLatitude = 52.0001F;
+    constexpr float northLatitude = 52.0008F;
+    constexpr float eastLongitude = 21.0002F;
+    constexpr float westLongitude = 20.9998F;
+    const TelemetrySession laps = sessionFor(
+        {0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 11.0,
+         12.0, 13.0, 14.0, 15.0},
+        {midLatitude, midLatitude, midLatitude, northLatitude, northLatitude,
+         midLatitude, midLatitude, northLatitude, northLatitude, midLatitude,
+         midLatitude, northLatitude, northLatitude, midLatitude, midLatitude},
+        {eastLongitude, eastLongitude, westLongitude, westLongitude, eastLongitude,
+         eastLongitude, westLongitude, westLongitude, eastLongitude, eastLongitude,
+         westLongitude, westLongitude, eastLongitude, eastLongitude, westLongitude});
+    const LapSession detected = detectLaps(laps, startGate);
+    QCOMPARE(detected.status, LapSessionStatus::Available);
+    QCOMPARE(detected.acceptedPasses.size(), qsizetype(4));
+    QCOMPARE(detected.timedLaps.size(), qsizetype(3));
+    QVERIFY(qAbs(detected.timedLaps[0].durationSeconds - 4.0) < 0.001);
+    QVERIFY(qAbs(detected.timedLaps[1].durationSeconds - 5.0) < 0.001);
+    QVERIFY(qAbs(detected.timedLaps[2].durationSeconds - 4.0) < 0.001);
+    QCOMPARE(detected.fastestLapIndex, std::optional<qsizetype>(0));
+    QVERIFY(qAbs(detected.timedLaps[1].deltaToBestSeconds - 1.0) < 0.001);
+
+    const TelemetrySession reverseCrossing = sessionFor(
+        {0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0},
+        {midLatitude, midLatitude, midLatitude, northLatitude, midLatitude,
+         midLatitude, northLatitude},
+        {eastLongitude, eastLongitude, westLongitude, westLongitude, westLongitude,
+         eastLongitude, eastLongitude});
+    const LapSession directional = detectLaps(reverseCrossing, startGate);
+    QCOMPARE(directional.acceptedPasses.size(), qsizetype(1));
+    QCOMPARE(directional.diagnostics.rejectedOppositeDirectionClusters, qsizetype(1));
+}
+
+void TelemetryCoreTests::finalizesGatePassWhenTelemetryEndsInsideCorridor()
+{
+    TelemetrySession session;
+    const auto addCoordinateChannel = [&session](
+                                          const QString &name, const QVector<float> &values) {
+        TelemetryChannel channel;
+        channel.name = name;
+        channel.timestamps = {0.0, 1.0, 2.0};
+        channel.values = values;
+        session.channels.insert(name, channel);
+        session.aliases.insert(name, name);
+    };
+    addCoordinateChannel(QStringLiteral("latitude"), {52.0001F, 52.0001F, 52.0001F});
+    addCoordinateChannel(QStringLiteral("longitude"), {21.0002F, 21.0002F, 21.0F});
+    session.duration = 2.0;
+
+    TimingGate startGate;
+    startGate.type = TimingGateType::Start;
+    startGate.endpointA = {52.0, 21.0};
+    startGate.endpointB = {52.0002, 21.0};
+
+    const LapSession result = detectLaps(session, startGate);
+    QCOMPARE(result.status, LapSessionStatus::InsufficientPasses);
+    QCOMPARE(result.acceptedPasses.size(), qsizetype(1));
+    QVERIFY(qAbs(result.acceptedPasses.constFirst().telemetryTime - 2.0) < 0.001);
+}
+
+void TelemetryCoreTests::parsesOptionalRealVbo()
+{
+    const QString path = qEnvironmentVariable("FLAPPEDEAR_REAL_VBO");
+    if (path.isEmpty()) {
+        QSKIP("FLAPPEDEAR_REAL_VBO is not set");
+    }
+    const auto session = VboParser::parseFile(path);
+    QVERIFY(session.sampleCount > 0);
+    QVERIFY(!session.channels.isEmpty());
+    QVERIFY(std::isfinite(session.duration));
+    QVERIFY(session.duration >= 0.0);
+    qsizetype nonFiniteSamples = 0;
+    qsizetype finiteSamples = 0;
+    for (const TelemetryChannel &channel : session.channels) {
+        QCOMPARE(channel.timestamps.size(), session.sampleCount);
+        QCOMPARE(channel.values.size(), session.sampleCount);
+        for (qsizetype index = 0; index < channel.values.size(); ++index) {
+            if (index > 0) QVERIFY(channel.timestamps[index] > channel.timestamps[index - 1]);
+            const float value = channel.values[index];
+            if (!std::isfinite(value)) {
+                ++nonFiniteSamples;
+            } else {
+                ++finiteSamples;
+            }
+        }
+    }
+    QVERIFY(finiteSamples > 0);
+    qInfo().noquote() << QStringLiteral(
+        "real VBO: %1 samples, %2 channels, duration=%3 s, timing gates=%4, "
+        "%5 parser warnings, %6 non-finite values")
+                             .arg(session.sampleCount)
+                             .arg(session.channels.size())
+                             .arg(session.duration, 0, 'f', 3)
+                             .arg(session.timingGates.size())
+                             .arg(session.warnings.size())
+                             .arg(nonFiniteSamples);
+}
+
+void TelemetryCoreTests::derivesOptionalRealVboLaps()
+{
+    const QString path = qEnvironmentVariable("FLAPPEDEAR_REAL_VBO");
+    if (path.isEmpty()) QSKIP("FLAPPEDEAR_REAL_VBO is not set");
+    const TelemetrySession session = VboParser::parseFile(path);
+    const LapSession laps = deriveSourceLapSession(session);
+    QVERIFY(laps.selectedStartGate.has_value());
+    QCOMPARE(laps.selectedStartGate->type, TimingGateType::Start);
+    for (qsizetype index = 1; index < laps.acceptedPasses.size(); ++index) {
+        QVERIFY(laps.acceptedPasses[index].telemetryTime
+                > laps.acceptedPasses[index - 1].telemetryTime);
+    }
+    QCOMPARE(laps.timedLaps.size(), std::max<qsizetype>(0, laps.acceptedPasses.size() - 1));
+    if (!laps.timedLaps.isEmpty()) {
+        QVERIFY(laps.fastestLapIndex.has_value());
+        QVERIFY(*laps.fastestLapIndex < static_cast<qsizetype>(laps.timedLaps.size()));
+    }
+    const TimingGate &gate = *laps.selectedStartGate;
+    qInfo().noquote() << QStringLiteral(
+        "real laps: status=%1 start=(%2,%3)->(%4,%5) passes=%6 complete=%7 fastest=%8")
+                             .arg(static_cast<int>(laps.status))
+                             .arg(gate.endpointA.latitudeDegrees, 0, 'f', 8)
+                             .arg(gate.endpointA.longitudeDegrees, 0, 'f', 8)
+                             .arg(gate.endpointB.latitudeDegrees, 0, 'f', 8)
+                             .arg(gate.endpointB.longitudeDegrees, 0, 'f', 8)
+                             .arg(laps.acceptedPasses.size())
+                             .arg(laps.timedLaps.size())
+                             .arg(laps.fastestLapIndex ? QString::number(*laps.fastestLapIndex + 1)
+                                                       : QStringLiteral("none"));
+    for (const GatePass &pass : laps.acceptedPasses) {
+        qInfo().noquote() << QStringLiteral(
+            "real passage: telemetry=%1 direction=%2 gateFraction=%3 distance=%4 m")
+                                 .arg(pass.telemetryTime, 0, 'f', 3)
+                                 .arg(pass.direction)
+                                 .arg(pass.gateFraction, 0, 'f', 3)
+                                 .arg(pass.closestDistanceMeters, 0, 'f', 3);
+    }
+    for (const TimedLap &lap : laps.timedLaps) {
+        qInfo().noquote() << QStringLiteral(
+            "real lap %1: telemetryStart=%2 duration=%3 delta=%4")
+                                 .arg(lap.number)
+                                 .arg(lap.startTelemetryTime, 0, 'f', 3)
+                                 .arg(lap.durationSeconds, 0, 'f', 3)
+                                 .arg(lap.deltaToBestSeconds, 0, 'f', 3);
+    }
+}
+
+void TelemetryCoreTests::buildsTrackGeometry()
+{
+    const TelemetrySession session = VboParser::parseFile(TEST_FIXTURE_PATH);
+    const TrackGeometry geometry = buildTrackGeometry(session);
+    QVERIFY(geometry.valid);
+    QCOMPARE(geometry.points.size(), 3);
+    QVERIFY(geometry.points.front().x() > 0.0);
+    QCOMPARE(geometry.points.front().y(), 1.0);
+    QVERIFY(geometry.points.back().x() < 1.0);
+    QCOMPARE(geometry.points.back().y(), 0.0);
+    const auto current = currentTrackPoint(session, 0.5, geometry);
+    QVERIFY(current.has_value());
+    QVERIFY2(
+        qAbs(current->x() - 0.5) < 0.01,
+        qPrintable(QStringLiteral("x=%1").arg(current->x(), 0, 'g', 12)));
+    QVERIFY2(
+        qAbs(current->y() - 0.5) < 0.01,
+        qPrintable(QStringLiteral("y=%1").arg(current->y(), 0, 'g', 12)));
+}
+
+void TelemetryCoreTests::cancelsTrackGeometryConstruction()
+{
+    TelemetrySession session;
+    TelemetryChannel latitude;
+    latitude.name = QStringLiteral("latitude");
+    TelemetryChannel longitude;
+    longitude.name = QStringLiteral("longitude");
+    constexpr qsizetype count = 50'000;
+    latitude.timestamps.reserve(count);
+    latitude.values.reserve(count);
+    longitude.timestamps.reserve(count);
+    longitude.values.reserve(count);
+    for (qsizetype index = 0; index < count; ++index) {
+        latitude.timestamps.append(static_cast<double>(index) / 10.0);
+        longitude.timestamps.append(static_cast<double>(index) / 10.0);
+        latitude.values.append(static_cast<float>(52.0 + index * 0.000001));
+        longitude.values.append(static_cast<float>(21.0 + index * 0.000001));
+    }
+    session.channels.insert(latitude.name, latitude);
+    session.channels.insert(longitude.name, longitude);
+    session.aliases.insert(QStringLiteral("latitude"), latitude.name);
+    session.aliases.insert(QStringLiteral("longitude"), longitude.name);
+    int checks = 0;
+    QVERIFY_THROWS_EXCEPTION(
+        OperationCancelled,
+        (void) buildTrackGeometry(session, [&checks] { return ++checks == 8; }));
+    QVERIFY(checks >= 8);
+}
+
+void TelemetryCoreTests::boundsExternalJsonDocuments()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString validPath = directory.filePath(QStringLiteral("valid.fetproject"));
+    const QByteArray valid = QJsonDocument(QJsonObject{{QStringLiteral("version"), 2}}).toJson();
+    QVERIFY(writeBytes(validPath, valid));
+    const auto accepted = BoundedJsonLoader::loadFile(
+        validPath, valid.size(), QStringLiteral("Project"));
+    QVERIFY2(accepted.success(), qPrintable(accepted.error));
+
+    const QString oversizedPath = directory.filePath(QStringLiteral("oversized.fetproject"));
+    QVERIFY(writeBytes(oversizedPath, QByteArray(ProjectLimits::projectBytes + 1, ' ')));
+    const auto oversized = BoundedJsonLoader::loadFile(
+        oversizedPath, ProjectLimits::projectBytes, QStringLiteral("Project"));
+    QVERIFY(!oversized.success());
+    QVERIFY(oversized.error.contains(QStringLiteral("limit")));
+
+    const QString malformedPath = directory.filePath(QStringLiteral("malformed.fetproject"));
+    QVERIFY(writeBytes(malformedPath, QByteArrayLiteral("{ not JSON")));
+    const auto malformed = BoundedJsonLoader::loadFile(
+        malformedPath, ProjectLimits::projectBytes, QStringLiteral("Project"));
+    QVERIFY(!malformed.success());
+    QVERIFY(malformed.error.contains(QStringLiteral("invalid JSON")));
+}
+
+QTEST_GUILESS_MAIN(TelemetryCoreTests)
+#include "TelemetryCoreTests.moc"

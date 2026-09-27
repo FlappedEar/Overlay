@@ -1425,6 +1425,15 @@ Telemetry app will. It derives the laps of two recordings with
 The run sources are built the way the project provides them: reference and
 fingerprint, derivation digest, and the import's timing-gate revision.
 
+**Core tests without the application.** `flappedear_telemetry_core_tests`
+(`TelemetryCoreTests.cpp`) links only `flappedear_telemetry_core`, with no
+Gui. It holds the tests moved out of `TelemetryTests.cpp`: VBO parsing and
+its resource bounds and cancellation, time formats and monotonic
+timestamps, coordinate evidence, timing gates and lap derivation, track
+geometry, lap references, exclusions, route inference, import grouping and
+the bounded JSON loader. The optional real-VBO tests there skip unless
+their file is set, as before.
+
 **Telemetry controllers without the editor.** `flappedear_telemetry_app_tests`
 links only `flappedear_telemetry_app` (Qt Core, no Gui) and drives
 `TelemetryController`:
