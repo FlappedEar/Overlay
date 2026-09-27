@@ -3,7 +3,7 @@
 // vehicle health applies to every run. One background worker decodes each
 // run's recording once.
 
-#include "app/AppController.h"
+#include "app/AnalysisController.h"
 #include "telemetry/ChannelSummary.h"
 #include "telemetry/OutingChannelSummaries.h"
 #include "telemetry/OutingLaps.h"
@@ -12,7 +12,7 @@
 
 using namespace FlappedEar;
 
-void AppController::initializeOutingChannelSummaries()
+void AnalysisController::initializeOutingChannelSummaries()
 {
     connect(&m_channelSummariesWatcher, &QFutureWatcher<ChannelSummariesResult>::finished, this, [this] {
         auto result = m_channelSummariesWatcher.future().takeResult();
@@ -22,7 +22,7 @@ void AppController::initializeOutingChannelSummaries()
         m_channelSummariesRuns = std::move(result.runs);
         emit outingChannelSummariesChanged();
     });
-    connect(this, &AppController::outingLapsChanged, this, [this] {
+    connect(this, &AnalysisController::outingLapsChanged, this, [this] {
         if (m_channelSummariesState == "idle") return;
         // Summaries depend only on the recordings. Re-deriving laps (e.g.
         // after Save As moves the project) keeps them; decide once loaded.
@@ -37,7 +37,7 @@ void AppController::initializeOutingChannelSummaries()
     });
 }
 
-QByteArray AppController::channelSummariesInputKey() const
+QByteArray AnalysisController::channelSummariesInputKey() const
 {
     // Each run's recording identity, independent of where the project is saved.
     QByteArray key;
@@ -48,13 +48,13 @@ QByteArray AppController::channelSummariesInputKey() const
     return key;
 }
 
-QVariantMap AppController::outingChannelSummaries() const
+QVariantMap AnalysisController::outingChannelSummaries() const
 {
     return {{"state", m_channelSummariesState}, {"message", m_channelSummariesMessage},
         {"algorithm", QString::fromLatin1(channelSummaryAlgorithm)}, {"runs", m_channelSummariesRuns}};
 }
 
-void AppController::requestOutingChannelSummaries()
+void AnalysisController::requestOutingChannelSummaries()
 {
     if (m_channelSummariesState == "loading" || outingLapsLoading()) return;
     ++m_channelSummariesRequest;
@@ -75,13 +75,13 @@ void AppController::requestOutingChannelSummaries()
     m_channelSummariesMessage.clear();
     emit outingChannelSummariesChanged();
     m_channelSummariesWatcher.setFuture(QtConcurrent::run(
-        [rows = m_outingRawLapRows, sourcesByRunId, projectPath = m_documentState.projectPath(),
+        [rows = m_outingRawLapRows, sourcesByRunId, projectPath = m_document.documentProjectPath(),
             request = m_channelSummariesRequest, cancellation = m_channelSummariesCancellation] {
             return computeOutingChannelSummaries(rows, sourcesByRunId, projectPath, request, cancellation);
         }));
 }
 
-AppController::ChannelSummariesResult AppController::computeOutingChannelSummaries(QVector<OutingLapRow> rows,
+AnalysisController::ChannelSummariesResult AnalysisController::computeOutingChannelSummaries(QVector<OutingLapRow> rows,
     const QHash<QString, QJsonObject> sourcesByRunId, const QString projectPath, const quint64 request,
     const std::shared_ptr<std::atomic_bool> &cancellation)
 {
@@ -89,7 +89,7 @@ AppController::ChannelSummariesResult AppController::computeOutingChannelSummari
     return {request, std::move(summary.error), std::move(summary.runs)};
 }
 
-QVariantMap AppController::comparisonHeartRate(const double startMeters, const double endMeters) const
+QVariantMap AnalysisController::comparisonHeartRate(const double startMeters, const double endMeters) const
 {
     if (!comparisonPairReady()) return {{"valid", false}};
     ensureComparisonProgressAxis();

@@ -6,7 +6,7 @@
 // exact revision match rather than guessing a correspondence between two
 // independently-approved sets.
 
-#include "app/AppController.h"
+#include "app/AnalysisController.h"
 #include "telemetry/OutingTheoreticalBestResults.h"
 #include "telemetry/OutingLaps.h"
 #include "telemetry/SectorTiming.h"
@@ -26,7 +26,7 @@
 using namespace FlappedEar;
 
 
-void AppController::initializeOutingTheoreticalBest()
+void AnalysisController::initializeOutingTheoreticalBest()
 {
     connect(&m_theoreticalBestWatcher, &QFutureWatcher<TheoreticalBestResult>::finished, this, [this] {
         auto result = m_theoreticalBestWatcher.future().takeResult();
@@ -74,13 +74,13 @@ void AppController::initializeOutingTheoreticalBest()
         m_theoreticalBest.population.clear();
         emit outingTheoreticalBestChanged();
     };
-    connect(this, &AppController::outingLapsChanged, this, invalidate);
-    connect(this, &AppController::documentStateChanged, this, invalidate);
+    connect(this, &AnalysisController::outingLapsChanged, this, invalidate);
+    connect(this, &AnalysisController::documentStateChanged, this, invalidate);
 }
 
-QByteArray AppController::theoreticalBestInputKey() const
+QByteArray AnalysisController::theoreticalBestInputKey() const
 {
-    const auto event = currentProjectObject().value("event").toObject();
+    const auto event = m_document.analysisProject().value("event").toObject();
     QJsonArray runs;
     for (const auto &value : event.value("runs").toArray()) {
         const auto run = value.toObject();
@@ -102,7 +102,7 @@ QByteArray AppController::theoreticalBestInputKey() const
 }
 
 
-QVariantMap AppController::outingLapConsistency() const
+QVariantMap AnalysisController::outingLapConsistency() const
 {
     QVariantMap result{{"algorithm", QString::fromLatin1(consistencyAlgorithm)},
         {"minimumSamples", minimumConsistencySamples}};
@@ -110,7 +110,7 @@ QVariantMap AppController::outingLapConsistency() const
     QVector<const OutingLapRow *> eligible;
     try {
         eligible = eligibleOutingLaps(m_outingRawLapRows, m_outingComparisonGroupId, m_outingRunConfigurations,
-            currentProjectObject().value("event").toObject().value("lapExclusions").toArray(), m_outingStaleRunIds);
+            m_document.analysisProject().value("event").toObject().value("lapExclusions").toArray(), m_outingStaleRunIds);
     } catch (const std::exception &) {
         return result;
     }
@@ -134,30 +134,30 @@ QVariantMap AppController::outingLapConsistency() const
 }
 
 
-QVariantMap AppController::outingSectorProgression() const
+QVariantMap AnalysisController::outingSectorProgression() const
 {
     return publishSectorProgression(m_theoreticalBest, m_theoreticalBestState, m_theoreticalBestMessage, m_outingProgression,
         [this](const QJsonObject &reference) { return outingLapLabel(reference); });
 }
 
-QVariantMap AppController::outingTheoreticalBest() const
+QVariantMap AnalysisController::outingTheoreticalBest() const
 {
     return publishTheoreticalBest(m_theoreticalBest, m_theoreticalBestState, m_theoreticalBestMessage,
         [this](const QJsonObject &reference) { return outingLapLabel(reference); });
 }
 
-QVariantMap AppController::outingTimeLossRanking() const
+QVariantMap AnalysisController::outingTimeLossRanking() const
 {
     return publishTimeLossRanking(m_theoreticalBest, m_theoreticalBestState, m_theoreticalBestMessage, m_timeLossAllLaps,
         [this](const QJsonObject &reference) { return outingLapLabel(reference); });
 }
 
-TimeLossRanking AppController::computeTimeLossRanking(const bool allLaps, const qsizetype maximumResults) const
+TimeLossRanking AnalysisController::computeTimeLossRanking(const bool allLaps, const qsizetype maximumResults) const
 {
     return rankOutingTimeLosses(m_theoreticalBest, allLaps, maximumResults);
 }
 
-QString AppController::outingLapLabel(const QJsonObject &reference) const
+QString AnalysisController::outingLapLabel(const QJsonObject &reference) const
 {
     const auto resolved = resolveOutingLapReference(reference.toVariantMap());
     if (resolved.value("state") != "resolved") return {};
@@ -168,14 +168,14 @@ QString AppController::outingLapLabel(const QJsonObject &reference) const
 
 
 
-void AppController::setOutingTimeLossAllLaps(const bool allLaps)
+void AnalysisController::setOutingTimeLossAllLaps(const bool allLaps)
 {
     if (m_timeLossAllLaps == allLaps) return;
     m_timeLossAllLaps = allLaps;
     emit outingTheoreticalBestChanged();
 }
 
-bool AppController::openTheoreticalBestSector(const QString &segmentId)
+bool AnalysisController::openTheoreticalBestSector(const QString &segmentId)
 {
     if (m_theoreticalBestState != "ready" || !m_theoreticalBest.actualBest) return false;
     const auto sector = std::find_if(m_theoreticalBest.best.sectors.cbegin(), m_theoreticalBest.best.sectors.cend(),
@@ -201,7 +201,7 @@ bool AppController::openTheoreticalBestSector(const QString &segmentId)
     return openComparisonEvidence(sector->sourceLapReference.toVariantMap(), against.toVariantMap(), segmentId);
 }
 
-bool AppController::openTimeLoss(const QVariantMap &loss)
+bool AnalysisController::openTimeLoss(const QVariantMap &loss)
 {
     if (m_theoreticalBestState != "ready" || !m_theoreticalBest.actualBest) return false;
     const auto segmentId = loss.value("segmentId").toString();
@@ -212,7 +212,7 @@ bool AppController::openTimeLoss(const QVariantMap &loss)
         m_theoreticalBest.actualBest->lapReference.toVariantMap(), segmentId);
 }
 
-bool AppController::openComparisonEvidence(const QVariantMap &lapA, const QVariantMap &lapB, const QString &segmentId)
+bool AnalysisController::openComparisonEvidence(const QVariantMap &lapA, const QVariantMap &lapB, const QString &segmentId)
 {
     closeOutingLap();
     if (!selectComparisonLap(0, lapA) || !selectComparisonLap(1, lapB)) return false;
@@ -226,14 +226,14 @@ bool AppController::openComparisonEvidence(const QVariantMap &lapA, const QVaria
     return true;
 }
 
-void AppController::clearComparisonFocusSegment()
+void AnalysisController::clearComparisonFocusSegment()
 {
     if (m_comparisonFocusSegmentId.isEmpty()) return;
     m_comparisonFocusSegmentId.clear();
     emit comparisonFocusSegmentIdChanged();
 }
 
-void AppController::requestOutingTheoreticalBest()
+void AnalysisController::requestOutingTheoreticalBest()
 {
     if (m_theoreticalBestState == "loading") return;
     ++m_theoreticalBestRequest;
@@ -248,7 +248,7 @@ void AppController::requestOutingTheoreticalBest()
     QVector<OutingLapRow> population;
     try {
         const auto eligible = eligibleOutingLaps(m_outingRawLapRows, m_outingComparisonGroupId,
-            m_outingRunConfigurations, currentProjectObject().value("event").toObject().value("lapExclusions").toArray(),
+            m_outingRunConfigurations, m_document.analysisProject().value("event").toObject().value("lapExclusions").toArray(),
             m_outingStaleRunIds);
         population.reserve(eligible.size());
         for (const auto *row : eligible) population.append(*row);
@@ -269,7 +269,7 @@ void AppController::requestOutingTheoreticalBest()
     QStringList runOrder;
     for (const auto &row : population) if (!runOrder.contains(row.runId)) runOrder.append(row.runId);
     std::sort(runOrder.begin(), runOrder.end());
-    const auto runs = currentProjectObject().value("event").toObject().value("runs").toArray();
+    const auto runs = m_document.analysisProject().value("event").toObject().value("runs").toArray();
     QString canonicalRunId;
     ApprovedSegmentation approved;
     for (const auto &runId : runOrder) {
@@ -301,14 +301,14 @@ void AppController::requestOutingTheoreticalBest()
     const auto actualBestReference = QJsonObject::fromVariantMap(
         m_outingRanking.value("bestOfDay").toMap().value("reference").toMap());
     m_theoreticalBestWatcher.setFuture(QtConcurrent::run(
-        [population, sourcesByRunId, projectPath = m_documentState.projectPath(), approved, canonicalRunId,
+        [population, sourcesByRunId, projectPath = m_document.documentProjectPath(), approved, canonicalRunId,
             actualBestReference, request = m_theoreticalBestRequest, cancellation = m_theoreticalBestCancellation] {
             return computeOutingTheoreticalBest(population, sourcesByRunId, projectPath, approved, canonicalRunId,
                 actualBestReference, request, cancellation);
         }));
 }
 
-AppController::TheoreticalBestResult AppController::computeOutingTheoreticalBest(QVector<OutingLapRow> population,
+AnalysisController::TheoreticalBestResult AnalysisController::computeOutingTheoreticalBest(QVector<OutingLapRow> population,
     const QHash<QString, QJsonObject> sourcesByRunId, const QString projectPath, const ApprovedSegmentation approved,
     const QString canonicalRunId, const QJsonObject actualBestReference, const quint64 request,
     const std::shared_ptr<std::atomic_bool> &cancellation)

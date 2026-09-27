@@ -4,7 +4,7 @@
 // telemetry/DayReport.h document with provenance. Nothing is recalculated
 // here; a result that has not been computed is reported as such.
 
-#include "app/AppController.h"
+#include "app/AnalysisController.h"
 #include "telemetry/ChannelSummary.h"
 #include "telemetry/DayReport.h"
 #include "telemetry/FocusAreas.h"
@@ -15,41 +15,41 @@
 using namespace FlappedEar;
 
 
-void AppController::initializeOutingDayReport()
+void AnalysisController::initializeOutingDayReport()
 {
     const auto invalidate = [this] {
         m_dayReportCache.reset();
         emit outingDayReportChanged();
     };
-    connect(this, &AppController::outingLapsChanged, this, invalidate);
-    connect(this, &AppController::outingTheoreticalBestChanged, this, invalidate);
-    connect(this, &AppController::outingChannelSummariesChanged, this, invalidate);
-    connect(this, &AppController::documentStateChanged, this, invalidate);
+    connect(this, &AnalysisController::outingLapsChanged, this, invalidate);
+    connect(this, &AnalysisController::outingTheoreticalBestChanged, this, invalidate);
+    connect(this, &AnalysisController::outingChannelSummariesChanged, this, invalidate);
+    connect(this, &AnalysisController::documentStateChanged, this, invalidate);
 }
 
-void AppController::requestOutingDayReport()
+void AnalysisController::requestOutingDayReport()
 {
     requestOutingTheoreticalBest();
     requestOutingChannelSummaries();
 }
 
-bool AppController::openFocusArea(const QVariantMap &evidence)
+bool AnalysisController::openFocusArea(const QVariantMap &evidence)
 {
     if (evidence.value("kind").toString() != "segment") return false;
     return openComparisonEvidence(evidence.value("reference").toMap(), evidence.value("against").toMap(),
         evidence.value("segmentId").toString());
 }
 
-QVariantMap AppController::outingDayReport() const
+QVariantMap AnalysisController::outingDayReport() const
 {
     if (!m_dayReportCache) m_dayReportCache = computeOutingDayReport();
     return *m_dayReportCache;
 }
 
-QVariantMap AppController::computeOutingDayReport() const
+QVariantMap AnalysisController::computeOutingDayReport() const
 {
     OutingDayReportSources sources;
-    sources.eventId = currentProjectObject().value("event").toObject().value("id").toString();
+    sources.eventId = m_document.analysisProject().value("event").toObject().value("id").toString();
     sources.groupId = m_outingComparisonGroupId;
     sources.decisionsKey = theoreticalBestInputKey();
     sources.theoreticalKey = m_theoreticalBestKey;
@@ -64,7 +64,7 @@ QVariantMap AppController::computeOutingDayReport() const
     sources.lapLabel = [this](const QJsonObject &reference) { return outingLapLabel(reference); };
     try {
         for (const auto *row : eligibleOutingLaps(m_outingRawLapRows, m_outingComparisonGroupId, m_outingRunConfigurations,
-                 currentProjectObject().value("event").toObject().value("lapExclusions").toArray(), m_outingStaleRunIds))
+                 m_document.analysisProject().value("event").toObject().value("lapExclusions").toArray(), m_outingStaleRunIds))
             sources.eligibleLaps.append(QJsonObject{{"kind", "lap"}, {"reference", row->reference},
                 {"label", QStringLiteral("%1 · LAP %2").arg(row->runName).arg(row->lapNumber)}});
     } catch (const std::exception &) {

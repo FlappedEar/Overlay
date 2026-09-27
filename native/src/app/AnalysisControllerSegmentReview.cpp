@@ -3,7 +3,7 @@
 // writes an ordinary segment into the run's "trackSegments", which is the
 // approved revision every downstream consumer must use.
 
-#include "app/AppController.h"
+#include "app/AnalysisController.h"
 #include "project/EventProjectCodec.h"
 #include "project/ProjectLimits.h"
 #include "telemetry/TrackSegmentReview.h"
@@ -82,7 +82,7 @@ QVector<ProgressRange> coverageGaps(const QVector<ProgressSegment> &trace, const
 
 } // namespace
 
-void AppController::initializeSegmentReview()
+void AnalysisController::initializeSegmentReview()
 {
     connect(&m_segmentReviewWatcher, &QFutureWatcher<SegmentReviewResult>::finished, this, [this] {
         auto result = m_segmentReviewWatcher.future().takeResult();
@@ -110,14 +110,14 @@ void AppController::initializeSegmentReview()
         emit segmentReviewChanged();
     });
     // Approvals, and any other edit of the run's stored segments, change the approved revision.
-    connect(this, &AppController::documentStateChanged, this, [this] {
+    connect(this, &AnalysisController::documentStateChanged, this, [this] {
         if (m_segmentReviewState == "idle") return;
         m_segmentReviewLayersDirty = true;
         emit segmentReviewChanged();
     });
 }
 
-void AppController::resetSegmentReview()
+void AnalysisController::resetSegmentReview()
 {
     ++m_segmentReviewRequest;
     if (m_segmentReviewCancellation) m_segmentReviewCancellation->store(true);
@@ -138,12 +138,12 @@ void AppController::resetSegmentReview()
     if (changed) emit segmentReviewChanged();
 }
 
-QString AppController::segmentReviewConfiguration() const
+QString AnalysisController::segmentReviewConfiguration() const
 {
     return m_selectedOutingLap.value("compatibilityGroupId").toString();
 }
 
-QString AppController::segmentReviewUnavailableReason() const
+QString AnalysisController::segmentReviewUnavailableReason() const
 {
     if (m_selectedOutingLap.value("type").toString() != "LAP")
         return QStringLiteral("Segment proposals need a complete timed lap.");
@@ -155,7 +155,7 @@ QString AppController::segmentReviewUnavailableReason() const
     return {};
 }
 
-void AppController::requestSegmentReview()
+void AnalysisController::requestSegmentReview()
 {
     if (m_outingLapDetailState != "ready" || !m_outingLapDetailSession || m_segmentReviewState == "loading") return;
     resetSegmentReview();
@@ -176,7 +176,7 @@ void AppController::requestSegmentReview()
         }));
 }
 
-AppController::SegmentReviewResult AppController::computeSegmentReview(std::shared_ptr<const TelemetrySession> session,
+AnalysisController::SegmentReviewResult AnalysisController::computeSegmentReview(std::shared_ptr<const TelemetrySession> session,
     const double startTime, const double endTime, const int lapNumber, const quint64 request,
     const std::shared_ptr<std::atomic_bool> &cancellation)
 {
@@ -223,15 +223,15 @@ AppController::SegmentReviewResult AppController::computeSegmentReview(std::shar
     return result;
 }
 
-double AppController::segmentReviewAxisLength() const
+double AnalysisController::segmentReviewAxisLength() const
 {
     return m_segmentReviewAxis.valid ? m_segmentReviewAxis.lengthMeters : 0.0;
 }
 
-ApprovedSegmentation AppController::currentApprovedSegmentation() const
+ApprovedSegmentation AnalysisController::currentApprovedSegmentation() const
 {
     const auto runId = m_selectedOutingLap.value("runId").toString();
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray()) {
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray()) {
         const auto run = value.toObject();
         if (run.value("id").toString() == runId)
             return approvedSegmentation(run.value("trackSegments"), segmentReviewConfiguration());
@@ -239,14 +239,14 @@ ApprovedSegmentation AppController::currentApprovedSegmentation() const
     return {};
 }
 
-QVector<SegmentReviewItem> AppController::currentSegmentReviewItems() const
+QVector<SegmentReviewItem> AnalysisController::currentSegmentReviewItems() const
 {
     if (m_segmentReviewState != "ready") return {};
     return reviewSegmentProposals(m_segmentProposals, m_editedSegmentProposals, m_rejectedSegmentProposals,
         currentApprovedSegmentation(), m_segmentReviewAxis.lengthMeters);
 }
 
-QVariantList AppController::segmentReviewItems() const
+QVariantList AnalysisController::segmentReviewItems() const
 {
     QVariantList rows;
     const auto items = currentSegmentReviewItems();
@@ -280,7 +280,7 @@ QVariantList AppController::segmentReviewItems() const
     return rows;
 }
 
-QVariantMap AppController::segmentReviewApproved() const
+QVariantMap AnalysisController::segmentReviewApproved() const
 {
     if (m_segmentReviewState == "idle") return {};
     const auto approved = currentApprovedSegmentation();
@@ -303,7 +303,7 @@ QVariantMap AppController::segmentReviewApproved() const
         {"otherConfigurationCount", approved.otherConfigurationSegments}, {"segments", segments}};
 }
 
-QVariantList AppController::mapPolylines(const double startMeters, const double endMeters) const
+QVariantList AnalysisController::mapPolylines(const double startMeters, const double endMeters) const
 {
     const double length = m_segmentReviewAxis.lengthMeters;
     if (!m_outingLapDetailSession || !m_segmentReviewAxis.valid || m_segmentReviewLapTrace.isEmpty()
@@ -330,7 +330,7 @@ QVariantList AppController::mapPolylines(const double startMeters, const double 
     return polylines;
 }
 
-QVariantList AppController::segmentReviewMapLayers() const
+QVariantList AnalysisController::segmentReviewMapLayers() const
 {
     if (!m_segmentReviewLayersDirty) return m_segmentReviewLayerCache;
     m_segmentReviewLayersDirty = false;
@@ -363,14 +363,11 @@ QVariantList AppController::segmentReviewMapLayers() const
     return m_segmentReviewLayerCache;
 }
 
-bool AppController::replaceRunField(const QString &runId, const QString &key, const QJsonValue &value,
+bool AnalysisController::replaceRunField(const QString &runId, const QString &key, const QJsonValue &value,
     const std::function<void()> &beforeNotify)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
-        || recoveryPending() || m_batchPending
-        || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
-        || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;
-    auto project = currentProjectObject();
+    if (!documentEditable()) return false;
+    auto project = m_document.analysisProject();
     auto event = project.value("event").toObject();
     auto runs = event.value("runs").toArray();
     // An empty array or object is stored as an absent key.
@@ -387,8 +384,7 @@ bool AppController::replaceRunField(const QString &runId, const QString &key, co
         project.insert("event", event);
         QString error;
         if (!ProjectLimits::validateProject(project, &error)) return false;
-        m_projectTemplate = project;
-        markPersistentChange();
+        m_document.commitAnalysisProject(project);
         if (beforeNotify) beforeNotify();
         m_segmentReviewLayersDirty = true;
         emit segmentReviewChanged();
@@ -397,7 +393,7 @@ bool AppController::replaceRunField(const QString &runId, const QString &key, co
     return false;
 }
 
-bool AppController::replaceRunTrackSegments(const QString &runId, const QJsonArray &segments, const bool recordHistory)
+bool AnalysisController::replaceRunTrackSegments(const QString &runId, const QJsonArray &segments, const bool recordHistory)
 {
     const auto before = storedRunTrackSegments(runId).toArray();
     return replaceRunField(runId, QStringLiteral("trackSegments"), segments, [&] {
@@ -405,7 +401,7 @@ bool AppController::replaceRunTrackSegments(const QString &runId, const QJsonArr
     });
 }
 
-QString AppController::approveSegmentProposal(const int index)
+QString AnalysisController::approveSegmentProposal(const int index)
 {
     const auto items = currentSegmentReviewItems();
     if (index < 0 || index >= items.size()) return QStringLiteral("This proposal is no longer available.");
@@ -419,7 +415,7 @@ QString AppController::approveSegmentProposal(const int index)
     if (segment.isEmpty()) return QStringLiteral("This proposal cannot be stored as a segment.");
     const auto runId = m_selectedOutingLap.value("runId").toString();
     QJsonValue stored;
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray())
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray())
         if (value.toObject().value("id").toString() == runId) stored = value.toObject().value("trackSegments");
     QString error;
     const auto next = withApprovedSegment(stored, segment, m_segmentReviewAxis.lengthMeters, &error);
@@ -429,12 +425,12 @@ QString AppController::approveSegmentProposal(const int index)
     return {};
 }
 
-int AppController::approveCertainSegmentProposals()
+int AnalysisController::approveCertainSegmentProposals()
 {
     const auto items = currentSegmentReviewItems();
     const auto runId = m_selectedOutingLap.value("runId").toString();
     QJsonValue stored;
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray())
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray())
         if (value.toObject().value("id").toString() == runId) stored = value.toObject().value("trackSegments");
     int approved = 0;
     for (const auto &item : items) {
@@ -452,7 +448,7 @@ int AppController::approveCertainSegmentProposals()
     return approved;
 }
 
-bool AppController::setSegmentProposalRejected(const int index, const bool rejected)
+bool AnalysisController::setSegmentProposalRejected(const int index, const bool rejected)
 {
     const auto items = currentSegmentReviewItems();
     if (index < 0 || index >= items.size()) return false;
@@ -479,7 +475,7 @@ bool AppController::setSegmentProposalRejected(const int index, const bool rejec
     return true;
 }
 
-QString AppController::editSegmentProposal(const int index, const QString &name, const QString &type,
+QString AnalysisController::editSegmentProposal(const int index, const QString &name, const QString &type,
     const double startMeters, const double endMeters)
 {
     const auto items = currentSegmentReviewItems();
@@ -508,10 +504,10 @@ QString AppController::editSegmentProposal(const int index, const QString &name,
     return {};
 }
 
-bool AppController::revokeApprovedSegment(const QString &id)
+bool AnalysisController::revokeApprovedSegment(const QString &id)
 {
     const auto runId = m_selectedOutingLap.value("runId").toString();
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray()) {
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray()) {
         const auto run = value.toObject();
         if (run.value("id").toString() != runId) continue;
         const auto next = withoutApprovedSegment(run.value("trackSegments"), id);
@@ -520,12 +516,12 @@ bool AppController::revokeApprovedSegment(const QString &id)
     return false;
 }
 
-bool AppController::discardOtherConfigurationSegments()
+bool AnalysisController::discardOtherConfigurationSegments()
 {
     const auto configuration = segmentReviewConfiguration();
     if (configuration.isEmpty()) return false;
     const auto runId = m_selectedOutingLap.value("runId").toString();
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray()) {
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray()) {
         const auto run = value.toObject();
         if (run.value("id").toString() != runId) continue;
         if (!validTrackSegments(run.value("trackSegments"))) return false;
@@ -534,19 +530,19 @@ bool AppController::discardOtherConfigurationSegments()
     return false;
 }
 
-QJsonValue AppController::storedRunValue(const QString &runId, const QString &key) const
+QJsonValue AnalysisController::storedRunValue(const QString &runId, const QString &key) const
 {
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray())
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray())
         if (value.toObject().value("id").toString() == runId) return value.toObject().value(key);
     return {};
 }
 
-QJsonValue AppController::storedRunTrackSegments(const QString &runId) const
+QJsonValue AnalysisController::storedRunTrackSegments(const QString &runId) const
 {
     return storedRunValue(runId, QStringLiteral("trackSegments"));
 }
 
-QString AppController::applySegmentEdit(const std::optional<QJsonArray> &next, const QString &error)
+QString AnalysisController::applySegmentEdit(const std::optional<QJsonArray> &next, const QString &error)
 {
     if (!next) return error.isEmpty() ? QStringLiteral("This edit is not possible.") : error;
     if (!replaceRunTrackSegments(m_selectedOutingLap.value("runId").toString(), *next))
@@ -554,7 +550,7 @@ QString AppController::applySegmentEdit(const std::optional<QJsonArray> &next, c
     return {};
 }
 
-QString AppController::editApprovedSegment(const QString &id, const QString &name, const QString &type,
+QString AnalysisController::editApprovedSegment(const QString &id, const QString &name, const QString &type,
     const double startMeters, const double endMeters, const bool keepAdjacentJoined)
 {
     if (m_segmentReviewState != "ready") return QStringLiteral("Open the segment review first.");
@@ -566,7 +562,7 @@ QString AppController::editApprovedSegment(const QString &id, const QString &nam
     return applySegmentEdit(next, error);
 }
 
-QString AppController::splitApprovedSegment(const QString &id, const double atMeters)
+QString AnalysisController::splitApprovedSegment(const QString &id, const double atMeters)
 {
     if (m_segmentReviewState != "ready") return QStringLiteral("Open the segment review first.");
     if (currentApprovedSegmentation().otherConfigurationSegments > 0)
@@ -581,7 +577,7 @@ QString AppController::splitApprovedSegment(const QString &id, const double atMe
     return applySegmentEdit(next, error);
 }
 
-QString AppController::mergeApprovedSegments(const QString &firstId, const QString &secondId)
+QString AnalysisController::mergeApprovedSegments(const QString &firstId, const QString &secondId)
 {
     if (m_segmentReviewState != "ready") return QStringLiteral("Open the segment review first.");
     if (currentApprovedSegmentation().otherConfigurationSegments > 0)
@@ -592,7 +588,7 @@ QString AppController::mergeApprovedSegments(const QString &firstId, const QStri
     return applySegmentEdit(next, error);
 }
 
-QString AppController::applySegmentHistoryStep(const bool undo)
+QString AnalysisController::applySegmentHistoryStep(const bool undo)
 {
     const auto *step = undo ? m_segmentEditHistory.nextUndo() : m_segmentEditHistory.nextRedo();
     if (!step) return undo ? QStringLiteral("Nothing to undo.") : QStringLiteral("Nothing to redo.");
@@ -612,17 +608,17 @@ QString AppController::applySegmentHistoryStep(const bool undo)
     return {};
 }
 
-QString AppController::undoSegmentEdit()
+QString AnalysisController::undoSegmentEdit()
 {
     return applySegmentHistoryStep(true);
 }
 
-QString AppController::redoSegmentEdit()
+QString AnalysisController::redoSegmentEdit()
 {
     return applySegmentHistoryStep(false);
 }
 
-QVariantMap AppController::segmentReviewProgressAt(const double x, const double y) const
+QVariantMap AnalysisController::segmentReviewProgressAt(const double x, const double y) const
 {
     if (m_segmentReviewState != "ready" || !m_segmentReviewAxis.valid || !m_outingLapDetailSession)
         return {{"error", QStringLiteral("Open the segment review first.")}};
@@ -648,7 +644,7 @@ QVariantMap AppController::segmentReviewProgressAt(const double x, const double 
     return {{"error", QStringLiteral("The lap trace is not available for picking.")}};
 }
 
-QVariantMap AppController::outingLapSectorTimes() const
+QVariantMap AnalysisController::outingLapSectorTimes() const
 {
     if (m_segmentReviewState != "ready" || !m_segmentReviewAxis.valid) return {{"valid", false}};
     const auto times = computeLapSectorTimes(currentApprovedSegmentation(), m_segmentReviewAxis.lengthMeters,
@@ -686,7 +682,7 @@ QVariantMap cornerSpeedValueMap(const CornerSpeedValue &value)
 
 } // namespace
 
-QVariantList AppController::outingLapCornerSpeeds() const
+QVariantList AnalysisController::outingLapCornerSpeeds() const
 {
     if (m_segmentReviewState != "ready" || !m_segmentReviewAxis.valid || !m_outingLapDetailSession) return {};
     const auto features = computeTrackFeatures(m_segmentReviewAxis, segmentReviewSmoothingMeters);
@@ -708,7 +704,7 @@ QVariantList AppController::outingLapCornerSpeeds() const
     return rows;
 }
 
-QVariantList AppController::outingLapBrakingMetrics() const
+QVariantList AnalysisController::outingLapBrakingMetrics() const
 {
     if (m_segmentReviewState != "ready" || !m_segmentReviewAxis.valid || !m_outingLapDetailSession) return {};
     const auto approved = currentApprovedSegmentation();
@@ -745,7 +741,7 @@ QVariantList AppController::outingLapBrakingMetrics() const
     return rows;
 }
 
-QVariantList AppController::outingLapExitMetrics() const
+QVariantList AnalysisController::outingLapExitMetrics() const
 {
     if (m_segmentReviewState != "ready" || !m_segmentReviewAxis.valid || !m_outingLapDetailSession) return {};
     const auto approved = currentApprovedSegmentation();

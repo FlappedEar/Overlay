@@ -222,14 +222,18 @@ endif()
 
 qt_add_executable(flappedear_native MACOSX_BUNDLE
     src/app/AppControllerImport.cpp
-    src/app/AppControllerComparison.cpp
-    src/app/AppControllerOuting.cpp
-    src/app/AppControllerSegmentReview.cpp
-    src/app/AppControllerCornerAnalyzer.cpp
-    src/app/AppControllerTheoreticalBest.cpp
-    src/app/AppControllerChannelSummaries.cpp
-    src/app/AppControllerDayReport.cpp
+    src/app/AnalysisControllerComparison.cpp
+    src/app/AnalysisControllerOuting.cpp
+    src/app/AnalysisControllerSegmentReview.cpp
+    src/app/AnalysisControllerCornerAnalyzer.cpp
+    src/app/AnalysisControllerTheoreticalBest.cpp
+    src/app/AnalysisControllerChannelSummaries.cpp
+    src/app/AnalysisControllerDayReport.cpp
     src/app/VideoLink.h
+    src/app/AppControllerAnalysis.cpp
+    src/app/AnalysisController.cpp
+    src/app/AnalysisController.h
+    src/app/AnalysisDocument.h
     src/app/AppController.cpp
     src/app/AppController.h
     src/main.cpp

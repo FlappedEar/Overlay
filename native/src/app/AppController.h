@@ -1,6 +1,8 @@
 #pragma once
 
 #include "app/VideoLink.h"
+#include "app/AnalysisController.h"
+#include "app/AnalysisDocument.h"
 #include "telemetry/TelemetrySessionCache.h"
 
 #include "telemetry/LapTiming.h"
@@ -58,7 +60,7 @@ class TelemetryTests;
 
 namespace FlappedEar {
 
-class AppController final : public QObject, private VideoLink {
+class AppController final : public QObject, private VideoLink, private AnalysisDocument {
     Q_OBJECT
     Q_PROPERTY(QUrl videoSource READ videoSource NOTIFY videoSourceChanged)
     Q_PROPERTY(QString videoName READ videoName NOTIFY videoSourceChanged)
@@ -221,7 +223,7 @@ public:
     // KAN-124: the document is busy with an operation that must not be
     // interleaved with analysis edits (today: an export). Analysis and import
     // guards use this, not the overlay's export state.
-    [[nodiscard]] bool documentBusy() const;
+    [[nodiscard]] bool documentBusy() const override;
     [[nodiscard]] int exportProgress() const;
     [[nodiscard]] QString exportState() const;
     [[nodiscard]] QString exportError() const;
@@ -256,17 +258,17 @@ public:
     [[nodiscard]] int windowHeight() const;
     [[nodiscard]] QUrl projectPath() const;
     [[nodiscard]] QString eventName() const;
-    [[nodiscard]] QVariantList eventRuns() const;
-    [[nodiscard]] QString activeRunId() const;
-    [[nodiscard]] bool dirty() const;
+    [[nodiscard]] QVariantList eventRuns() const override;
+    [[nodiscard]] QString activeRunId() const override;
+    [[nodiscard]] bool dirty() const override;
     [[nodiscard]] quint64 lastSavedRevision() const;
     [[nodiscard]] QString pendingDestructiveAction() const;
     [[nodiscard]] QString videoLoadState() const;
     [[nodiscard]] QString vboLoadState() const;
-    [[nodiscard]] bool projectLoading() const;
+    [[nodiscard]] bool projectLoading() const override;
     [[nodiscard]] QString projectLoadStage() const;
     [[nodiscard]] QString projectLoadError() const;
-    [[nodiscard]] bool recoveryPending() const;
+    [[nodiscard]] bool recoveryPending() const override;
     [[nodiscard]] bool recoveryDegraded() const;
     [[nodiscard]] QString recoveryError() const;
     [[nodiscard]] QString sourceMismatchType() const;
@@ -298,7 +300,7 @@ public:
     // KAN-73: opens a focus area's evidence pair in the comparison, at its segment.
     Q_INVOKABLE bool openFocusArea(const QVariantMap &evidence);
     [[nodiscard]] QVariantMap outingSectorProgression() const;
-    [[nodiscard]] bool outingTimeLossAllLaps() const { return m_timeLossAllLaps; }
+    [[nodiscard]] bool outingTimeLossAllLaps() const { return m_analysis.outingTimeLossAllLaps(); }
     void setOutingTimeLossAllLaps(bool allLaps);
     Q_INVOKABLE void requestOutingTheoreticalBest();
     Q_INVOKABLE bool openTheoreticalBestSector(const QString &segmentId);
@@ -308,16 +310,13 @@ public:
     // Opens one comparison lap in the lap view with its cursor where it
     // reaches `progressMeters`, so the run's video (if any) follows.
     Q_INVOKABLE bool openComparisonLapAtProgress(int slot, double progressMeters);
-    [[nodiscard]] QString comparisonFocusSegmentId() const { return m_comparisonFocusSegmentId; }
+    [[nodiscard]] QString comparisonFocusSegmentId() const { return m_analysis.comparisonFocusSegmentId(); }
     Q_INVOKABLE void clearComparisonFocusSegment();
     [[nodiscard]] QVariantList outingCompatibilityGroups() const;
     [[nodiscard]] QString outingComparisonGroupId() const;
     [[nodiscard]] QString outingComparisonSelectionState() const;
     Q_INVOKABLE bool setRunTrackConfiguration(
         const QString &runId, const QString &layoutId, const QString &direction);
-    [[nodiscard]] QString batchImportState() const { return m_batchState; }
-    [[nodiscard]] QString batchImportError() const { return m_batchError; }
-    [[nodiscard]] QStringList analysisImportMessages() const { return m_analysisImportMessages; }
     [[nodiscard]] QVariantList comparisonSlots() const;
     [[nodiscard]] QVariantList comparisonLaps() const;
     [[nodiscard]] bool comparisonPairReady() const;
@@ -326,7 +325,7 @@ public:
     Q_INVOKABLE bool swapComparisonLaps();
     Q_INVOKABLE bool useBestComparisonLap(bool wholeDay);
     Q_INVOKABLE bool inspectComparisonLap(int slot);
-    [[nodiscard]] bool comparisonViewOpen() const { return m_comparisonViewOpen; }
+    [[nodiscard]] bool comparisonViewOpen() const { return m_analysis.comparisonViewOpen(); }
     void setComparisonViewOpen(bool open);
     Q_INVOKABLE QVariantMap comparisonLapSeries(
         int slot, const QString &channel, double startTime, double endTime, int maximumPoints) const;
@@ -418,17 +417,17 @@ public:
     Q_INVOKABLE QVariantMap outingLapSeries(
         const QString &channel, double startTime, double endTime, int maximumPoints) const;
     Q_INVOKABLE QString outingLapValueText(const QString &channel) const;
-    [[nodiscard]] QVariantMap selectedOutingLap() const { return m_selectedOutingLap; }
-    [[nodiscard]] QString outingLapDetailState() const { return m_outingLapDetailState; }
-    [[nodiscard]] QString outingLapDetailError() const { return m_outingLapDetailError; }
+    [[nodiscard]] QVariantMap selectedOutingLap() const { return m_analysis.selectedOutingLap(); }
+    [[nodiscard]] QString outingLapDetailState() const { return m_analysis.outingLapDetailState(); }
+    [[nodiscard]] QString outingLapDetailError() const { return m_analysis.outingLapDetailError(); }
     [[nodiscard]] QStringList outingLapAvailableChannels() const;
     void setOutingLapChannels(const QStringList &channels);
-    [[nodiscard]] QStringList outingLapChannels() const { return m_outingLapChannels; }
-    [[nodiscard]] QVariantList outingLapTrack() const { return m_outingLapTrack; }
+    [[nodiscard]] QStringList outingLapChannels() const { return m_analysis.outingLapChannels(); }
+    [[nodiscard]] QVariantList outingLapTrack() const { return m_analysis.outingLapTrack(); }
     [[nodiscard]] QVariantMap outingLapTrackPoint() const;
-    [[nodiscard]] double outingLapCursor() const { return m_outingLapCursor; }
-    [[nodiscard]] QString segmentReviewState() const { return m_segmentReviewState; }
-    [[nodiscard]] QString segmentReviewMessage() const { return m_segmentReviewMessage; }
+    [[nodiscard]] double outingLapCursor() const { return m_analysis.outingLapCursor(); }
+    [[nodiscard]] QString segmentReviewState() const { return m_analysis.segmentReviewState(); }
+    [[nodiscard]] QString segmentReviewMessage() const { return m_analysis.segmentReviewMessage(); }
     [[nodiscard]] double segmentReviewAxisLength() const;
     [[nodiscard]] QVariantList segmentReviewItems() const;
     [[nodiscard]] QVariantMap segmentReviewApproved() const;
@@ -443,11 +442,11 @@ public:
     [[nodiscard]] QVariantList outingLaps() const;
     [[nodiscard]] QVariantMap outingAnalysisStatus() const;
     Q_INVOKABLE bool retryOutingAnalysis();
-    [[nodiscard]] QStringList outingLapMessages() const { return m_outingLapMessages; }
-    [[nodiscard]] bool outingLapsLoading() const {
-        return projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
-            || m_outingLapGeneration != m_sourceGeneration;
-    }
+    [[nodiscard]] QStringList outingLapMessages() const { return m_analysis.outingLapMessages(); }
+    [[nodiscard]] bool outingLapsLoading() const { return m_analysis.outingLapsLoading(); }
+    [[nodiscard]] QString batchImportState() const { return m_batchState; }
+    [[nodiscard]] QString batchImportError() const { return m_batchError; }
+    [[nodiscard]] QStringList analysisImportMessages() const { return m_analysisImportMessages; }
     [[nodiscard]] QVariantList batchImportRows() const { return m_batchRows; }
     [[nodiscard]] int batchImportProcessed() const { return m_batchProcessed; }
     [[nodiscard]] int batchImportTotal() const { return m_batchTotal; }
@@ -677,230 +676,24 @@ private:
     [[nodiscard]] static QString syncCandidateLevelName(double confidence);
 
     QSettings m_settings;
-    using OutingLapDetailResult = FlappedEar::OutingLapDetail;
-    struct ComparisonSlot {
-        QVariantMap row;
-        QJsonObject source;
-        QByteArray key;
-        quint64 request = 0;
-        QString state = QStringLiteral("empty");
-        QString error;
-        std::shared_ptr<const TelemetrySession> session;
-        TrackGeometry geometry;
-        QVariantList track;
-        FlappedEar::LapTrace referenceTrace;
-        FlappedEar::TimingGate referenceGate;
-        bool hasReferenceGate = false;
-    };
-    void initializeComparisonLaps();
-    void loadComparisonLap();
-    void invalidateComparisonLaps();
-    void failComparisonLap(int slot, const QString &reason);
-    void resetComparisonSlot(int slot);
-    void persistComparisonSlot(int slot, const QJsonValue &reference);
-    void restorePersistedComparisonSlots();
-    // Lazily rebuilt only when either slot's request id changes; both slots'
-    // overlay tracks are recomputed together since they share one normalization.
-    void ensureComparisonSharedGeometry() const;
-    mutable TrackGeometry m_comparisonSharedGeometry;
-    mutable quint64 m_comparisonSharedGeometryRequestA = 0;
-    mutable quint64 m_comparisonSharedGeometryRequestB = 0;
-    mutable std::array<QVariantList, 2> m_comparisonOverlayTrackCache;
-    // Same lazy-rebuild pattern: the shared progress axis is built once from
-    // slot 0's reference trace/gate (both slots are already verified
-    // compatible, i.e. the same physical gate), and both slots' telemetry are
-    // projected onto it. Building the axis and projecting one lap's telemetry
-    // are both cheap (resampling + a bounded per-lap scan); only the earlier,
-    // whole-file gate/lap derivation that produced referenceTrace/referenceGate
-    // was expensive enough to need the background worker.
-    void ensureComparisonProgressAxis() const;
-    mutable FlappedEar::ProgressAxis m_comparisonProgressAxis;
-    mutable quint64 m_comparisonProgressAxisRequestA = 0;
-    mutable quint64 m_comparisonProgressAxisRequestB = 0;
-    mutable std::array<QVector<FlappedEar::ProgressSegment>, 2> m_comparisonProgressTraceCache;
-    // KAN-55: the approved segments for one comparison slot's own run, same
-    // lookup as AppController::currentApprovedSegmentation() but parameterized
-    // by slot instead of the single open outing lap.
-    FlappedEar::ApprovedSegmentation comparisonApprovedSegmentation(int slot) const;
-    bool m_comparisonRestoreAttempted = false;
-    std::shared_ptr<TelemetrySessionCache> m_analysisSourceCache = std::make_shared<TelemetrySessionCache>();
-    std::array<ComparisonSlot, 2> m_comparisonSlots;
-    QFutureWatcher<OutingLapDetailResult> m_comparisonWatcher;
-    QTimer m_comparisonTimer;
-    std::shared_ptr<std::atomic_bool> m_comparisonCancellation;
-    quint64 m_comparisonRequest = 0;
-    int m_comparisonLoadingSlot = -1;
-    bool m_comparisonPending = false;
-    bool m_comparisonViewOpen = false;
-    // KAN-56: theoretical best across the current comparison group's whole
-    // eligible population, not the two comparison slots. Deliberately its own
-    // background worker/cache rather than m_analysisSourceCache/m_comparisonSlots
-    // -- it must decode every eligible lap's recording in turn, which the
-    // 2-entry comparison cache is not sized for; a fresh single-request cache
-    // is used instead (sized fine since laps are processed grouped by run).
-    // The core result plus the request it answers (stale results are dropped).
-    struct TheoreticalBestResult : FlappedEar::OutingTheoreticalBest {
-        quint64 request = 0;
-    };
-    static TheoreticalBestResult computeOutingTheoreticalBest(QVector<FlappedEar::OutingLapRow> population,
-        QHash<QString, QJsonObject> sourcesByRunId, QString projectPath, FlappedEar::ApprovedSegmentation approved,
-        QString canonicalRunId, QJsonObject actualBestReference, quint64 request,
-        const std::shared_ptr<std::atomic_bool> &cancellation);
-    void initializeOutingTheoreticalBest();
-    struct ChannelSummariesResult {
-        quint64 request = 0;
-        QString error;
-        QVariantList runs;
-    };
-    static ChannelSummariesResult computeOutingChannelSummaries(QVector<FlappedEar::OutingLapRow> rows,
-        QHash<QString, QJsonObject> sourcesByRunId, QString projectPath, quint64 request,
-        const std::shared_ptr<std::atomic_bool> &cancellation);
-    void initializeOutingChannelSummaries();
-    void initializeOutingDayReport();
-    [[nodiscard]] QVariantMap computeOutingDayReport() const;
-    mutable std::optional<QVariantMap> m_dayReportCache;
-    QFutureWatcher<ChannelSummariesResult> m_channelSummariesWatcher;
-    std::shared_ptr<std::atomic_bool> m_channelSummariesCancellation;
-    quint64 m_channelSummariesRequest = 0;
-    QString m_channelSummariesState = QStringLiteral("idle");
-    QString m_channelSummariesMessage;
-    QVariantList m_channelSummariesRuns;
-    QByteArray m_channelSummariesKey;
-    // KAN-124: video as the analysis side sees it; null without video support.
-    const VideoLink *m_videoLink = nullptr;
+    // KAN-124: the day's analysis; reads and edits this document through
+    // AnalysisDocument and reaches the loaded video through VideoLink.
     [[nodiscard]] std::optional<qint64> videoPositionForTelemetry(const QString &runId, double telemetrySeconds) const override;
     [[nodiscard]] std::optional<double> telemetryForVideoPosition(const QString &runId, qint64 videoMilliseconds) const override;
-    [[nodiscard]] QByteArray channelSummariesInputKey() const;
-    [[nodiscard]] QString outingLapLabel(const QJsonObject &reference) const;
-    // What the theoretical best and loss ranking depend on; a document change
-    // that leaves this unchanged (e.g. persisting the comparison pair) keeps
-    // the result (KAN-117).
-    [[nodiscard]] QByteArray theoreticalBestInputKey() const;
-    QByteArray m_theoreticalBestKey;
-    bool m_timeLossAllLaps = false;
-    bool openComparisonEvidence(const QVariantMap &lapA, const QVariantMap &lapB, const QString &segmentId);
-    QFutureWatcher<TheoreticalBestResult> m_theoreticalBestWatcher;
-    std::shared_ptr<std::atomic_bool> m_theoreticalBestCancellation;
-    quint64 m_theoreticalBestRequest = 0;
-    QString m_theoreticalBestState = QStringLiteral("idle");
-    QString m_theoreticalBestMessage;
-    // The committed worker result (valid while the state is "ready").
-    FlappedEar::OutingTheoreticalBest m_theoreticalBest;
-    // Losses of each session's fastest lap (or every eligible lap) against the
-    // actual best; requires a ready theoretical best with a timed actual best.
-    [[nodiscard]] FlappedEar::TimeLossRanking computeTimeLossRanking(bool allLaps, qsizetype maximumResults) const;
-    QString m_comparisonFocusSegmentId;
-    // KAN-57: set when the comparison is opened from a theoretical-best
-    // sector. The pair is then measured against the canonical run's approved
-    // segments (the ones the theoretical best used), labelled as such, as long
-    // as both laps are in that segmentation's group. Cleared on close.
-    QString m_comparisonSegmentationRunId;
-    [[nodiscard]] std::optional<FlappedEar::ApprovedSegmentation> comparisonSharedSegmentation() const;
-    void initializeOutingLapDetail();
-    void loadOutingLapDetail();
-    static QVariantMap sessionSeries(const TelemetrySession &session, const QString &channel,
-        double start, double end, int maximumPoints);
-    QFutureWatcher<OutingLapDetailResult> m_outingLapDetailWatcher;
-    QTimer m_outingLapDetailTimer;
-    std::shared_ptr<std::atomic_bool> m_outingLapDetailCancellation;
-    std::shared_ptr<const TelemetrySession> m_outingLapDetailSession;
-    TrackGeometry m_outingLapDetailGeometry;
-    QVariantMap m_selectedOutingLap;
-    QJsonObject m_outingLapDetailSource;
-    QByteArray m_outingLapDetailKey;
-    quint64 m_outingLapDetailRequest = 0;
-    bool m_outingLapDetailPending = false;
-    QString m_outingLapDetailState = QStringLiteral("idle");
-    QString m_outingLapDetailError;
-    QStringList m_outingLapChannels;
-    QString m_outingLapPendingChannel;
-    QVariantList m_outingLapTrack;
-    double m_outingLapCursor = 0;
-    struct SegmentReviewResult {
-        quint64 request = 0;
-        FlappedEar::ProgressAxis axis;
-        FlappedEar::TrackSegmentProposals proposals;
-        QVector<FlappedEar::CornerGeometryPhases> phases; // one per proposal; invalid for straights
-        QVector<FlappedEar::ProgressSegment> lapTrace;
-        QString unavailable; // no proposals can be made, and why
-        QString error;
-    };
-    static SegmentReviewResult computeSegmentReview(std::shared_ptr<const TelemetrySession> session,
-        double startTime, double endTime, int lapNumber, quint64 request,
-        const std::shared_ptr<std::atomic_bool> &cancellation);
-    void initializeSegmentReview();
-    void resetSegmentReview();
-    [[nodiscard]] QString segmentReviewUnavailableReason() const;
-    [[nodiscard]] QString segmentReviewConfiguration() const;
-    [[nodiscard]] FlappedEar::ApprovedSegmentation currentApprovedSegmentation() const;
-    [[nodiscard]] QVector<FlappedEar::SegmentReviewItem> currentSegmentReviewItems() const;
-    bool replaceRunTrackSegments(const QString &runId, const QJsonArray &segments, bool recordHistory = true);
-    [[nodiscard]] QJsonValue storedRunTrackSegments(const QString &runId) const;
-    [[nodiscard]] QJsonValue storedRunValue(const QString &runId, const QString &key) const;
-    bool replaceRunField(const QString &runId, const QString &key, const QJsonValue &value,
-        const std::function<void()> &beforeNotify = {});
-    QString applySegmentEdit(const std::optional<QJsonArray> &next, const QString &error);
-    QString applySegmentHistoryStep(bool undo);
-    [[nodiscard]] QVariantList mapPolylines(double startMeters, double endMeters) const;
-    QFutureWatcher<SegmentReviewResult> m_segmentReviewWatcher;
-    std::shared_ptr<std::atomic_bool> m_segmentReviewCancellation;
-    quint64 m_segmentReviewRequest = 0;
-    QString m_segmentReviewState = QStringLiteral("idle");
-    QString m_segmentReviewMessage;
-    FlappedEar::ProgressAxis m_segmentReviewAxis;
-    QVector<FlappedEar::TrackSegmentProposal> m_segmentProposals;
-    QVector<FlappedEar::CornerGeometryPhases> m_segmentProposalPhases;
-    QVector<FlappedEar::ProgressSegment> m_segmentReviewLapTrace;
-    QSet<int> m_editedSegmentProposals;
-    QSet<int> m_rejectedSegmentProposals;
-    mutable QVariantList m_segmentReviewLayerCache;
-    mutable bool m_segmentReviewLayersDirty = true;
-    FlappedEar::SegmentEditHistory m_segmentEditHistory;
-    mutable QVector<FlappedEar::ProgressMapPoint> m_segmentReviewPickTrace;
-    mutable bool m_segmentReviewPickTraceDirty = true;
-    using OutingSourceMessage = FlappedEar::OutingSourceMessage;
-    using OutingRunResult = FlappedEar::OutingRunDerivation;
-    // The core derivation plus the request identity it answers.
-    struct OutingLapResult : FlappedEar::OutingLapDerivation {
-        QByteArray key;
-        quint64 generation = 0;
-    };
-    void initializeOutingLaps();
-    void refreshOutingLaps();
-    void refreshLapExclusionPolicy();
+    [[nodiscard]] QJsonObject analysisProject() const override { return currentProjectObject(); }
+    void commitAnalysisProject(const QJsonObject &project) override;
+    [[nodiscard]] bool isEventDocument() const override;
+    [[nodiscard]] QString documentProjectPath() const override { return m_documentState.projectPath(); }
+    [[nodiscard]] QString documentIdentity() const override { return m_documentId; }
+    [[nodiscard]] quint64 documentRevision() const override { return m_documentState.revision(); }
+    [[nodiscard]] quint64 sourceGeneration() const override { return m_sourceGeneration; }
+    [[nodiscard]] bool batchImportPending() const override { return m_batchPending; }
+    [[nodiscard]] bool destructiveActionPending() const override;
+    [[nodiscard]] bool dirtyTrackingSuppressed() const override { return m_suppressDirtyTracking; }
+    // The editor's own lap navigation follows the saved lap exclusions.
+    void applyActiveLapExclusions();
     [[nodiscard]] QJsonObject activeLapBinding() const;
-    void refreshOutingCompatibility();
-    bool setRunTrackConfigurations(const QStringList &runIds, const QString &layoutId, const QString &direction);
-    QVariantMap m_outingRanking;
-    QVariantMap m_outingProgression;
-    QVariantList m_outingCompatibilityGroups;
-    QString m_outingComparisonGroupId;
-    // The per-run track configuration used by rankOutingLaps/refreshOutingCompatibility,
-    // captured so a second population consumer (theoretical best) can reuse the
-    // exact same configurations without recomputing or risking drift.
-    QHash<QString, QJsonObject> m_outingRunConfigurations;
-    QVector<OutingLapRow> m_outingRawLapRows;
-    QList<OutingSourceMessage> m_outingSourceMessages;
     QByteArray m_loadedSourceRevision;
-    [[nodiscard]] QJsonArray outingLapSources() const;
-    [[nodiscard]] QByteArray outingLapKey() const;
-    [[nodiscard]] QByteArray outingRunKey(const QString &runId) const;
-    [[nodiscard]] QSet<QString> reusableOutingRuns() const;
-    void invalidateOutingLapDetail();
-    QHash<QString, OutingRunResult> m_outingRunCache;
-    InferredTrackGroups m_outingInferredGroups;
-    [[nodiscard]] QJsonObject projectWithOutingInference(QJsonObject project) const;
-    QHash<QString, quint64> m_outingRunGenerations;
-    quint64 m_outingDocumentGeneration = 0;
-    QFutureWatcher<OutingLapResult> m_outingLapWatcher;
-    QTimer m_outingLapTimer;
-    std::shared_ptr<std::atomic_bool> m_outingLapCancellation;
-    QByteArray m_outingLapRequestedKey;
-    quint64 m_outingLapGeneration = 0;
-    QVariantList m_outingLapRows;
-    QSet<QString> m_outingStaleRunIds;
-    QStringList m_outingLapMessages;
-    bool m_outingLapsLoading = false;
     struct BatchImportResult {
         std::shared_ptr<TelemetryImportPlan> plan;
         QHash<QString, QJsonObject> fingerprints;
@@ -912,6 +705,7 @@ private:
         bool append = false;
     };
     void initializeBatchImport();
+    void initializeAnalysis();
     void invalidateBatchImport();
     [[nodiscard]] bool batchContextMatches() const;
     void publishBatchRows();
@@ -1011,6 +805,8 @@ private:
     QVariantMap m_syncCandidate;
     QStringList m_analysisChannels;
     bool m_analysisVisible = false;
+    // Declared last: destroyed first, while the document it reads still exists.
+    AnalysisController m_analysis{*this};
 };
 
 } // namespace FlappedEar

@@ -82,8 +82,28 @@ theoretical-best family's published forms are in core as well
 - `rankOutingTimeLosses`.
 
 They work from the single committed `OutingTheoreticalBest` result the
-controller keeps. The Document, Analysis and Overlay controllers are
-extracted behind the same QML-facing API in later steps.
+controller keeps.
+
+`AnalysisController` (`src/app/AnalysisController.h`) owns the day's
+analysis state:
+- outing laps and lap detail;
+- segment review and the Corner Analyzer;
+- the comparison;
+- theoretical best, losses and section progression;
+- channel summaries and the day report.
+
+It sees the project only through `AnalysisDocument`
+(`src/app/AnalysisDocument.h`). That interface lets it:
+- read the project;
+- commit a validated edit;
+- check whether an edit is allowed now (loading, busy, recovery, batch
+  import, pending destructive action);
+- read the source generation and the active run.
+
+`AppController` implements both `AnalysisDocument` and `VideoLink` and
+forwards its QML API unchanged. It still applies lap exclusions to the
+editor's own lap navigation when analysis re-applies them. The Document
+and Overlay controllers are extracted in later steps.
 
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
@@ -133,7 +153,7 @@ verification, cancellation and document/source context checks precede committing
 an event. The [import workflow](batch-import.md) and [event delivery plan](event-analysis-plan.md)
 describe the remaining boundaries.
 
-`AppControllerOuting` loads primary sources under fingerprint, cancellation and
+`AnalysisControllerOuting` loads primary sources under fingerprint, cancellation and
 generation guards to build the event's chronological OUT/LAP/IN rows. Unknown
 recording times remain explicit and sort after dated rows in import order.
 Opening a row loads an independent, bounded detail session for its telemetry

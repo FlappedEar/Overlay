@@ -1,4 +1,4 @@
-#include "app/AppController.h"
+#include "app/AnalysisController.h"
 #include "telemetry/OutingLapDerivation.h"
 #include "project/EventProjectCodec.h"
 #include "project/ProjectLimits.h"
@@ -20,9 +20,9 @@ namespace FlappedEar {
 namespace {
 }
 
-QVariantMap AppController::runMetadata(const QString &runId) const
+QVariantMap AnalysisController::runMetadata(const QString &runId) const
 {
-    const auto event = currentProjectObject().value("event").toObject();
+    const auto event = m_document.analysisProject().value("event").toObject();
     for (const auto &value : event.value("runs").toArray()) {
         const auto run = value.toObject();
         if (run.value("id").toString() != runId) continue;
@@ -30,26 +30,23 @@ QVariantMap AppController::runMetadata(const QString &runId) const
         for (const auto *key : {"notes", "conditions", "setupChanges"})
             metadata.insert(key, run.contains(key) ? run.value(key) : QJsonValue(QJsonValue::Null));
         const auto token = QCryptographicHash::hash(QJsonDocument(QJsonObject{
-            {"documentId", m_documentId}, {"run", run}}).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex();
+            {"documentId", m_document.documentIdentity()}, {"run", run}}).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex();
         metadata.insert("editToken", QString::fromLatin1(token));
         return metadata.toVariantMap();
     }
     return {};
 }
 
-bool AppController::updateRunMetadata(const QString &runId, const QString &expectedToken,
+bool AnalysisController::updateRunMetadata(const QString &runId, const QString &expectedToken,
     const QString &name, const QString &notes, const QString &conditions, const QString &setupChanges)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
-        || recoveryPending() || m_batchPending
-        || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
-        || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;
+    if (!documentEditable()) return false;
     const auto current = runMetadata(runId);
     if (current.isEmpty() || expectedToken.isEmpty() || current.value("editToken").toString() != expectedToken
         || name.trimmed().isEmpty() || name.size() > ProjectLimits::maximumTemplateNameCharacters) return false;
     for (const auto &text : {name, notes, conditions, setupChanges})
         if (text.size() > ProjectLimits::maximumStringCharacters || text.contains(QChar::Null)) return false;
-    auto project = currentProjectObject(); auto event = project.value("event").toObject();
+    auto project = m_document.analysisProject(); auto event = project.value("event").toObject();
     auto runs = event.value("runs").toArray();
     for (qsizetype i = 0; i < runs.size(); ++i) {
         auto run = runs[i].toObject();
@@ -66,14 +63,13 @@ bool AppController::updateRunMetadata(const QString &runId, const QString &expec
         runs[i] = run; event.insert("runs", runs); project.insert("event", event);
         QString error;
         if (!ProjectLimits::validateProject(project, &error)) return false;
-        m_projectTemplate = project;
-        markPersistentChange();
+        m_document.commitAnalysisProject(project);
         return true;
     }
     return false;
 }
 
-QVariantMap AppController::runTrackConfiguration(const QString &runId) const
+QVariantMap AnalysisController::runTrackConfiguration(const QString &runId) const
 {
     for (const auto &value : outingLapSources()) {
         const auto source = value.toObject();
@@ -91,7 +87,7 @@ QVariantMap AppController::runTrackConfiguration(const QString &runId) const
     return {};
 }
 
-bool AppController::confirmRunTrackConfiguration(const QString &runId, const QString &expectedDerivationKey,
+bool AnalysisController::confirmRunTrackConfiguration(const QString &runId, const QString &expectedDerivationKey,
     const QString &layoutId, const QString &direction, const bool applyToMatching)
 {
     const auto current = runTrackConfiguration(runId);
@@ -110,28 +106,28 @@ bool AppController::confirmRunTrackConfiguration(const QString &runId, const QSt
     return setRunTrackConfigurations(ids, layoutId.trimmed(), direction);
 }
 
-QVariantMap AppController::outingRanking() const
+QVariantMap AnalysisController::outingRanking() const
 {
-    if (projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
-        || m_outingLapGeneration != m_sourceGeneration) return {{"state", "loading"}};
+    if (m_document.projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
+        || m_outingLapGeneration != sourceGeneration()) return {{"state", "loading"}};
     return m_outingRanking;
 }
 
-QVariantMap AppController::outingProgression() const
+QVariantMap AnalysisController::outingProgression() const
 {
-    if (projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
-        || m_outingLapGeneration != m_sourceGeneration) return {{"state", "loading"}};
+    if (m_document.projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
+        || m_outingLapGeneration != sourceGeneration()) return {{"state", "loading"}};
     return m_outingProgression;
 }
 
-QVariantList AppController::outingCompatibilityGroups() const
+QVariantList AnalysisController::outingCompatibilityGroups() const
 {
-    if (projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
-        || m_outingLapGeneration != m_sourceGeneration) return {};
+    if (m_document.projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
+        || m_outingLapGeneration != sourceGeneration()) return {};
     return m_outingCompatibilityGroups;
 }
 
-QString AppController::outingComparisonGroupId() const
+QString AnalysisController::outingComparisonGroupId() const
 {
     for (const auto &value : outingCompatibilityGroups())
         if (value.toMap().value("id").toString() == m_outingComparisonGroupId
@@ -139,25 +135,22 @@ QString AppController::outingComparisonGroupId() const
     return {};
 }
 
-QString AppController::outingComparisonSelectionState() const
+QString AnalysisController::outingComparisonSelectionState() const
 {
-    const auto saved = currentProjectObject().value("event").toObject().value("analysisDecisions")
+    const auto saved = m_document.analysisProject().value("event").toObject().value("analysisDecisions")
         .toObject().value("comparisonGroupId").toString();
     if (saved.isEmpty()) return outingComparisonGroupId().isEmpty() ? "none" : "automatic";
-    if (projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
-        || m_outingLapGeneration != m_sourceGeneration) return "loading";
+    if (m_document.projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
+        || m_outingLapGeneration != sourceGeneration()) return "loading";
     return outingComparisonGroupId() == saved ? "applied" : "unavailable";
 }
 
-bool AppController::selectOutingComparisonGroup(const QString &groupId)
+bool AnalysisController::selectOutingComparisonGroup(const QString &groupId)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
-        || recoveryPending() || m_batchPending
-        || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
-        || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;
+    if (!documentEditable()) return false;
     if (!groupId.isEmpty()) {
         if (m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
-            || m_outingLapGeneration != m_sourceGeneration) return false;
+            || m_outingLapGeneration != sourceGeneration()) return false;
         bool found = false;
         for (const auto &value : m_outingCompatibilityGroups) {
             const auto group = value.toMap();
@@ -165,22 +158,21 @@ bool AppController::selectOutingComparisonGroup(const QString &groupId)
         }
         if (!found) return false;
     }
-    auto project = currentProjectObject(); auto event = project.value("event").toObject();
+    auto project = m_document.analysisProject(); auto event = project.value("event").toObject();
     auto decisions = event.value("analysisDecisions").toObject();
     if (decisions.value("comparisonGroupId").toString() == groupId) return true;
     decisions.insert("comparisonGroupId", groupId.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(groupId));
     event.insert("analysisDecisions", decisions); project.insert("event", event);
     if (!ProjectLimits::validateProject(project)) return false;
-    m_projectTemplate = project;
-    markPersistentChange();
+    m_document.commitAnalysisProject(project);
     emit outingLapsChanged();
     return true;
 }
 
-void AppController::refreshOutingCompatibility()
+void AnalysisController::refreshOutingCompatibility()
 {
-    if (m_outingLapRequestedKey != outingLapKey() || m_outingLapGeneration != m_sourceGeneration) return;
-    m_outingComparisonGroupId = currentProjectObject().value("event").toObject()
+    if (m_outingLapRequestedKey != outingLapKey() || m_outingLapGeneration != sourceGeneration()) return;
+    m_outingComparisonGroupId = m_document.analysisProject().value("event").toObject()
         .value("analysisDecisions").toObject().value("comparisonGroupId").toString();
     QHash<QString, QJsonObject> configurations;
     for (const auto &value : outingLapSources()) {
@@ -234,10 +226,10 @@ void AppController::refreshOutingCompatibility()
         m_outingCompatibilityGroups.append(group);
     }
     m_outingRanking = rankOutingLaps(m_outingRawLapRows, m_outingComparisonGroupId, configurations,
-        currentProjectObject().value("event").toObject().value("lapExclusions").toArray(), m_outingStaleRunIds).toVariantMap();
+        m_document.analysisProject().value("event").toObject().value("lapExclusions").toArray(), m_outingStaleRunIds).toVariantMap();
     m_outingRanking.insert("groupLabel", groups.value(m_outingComparisonGroupId).value("label"));
     QJsonArray metadata;
-    for (const auto &value : currentProjectObject().value("event").toObject().value("runs").toArray()) {
+    for (const auto &value : m_document.analysisProject().value("event").toObject().value("runs").toArray()) {
         const auto run = value.toObject();
         QJsonObject item{{"id", run.value("id")}, {"name", run.value("name")},
             {"groupId", lapCompatibilityGroupId(configurations.value(run.value("id").toString()))}};
@@ -259,7 +251,7 @@ void AppController::refreshOutingCompatibility()
         auto group = value.toMap();
         if (group.value("resolved").toBool()) {
             const auto ranking = rankOutingLaps(m_outingRawLapRows, group.value("id").toString(), configurations,
-                currentProjectObject().value("event").toObject().value("lapExclusions").toArray(), m_outingStaleRunIds);
+                m_document.analysisProject().value("event").toObject().value("lapExclusions").toArray(), m_outingStaleRunIds);
             group.insert("ranking", ranking.toVariantMap());
             group.insert("progression", summarizeOutingProgression(m_outingRawLapRows, ranking, metadata).toVariantMap());
         }
@@ -302,29 +294,14 @@ void AppController::refreshOutingCompatibility()
     }
 }
 
-QJsonObject AppController::activeLapBinding() const
+bool AnalysisController::setOutingLapExcluded(const QVariantMap &referenceMap, bool excluded, const QString &reason)
 {
-    for (auto value : outingLapSources()) {
-        auto source = value.toObject();
-        if (source.value("runId").toString() != activeRunId()) continue;
-        source.insert("sourceRevision", QString::fromLatin1(m_loadedSourceRevision));
-        source.remove("reference"); source.remove("name"); source.remove("trackConfiguration");
-        return source;
-    }
-    return {};
-}
-
-bool AppController::setOutingLapExcluded(const QVariantMap &referenceMap, bool excluded, const QString &reason)
-{
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
-        || recoveryPending() || m_batchPending
-        || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
-        || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;
+    if (!documentEditable()) return false;
     const auto reference = QJsonObject::fromVariantMap(referenceMap);
     if (!validLapReference(reference) || reference.value("type") != "LAP") return false;
     if (excluded && (resolveOutingLapReference(referenceMap).value("state").toString() != "resolved"
         || reason.trimmed().isEmpty() || reason.size() > 256 || reason.contains(QChar::Null))) return false;
-    auto project = currentProjectObject();
+    auto project = m_document.analysisProject();
     auto event = project.value("event").toObject();
     QJsonArray exclusions;
     for (const auto &item : event.value("lapExclusions").toArray()) {
@@ -337,20 +314,16 @@ bool AppController::setOutingLapExcluded(const QVariantMap &referenceMap, bool e
     event.insert("lapExclusions", exclusions); project.insert("event", event);
     QString error;
     if (!ProjectLimits::validateProject(project, &error)) return false;
-    m_projectTemplate = project;
-    markPersistentChange();
+    m_document.commitAnalysisProject(project);
     return true;
 }
 
-void AppController::refreshLapExclusionPolicy()
+void AnalysisController::refreshLapExclusionPolicy()
 {
-    const auto event = currentProjectObject().value("event").toObject();
+    const auto event = m_document.analysisProject().value("event").toObject();
     const auto exclusions = event.value("lapExclusions").toArray();
-    applyLapExclusions(m_lapSession, activeLapBinding(), exclusions);
-    m_previewRenderContext.setLapSession(m_lapSession);
-    emit lapNavigationChanged();
-    emit liveValuesChanged();
-    if (m_outingLapRequestedKey != outingLapKey() || m_outingLapGeneration != m_sourceGeneration) return;
+    emit lapExclusionsRefreshing();
+    if (m_outingLapRequestedKey != outingLapKey() || m_outingLapGeneration != sourceGeneration()) return;
     QHash<QString, QString> names;
     for (const auto &value : event.value("runs").toArray()) {
         const auto run = value.toObject(); names.insert(run.value("id").toString(), run.value("name").toString());
@@ -407,20 +380,17 @@ void AppController::refreshLapExclusionPolicy()
     emit outingLapsChanged();
 }
 
-bool AppController::setRunTrackConfiguration(
+bool AnalysisController::setRunTrackConfiguration(
     const QString &runId, const QString &layoutId, const QString &direction)
 {
     return setRunTrackConfigurations({runId}, layoutId, direction);
 }
 
-bool AppController::setRunTrackConfigurations(
+bool AnalysisController::setRunTrackConfigurations(
     const QStringList &runIds, const QString &layoutId, const QString &direction)
 {
-    if (!EventProjectCodec::isEvent(m_projectTemplate) || projectLoading() || documentBusy()
-        || recoveryPending() || m_batchPending
-        || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
-        || m_documentState.revision() == std::numeric_limits<quint64>::max()) return false;
-    auto project = currentProjectObject();
+    if (!documentEditable()) return false;
+    auto project = m_document.analysisProject();
     auto event = project.value("event").toObject();
     auto runs = event.value("runs").toArray();
     QSet<QString> found;
@@ -456,15 +426,14 @@ bool AppController::setRunTrackConfigurations(
     event.insert("runs", runs); project.insert("event", event);
     QString error;
     if (!ProjectLimits::validateProject(project, &error)) return false;
-    m_projectTemplate = project;
-    markPersistentChange();
+    m_document.commitAnalysisProject(project);
     return true;
 }
 
-QJsonArray AppController::outingLapSources() const
+QJsonArray AnalysisController::outingLapSources() const
 {
     QJsonArray sources;
-    const auto project = currentProjectObject();
+    const auto project = m_document.analysisProject();
     for (const auto &value : project.value("event").toObject().value("runs").toArray()) {
         const auto run = value.toObject();
         for (const auto &item : run.value("sources").toObject().value("telemetry").toArray()) {
@@ -483,24 +452,24 @@ QJsonArray AppController::outingLapSources() const
     return sources;
 }
 
-QByteArray AppController::outingLapKey() const
+QByteArray AnalysisController::outingLapKey() const
 {
     auto sources = outingLapSources();
     for (qsizetype i = 0; i < sources.size(); ++i) {
         auto source = sources[i].toObject(); source.remove("name"); source.remove("inference"); sources[i] = source;
     }
-    return QJsonDocument(QJsonObject{{"document", m_documentId}, {"path", m_documentState.projectPath()},
+    return QJsonDocument(QJsonObject{{"document", m_document.documentIdentity()}, {"path", m_document.documentProjectPath()},
         {"sources", sources}}).toJson(QJsonDocument::Compact);
 }
 
-QByteArray AppController::outingRunKey(const QString &runId) const
+QByteArray AnalysisController::outingRunKey(const QString &runId) const
 {
     for (const auto &value : outingLapSources())
         if (value.toObject().value("runId").toString() == runId) return outingSourceDependencyKey(value.toObject());
     return {};
 }
 
-QSet<QString> AppController::reusableOutingRuns() const
+QSet<QString> AnalysisController::reusableOutingRuns() const
 {
     QSet<QString> ids;
     for (const auto &value : outingLapSources()) {
@@ -511,7 +480,7 @@ QSet<QString> AppController::reusableOutingRuns() const
     return ids;
 }
 
-QVariantList AppController::outingLaps() const
+QVariantList AnalysisController::outingLaps() const
 {
     if (!outingLapsLoading()) return m_outingLapRows;
     const auto reusable = reusableOutingRuns();
@@ -521,7 +490,7 @@ QVariantList AppController::outingLaps() const
     return rows;
 }
 
-QVariantMap AppController::outingAnalysisStatus() const
+QVariantMap AnalysisController::outingAnalysisStatus() const
 {
     const bool loading = outingLapsLoading();
     const auto reusable = reusableOutingRuns();
@@ -537,12 +506,12 @@ QVariantMap AppController::outingAnalysisStatus() const
         }
     }
     int sectionCount = 0, readyCount = 0, missingCount = 0, errorCount = 0;
-    for (const auto &value : eventRuns()) {
+    for (const auto &value : m_document.eventRuns()) {
         const auto run = value.toMap();
         const auto id = run.value("id").toString(), name = run.value("name").toString();
         QString state = "empty", message = tr("No recorded sections in this run.");
         int count = 0;
-        if (projectLoading() || (loading && !reusable.contains(id))) {
+        if (m_document.projectLoading() || (loading && !reusable.contains(id))) {
             state = "loading";
             message = tr("Reading recording and detecting laps…");
         } else if (reusable.contains(id)) {
@@ -584,10 +553,10 @@ QVariantMap AppController::outingAnalysisStatus() const
         {"partial", sectionCount > 0 && readyCount < runs.size()}};
 }
 
-bool AppController::retryOutingAnalysis()
+bool AnalysisController::retryOutingAnalysis()
 {
-    if (outingLapsLoading() || projectLoading() || documentBusy() || recoveryPending()
-        || m_batchPending || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None
+    if (outingLapsLoading() || m_document.projectLoading() || m_document.documentBusy() || m_document.recoveryPending()
+        || m_document.batchImportPending() || m_document.destructiveActionPending()
         || outingLapSources().isEmpty()) return false;
     // Reuse the bounded worker and its full-content checks. Retrying does not
     // select an editor run, alter synchronization or persist an analysis choice.
@@ -596,24 +565,24 @@ bool AppController::retryOutingAnalysis()
     return true;
 }
 
-void AppController::initializeOutingLaps()
+void AnalysisController::initializeOutingLaps()
 {
     m_outingLapTimer.setSingleShot(true);
     m_outingLapTimer.setInterval(0);
     const auto schedule = [this] { m_outingLapTimer.start(); };
-    connect(this, &AppController::documentStateChanged, this, &AppController::refreshLapExclusionPolicy);
-    connect(this, &AppController::documentStateChanged, this, schedule);
-    connect(this, &AppController::sourceLoadStateChanged, this, schedule);
+    connect(this, &AnalysisController::documentStateChanged, this, &AnalysisController::refreshLapExclusionPolicy);
+    connect(this, &AnalysisController::documentStateChanged, this, schedule);
+    connect(this, &AnalysisController::sourceLoadStateChanged, this, schedule);
     // KAN-39: catch-all so outingLapVideoAvailable/outingLapVideoPositionMilliseconds
     // never go stale -- covers active-run switches (documentStateChanged) and video
     // finishing loading/probing (sourceLoadStateChanged), on top of the more specific
     // emits at lap open/close/cursor-move.
-    connect(this, &AppController::documentStateChanged, this, &AppController::outingLapVideoChanged);
-    connect(this, &AppController::sourceLoadStateChanged, this, &AppController::outingLapVideoChanged);
-    connect(&m_outingLapTimer, &QTimer::timeout, this, &AppController::refreshOutingLaps);
+    connect(this, &AnalysisController::documentStateChanged, this, &AnalysisController::outingLapVideoChanged);
+    connect(this, &AnalysisController::sourceLoadStateChanged, this, &AnalysisController::outingLapVideoChanged);
+    connect(&m_outingLapTimer, &QTimer::timeout, this, &AnalysisController::refreshOutingLaps);
     connect(&m_outingLapWatcher, &QFutureWatcher<OutingLapResult>::finished, this, [this] {
         const auto result = m_outingLapWatcher.future().takeResult();
-        if (result.cancelled || result.generation != m_sourceGeneration || result.key != outingLapKey()) {
+        if (result.cancelled || result.generation != sourceGeneration() || result.key != outingLapKey()) {
             m_outingLapRequestedKey.clear();
             m_outingLapTimer.start();
             return;
@@ -625,10 +594,10 @@ void AppController::initializeOutingLaps()
         m_outingSourceMessages = result.messages;
         m_outingLapsLoading = false;
         refreshLapExclusionPolicy();
-        if (dirty() && !documentBusy() && !recoveryPending() && !m_suppressDirtyTracking) {
-            const auto project = currentProjectObject();
+        if (m_document.dirty() && !m_document.documentBusy() && !m_document.recoveryPending() && !m_document.dirtyTrackingSuppressed()) {
+            const auto project = m_document.analysisProject();
             const auto withInference = projectWithOutingInference(project);
-            if (withInference != project) { m_projectTemplate = withInference; markPersistentChange(); }
+            if (withInference != project) { m_document.commitAnalysisProject(withInference); }
         }
         if (!m_selectedOutingLap.isEmpty()
             && resolveOutingLapReference(m_selectedOutingLap.value("reference").toMap()).value("state") != "resolved")
@@ -639,10 +608,10 @@ void AppController::initializeOutingLaps()
     m_outingLapTimer.start();
 }
 
-void AppController::refreshOutingLaps()
+void AnalysisController::refreshOutingLaps()
 {
     const auto key = outingLapKey();
-    if (key == m_outingLapRequestedKey && m_sourceGeneration == m_outingLapGeneration) return;
+    if (key == m_outingLapRequestedKey && sourceGeneration() == m_outingLapGeneration) return;
     if (m_outingLapCancellation) m_outingLapCancellation->store(true);
     // Keep unrelated rows and the independently verified open detail. The worker
     // rechecks full content before reusing any cached derivation.
@@ -665,12 +634,12 @@ void AppController::refreshOutingLaps()
     // One worker at a time. Its completion schedules the latest source set.
     if (m_outingLapWatcher.isRunning()) return;
     m_outingLapRequestedKey = key;
-    m_outingLapGeneration = m_sourceGeneration;
+    m_outingLapGeneration = sourceGeneration();
     if (sources.isEmpty()) { emit outingLapsChanged(); return; }
     m_outingLapCancellation = std::make_shared<std::atomic_bool>(false);
     const auto cancellation = m_outingLapCancellation;
-    const auto generation = m_sourceGeneration;
-    const auto projectPath = m_documentState.projectPath();
+    const auto generation = sourceGeneration();
+    const auto projectPath = m_document.documentProjectPath();
     const auto cache = m_outingRunCache;
     m_outingLapWatcher.setFuture(QtConcurrent::run([sources, key, generation, projectPath, cancellation, cache] {
         OutingLapResult result;
@@ -681,7 +650,7 @@ void AppController::refreshOutingLaps()
     }));
 }
 
-QJsonObject AppController::projectWithOutingInference(QJsonObject project) const
+QJsonObject AnalysisController::projectWithOutingInference(QJsonObject project) const
 {
     auto event = project.value("event").toObject(); auto runs = event.value("runs").toArray();
     for (qsizetype i = 0; i < runs.size(); ++i) {
@@ -700,13 +669,13 @@ QJsonObject AppController::projectWithOutingInference(QJsonObject project) const
     return project;
 }
 
-void AppController::initializeOutingLapDetail()
+void AnalysisController::initializeOutingLapDetail()
 {
     m_outingLapDetailTimer.setSingleShot(true);
     m_outingLapDetailTimer.setInterval(0);
-    connect(&m_outingLapDetailTimer, &QTimer::timeout, this, &AppController::loadOutingLapDetail);
-    connect(this, &AppController::documentStateChanged, this, &AppController::invalidateOutingLapDetail);
-    connect(this, &AppController::sourceLoadStateChanged, this, &AppController::invalidateOutingLapDetail);
+    connect(&m_outingLapDetailTimer, &QTimer::timeout, this, &AnalysisController::loadOutingLapDetail);
+    connect(this, &AnalysisController::documentStateChanged, this, &AnalysisController::invalidateOutingLapDetail);
+    connect(this, &AnalysisController::sourceLoadStateChanged, this, &AnalysisController::invalidateOutingLapDetail);
     connect(&m_outingLapDetailWatcher, &QFutureWatcher<OutingLapDetailResult>::finished, this, [this] {
         auto result = m_outingLapDetailWatcher.future().takeResult();
         m_outingLapDetailPending = false;
@@ -755,13 +724,13 @@ void AppController::initializeOutingLapDetail()
     });
 }
 
-void AppController::invalidateOutingLapDetail()
+void AnalysisController::invalidateOutingLapDetail()
 {
     if (!m_selectedOutingLap.isEmpty()
         && m_outingLapDetailKey != outingRunKey(m_selectedOutingLap.value("runId").toString())) closeOutingLap();
 }
 
-QVariantMap AppController::resolveOutingLapReference(const QVariantMap &value) const
+QVariantMap AnalysisController::resolveOutingLapReference(const QVariantMap &value) const
 {
     const auto reference = QJsonObject::fromVariantMap(value);
     const auto result = [](const char *state, const char *reason) {
@@ -770,7 +739,7 @@ QVariantMap AppController::resolveOutingLapReference(const QVariantMap &value) c
     if (!validLapReference(reference)) return result("invalid", "Malformed or unsupported lap reference.");
     if (reference.value("algorithm").toString() != lapReferenceAlgorithm)
         return result("stale", "Lap derivation algorithm changed.");
-    const auto project = currentProjectObject();
+    const auto project = m_document.analysisProject();
     const auto event = project.value("event").toObject();
     if (reference.value("eventId") != event.value("id"))
         return result("stale", "Lap reference belongs to another event.");
@@ -785,8 +754,8 @@ QVariantMap AppController::resolveOutingLapReference(const QVariantMap &value) c
     if (m_outingStaleRunIds.contains(reference.value("runId").toString()))
         return result("stale", "Recording content changed since the last lap derivation.");
     // A document edit can precede the refresh timer: never search yesterday's rows.
-    if (projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
-        || m_outingLapGeneration != m_sourceGeneration)
+    if (m_document.projectLoading() || m_outingLapsLoading || m_outingLapRequestedKey != outingLapKey()
+        || m_outingLapGeneration != sourceGeneration())
         return result("loading", "Current lap derivation is not ready.");
     int match = -1;
     bool runAvailable = false;
@@ -802,13 +771,13 @@ QVariantMap AppController::resolveOutingLapReference(const QVariantMap &value) c
                         : result("unavailable", "Referenced recording has no available lap derivation.");
 }
 
-bool AppController::selectOutingLapReference(const QVariantMap &reference)
+bool AnalysisController::selectOutingLapReference(const QVariantMap &reference)
 {
     const auto resolved = resolveOutingLapReference(reference);
     return resolved.value("state").toString() == "resolved" && selectOutingLap(resolved.value("index").toInt());
 }
 
-bool AppController::openOutingLapChannel(const QVariantMap &reference, const QString &channel)
+bool AnalysisController::openOutingLapChannel(const QVariantMap &reference, const QString &channel)
 {
     if (!selectOutingLapReference(reference)) return false;
     // Applied when the lap's recording has loaded; selecting clears it.
@@ -816,11 +785,11 @@ bool AppController::openOutingLapChannel(const QVariantMap &reference, const QSt
     return true;
 }
 
-bool AppController::selectOutingLap(int index)
+bool AnalysisController::selectOutingLap(int index)
 {
-    if (index < 0 || index >= m_outingLapRows.size() || m_outingLapsLoading || projectLoading()
-        || m_outingLapRequestedKey != outingLapKey() || m_outingLapGeneration != m_sourceGeneration
-        || recoveryPending() || m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None)
+    if (index < 0 || index >= m_outingLapRows.size() || m_outingLapsLoading || m_document.projectLoading()
+        || m_outingLapRequestedKey != outingLapKey() || m_outingLapGeneration != sourceGeneration()
+        || m_document.recoveryPending() || m_document.destructiveActionPending())
         return false;
     const auto row = m_outingLapRows[index].toMap();
     QJsonObject source;
@@ -840,7 +809,7 @@ bool AppController::selectOutingLap(int index)
     return true;
 }
 
-void AppController::closeOutingLap()
+void AnalysisController::closeOutingLap()
 {
     ++m_outingLapDetailRequest;
     if (m_outingLapDetailCancellation) m_outingLapDetailCancellation->store(true);
@@ -859,13 +828,13 @@ void AppController::closeOutingLap()
     emit outingLapVideoChanged();
 }
 
-void AppController::loadOutingLapDetail()
+void AnalysisController::loadOutingLapDetail()
 {
     // A rapid second click cancels the current parse and waits for it to finish;
     // it cannot create concurrent parsers with multiplied source-memory budgets.
     if (m_selectedOutingLap.isEmpty() || m_outingLapDetailPending) return;
     const auto source = m_outingLapDetailSource;
-    const auto projectPath = m_documentState.projectPath();
+    const auto projectPath = m_document.documentProjectPath();
     const auto row = m_selectedOutingLap;
     const auto request = m_outingLapDetailRequest;
     m_outingLapDetailCancellation = std::make_shared<std::atomic_bool>(false);
@@ -876,12 +845,12 @@ void AppController::loadOutingLapDetail()
     }));
 }
 
-QStringList AppController::outingLapAvailableChannels() const
+QStringList AnalysisController::outingLapAvailableChannels() const
 {
     return m_outingLapDetailSession ? m_outingLapDetailSession->channelNames() : QStringList{};
 }
 
-void AppController::setOutingLapChannels(const QStringList &channels)
+void AnalysisController::setOutingLapChannels(const QStringList &channels)
 {
     if (!m_outingLapDetailSession || m_outingLapDetailState != "ready") return;
     QStringList selected;
@@ -897,33 +866,33 @@ void AppController::setOutingLapChannels(const QStringList &channels)
     emit outingLapDetailChanged();
 }
 
-QVariantMap AppController::outingLapSeries(const QString &channel, const int maximumPoints) const
+QVariantMap AnalysisController::outingLapSeries(const QString &channel, const int maximumPoints) const
 {
     return outingLapSeries(channel, m_selectedOutingLap.value("startTime").toDouble(),
         m_selectedOutingLap.value("endTime").toDouble(), maximumPoints);
 }
 
-QVariantMap AppController::outingLapSeries(
+QVariantMap AnalysisController::outingLapSeries(
     const QString &channel, const double startTime, const double endTime, const int maximumPoints) const
 {
     if (!m_outingLapDetailSession || maximumPoints < 2) return {};
     return sessionSeries(*m_outingLapDetailSession, channel, startTime, endTime, maximumPoints);
 }
 
-QString AppController::outingLapValueText(const QString &channel) const
+QString AnalysisController::outingLapValueText(const QString &channel) const
 {
     const auto value = m_outingLapDetailSession ? m_outingLapDetailSession->valueAt(channel, m_outingLapCursor) : std::nullopt;
     return value ? QString::number(*value, 'f', 2) : QStringLiteral("—");
 }
 
-QVariantMap AppController::outingLapTrackPoint() const
+QVariantMap AnalysisController::outingLapTrackPoint() const
 {
     if (!m_outingLapDetailSession) return {};
     const auto point = FlappedEar::currentTrackPoint(*m_outingLapDetailSession, m_outingLapCursor, m_outingLapDetailGeometry);
     return point ? QVariantMap{{"x", point->x()}, {"y", point->y()}} : QVariantMap{};
 }
 
-void AppController::setOutingLapCursor(double seconds)
+void AnalysisController::setOutingLapCursor(double seconds)
 {
     if (!m_outingLapDetailSession || !std::isfinite(seconds)) return;
     seconds = std::clamp(seconds, m_selectedOutingLap.value("startTime").toDouble(), m_selectedOutingLap.value("endTime").toDouble());
@@ -934,19 +903,19 @@ void AppController::setOutingLapCursor(double seconds)
 }
 
 // KAN-39: the open lap's video, through the VideoLink (KAN-124).
-bool AppController::outingLapVideoAvailable() const
+bool AnalysisController::outingLapVideoAvailable() const
 {
     if (m_selectedOutingLap.isEmpty() || !m_videoLink) return false;
     return m_videoLink->videoPositionForTelemetry(m_selectedOutingLap.value("runId").toString(), m_outingLapCursor).has_value();
 }
 
-qint64 AppController::outingLapVideoPositionMilliseconds() const
+qint64 AnalysisController::outingLapVideoPositionMilliseconds() const
 {
     if (m_selectedOutingLap.isEmpty() || !m_videoLink) return 0;
     return m_videoLink->videoPositionForTelemetry(m_selectedOutingLap.value("runId").toString(), m_outingLapCursor).value_or(0);
 }
 
-bool AppController::followOutingLapVideoPosition(const qint64 videoPositionMilliseconds)
+bool AnalysisController::followOutingLapVideoPosition(const qint64 videoPositionMilliseconds)
 {
     if (m_selectedOutingLap.isEmpty() || !m_videoLink) return false;
     const auto telemetryTime = m_videoLink->telemetryForVideoPosition(
@@ -954,25 +923,6 @@ bool AppController::followOutingLapVideoPosition(const qint64 videoPositionMilli
     if (!telemetryTime) return false;
     setOutingLapCursor(*telemetryTime);
     return true;
-}
-
-// KAN-124: AppController's VideoLink (the overlay side). The lap's run must be
-// the active, loaded one; a lap from another run has no video rather than
-// silently switching runs. Out-of-range footage is unavailable, never clamped.
-std::optional<qint64> AppController::videoPositionForTelemetry(const QString &runId, const double telemetrySeconds) const
-{
-    if (m_videoSource.isEmpty() || runId != activeRunId()) return std::nullopt;
-    const auto videoTime = FlappedEar::telemetryToVideoTime(telemetrySeconds, m_sync);
-    if (!videoTime || *videoTime < 0.0) return std::nullopt;
-    const auto milliseconds = qRound64(*videoTime * 1000.0);
-    if (milliseconds > previewEndPositionMilliseconds()) return std::nullopt;
-    return clampPreviewPositionMilliseconds(milliseconds);
-}
-
-std::optional<double> AppController::telemetryForVideoPosition(const QString &runId, const qint64 videoMilliseconds) const
-{
-    if (runId != activeRunId()) return std::nullopt;
-    return FlappedEar::videoToTelemetryTime(videoMilliseconds / 1000.0, m_sync);
 }
 
 } // namespace FlappedEar
