@@ -119,7 +119,7 @@ QString lapCompatibilityReasonText(const QString &reason)
     if (reason == "stale-source") return "Source changed; reload recording";
     if (reason == "ineligible-lap") return "Lap is not eligible";
     if (reason == "invalid-reference") return "Lap identity is invalid";
-    if (reason == "different-recorded-route") return "Lap does not follow the supported route";
+    if (reason == "different-recorded-route") return "Lap leaves the route the other laps took (off track, a detour or the pit lane)";
     return reason;
 }
 
