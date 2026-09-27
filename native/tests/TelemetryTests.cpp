@@ -5766,6 +5766,50 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
     QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey(), 120000);
     QTRY_VERIFY_WITH_TIMEOUT(!controller.outingComparisonGroupId().isEmpty(), 60000);
 
+    // KAN-79: every derived section, for the owner to check against RaceChrono.
+    int outCount = 0, lapCount = 0, inCount = 0;
+    for (const auto &value : controller.outingLaps()) {
+        const auto row = value.toMap();
+        const auto type = row.value("type").toString();
+        outCount += type == "OUT"; lapCount += type == "LAP"; inCount += type == "IN";
+        qInfo().noquote() << QString("  section %1 %2 %3 %4%5").arg(row.value("runName").toString(), -10)
+            .arg(type == "LAP" ? "LAP " + row.value("lapNumber").toString() : type, -7)
+            .arg(AppController::formatElapsedTime(row.value("durationSeconds").toDouble()), 10)
+            .arg(row.value("referenceEligible").toBool() ? "" : " not eligible")
+            .arg(row.value("referenceEligible").toBool() || type != "LAP" ? QString()
+                : " (" + row.value("compatibilityReasonLabels").toStringList().join(", ") + ")");
+    }
+    qInfo().noquote() << "Sections: OUT" << outCount << "LAP" << lapCount << "IN" << inCount;
+    // Every session starts with its out lap and ends with its in lap.
+    QString previousRun;
+    QString previousType;
+    for (const auto &value : controller.outingLaps()) {
+        const auto row = value.toMap();
+        if (row.value("runName").toString() != previousRun) {
+            if (!previousRun.isEmpty()) QCOMPARE(previousType, QString("IN"));
+            QCOMPARE(row.value("type").toString(), QString("OUT"));
+            previousRun = row.value("runName").toString();
+        }
+        previousType = row.value("type").toString();
+    }
+    QCOMPARE(previousType, QString("IN"));
+    // An exclusion moves the best of the day to the next-fastest eligible lap
+    // and restoring it brings the original back exactly.
+    {
+        const auto best = controller.outingRanking().value("bestOfDay").toMap();
+        QVERIFY(controller.setOutingLapExcluded(best.value("reference").toMap(), true, "Acceptance check"));
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 60000);
+        const auto next = controller.outingRanking().value("bestOfDay").toMap();
+        QVERIFY(next.value("reference") != best.value("reference"));
+        QVERIFY(next.value("durationSeconds").toDouble() >= best.value("durationSeconds").toDouble());
+        qInfo().noquote() << "Excluding" << best.value("runName").toString() << "LAP" << best.value("lapNumber").toInt()
+                          << "moves the best of the day to" << next.value("runName").toString() << "LAP" << next.value("lapNumber").toInt()
+                          << AppController::formatElapsedTime(next.value("durationSeconds").toDouble());
+        QVERIFY(controller.setOutingLapExcluded(best.value("reference").toMap(), false, {}));
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 60000);
+        QCOMPARE(controller.outingRanking().value("bestOfDay").toMap().value("reference"), best.value("reference"));
+    }
+
     // Review the best lap's run so its proposals come from a clean lap.
     const auto bestOfDay = controller.outingRanking().value("bestOfDay").toMap();
     QVERIFY(!bestOfDay.isEmpty());
