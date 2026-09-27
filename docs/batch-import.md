@@ -256,6 +256,13 @@ No project, source selection, dirty state or recovery snapshot changes before
 successful confirmation. Cancel (including Escape), validation failure or stale
 results leave the current document intact. Import context includes document ID,
 revision, source generation **and project path** (Save As invalidates a review).
+Adding runs to an open day is the exception for the revision. It checks the
+event's recordings instead: which runs exist, their primaries, and each
+source's identity and reference. Edits that leave those alone do not make the
+import stale. An example is the analysis recording its verified track
+inference while the previous import's laps derive. The import then adds only
+its new runs to the current project, so such edits are kept. A new-event
+import still goes stale on any change, because it replaces the document.
 Only one import worker may be outstanding; cancellation cannot start parallel
 batches that exceed the retention budget. Closing the controller requests worker
 cancellation without allowing worker callbacks to access destroyed GUI objects.

@@ -72,11 +72,32 @@ QSet<QString> existingContent(const QJsonObject &project)
 
 } // namespace
 
+QByteArray DocumentController::eventSourcesSignature() const
+{
+    const auto event = currentProjectObject().value("event").toObject();
+    QJsonArray runs;
+    for (const auto &value : event.value("runs").toArray()) {
+        const auto run = value.toObject();
+        QJsonArray telemetry;
+        for (const auto &source : run.value("sources").toObject().value("telemetry").toArray())
+            telemetry.append(QJsonObject{{"id", source.toObject().value("id")},
+                {"contentSha256", source.toObject().value("contentSha256")}, {"reference", source.toObject().value("reference")}});
+        runs.append(QJsonObject{{"id", run.value("id")}, {"primary", run.value("primaryTelemetrySourceId")}, {"telemetry", telemetry}});
+    }
+    return QCryptographicHash::hash(QJsonDocument(QJsonObject{{"event", event.value("id")}, {"runs", runs}})
+        .toJson(QJsonDocument::Compact), QCryptographicHash::Sha256);
+}
+
 bool DocumentController::batchContextMatches() const
 {
-    return m_batchDocumentId == m_documentId && m_batchRevision == m_documentState.revision()
-        && m_batchProjectPath == m_documentState.projectPath()
-        && m_batchGeneration == m_sourceGeneration;
+    if (m_batchDocumentId != m_documentId || m_batchProjectPath != m_documentState.projectPath()
+        || m_batchGeneration != m_sourceGeneration) return false;
+    // Adding runs to an open day only depends on the event's recordings, so
+    // the day's own analysis bookkeeping (verified track inference written
+    // while laps derive, exclusions, notes) does not make it stale. A new
+    // event replaces the document, so any change does.
+    return m_batchAppendsToEvent ? m_batchSources == eventSourcesSignature()
+                                 : m_batchRevision == m_documentState.revision();
 }
 
 void DocumentController::invalidateBatchImport()
@@ -144,7 +165,19 @@ void DocumentController::initializeBatchImport()
             } else {
                 bool applied = true;
                 if (result.append) {
-                    m_projectTemplate = result.project;
+                    // Only the new runs: edits made to the day while the files
+                    // were rechecked (analysis bookkeeping, notes) are kept.
+                    auto project = currentProjectObject();
+                    auto event = project.value("event").toObject();
+                    auto runs = event.value("runs").toArray();
+                    QSet<QString> known;
+                    for (const auto &value : runs) known.insert(value.toObject().value("id").toString());
+                    for (const auto &value : result.project.value("event").toObject().value("runs").toArray())
+                        if (!known.contains(value.toObject().value("id").toString())) runs.append(value);
+                    event.insert("runs", runs);
+                    project.insert("event", event);
+                    applied = ProjectLimits::validateProject(project);
+                    if (applied) m_projectTemplate = project;
                 } else {
                     applied = beginProjectLoad({}, result.project);
                 }
@@ -253,6 +286,7 @@ bool DocumentController::importAnalysisRuns(const QString &name, const QList<QUr
     if (!beginBatchImport(urls)) return false;
     m_analysisImportAutomatic = true;
     m_analysisImportAppend = append;
+    m_batchAppendsToEvent = append;
     m_analysisImportName = name.trimmed();
     return true;
 }
@@ -295,6 +329,8 @@ bool DocumentController::importAnalysisSources(const QString &name, const QList<
     m_batchDocumentId = m_documentId;
     m_batchProjectPath = m_documentState.projectPath();
     m_batchRevision = m_documentState.revision();
+    m_batchSources = eventSourcesSignature();
+    m_batchAppendsToEvent = append;
     m_batchGeneration = m_sourceGeneration;
     m_batchError.clear();
     m_batchState = QStringLiteral("scanning");
@@ -332,6 +368,8 @@ bool DocumentController::beginBatchImport(const QList<QUrl> &urls)
     m_batchDocumentId = m_documentId;
     m_batchProjectPath = m_documentState.projectPath();
     m_batchRevision = m_documentState.revision();
+    m_batchSources = eventSourcesSignature();
+    m_batchAppendsToEvent = false;
     m_batchGeneration = m_sourceGeneration;
     m_batchProcessed = 0;
     m_batchTotal = static_cast<int>(paths.size());
