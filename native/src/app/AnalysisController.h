@@ -226,6 +226,10 @@ public:
     // KAN-69: both laps' heart rate over [start, end] metres of the shared axis;
     // start after end crosses start/finish (KAN-70).
     Q_INVOKABLE QVariantMap comparisonHeartRate(double startMeters, double endMeters) const;
+    // KAN-93: braking while cornering for both laps over [start, end] metres of
+    // the shared axis: overlap time and distance, the states' provenance and
+    // strips (fractions of the range) for braking, cornering and the overlap.
+    Q_INVOKABLE QVariantMap comparisonTrailBraking(double startMeters, double endMeters) const;
     Q_INVOKABLE bool selectOutingLap(int index);
     // Snapshot resolution: opening detail revalidates source content off-thread.
     Q_INVOKABLE QVariantMap resolveOutingLapReference(const QVariantMap &reference) const;

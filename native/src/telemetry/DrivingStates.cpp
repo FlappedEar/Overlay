@@ -201,4 +201,26 @@ DrivingStateClassification classifyDrivingStates(const TelemetrySession &session
     return result;
 }
 
+QVector<DrivingStateInterval> overlapOf(const QVector<DrivingStateInterval> &first,
+    const QVector<DrivingStateInterval> &second)
+{
+    return intersect(unite(first), unite(second));
+}
+
+double travelledMeters(const TelemetrySession &session, const QVector<DrivingStateInterval> &intervals)
+{
+    const auto speed = session.channels.constFind(session.aliases.value(QStringLiteral("speed")));
+    if (speed == session.channels.cend() || speed->timestamps.size() != speed->values.size()) return 0.0;
+    const auto &times = speed->timestamps;
+    double meters = 0.0;
+    for (const auto &interval : intervals) {
+        auto index = std::distance(times.cbegin(), std::lower_bound(times.cbegin(), times.cend(), interval.start));
+        for (; index + 1 < times.size() && times[index + 1] <= interval.end; ++index) {
+            const double a = speed->values[index], b = speed->values[index + 1];
+            if (std::isfinite(a) && std::isfinite(b)) meters += (a + b) / 2.0 / 3.6 * (times[index + 1] - times[index]);
+        }
+    }
+    return meters;
+}
+
 } // namespace FlappedEar
