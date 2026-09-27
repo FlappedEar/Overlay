@@ -12,6 +12,7 @@
 #include "telemetry/OutingLaps.h"
 #include "telemetry/TrackSegments.h"
 
+#include <QJsonDocument>
 #include <QtConcurrent/QtConcurrentRun>
 
 using namespace FlappedEar;
