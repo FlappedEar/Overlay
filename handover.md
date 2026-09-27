@@ -1,4 +1,4 @@
-# Session handover — 26 September 2026
+# Session handover — 27 September 2026
 
 Written for: the next Claude Code session continuing this work. Read this
 first, then `AGENTS.md` (engineering rules and safety invariants).
@@ -58,6 +58,36 @@ Merged later on 26 September 2026, which completes **M4**:
 | KAN-72 | Day results → **Day report…** with evidence navigation | #82 |
 | KAN-73 | "Where to look next": observations apart from hypotheses (`FocusAreas.h`) | #83 |
 | KAN-74 | M4 acceptance `docs/kan74-m4-acceptance.md`, plus a fix: Save As no longer discards computed results | #84 |
+
+Merged 27 September 2026 (M5 checks, and M6 import work, while the
+remaining M5 items wait for the owner):
+
+| Ticket | What | PR |
+| --- | --- | --- |
+| KAN-124 | Split phase 2 closed: `AnalysisController`, `DocumentController`, `TelemetryController` (Qt-Core-only `flappedear_telemetry_app`), core tests split | #94–#97 |
+| KAN-77 | Full-day budgets on the real day: import to report about 7 s (Release), peak 150 MiB | #98 |
+| KAN-76 | Export refuses a hard link to any day source | #99 |
+| KAN-75 | Export to a filling destination (disk image) is safe; "the disk ran out of space" message | #100 |
+| KAN-78 | Controls reachable at 1180×720 and 760×480; Escape no longer discards typing | #101 |
+| KAN-79 | Full-day acceptance record `docs/kan79-full-day-acceptance.md` | #102 |
+| KAN-82 | A complete day through move, relink and recovery; the A/B lap returns after a relink | #103 |
+| KAN-87 | Folder import (`scanTelemetryFolder`) | #104 |
+| KAN-88 | Drag-and-drop import of files and folders | #105 |
+| KAN-90 | Attach a recording to a run after reviewing evidence; choose the primary | #106 |
+| — | Adding runs to a day is not made stale by analysis bookkeeping | #107 |
+
+**Waiting for the owner (M5):**
+- KAN-80 and KAN-81 need the matching private video.
+- KAN-83 needs a clean account or machine.
+- KAN-84 and KAN-85 depend on Windows work, which is paused.
+- KAN-86 closes M5 once those are resolved.
+- KAN-79 has questions for the owner in its record: lap times against
+  RaceChrono, two laps flagged off-route, and an RCZ to close the blocked
+  alternative case.
+- KAN-89 (reusable vehicle and track profiles) needs a product decision:
+  where shared profiles live, and how they differ from an event's setup
+  snapshot.
+- KAN-113, KAN-114 and KAN-115 are owner-marked "backlog only".
 
 KAN-124 (split phase 2) steps 1–11 are merged (#85, #87–#92, #94–#97):
 - **Step 1:** analysis reaches video only through `VideoLink`, and its guards
