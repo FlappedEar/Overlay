@@ -1194,6 +1194,15 @@ QVariantMap AppController::telemetrySeries(
     return AnalysisController::sessionSeries(*m_session, channelName, *telemetryStart, *telemetryEnd, maximumPoints);
 }
 
+int AppController::lapNumberAtPlayback() const
+{
+    const auto telemetry = FlappedEar::videoToTelemetryTime(m_playbackTime, m_sync);
+    if (!telemetry) return 0;
+    for (const auto &lap : m_lapSession.timedLaps)
+        if (*telemetry >= lap.startTelemetryTime && *telemetry < lap.endTelemetryTime) return lap.number;
+    return 0;
+}
+
 qint64 AppController::videoMillisecondsForTelemetryTime(const double telemetryTime) const
 {
     if (!m_exportSourceInfo.videoSize.isValid()) return -1;

@@ -512,6 +512,8 @@ public:
     Q_INVOKABLE QVariantMap telemetrySeries(
         const QString &channelName, double videoStart, double videoEnd, int maximumPoints) const;
     Q_INVOKABLE qint64 videoMillisecondsForTelemetryTime(double telemetryTime) const;
+    // The timed lap under the playhead, or 0 outside every lap (hotlap widget option).
+    Q_INVOKABLE int lapNumberAtPlayback() const;
     Q_INVOKABLE void toggleAnalysisChannel(const QString &channelName);
     Q_INVOKABLE void requestNewProject() { m_document.requestNewProject(); }
     Q_INVOKABLE void requestOpenProject(const QUrl &url) { m_document.requestOpenProject(url); }

@@ -15,6 +15,14 @@ Item {
     readonly property bool isBest: tileType.endsWith("Best")
     readonly property bool isCurrent: tileType.endsWith("Current")
     readonly property bool isDelta: tileType.endsWith("Delta")
+    // Hotlap mode (current lap time only): one chosen lap, 0:00 before its
+    // start-line crossing, running during it, and held at its final time after.
+    readonly property bool hotlap: tileType === "lapCurrent" && (frame.widgetSettings.hotlapMode ?? false)
+    readonly property var hotlapTiming: {
+        frame.renderContext.time;
+        return root.hotlap ? frame.renderContext.fixedLapTiming(Number(frame.widgetSettings.hotlapLap ?? 0)) : ({});
+    }
+    readonly property bool hotlapFinished: root.hotlap && root.hotlapTiming.state === "finished"
     readonly property real tileScale: frame.sceneScale * frame.widgetScale
     readonly property int decimals: isSpeed
         ? Number(isDelta ? frame.widgetSettings.speedDeltaDecimals ?? 1
@@ -25,7 +33,8 @@ Item {
         ? (isBest ? timing.referenceSpeedKmh
                   : isCurrent ? timing.currentSpeedKmh : timing.speedDeltaKmh)
         : (isBest ? timing.bestLapSeconds
-                  : isCurrent ? timing.currentElapsedSeconds : timing.liveDeltaSeconds))
+                  : isCurrent ? (hotlap ? hotlapTiming.elapsedSeconds : timing.currentElapsedSeconds)
+                              : timing.liveDeltaSeconds))
     readonly property bool hasValue: Number.isFinite(metricValue)
     readonly property real deltaRange: Math.max(1, Number(isSpeed
         ? frame.widgetSettings.speedDeltaRangeKmh ?? 30
@@ -36,7 +45,7 @@ Item {
     readonly property color deltaColor: !hasValue ? frame.secondary
         : deltaIsGood ? goodColor : badColor
     readonly property var lapNumber: isBest
-        ? timing.bestLapNumber : timing.currentLapNumber
+        ? timing.bestLapNumber : hotlap ? hotlapTiming.lapNumber : timing.currentLapNumber
 
     function formatTime(seconds) {
         const value = Number(seconds);
@@ -172,14 +181,16 @@ Item {
         anchors.bottom: parent.bottom
         anchors.rightMargin: 12 * root.tileScale
         anchors.bottomMargin: 7 * root.tileScale
-        text: root.isCurrent && !root.isSpeed && root.timing.state === "waiting"
+        text: root.isCurrent && !root.isSpeed && !root.hotlap && root.timing.state === "waiting"
             ? qsTr("READY")
             : root.isSpeed || root.isDelta
                 ? root.formatNumber(root.metricValue) : root.formatTime(root.metricValue)
-        color: root.hasValue || (root.isCurrent && root.timing.state === "waiting")
+        // A finished hotlap keeps its result in the accent colour.
+        color: root.hotlapFinished ? root.goodColor
+            : root.hasValue || (root.isCurrent && root.timing.state === "waiting")
             ? root.frame.primary : root.frame.secondary
         font.family: root.frame.family
-        font.pixelSize: root.isCurrent && !root.isSpeed && root.timing.state === "waiting"
+        font.pixelSize: root.isCurrent && !root.isSpeed && !root.hotlap && root.timing.state === "waiting"
             ? Math.min(31 * root.frame.valueScale * root.tileScale, root.height * 0.32)
             : Math.min(50 * root.frame.valueScale * root.tileScale, root.height * 0.46)
         font.weight: Font.Medium

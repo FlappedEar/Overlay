@@ -55,6 +55,7 @@ private slots:
     void rejectsInvalidAndUnpairedCoordinates();
     void exposesNoBestWhenEveryLapHasMissingGps();
     void rendererNeverUsesIneligibleCompletedLap();
+    void holdsAChosenHotlap();
     void propagatesOutingEligibilityAndBest();
     void preservesNormalLapRanking();
     void rendererOmitsDeltaAtMissingCurrentCoordinate();
@@ -403,6 +404,47 @@ void LapEligibilityTests::rendererNeverUsesIneligibleCompletedLap()
     QVERIFY(!first.contains("lastDeltaToBestSeconds"));
     context.setTime(11.0);
     QCOMPARE(context.lapTiming().value("bestLapNumber").toInt(), 2);
+}
+
+void LapEligibilityTests::holdsAChosenHotlap()
+{
+    // Hotlap mode of the current-lap tile: one chosen lap only. 0:00 before
+    // its start-line crossing, running during the lap, and its final time
+    // held afterwards, through every later lap. Lap 0 means the best lap.
+    auto session = interiorGapFixture();
+    const auto laps = deriveSourceLapSession(session);
+    QVERIFY(laps.timedLaps.size() >= 2);
+    TelemetryRenderContext context;
+    context.setSession(&session);
+    context.setLapSession(laps);
+    const TimedLap *best = nullptr;
+    for (const auto &lap : laps.timedLaps)
+        if (lap.referenceEligible() && (!best || lap.durationSeconds < best->durationSeconds)) best = &lap;
+    QVERIFY(best);
+    for (const int chosen : {0, best->number, laps.timedLaps.first().number}) {
+        const auto &lap = chosen == 0 ? *best : *std::find_if(laps.timedLaps.cbegin(), laps.timedLaps.cend(),
+            [chosen](const TimedLap &candidate) { return candidate.number == chosen; });
+        context.setTime(lap.startTelemetryTime - 0.5);
+        auto timing = context.fixedLapTiming(chosen);
+        QCOMPARE(timing.value("lapNumber").toInt(), lap.number);
+        QCOMPARE(timing.value("state").toString(), QString("before"));
+        QCOMPARE(timing.value("elapsedSeconds").toDouble(), 0.0);
+        context.setTime(lap.startTelemetryTime + 1.0);
+        timing = context.fixedLapTiming(chosen);
+        QCOMPARE(timing.value("state").toString(), QString("running"));
+        QVERIFY(std::abs(timing.value("elapsedSeconds").toDouble() - 1.0) < 1e-9);
+        // After the lap, and still after every later lap: the final time.
+        for (const double after : {lap.endTelemetryTime, lap.endTelemetryTime + 0.5, laps.timedLaps.last().endTelemetryTime + 5.0}) {
+            context.setTime(after);
+            timing = context.fixedLapTiming(chosen);
+            QCOMPARE(timing.value("state").toString(), QString("finished"));
+            QCOMPARE(timing.value("elapsedSeconds").toDouble(), lap.durationSeconds);
+        }
+        QCOMPARE(timing.value("isBest").toBool(), lap.number == best->number);
+    }
+    QCOMPARE(context.fixedLapTiming(99).value("state").toString(), QString("unavailable"));
+    TelemetryRenderContext empty;
+    QCOMPARE(empty.fixedLapTiming(0).value("state").toString(), QString("unavailable"));
 }
 
 void LapEligibilityTests::propagatesOutingEligibilityAndBest()

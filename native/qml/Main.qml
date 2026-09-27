@@ -930,6 +930,7 @@ ApplicationWindow {
 
     Dialog {
         id: exportDialog
+        objectName: "exportDialog"
         title: qsTr("Export H.265 / HEVC")
         modal: true
         closePolicy: Popup.CloseOnEscape
@@ -1020,7 +1021,23 @@ ApplicationWindow {
             exportRangeStart.text = appController.exportFullRangeTimecode(rate.numerator, rate.denominator, false);
             exportRangeEnd.text = appController.exportFullRangeTimecode(rate.numerator, rate.denominator, true);
             exportRangeMode.currentIndex = 0;
+            // A hotlap tile (Current lap, one lap only) makes its lap the export:
+            // Single lap, that lap selected. Otherwise the lap picker starts at the best lap.
+            const laps = appController.lapSummaries;
+            let hotlapLap = -1;
+            for (let index = 0; index < appController.widgetModel.count; ++index) {
+                const widget = appController.widgetModel.widget(index);
+                if (widget.type === "lapCurrent" && widget.settings && widget.settings.hotlapMode)
+                    hotlapLap = Number(widget.settings.hotlapLap || 0);
+            }
+            const target = hotlapLap > 0 ? laps.findIndex(lap => Number(lap.number) === hotlapLap)
+                                         : laps.findIndex(lap => lap.isBest);
+            lapPicker.currentIndex = target >= 0 ? target : 0;
+            if (hotlapLap >= 0 && laps.length > 0)
+                exportRangeMode.currentIndex = 2;
         }
+        // The day's best lap, when the analysis knows it.
+        readonly property var dayBestLap: appController.outingRanking.bestOfDay || null
         onOpened: selectSourceFormat()
         background: Rectangle {
             radius: 14
@@ -1172,6 +1189,7 @@ ApplicationWindow {
             }
             FeComboBox {
                 id: exportRangeMode
+                objectName: "exportRangeMode"
                 Layout.fillWidth: true
                 model: [qsTr("Entire video"), qsTr("Custom timecode"), qsTr("Single lap · hotlap")]
             }
@@ -1215,13 +1233,20 @@ ApplicationWindow {
                 }
                 FeComboBox {
                     id: lapPicker
+                    objectName: "exportLapPicker"
                     Layout.fillWidth: true
                     model: appController.lapSummaries
                     textRole: "number"
+                    displayText: exportDialog.selectedLap()
+                        ? qsTr("Lap %1 · %2%3").arg(exportDialog.selectedLap().number)
+                            .arg(appController.formatElapsedTime(Number(exportDialog.selectedLap().durationSeconds)))
+                            .arg(exportDialog.selectedLap().isBest ? qsTr(" · best") : "")
+                        : ""
                     delegate: ItemDelegate {
                         required property var modelData
                         width: lapPicker.width
-                        text: qsTr("Lap %1 · %2").arg(modelData.number).arg(appController.formatElapsedTime(Number(modelData.durationSeconds)))
+                        text: qsTr("Lap %1 · %2%3").arg(modelData.number).arg(appController.formatElapsedTime(Number(modelData.durationSeconds)))
+                            .arg(modelData.isBest ? qsTr(" · best") : "")
                     }
                 }
                 Label {
@@ -1260,6 +1285,46 @@ ApplicationWindow {
                     color: "#ffb84d"
                     wrapMode: Text.WordWrap
                     font.pixelSize: 10
+                }
+                // Where the day's best lap is: this recording, or another run.
+                Label {
+                    objectName: "exportDayBestLap"
+                    Layout.columnSpan: 2
+                    Layout.fillWidth: true
+                    visible: !!exportDialog.dayBestLap
+                    text: !exportDialog.dayBestLap ? ""
+                        : exportDialog.dayBestLap.runId === appController.activeRunId
+                            ? qsTr("The day's best lap is lap %1 of this recording (%2).").arg(exportDialog.dayBestLap.lapNumber)
+                                .arg(appController.formatElapsedTime(Number(exportDialog.dayBestLap.durationSeconds)))
+                            : qsTr("The day's best lap is %1 · LAP %2 (%3), in another recording. Open that run to export it with its own video.")
+                                .arg(exportDialog.dayBestLap.runName).arg(exportDialog.dayBestLap.lapNumber)
+                                .arg(appController.formatElapsedTime(Number(exportDialog.dayBestLap.durationSeconds)))
+                    color: "#91a0b2"
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: 10
+                }
+                FeButton {
+                    objectName: "exportSelectDayBestLap"
+                    Layout.columnSpan: 2
+                    visible: !!exportDialog.dayBestLap && exportDialog.dayBestLap.runId === appController.activeRunId
+                    compact: true
+                    text: qsTr("Select the day's best lap")
+                    onClicked: {
+                        const index = appController.lapSummaries.findIndex(lap => Number(lap.number) === Number(exportDialog.dayBestLap.lapNumber));
+                        if (index >= 0) lapPicker.currentIndex = index;
+                    }
+                }
+                FeButton {
+                    objectName: "exportOpenDayBestRun"
+                    Layout.columnSpan: 2
+                    visible: !!exportDialog.dayBestLap && exportDialog.dayBestLap.runId !== appController.activeRunId
+                    compact: true
+                    text: qsTr("Open %1").arg(exportDialog.dayBestLap ? exportDialog.dayBestLap.runName : "")
+                    onClicked: {
+                        const runId = exportDialog.dayBestLap.runId;
+                        exportDialog.close();
+                        appController.selectEventRun(runId);
+                    }
                 }
             }
             Label {

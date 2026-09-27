@@ -159,6 +159,37 @@ QVariantMap TelemetryRenderContext::currentTrackPoint() const
     return point ? QVariantMap{{"x", point->x()}, {"y", point->y()}} : QVariantMap();
 }
 
+QVariantMap TelemetryRenderContext::fixedLapTiming(const int lapNumber) const
+{
+    QVariantMap result{{QStringLiteral("state"), QStringLiteral("unavailable")}};
+    if (m_lapSession.timedLaps.isEmpty()) return result;
+    const TimedLap *best = nullptr;
+    for (const auto &lap : m_lapSession.timedLaps)
+        if (lap.referenceEligible() && (!best || lap.durationSeconds < best->durationSeconds)) best = &lap;
+    const TimedLap *chosen = lapNumber == 0 ? best : nullptr;
+    for (const auto &lap : m_lapSession.timedLaps)
+        if (lapNumber > 0 && lap.number == lapNumber) chosen = &lap;
+    if (!chosen) return result;
+    result.insert(QStringLiteral("lapNumber"), chosen->number);
+    result.insert(QStringLiteral("durationSeconds"), chosen->durationSeconds);
+    result.insert(QStringLiteral("isBest"), best && best->number == chosen->number);
+    const auto transformed = videoToTelemetryTime(m_time, m_sync);
+    if (!transformed || !std::isfinite(*transformed)) return result;
+    // Before the start-line crossing, then running, then held at the final time.
+    const double elapsed = *transformed - chosen->startTelemetryTime;
+    if (elapsed < 0.0) {
+        result.insert(QStringLiteral("state"), QStringLiteral("before"));
+        result.insert(QStringLiteral("elapsedSeconds"), 0.0);
+    } else if (*transformed < chosen->endTelemetryTime) {
+        result.insert(QStringLiteral("state"), QStringLiteral("running"));
+        result.insert(QStringLiteral("elapsedSeconds"), elapsed);
+    } else {
+        result.insert(QStringLiteral("state"), QStringLiteral("finished"));
+        result.insert(QStringLiteral("elapsedSeconds"), chosen->durationSeconds);
+    }
+    return result;
+}
+
 QVariantMap TelemetryRenderContext::lapTiming() const
 {
     QVariantMap result{{QStringLiteral("available"), false},

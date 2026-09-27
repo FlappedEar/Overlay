@@ -1782,6 +1782,50 @@ Rectangle {
                                 onEditingFinished: root.setSetting("warningValue", Number(text))
                             }
                         }
+                        // Hotlap: the current lap time of one chosen lap only.
+                        FeCheckBox {
+                            objectName: "hotlapModeCheck"
+                            visible: root.selectedWidget.type === "lapCurrent"
+                            text: qsTr("Show one lap only (hotlap)")
+                            checked: root.settings.hotlapMode ?? false
+                            onToggled: root.setSetting("hotlapMode", checked)
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            visible: root.selectedWidget.type === "lapCurrent" && (root.settings.hotlapMode ?? false)
+                            text: qsTr("Shows 0:00 until the lap crosses the start/finish line, counts during the lap, then keeps its final time. Pick the same lap under Export → Single lap · hotlap to export just this lap.")
+                            color: "#718092"
+                            wrapMode: Text.WordWrap
+                            font.pixelSize: 11
+                        }
+                        FeComboBox {
+                            id: hotlapLapPicker
+                            objectName: "hotlapLapPicker"
+                            Layout.fillWidth: true
+                            visible: root.selectedWidget.type === "lapCurrent" && (root.settings.hotlapMode ?? false)
+                            readonly property var laps: appController.lapSummaries
+                            model: [qsTr("Best lap of this recording")].concat(hotlapLapPicker.laps.map(lap =>
+                                qsTr("Lap %1 · %2%3").arg(lap.number).arg(appController.formatElapsedTime(Number(lap.durationSeconds)))
+                                    .arg(lap.isBest ? qsTr(" · best") : "")))
+                            currentIndex: {
+                                const chosen = Number(root.settings.hotlapLap ?? 0);
+                                if (chosen === 0) return 0;
+                                const index = hotlapLapPicker.laps.findIndex(lap => Number(lap.number) === chosen);
+                                return index >= 0 ? index + 1 : 0;
+                            }
+                            onActivated: index => root.setSetting("hotlapLap",
+                                index === 0 ? 0 : Number(hotlapLapPicker.laps[index - 1].number))
+                        }
+                        FeButton {
+                            objectName: "hotlapUsePlayhead"
+                            Layout.fillWidth: true
+                            visible: root.selectedWidget.type === "lapCurrent" && (root.settings.hotlapMode ?? false)
+                            readonly property int lapAtPlayhead: (appController.playbackTime, appController.lapNumberAtPlayback())
+                            text: lapAtPlayhead > 0 ? qsTr("Use the lap at the playhead (lap %1)").arg(lapAtPlayhead)
+                                                    : qsTr("Use the lap at the playhead")
+                            enabled: lapAtPlayhead > 0
+                            onClicked: root.setSetting("hotlapLap", lapAtPlayhead)
+                        }
                         FeCheckBox {
                             visible: root.selectedWidget.type === "heartRate"
                             text: qsTr("Show heart icon")
