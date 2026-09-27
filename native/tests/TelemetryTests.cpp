@@ -9018,6 +9018,11 @@ void TelemetryTests::reviewsSourceFusionInRunDetails()
     QSignalSpy committed(&controller, &AppController::batchImportCommitted);
     QVERIFY(controller.importAnalysisRuns("Fusion review", {QUrl::fromLocalFile(primary)}));
     QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    // Let the analysis settle first: it records its track inference as an
+    // edit, which (correctly) makes an attach review in flight stale.
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 20000);
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && !controller.outingLaps().isEmpty(), 20000);
+    QTest::qWait(500);
     const auto runId = controller.activeRunId();
     QVERIFY(controller.attachRunRecording(runId, QUrl::fromLocalFile(biased)));
     QTRY_COMPARE_WITH_TIMEOUT(controller.runRecordingReview().value("state").toString(), QString("review"), 20000);
