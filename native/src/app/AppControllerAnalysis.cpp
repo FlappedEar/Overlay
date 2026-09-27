@@ -551,4 +551,9 @@ QVariantMap AppController::outingLapCoasting() const
     return m_analysis.outingLapCoasting();
 }
 
+QVariantMap AppController::comparisonTrailBraking(double startMeters, double endMeters) const
+{
+    return m_analysis.comparisonTrailBraking(startMeters, endMeters);
+}
+
 } // namespace FlappedEar

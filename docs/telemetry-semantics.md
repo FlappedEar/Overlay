@@ -328,3 +328,34 @@ cannot be told rather than zero.
 **On the Jastrząb day:** the best lap (Session 5 LAP 2, 1:49.898) coasts
 14.8 s over 226 m in 14 episodes (13.5 % of the lap), from the recorded
 pedals. Most of it is in Corners 9–16 (5.4 s) and Corners 5–6 (4.8 s).
+
+## Trail braking (KAN-93)
+
+The Corner Analyzer shows **Trail braking** for the selected segment: the
+time each lap of the A/B pair spends braking while cornering. It is the
+overlap of the KAN-91 braking and cornering states. For each lap,
+`comparisonTrailBraking` maps the segment's progress range to that lap's
+time range. A segment across start/finish is handled as the end of the lap
+followed by its beginning. It then classifies the driving states over that
+range and reports:
+- the overlap time, and its distance (recorded speed integrated over the
+  overlap, never across a missing sample);
+- the total braking and cornering time in the segment;
+- the braking and cornering provenance and the channels they came from;
+- the braking, cornering and overlap intervals as fractions of the segment.
+
+The row shows A and B overlap seconds and Δ (A−B). Under it, a strip per lap
+shows braking in red, cornering in blue and both in violet along the segment.
+The note gives the overlap distance for each lap and where the evidence comes
+from:
+- brake measured, or braking inferred from deceleration (no brake channel);
+- lateral G measured, or calculated from GPS (a RaceChrono `-calc` channel).
+
+The ⎍ button adds the brake and lateral-G channels to the charts. A lap
+whose braking or cornering state is unknown, or whose progress does not
+cover the segment, shows "—" rather than zero. Longer overlap is not
+automatically better or safer, and the note says so.
+
+**On the Jastrząb day:** in Corners 2–3 (174 m), Session 2 LAP 1 (A) brakes
+while cornering for 1.8 s over 35 m. The best lap, Session 5 LAP 2 (B), does
+so for 2.9 s over 65 m. Both use the measured brake and calculated lateral G.

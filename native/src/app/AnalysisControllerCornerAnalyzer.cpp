@@ -12,6 +12,7 @@
 #include "app/AnalysisController.h"
 #include "telemetry/MetricProvenance.h"
 #include "telemetry/GgPairs.h"
+#include "telemetry/DrivingStates.h"
 
 using namespace FlappedEar;
 
@@ -419,4 +420,81 @@ QVariantMap AnalysisController::comparisonGgScatter(const double startMeters, co
     }
     return {{"valid", true}, {"algorithm", QString::fromLatin1(ggPairsAlgorithm)}, {"laps", laps},
         {"startMeters", from}, {"endMeters", to}};
+}
+
+QVariantMap AnalysisController::comparisonTrailBraking(const double startMeters, const double endMeters) const
+{
+    if (!comparisonPairReady()) return {{"valid", false}};
+    ensureComparisonProgressAxis();
+    if (!m_comparisonProgressAxis.valid) return {{"valid", false}};
+    const double length = m_comparisonProgressAxis.lengthMeters;
+    const double from = std::clamp(startMeters, 0.0, length), to = std::clamp(endMeters, 0.0, length);
+    // A range with start after end crosses start/finish: the lap's end, then
+    // its beginning, laid end to end along the segment.
+    const QVector<std::pair<double, double>> ranges = from <= to
+        ? QVector<std::pair<double, double>>{{from, to}}
+        : QVector<std::pair<double, double>>{{from, length}, {0.0, to}};
+    double span = 0.0;
+    for (const auto &[a, b] : ranges) span += b - a;
+    if (!(span > 0.0)) return {{"valid", false}};
+    QVariantList laps;
+    for (int slot = 0; slot < 2; ++slot) {
+        const auto &comparisonSlot = m_comparisonSlots[slot];
+        const auto &trace = m_comparisonProgressTraceCache[slot];
+        const double lapStart = comparisonSlot.row.value("startTime").toDouble();
+        const double lapEnd = comparisonSlot.row.value("endTime").toDouble();
+        const auto timeAt = [&](const double meters) -> std::optional<double> {
+            if (meters <= 1e-6) return lapStart;
+            if (meters >= length - 1e-6) return lapEnd;
+            return timeAtProgress(trace, meters);
+        };
+        QVariantMap lap{{"valid", true}};
+        double overlapSeconds = 0, overlapMeters = 0, brakingSeconds = 0, corneringSeconds = 0, offset = 0;
+        QVariantList brakingStrip, corneringStrip, overlapStrip;
+        const auto strip = [&](const QVector<DrivingStateInterval> &intervals, const double rangeStart, QVariantList &out) {
+            for (const auto &interval : intervals) {
+                const auto a = progressAtTime(trace, interval.start), b = progressAtTime(trace, interval.end);
+                if (!a || !b) continue;
+                out.append(QVariantMap{{"from", (offset + *a - rangeStart) / span}, {"to", (offset + *b - rangeStart) / span}});
+            }
+        };
+        const auto seconds = [](const QVector<DrivingStateInterval> &intervals) {
+            double total = 0; for (const auto &i : intervals) total += i.end - i.start; return total;
+        };
+        for (const auto &[rangeStart, rangeEnd] : ranges) {
+            const auto t0 = timeAt(rangeStart), t1 = timeAt(rangeEnd);
+            if (!t0 || !t1 || *t1 <= *t0) { lap = {{"valid", false}, {"unavailableReason", "incompleteCoverage"}}; break; }
+            const auto states = classifyDrivingStates(*comparisonSlot.session, *t0, *t1);
+            const auto overlap = overlapOf(states.braking.active, states.cornering.active);
+            overlapSeconds += seconds(overlap);
+            overlapMeters += travelledMeters(*comparisonSlot.session, overlap);
+            brakingSeconds += seconds(states.braking.active);
+            corneringSeconds += seconds(states.cornering.active);
+            strip(states.braking.active, rangeStart, brakingStrip);
+            strip(states.cornering.active, rangeStart, corneringStrip);
+            strip(overlap, rangeStart, overlapStrip);
+            lap.insert("brakingProvenance", states.braking.provenance);
+            lap.insert("corneringProvenance", states.cornering.provenance);
+            lap.insert("brakeChannel", states.braking.channel);
+            lap.insert("lateralChannel", states.cornering.channel);
+            offset += rangeEnd - rangeStart;
+        }
+        if (lap.value("valid").toBool()) {
+            const bool known = lap.value("brakingProvenance") != drivingStateUnknown
+                && lap.value("corneringProvenance") != drivingStateUnknown;
+            if (!known) {
+                lap = {{"valid", false}, {"unavailableReason", "stateUnknown"},
+                    {"brakingProvenance", lap.value("brakingProvenance")}, {"corneringProvenance", lap.value("corneringProvenance")}};
+            } else {
+                lap.insert("overlapSeconds", overlapSeconds);
+                lap.insert("overlapMeters", overlapMeters);
+                lap.insert("brakingSeconds", brakingSeconds);
+                lap.insert("corneringSeconds", corneringSeconds);
+                lap.insert("strips", QVariantMap{{"braking", brakingStrip}, {"cornering", corneringStrip}, {"overlap", overlapStrip}});
+            }
+        }
+        laps.append(lap);
+    }
+    return {{"valid", true}, {"algorithm", QString::fromLatin1(drivingStatesAlgorithm)}, {"laps", laps},
+        {"startMeters", from}, {"endMeters", to}, {"crossesStartFinish", from > to}};
 }

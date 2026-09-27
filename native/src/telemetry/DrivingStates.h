@@ -71,4 +71,11 @@ struct DrivingStateClassification {
 [[nodiscard]] DrivingStateClassification classifyDrivingStates(const TelemetrySession &session,
     double startTime, double endTime, const DrivingStateOptions &options = {});
 
+// Where two states hold together (for example braking while cornering).
+[[nodiscard]] QVector<DrivingStateInterval> overlapOf(const QVector<DrivingStateInterval> &first,
+    const QVector<DrivingStateInterval> &second);
+// Distance travelled over `intervals`: the "speed" alias (km/h) integrated
+// between its samples; nothing is counted across a missing speed sample.
+[[nodiscard]] double travelledMeters(const TelemetrySession &session, const QVector<DrivingStateInterval> &intervals);
+
 } // namespace FlappedEar

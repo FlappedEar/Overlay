@@ -39,6 +39,22 @@ Rectangle {
     readonly property var heartRate: root.visible && root.selectedSegment && root.selectedSegment.endMeters !== root.selectedSegment.startMeters
         ? (appController.comparisonSlots, appController.comparisonHeartRate(root.selectedSegment.startMeters, root.selectedSegment.endMeters)) : ({})
     readonly property var heartRateLaps: root.heartRate.laps || []
+    // KAN-93: braking while cornering over the selected segment, A and B.
+    readonly property var trailBraking: root.visible && root.selectedSegment && root.selectedSegment.endMeters !== root.selectedSegment.startMeters
+        ? (appController.comparisonSlots, appController.comparisonTrailBraking(root.selectedSegment.startMeters, root.selectedSegment.endMeters)) : ({})
+    readonly property var trailLaps: root.trailBraking.laps || []
+    readonly property bool trailKnown: root.trailLaps.some(lap => lap.valid)
+    function trailText(lap) {
+        return lap && lap.valid ? Number(lap.overlapSeconds).toFixed(1) + " s" : "—";
+    }
+    function trailSource(lap) {
+        if (!lap) return "";
+        const brake = lap.brakingProvenance === "measured" ? qsTr("brake measured")
+            : lap.brakingProvenance === "inferred" ? qsTr("braking inferred from deceleration") : qsTr("braking unknown");
+        const corner = lap.corneringProvenance === "measured" ? qsTr("lateral G measured")
+            : lap.corneringProvenance === "calculated" ? qsTr("lateral G calculated from GPS") : qsTr("cornering unknown");
+        return brake + ", " + corner;
+    }
     readonly property bool heartRateRecorded: root.heartRateLaps.some(lap => lap.valid)
     function heartRateText(lap) {
         return lap && lap.valid ? Number(lap.mean).toFixed(0) + " bpm" : "—";
@@ -332,6 +348,81 @@ Rectangle {
                 visible: root.heartRateRecorded
                 text: qsTr("Mean over this segment · A %1 · B %2. Observed values only.")
                     .arg(root.heartRateCoverage(root.heartRateLaps[0])).arg(root.heartRateCoverage(root.heartRateLaps[1]))
+                wrapMode: Text.WordWrap
+                color: "#657386"
+                font.pixelSize: 10
+            }
+            RowLayout {
+                objectName: "cornerAnalyzerTrailBrakingRow"
+                Layout.fillWidth: true
+                visible: root.trailKnown
+                Label { font.pixelSize: 12; text: qsTr("Trail braking"); color: "#91a0b2"; Layout.preferredWidth: 104 }
+                Label { font.pixelSize: 12; objectName: "cornerAnalyzerTrailA"; text: root.trailText(root.trailLaps[0]); color: "#55e6a5"; Layout.preferredWidth: 76 }
+                Label { font.pixelSize: 12; objectName: "cornerAnalyzerTrailB"; text: root.trailText(root.trailLaps[1]); color: "#d95926"; Layout.preferredWidth: 76 }
+                Label {
+                    font.pixelSize: 12
+                    text: root.trailLaps.length === 2 && root.trailLaps[0].valid && root.trailLaps[1].valid
+                        ? root.formatDelta({value: root.trailLaps[0].overlapSeconds - root.trailLaps[1].overlapSeconds}, 1, " s") : "—"
+                    color: "#f3f6fa"; font.bold: true
+                }
+                Item { Layout.fillWidth: true }
+                ToolButton {
+                    objectName: "cornerAnalyzerTrailShow"
+                    text: qsTr("⎍")
+                    implicitWidth: 26
+                    implicitHeight: 22
+                    Accessible.name: qsTr("Show the brake and lateral G channels in the charts")
+                    ToolTip.visible: hovered
+                    ToolTip.text: Accessible.name
+                    onClicked: {
+                        const lap = root.trailLaps.find(candidate => candidate.valid);
+                        if (!lap) return;
+                        if (lap.brakeChannel) root.channelRequested(lap.brakeChannel);
+                        if (lap.lateralChannel) root.channelRequested(lap.lateralChannel);
+                    }
+                }
+            }
+            // Where each lap brakes (red), corners (blue) and does both (violet)
+            // along the segment.
+            Repeater {
+                model: root.trailKnown ? root.trailLaps : []
+                delegate: RowLayout {
+                    id: stripRow
+                    required property var modelData
+                    required property int index
+                    Layout.fillWidth: true
+                    Label { text: stripRow.index === 0 ? "A" : "B"; color: stripRow.index === 0 ? "#55e6a5" : "#d95926"; font.pixelSize: 10; Layout.preferredWidth: 12 }
+                    Canvas {
+                        objectName: "cornerAnalyzerTrailStrip" + stripRow.index
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 14
+                        property var strips: stripRow.modelData.strips || ({})
+                        onStripsChanged: requestPaint()
+                        onWidthChanged: requestPaint()
+                        onPaint: {
+                            const context = getContext("2d");
+                            context.reset();
+                            context.fillStyle = "#14202a";
+                            context.fillRect(0, 0, width, height);
+                            const lanes = [["braking", "#ff6b6b", 0, height / 2], ["cornering", "#4da3ff", height / 2, height / 2],
+                                           ["overlap", "#b388ff", 0, height]];
+                            for (const [key, color, y, h] of lanes) {
+                                context.fillStyle = color;
+                                for (const part of (strips[key] || []))
+                                    context.fillRect(Number(part.from) * width, y, Math.max(1, (Number(part.to) - Number(part.from)) * width), h);
+                            }
+                        }
+                    }
+                }
+            }
+            Label {
+                objectName: "cornerAnalyzerTrailNote"
+                Layout.fillWidth: true
+                visible: root.trailKnown
+                text: qsTr("Braking while cornering over %1 m (A) and %2 m (B). A: %3 · B: %4. Red is braking, blue cornering, violet both. Longer overlap is not automatically better or safer.")
+                    .arg(root.trailLaps[0] && root.trailLaps[0].valid ? Math.round(root.trailLaps[0].overlapMeters) : "—")
+                    .arg(root.trailLaps[1] && root.trailLaps[1].valid ? Math.round(root.trailLaps[1].overlapMeters) : "—")
+                    .arg(root.trailSource(root.trailLaps[0])).arg(root.trailSource(root.trailLaps[1]))
                 wrapMode: Text.WordWrap
                 color: "#657386"
                 font.pixelSize: 10

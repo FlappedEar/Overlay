@@ -205,6 +205,7 @@ private slots:
     void importsDroppedFilesAndFolders();
     void switchesTheActiveRunPrimaryWithoutStaleEditorState();
     void showsCoastingOnTheOpenLap();
+    void showsTrailBrakingInTheCornerAnalyzer();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -4157,6 +4158,19 @@ QByteArray withColumns(const QByteArray &base, const QStringList &names, const s
 // A complete M4 recording: warpedRouteVbo() with heart rate at `heartRate`
 // bpm, coolant from `coolantStart` rising 0.01 per row, and accelerations
 // with lateral peak `gScale` and braking/accelerating peaks gScale/2.
+// `vbo` with a constant 100 km/h velocity column appended (the route
+// fixtures have no speed channel).
+QByteArray withVelocity(const QByteArray &vbo)
+{
+    QStringList out;
+    bool data = false;
+    for (const auto &line : QString::fromUtf8(vbo).split('\n')) {
+        if (line.startsWith("time latitude longitude")) { out << line + " velocity"; continue; }
+        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
+        out << line + " 100.0";
+    }
+    return out.join('\n').toUtf8();
+}
 QByteArray fullM4Vbo(const bool fastFirstHalf, const double heartRate, const double coolantStart, const double gScale)
 {
     return withColumns(warpedRouteVbo(fastFirstHalf), {"heart_rate", "coolant_temp-obd", "longacc-calc", "latacc-calc"},
@@ -6062,13 +6076,52 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("gg.png"))); reachable("gg");
         ggToggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space); QTest::qWait(300);
     }
+    // The segment list is a ListView (delegates exist only when in view), so
+    // a segment is selected through the panel, as a delegate click does.
+    auto *segmentPanel = window->findChild<QQuickItem *>("comparisonSegmentPanel"); QVERIFY(segmentPanel);
+    const auto selectSegment = [&](const QVariantMap &segment) {
+        if (!segmentPanel->isVisible()) {
+            auto *toggle = window->findChild<QQuickItem *>("comparisonToggleCornerAnalyzer"); QVERIFY(toggle);
+            toggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+            QTRY_VERIFY(segmentPanel->isVisible());
+        }
+        segmentPanel->setProperty("selectedSegmentId", segment.value("id"));
+        QVERIFY(QMetaObject::invokeMethod(segmentPanel, "selectMetric",
+            Q_ARG(QVariant, segment.value("startMeters")), Q_ARG(QVariant, segment.value("endMeters"))));
+        QTest::qWait(800);
+    };
     for (const auto &value : controller.comparisonApprovedSegments()) {
         if (value.toMap().value("type") != "straight") continue;
-        auto *item = window->findChild<QQuickItem *>("cornerAnalyzerSegment-" + value.toMap().value("id").toString());
-        if (!item) break;
-        item->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space); QTest::qWait(800);
+        selectSegment(value.toMap());
         QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("straight.png")));
         break;
+    }
+    // KAN-93: trail braking in the longest corner of the pair.
+    QVariantMap longestCorner;
+    const auto segmentLength = [](const QVariantMap &segment) {
+        return segment.value("endMeters").toDouble() - segment.value("startMeters").toDouble();
+    };
+    for (const auto &value : controller.comparisonApprovedSegments())
+        if (value.toMap().value("type") == "corner" && segmentLength(value.toMap()) > segmentLength(longestCorner))
+            longestCorner = value.toMap();
+    if (!longestCorner.isEmpty()) {
+        for (const auto &value : controller.comparisonTrailBraking(longestCorner.value("startMeters").toDouble(),
+                 longestCorner.value("endMeters").toDouble()).value("laps").toList()) {
+            const auto lap = value.toMap();
+            qInfo().noquote() << QString("  %1 trail braking %2 s / %3 m (braking %4 s %5, cornering %6 s %7)")
+                .arg(longestCorner.value("name").toString()).arg(lap.value("overlapSeconds").toDouble(), 0, 'f', 2)
+                .arg(lap.value("overlapMeters").toDouble(), 0, 'f', 0).arg(lap.value("brakingSeconds").toDouble(), 0, 'f', 2)
+                .arg(lap.value("brakingProvenance").toString()).arg(lap.value("corneringSeconds").toDouble(), 0, 'f', 2)
+                .arg(lap.value("corneringProvenance").toString());
+        }
+        selectSegment(longestCorner);
+        QTRY_VERIFY(window->findChild<QQuickItem *>("cornerAnalyzerTrailBrakingRow")->isVisible());
+        // Scroll to the end once wrapped labels have settled the content height.
+        QTest::qWait(500);
+        if (auto *scroll = window->findChild<QQuickItem *>("cornerAnalyzerScroll"))
+            scroll->setProperty("contentY", std::max(0.0, scroll->property("contentHeight").toDouble() - scroll->height()));
+        QTest::qWait(300);
+        QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("trail-braking.png"))); reachable("trail-braking");
     }
     // The theoretical-best window on the same real day.
     controller.setComparisonViewOpen(false);
@@ -8462,19 +8515,9 @@ void TelemetryTests::showsCoastingOnTheOpenLap()
     QTemporaryDir directory; QVERIFY(directory.isValid());
     QSettings settings; settings.clear(); settings.sync();
     const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
-    // Coasting needs speed; the route fixture has none, so add a velocity column.
-    const auto withSpeed = [](const QByteArray &vbo) {
-        QStringList out;
-        bool data = false;
-        for (const auto &line : QString::fromUtf8(vbo).split('\n')) {
-            if (line.startsWith("time latitude longitude")) { out << line + " velocity"; continue; }
-            if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
-            out << line + " 100.0";
-        }
-        return out.join('\n').toUtf8();
-    };
-    QVERIFY(writeBytes(fullA, withSpeed(fullM4Vbo(true, 140, 80, 1.0))));
-    QVERIFY(writeBytes(fullB, withSpeed(fullM4Vbo(false, 150, 85, 0.9))));
+    // Coasting needs speed; the route fixture has none.
+    QVERIFY(writeBytes(fullA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
+    QVERIFY(writeBytes(fullB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
     AppController controller(nullptr, directory.filePath("recovery.json"));
     QVERIFY(controller.importAnalysisRuns("Coasting day", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
     QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
@@ -8523,6 +8566,103 @@ void TelemetryTests::showsCoastingOnTheOpenLap()
     const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
     if (!review.isEmpty()) static_cast<void>(window->grabWindow().save(QDir(review).filePath("coasting.png")));
     QVERIFY(unreachableControls(window).isEmpty());
+    QCOMPARE(warnings.size(), 0);
+}
+
+void TelemetryTests::showsTrailBrakingInTheCornerAnalyzer()
+{
+    // KAN-93: the Corner Analyzer's Trail braking row -- A/B braking while
+    // cornering on the selected segment, its provenance (no brake channel
+    // here: inferred from deceleration; lateral G calculated), strips, and
+    // the brake and lateral G signals brought into the charts on request.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
+    QVERIFY(writeBytes(fullA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
+    QVERIFY(writeBytes(fullB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Trail day", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
+    // Opened from a time loss, as a driver does: both laps are then measured
+    // against the approved segments.
+    controller.requestOutingDayReport();
+    QTRY_VERIFY_WITH_TIMEOUT([&] {
+        for (const auto &value : controller.outingDayReport().value("results").toList())
+            if (value.toMap().value("id") == "timeLosses") return value.toMap().value("status") == "available";
+        return false;
+    }(), 60000);
+    QVariantList losses;
+    for (const auto &value : controller.outingDayReport().value("results").toList())
+        if (value.toMap().value("id") == "timeLosses") losses = value.toMap().value("evidence").toList();
+    QVERIFY(controller.openTimeLoss({{"segmentId", losses.first().toMap().value("segmentId")},
+                                     {"lapReference", losses.first().toMap().value("reference")}}));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
+    // The corner with the most braking while cornering.
+    QVariantMap corner;
+    double most = -1;
+    for (const auto &value : controller.comparisonApprovedSegments()) {
+        const auto segment = value.toMap();
+        const auto trail = controller.comparisonTrailBraking(segment.value("startMeters").toDouble(), segment.value("endMeters").toDouble());
+        const auto overlap = trail.value("laps").toList().value(0).toMap().value("overlapSeconds").toDouble();
+        if (overlap > most) { most = overlap; corner = segment; }
+    }
+    QVERIFY(most > 0);
+    const auto trail = controller.comparisonTrailBraking(corner.value("startMeters").toDouble(), corner.value("endMeters").toDouble());
+    for (const auto &value : trail.value("laps").toList()) {
+        const auto lap = value.toMap();
+        QVERIFY(lap.value("valid").toBool());
+        QCOMPARE(lap.value("brakingProvenance").toString(), QString("inferred"));
+        QCOMPARE(lap.value("corneringProvenance").toString(), QString("calculated"));
+        QVERIFY(lap.value("overlapMeters").toDouble() > 0);
+        QVERIFY(!lap.value("strips").toMap().value("overlap").toList().isEmpty());
+    }
+
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
+        {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->resize(1180, 720);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    auto *panel = window->findChild<QQuickItem *>("comparisonSegmentPanel"); QVERIFY(panel);
+    if (!panel->isVisible()) {
+        auto *toggle = window->findChild<QQuickItem *>("comparisonToggleCornerAnalyzer"); QVERIFY(toggle);
+        toggle->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(panel->isVisible());
+    }
+    panel->setProperty("selectedSegmentId", corner.value("id"));
+    QTRY_VERIFY(window->findChild<QQuickItem *>("cornerAnalyzerTrailBrakingRow")->isVisible());
+    QVERIFY(window->findChild<QQuickItem *>("cornerAnalyzerTrailNote")->property("text").toString().contains("not automatically better"));
+    QVERIFY(window->findChild<QQuickItem *>("cornerAnalyzerTrailNote")->property("text").toString().contains("inferred from deceleration"));
+    // The strips are Repeater delegates: search the visual tree once created.
+    const auto stripShown = [&] {
+        QQuickItem *strip = nullptr;
+        std::function<void(QQuickItem *)> find = [&](QQuickItem *item) {
+            if (strip || !item->isVisible()) return;
+            if (item->objectName() == "cornerAnalyzerTrailStrip0") { strip = item; return; }
+            for (auto *child : item->childItems()) find(child);
+        };
+        find(window->contentItem());
+        return strip && strip->width() > 0;
+    };
+    QTRY_VERIFY(stripShown());
+    auto *show = window->findChild<QQuickItem *>("cornerAnalyzerTrailShow"); QVERIFY(show);
+    show->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(controller.comparisonPersistedChannels().contains("longacc-calc"));
+    QVERIFY(controller.comparisonPersistedChannels().contains("latacc-calc"));
+    const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!review.isEmpty()) {
+        // Scroll the Corner Analyzer to its end to show the strips and note.
+        if (auto *scroll = window->findChild<QQuickItem *>("cornerAnalyzerScroll"))
+            scroll->setProperty("contentY", std::max(0.0, scroll->property("contentHeight").toDouble() - scroll->height()));
+        QTest::qWait(500);
+        static_cast<void>(window->grabWindow().save(QDir(review).filePath("trail-braking.png")));
+    }
     QCOMPARE(warnings.size(), 0);
 }
 

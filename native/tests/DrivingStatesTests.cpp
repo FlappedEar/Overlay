@@ -77,6 +77,7 @@ private slots:
     void leavesGapsAndUnusableChannelsUnknown();
     void separatesOverlapsAndSpikes();
     void summarizesCoastingBySegmentAndLap();
+    void measuresBrakingWhileCornering();
     void classifiesPrivateBestLaps();
 };
 
@@ -243,6 +244,23 @@ void DrivingStatesTests::summarizesCoastingBySegmentAndLap()
     QCOMPARE(unknown.provenance, QString("unknown"));
     QCOMPARE(unknown.unresolvedReason, QString("pedalStateUnknown"));
     QVERIFY(unknown.episodes.isEmpty());
+}
+
+void DrivingStatesTests::measuresBrakingWhileCornering()
+{
+    // KAN-93: braking 5-7 s and cornering 4.5-7.5 s overlap for 2 s; at
+    // 110 km/h that is 61.1 m.
+    const auto session = sessionWith({{"brake", makeChannel("brake_pos-obd", "%", brake)},
+        {"throttle", makeChannel("accelerator_pos-obd", "%", throttle)},
+        {"lateralAcceleration", makeChannel("latacc-calc", "g", lateral)},
+        {"speed", makeChannel("velocity", "km/h", speed)}});
+    const auto states = classifyDrivingStates(session, 0.0, 10.0);
+    const auto overlap = overlapOf(states.braking.active, states.cornering.active);
+    QCOMPARE(overlap.size(), 1);
+    QVERIFY(std::abs(overlap[0].end - overlap[0].start - 2.0) < 0.15);
+    QVERIFY(std::abs(travelledMeters(session, overlap) - 110.0 / 3.6 * 2.0) < 4.0);
+    QVERIFY(overlapOf(states.braking.active, {}).isEmpty());
+    QCOMPARE(travelledMeters(sessionWith({}), overlap), 0.0); // no speed: nothing invented
 }
 
 void DrivingStatesTests::classifiesPrivateBestLaps()
