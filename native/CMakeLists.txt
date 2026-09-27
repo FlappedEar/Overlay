@@ -221,7 +221,11 @@ elseif(WIN32)
 endif()
 
 qt_add_executable(flappedear_native MACOSX_BUNDLE
-    src/app/AppControllerImport.cpp
+    src/app/DocumentControllerImport.cpp
+    src/app/DocumentController.cpp
+    src/app/DocumentController.h
+    src/app/DocumentHost.h
+    src/app/AppControllerDocument.cpp
     src/app/AnalysisControllerComparison.cpp
     src/app/AnalysisControllerOuting.cpp
     src/app/AnalysisControllerSegmentReview.cpp

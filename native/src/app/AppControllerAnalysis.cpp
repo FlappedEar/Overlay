@@ -29,22 +29,6 @@ void AppController::initializeAnalysis()
     m_analysis.setVideoLink(this);
 }
 
-void AppController::commitAnalysisProject(const QJsonObject &project)
-{
-    m_projectTemplate = project;
-    markPersistentChange();
-}
-
-bool AppController::isEventDocument() const
-{
-    return EventProjectCodec::isEvent(m_projectTemplate);
-}
-
-bool AppController::destructiveActionPending() const
-{
-    return m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None;
-}
-
 QJsonObject AppController::activeLapBinding() const
 {
     for (auto value : m_analysis.outingLapSources()) {

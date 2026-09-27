@@ -2,7 +2,8 @@
 
 #include "app/VideoLink.h"
 #include "app/AnalysisController.h"
-#include "app/AnalysisDocument.h"
+#include "app/DocumentController.h"
+#include "app/DocumentHost.h"
 #include "telemetry/TelemetrySessionCache.h"
 
 #include "telemetry/LapTiming.h"
@@ -60,7 +61,7 @@ class TelemetryTests;
 
 namespace FlappedEar {
 
-class AppController final : public QObject, private VideoLink, private AnalysisDocument {
+class AppController final : public QObject, private VideoLink, private DocumentHost {
     Q_OBJECT
     Q_PROPERTY(QUrl videoSource READ videoSource NOTIFY videoSourceChanged)
     Q_PROPERTY(QString videoName READ videoName NOTIFY videoSourceChanged)
@@ -256,21 +257,21 @@ public:
     [[nodiscard]] int windowY() const;
     [[nodiscard]] int windowWidth() const;
     [[nodiscard]] int windowHeight() const;
-    [[nodiscard]] QUrl projectPath() const;
-    [[nodiscard]] QString eventName() const;
-    [[nodiscard]] QVariantList eventRuns() const override;
-    [[nodiscard]] QString activeRunId() const override;
-    [[nodiscard]] bool dirty() const override;
-    [[nodiscard]] quint64 lastSavedRevision() const;
-    [[nodiscard]] QString pendingDestructiveAction() const;
+    [[nodiscard]] QUrl projectPath() const { return m_document.projectPath(); }
+    [[nodiscard]] QString eventName() const { return m_document.eventName(); }
+    [[nodiscard]] QVariantList eventRuns() const { return m_document.eventRuns(); }
+    [[nodiscard]] QString activeRunId() const { return m_document.activeRunId(); }
+    [[nodiscard]] bool dirty() const { return m_document.dirty(); }
+    [[nodiscard]] quint64 lastSavedRevision() const { return m_document.lastSavedRevision(); }
+    [[nodiscard]] QString pendingDestructiveAction() const { return m_document.pendingDestructiveAction(); }
     [[nodiscard]] QString videoLoadState() const;
     [[nodiscard]] QString vboLoadState() const;
-    [[nodiscard]] bool projectLoading() const override;
-    [[nodiscard]] QString projectLoadStage() const;
-    [[nodiscard]] QString projectLoadError() const;
-    [[nodiscard]] bool recoveryPending() const override;
-    [[nodiscard]] bool recoveryDegraded() const;
-    [[nodiscard]] QString recoveryError() const;
+    [[nodiscard]] bool projectLoading() const { return m_document.projectLoading(); }
+    [[nodiscard]] QString projectLoadStage() const { return m_document.projectLoadStage(); }
+    [[nodiscard]] QString projectLoadError() const { return m_document.projectLoadError(); }
+    [[nodiscard]] bool recoveryPending() const { return m_document.recoveryPending(); }
+    [[nodiscard]] bool recoveryDegraded() const { return m_document.recoveryDegraded(); }
+    [[nodiscard]] QString recoveryError() const { return m_document.recoveryError(); }
     [[nodiscard]] QString sourceMismatchType() const;
     [[nodiscard]] QString sourceMismatchCandidateName() const;
     [[nodiscard]] QString selectedTemplateId() const;
@@ -278,7 +279,7 @@ public:
 
     Q_INVOKABLE void loadVideo(const QUrl &url);
     Q_INVOKABLE void loadVbo(const QUrl &url);
-    Q_INVOKABLE bool selectEventRun(const QString &runId);
+    Q_INVOKABLE bool selectEventRun(const QString &runId) { return m_document.selectEventRun(runId); }
     Q_INVOKABLE QVariantMap runMetadata(const QString &runId) const;
     Q_INVOKABLE bool updateRunMetadata(const QString &runId, const QString &expectedToken,
         const QString &name, const QString &notes, const QString &conditions, const QString &setupChanges);
@@ -444,16 +445,16 @@ public:
     Q_INVOKABLE bool retryOutingAnalysis();
     [[nodiscard]] QStringList outingLapMessages() const { return m_analysis.outingLapMessages(); }
     [[nodiscard]] bool outingLapsLoading() const { return m_analysis.outingLapsLoading(); }
-    [[nodiscard]] QString batchImportState() const { return m_batchState; }
-    [[nodiscard]] QString batchImportError() const { return m_batchError; }
-    [[nodiscard]] QStringList analysisImportMessages() const { return m_analysisImportMessages; }
-    [[nodiscard]] QVariantList batchImportRows() const { return m_batchRows; }
-    [[nodiscard]] int batchImportProcessed() const { return m_batchProcessed; }
-    [[nodiscard]] int batchImportTotal() const { return m_batchTotal; }
-    Q_INVOKABLE bool beginBatchImport(const QList<QUrl> &urls);
-    Q_INVOKABLE bool importAnalysisRuns(const QString &name, const QList<QUrl> &urls);
-    Q_INVOKABLE void cancelBatchImport();
-    Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices);
+    [[nodiscard]] QString batchImportState() const { return m_document.batchImportState(); }
+    [[nodiscard]] QString batchImportError() const { return m_document.batchImportError(); }
+    [[nodiscard]] QStringList analysisImportMessages() const { return m_document.analysisImportMessages(); }
+    [[nodiscard]] QVariantList batchImportRows() const { return m_document.batchImportRows(); }
+    [[nodiscard]] int batchImportProcessed() const { return m_document.batchImportProcessed(); }
+    [[nodiscard]] int batchImportTotal() const { return m_document.batchImportTotal(); }
+    Q_INVOKABLE bool beginBatchImport(const QList<QUrl> &urls) { return m_document.beginBatchImport(urls); }
+    Q_INVOKABLE bool importAnalysisRuns(const QString &name, const QList<QUrl> &urls) { return m_document.importAnalysisRuns(name, urls); }
+    Q_INVOKABLE void cancelBatchImport() { m_document.cancelBatchImport(); }
+    Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices) { return m_document.confirmBatchImport(name, append, choices); }
     Q_INVOKABLE void relinkVideo(const QUrl &url);
     Q_INVOKABLE void relinkVbo(const QUrl &url);
     Q_INVOKABLE void resolveSourceMismatch(bool acceptReplacement);
@@ -463,14 +464,14 @@ public:
         const QString &channelName, double videoStart, double videoEnd, int maximumPoints) const;
     Q_INVOKABLE qint64 videoMillisecondsForTelemetryTime(double telemetryTime) const;
     Q_INVOKABLE void toggleAnalysisChannel(const QString &channelName);
-    Q_INVOKABLE void requestNewProject();
-    Q_INVOKABLE void requestOpenProject(const QUrl &url);
-    Q_INVOKABLE void requestQuit();
-    Q_INVOKABLE void resolveDestructiveAction(const QString &decision);
-    Q_INVOKABLE void cancelPendingDestructiveAction();
-    Q_INVOKABLE bool saveCurrentProject();
-    Q_INVOKABLE bool saveProject(const QUrl &url);
-    Q_INVOKABLE void resolveStartupRecovery(const QString &decision);
+    Q_INVOKABLE void requestNewProject() { m_document.requestNewProject(); }
+    Q_INVOKABLE void requestOpenProject(const QUrl &url) { m_document.requestOpenProject(url); }
+    Q_INVOKABLE void requestQuit() { m_document.requestQuit(); }
+    Q_INVOKABLE void resolveDestructiveAction(const QString &decision) { m_document.resolveDestructiveAction(decision); }
+    Q_INVOKABLE void cancelPendingDestructiveAction() { m_document.cancelPendingDestructiveAction(); }
+    Q_INVOKABLE bool saveCurrentProject() { return m_document.saveCurrentProject(); }
+    Q_INVOKABLE bool saveProject(const QUrl &url) { return m_document.saveProject(url); }
+    Q_INVOKABLE void resolveStartupRecovery(const QString &decision) { m_document.resolveStartupRecovery(decision); }
     Q_INVOKABLE void autoSync();
     Q_INVOKABLE void applySyncCandidate();
     Q_INVOKABLE void ignoreSyncCandidate();
@@ -604,28 +605,6 @@ private:
         bool relink = false;
     };
 
-    struct ProjectLoadResult {
-        bool success = false;
-        bool cancelled = false;
-        QString projectPath;
-        QJsonObject project;
-        QJsonArray widgets;
-        QStringList analysisChannels;
-        SyncTransform sync;
-        ProjectSourceReference videoReference;
-        ProjectSourceReference vboReference;
-        QString resolvedVideoPath;
-        QString resolvedVboPath;
-        QString error;
-        quint64 generation = 0;
-        quint64 documentRevisionAtStart = 0;
-        bool recovered = false;
-        bool runSelection = false;
-        quint64 recoveredRevision = 0;
-        quint64 recoveredLastSavedRevision = 0;
-        QString recoveredDocumentId;
-    };
-
     [[nodiscard]] QVariant semanticValue(const QString &alias) const;
     void setStatus(QString status);
     struct SourceLoadRequest {
@@ -635,37 +614,16 @@ private:
         bool relink = false;
     };
     [[nodiscard]] quint64 beginSourceReplacement(bool replacingVideo);
-    [[nodiscard]] quint64 beginSourceGeneration(bool preserveOuting = false);
+    [[nodiscard]] quint64 beginSourceGeneration(bool preserveOuting = false) override;
     void cancelSourceJobs(bool cancelOutingDetail = true);
     void startVideoProbe(const QString &path, quint64 generation, bool markDocumentDirty,
                          QJsonObject expectedFingerprint = {}, bool relink = false);
     void startVboLoad(const QString &path, quint64 generation, bool markDocumentDirty,
                       QJsonObject expectedFingerprint = {}, bool relink = false);
-    void startProjectSources(const ProjectLoadResult &result);
-    [[nodiscard]] bool commitProjectLoad(const ProjectLoadResult &result);
     void commitVideoProbe(const VideoProbeResult &result, bool markDocumentDirty);
     void commitVboLoad(const VboLoadResult &result, bool markDocumentDirty);
-    void setProjectLoadState(bool loading, QString stage = {}, QString error = {});
-    [[nodiscard]] static QString normalizedSourcePath(const QString &path);
+    [[nodiscard]] static QString normalizedSourcePath(const QString &path) { return DocumentController::normalizedSourcePath(path); }
     [[nodiscard]] static QVariantList trackPointsFor(const TrackGeometry &geometry);
-    void markPersistentChange();
-    [[nodiscard]] QJsonObject currentProjectObject(const QString &projectPath = {},
-                                                    std::optional<quint64> savedRevision = std::nullopt) const;
-    bool beginProjectLoad(QString projectPath, const QJsonObject &project,
-                          bool recovered = false, quint64 recoveredRevision = 0,
-                          quint64 recoveredLastSavedRevision = 0,
-                          QString recoveredDocumentId = {}, bool runSelection = false);
-    void restoreStartupState();
-    void scheduleRecoveryWrite();
-    void writeRecoverySnapshot();
-    bool clearRecovery(const QString &reason);
-    bool discardRecovery(const ProjectRecoverySnapshot &snapshot, const QString &reason);
-    void clearDiscardTombstoneAfterRecoveryCleanup();
-    void retireLegacyDocumentSettings();
-    void performClearProject();
-    bool performOpenProject(const QUrl &url);
-    void beginDestructiveAction(ProjectDocumentState::DestructiveAction action, const QUrl &openUrl = {});
-    void performPendingDestructiveAction();
     void reconcileAnalysisChannels();
     void clearActiveTemplate();
     void handleExportOutput();
@@ -680,57 +638,29 @@ private:
     // AnalysisDocument and reaches the loaded video through VideoLink.
     [[nodiscard]] std::optional<qint64> videoPositionForTelemetry(const QString &runId, double telemetrySeconds) const override;
     [[nodiscard]] std::optional<double> telemetryForVideoPosition(const QString &runId, qint64 videoMilliseconds) const override;
-    [[nodiscard]] QJsonObject analysisProject() const override { return currentProjectObject(); }
-    void commitAnalysisProject(const QJsonObject &project) override;
-    [[nodiscard]] bool isEventDocument() const override;
-    [[nodiscard]] QString documentProjectPath() const override { return m_documentState.projectPath(); }
-    [[nodiscard]] QString documentIdentity() const override { return m_documentId; }
-    [[nodiscard]] quint64 documentRevision() const override { return m_documentState.revision(); }
-    [[nodiscard]] quint64 sourceGeneration() const override { return m_sourceGeneration; }
-    [[nodiscard]] bool batchImportPending() const override { return m_batchPending; }
-    [[nodiscard]] bool destructiveActionPending() const override;
-    [[nodiscard]] bool dirtyTrackingSuppressed() const override { return m_suppressDirtyTracking; }
+    // DocumentHost: the active run's editor state in the project document.
+    [[nodiscard]] bool acceptsEditorProject(const QJsonObject &project, const QString &projectPath) override;
+    [[nodiscard]] bool applyEditorScene(const ProjectLoadResult &result, QString *error) override;
+    void applyEditorProject(const ProjectLoadResult &result) override;
+    void announceEditorProject() override;
+    void startEditorSources(const ProjectLoadResult &result) override;
+    void clearEditor() override;
+    [[nodiscard]] QJsonObject withEditorState(QJsonObject projection, const QString &documentPath,
+        const QString &targetPath) const override;
+    [[nodiscard]] QByteArray loadedTelemetryRevision() const override;
+    [[nodiscard]] QJsonObject withVerifiedAnalysis(const QJsonObject &project) const override;
+    void editorProjectSaved(const QJsonObject &project) override;
+    void showStatus(const QString &status) override { setStatus(status); }
+    void revealAnalysis() override { setAnalysisVisible(true); }
+    void initializeDocument();
+    void initializeAnalysis();
+    // Shorthands for the document the editor state belongs to.
+    [[nodiscard]] QJsonObject currentProjectObject() const { return m_document.currentProjectObject(); }
+    void markPersistentChange() { m_document.markPersistentChange(); }
     // The editor's own lap navigation follows the saved lap exclusions.
     void applyActiveLapExclusions();
     [[nodiscard]] QJsonObject activeLapBinding() const;
     QByteArray m_loadedSourceRevision;
-    struct BatchImportResult {
-        std::shared_ptr<TelemetryImportPlan> plan;
-        QHash<QString, QJsonObject> fingerprints;
-        QSet<QString> existing;
-        QJsonObject project;
-        QString error;
-        bool cancelled = false;
-        bool confirmation = false;
-        bool append = false;
-    };
-    void initializeBatchImport();
-    void initializeAnalysis();
-    void invalidateBatchImport();
-    [[nodiscard]] bool batchContextMatches() const;
-    void publishBatchRows();
-    QFutureWatcher<BatchImportResult> m_batchWatcher;
-    QTimer m_batchProgressTimer;
-    std::shared_ptr<std::atomic_bool> m_batchCancellation;
-    std::shared_ptr<std::atomic_int> m_batchProgress;
-    std::shared_ptr<TelemetryImportPlan> m_batchPlan;
-    QHash<QString, QJsonObject> m_batchFingerprints;
-    QSet<QString> m_batchExisting;
-    QVariantList m_batchRows;
-    QString m_batchState = QStringLiteral("idle");
-    QString m_batchError;
-    QString m_batchDocumentId;
-    QString m_batchProjectPath;
-    quint64 m_batchRevision = 0;
-    quint64 m_batchGeneration = 0;
-    int m_batchProcessed = 0;
-    int m_batchTotal = 0;
-    bool m_batchApplying = false;
-    bool m_batchPending = false;
-    bool m_analysisImportAutomatic = false;
-    bool m_analysisImportAppend = false;
-    QString m_analysisImportName;
-    QStringList m_analysisImportMessages;
     QUrl m_videoSource;
     QString m_telemetryPath;
     ProjectSourceReference m_videoReference;
@@ -742,29 +672,14 @@ private:
     TrackGeometry m_trackGeometry;
     TelemetryRenderContext m_previewRenderContext;
     QVariantList m_trackPoints;
-    QJsonObject m_projectTemplate;
-    ProjectWriter m_projectWriter;
-    ProjectDocumentState m_documentState;
-    ProjectRecoveryStore m_recoveryStore;
-    QString m_documentId;
-    ProjectRecoverySnapshot m_pendingRecovery;
-    QTimer m_recoveryTimer;
-    bool m_recoveryPending = false;
-    bool m_recoveryDegraded = false;
-    QString m_recoveryError;
-    QUrl m_pendingOpenProject;
-    bool m_suppressDirtyTracking = false;
     double m_playbackTime = 0.0;
     SyncTransform m_sync;
     QFutureWatcher<AutoSyncResult> m_syncWatcher;
     QFutureWatcher<VideoProbeResult> m_videoProbeWatcher;
     QFutureWatcher<VboLoadResult> m_vboLoadWatcher;
-    QFutureWatcher<ProjectLoadResult> m_projectLoadWatcher;
-    quint64 m_sourceGeneration = 0;
     quint64 m_syncRevision = 0;
     std::shared_ptr<std::atomic_bool> m_videoProbeCancellation;
     std::shared_ptr<std::atomic_bool> m_vboLoadCancellation;
-    std::shared_ptr<std::atomic_bool> m_projectLoadCancellation;
     std::shared_ptr<std::atomic_bool> m_syncCancellation;
     bool m_videoLoadMarksDocumentDirty = true;
     bool m_vboLoadMarksDocumentDirty = true;
@@ -779,9 +694,6 @@ private:
     QString m_sourceMismatchType;
     QString m_selectedTemplateId;
     QString m_activeTemplateId;
-    bool m_projectLoading = false;
-    QString m_projectLoadStage;
-    QString m_projectLoadError;
     std::unique_ptr<QProcess> m_exportProcess;
     std::unique_ptr<ExportProcessSupervisor> m_exportSupervisor;
     std::unique_ptr<QTemporaryFile> m_exportConfig;
@@ -805,8 +717,9 @@ private:
     QVariantMap m_syncCandidate;
     QStringList m_analysisChannels;
     bool m_analysisVisible = false;
-    // Declared last: destroyed first, while the document it reads still exists.
-    AnalysisController m_analysis{*this};
+    // Declared last, analysis after the document it reads: destroyed first.
+    DocumentController m_document;
+    AnalysisController m_analysis{m_document};
 };
 
 } // namespace FlappedEar
