@@ -20,12 +20,14 @@ An event owns an ordered list of runs and an `activeRunId`. Each run owns:
 - Optional `sources.video` reference and its `sync.offset`/`sync.timeScale`.
 - `trackConfiguration` on new imports: explicit layout/direction/gate identity,
   bound to the primary source ID and fingerprint (details below).
+- Optional `fusion`: an approved source-fusion decision (KAN-103, details below).
 - Optional metadata such as `notes`; bounded unknown fields survive round trips.
 
 Event/run/source IDs are document identities, not filenames or import proposal
 hashes. Import confirmation will allocate them once; relinking does not replace
 these IDs. Alternate exports are retained, but only the explicit primary source
-is loaded. There is no RCZ-over-VBO priority or channel fusion.
+is loaded. There is no RCZ-over-VBO priority. Channels of one alternative join
+the run's analysis only through an approved `fusion` decision.
 
 Laps remain derived from the selected source and source gates, not serialized
 sample arrays or cached lap times. Published lap summaries include `runId` and a
@@ -516,3 +518,52 @@ document. Explicit Save also records available verified provenance. Legacy files
 without it reconstruct deterministically without confirmation. Per-run caches
 include the inference algorithm and source/derivation dependencies; inferred
 grouping does not change portable lap references or transfer saved exclusions.
+
+## Source-fusion decisions (KAN-103)
+
+A run may carry one approved `fusion` object. It adds an alternative
+recording's channels to that run's analysis:
+
+```json
+"fusion": {
+  "algorithm": "channel-fusion-v1",
+  "alternativeSourceId": "<a source of this run, not the primary>",
+  "primarySourceRevision": "<64 hex>",
+  "alternativeSourceRevision": "<64 hex>",
+  "clock": {"offsetSeconds": 0.01, "driftPpm": 0.0, "uncertaintySeconds": 0.05,
+            "alignmentAlgorithm": "recording-alignment-v1", "resolvedByDeclaredClock": false},
+  "rules": [{"key": "speed", "rule": "fillGaps"}]
+}
+```
+
+**Validation.** The codec validates the decision strictly:
+- `alternativeSourceId` must be one of this run's own sources and not its
+  primary.
+- Both content revisions are 64 lowercase hex characters.
+- The clock is finite: |offset| ≤ 86 400 s, |drift| ≤ 1000 ppm, uncertainty
+  ≥ 0.
+- At most 64 rules, one per channel key, each `primaryOnly`, `fillGaps` or
+  `preferAlternative`.
+
+The decision round-trips through save and recovery unchanged.
+
+**Approval.** A decision is written only by approving a fusion review in
+Run details:
+- The clock alignment (KAN-101) must be "aligned".
+- Every channel whose measurements conflict must have a rule.
+- The review and approval are guarded by the document revision.
+
+**When it applies.** It applies only while both sources' recorded content
+revisions still equal the approved ones. Otherwise the run's analysis uses
+its primary alone and Run details shows "Fusion needs review". Relinking a
+recording to different content therefore requires a new review. A fused
+file that changes on disk is caught when a lap opens: its content hash no
+longer matches, so the lap is not opened with it. Changing the run's
+primary removes the decision, and **Remove fusion** removes it explicitly.
+
+**What it changes.** Laps remain derived from the primary alone. Fusion
+changes only the channels the analysis sees: lap detail, A/B comparison,
+channel summaries and theoretical best all load through
+`loadOutingLapDetail`. Its session cache key includes the decision. The
+overlay editor keeps loading the primary recording.
+

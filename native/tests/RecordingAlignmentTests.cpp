@@ -83,7 +83,7 @@ void RecordingAlignmentTests::alignsAShiftedRecording()
     QCOMPARE(measuredOnly.status, QString(alignmentAmbiguous));
     QCOMPARE(measuredOnly.reason, QString("repeatedMatch"));
     QVERIFY2(std::abs(*measuredOnly.offset - 123.4) < 0.1, qPrintable(QString::number(*measuredOnly.offset)));
-    QVERIFY(std::abs(*measuredOnly.driftPpm) < 50.0);
+    QVERIFY(!measuredOnly.driftPpm); // identical clocks: no drift resolvable, none claimed
     QVERIFY(*measuredOnly.uncertaintySeconds <= 0.3);
     QVERIFY(measuredOnly.usedWindows >= 3);
     QVERIFY(measuredOnly.correlation > 0.95);

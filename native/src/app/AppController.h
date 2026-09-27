@@ -467,6 +467,9 @@ public:
     Q_INVOKABLE void cancelRunRecording() { m_document.cancelRunRecording(); }
     Q_INVOKABLE bool setRunPrimarySource(const QString &runId, const QString &sourceId) { return m_document.setRunPrimarySource(runId, sourceId); }
     Q_INVOKABLE bool checkRunRecordingAlignment(const QString &runId, const QString &sourceId) { return m_document.checkRunRecordingAlignment(runId, sourceId); }
+    Q_INVOKABLE bool reviewRunFusion(const QString &runId, const QString &sourceId) { return m_document.reviewRunFusion(runId, sourceId); }
+    Q_INVOKABLE bool approveRunFusion(const QVariantMap &rules) { return m_document.approveRunFusion(rules); }
+    Q_INVOKABLE bool removeRunFusion(const QString &runId) { return m_document.removeRunFusion(runId); }
     [[nodiscard]] QVariantMap runRecordingReview() const { return m_document.runRecordingReview(); }
     Q_INVOKABLE void cancelBatchImport() { m_document.cancelBatchImport(); }
     Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices) { return m_document.confirmBatchImport(name, append, choices); }

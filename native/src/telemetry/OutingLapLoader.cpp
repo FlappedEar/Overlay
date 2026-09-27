@@ -4,6 +4,7 @@
 #include "telemetry/OutingLapLoader.h"
 
 #include "project/ProjectSourceReference.h"
+#include "telemetry/ChannelFusion.h"
 #include "telemetry/LapTiming.h"
 #include "telemetry/OutingLaps.h"
 #include "telemetry/SourceOperation.h"
@@ -45,20 +46,62 @@ OutingLapDetail loadOutingLapDetail(const QJsonObject &source,
             result.staleReference = true;
             throw std::runtime_error("Lap reference is stale: recording content changed. Reload this source.");
         }
+        // KAN-103: an approved source fusion (present in the descriptor only
+        // while both recordings still match what was reviewed).
+        const auto fusion = source.value("fusion").toObject();
         const auto cacheKey = QCryptographicHash::hash(QJsonDocument(QJsonObject{
             {"fingerprint", reference.fingerprint}, {"content", QString::fromLatin1(contentRevision)},
             {"derivation", lapReference.value("derivationKey")}, {"algorithm", lapReference.value("algorithm")},
-            {"format", QFileInfo(path).suffix().toLower()}}).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256);
-        const auto session = cache->load(cacheKey, cancelled,
-            [&](qint64 available) { return TelemetrySource::load(path, cancelled, available); },
+            {"format", QFileInfo(path).suffix().toLower()}, {"fusion", fusion}}).toJson(QJsonDocument::Compact),
+            QCryptographicHash::Sha256);
+        const auto checkPrimary = [&](const TelemetrySession &candidate) {
+            if (ProjectSourceReferenceCodec::compareFingerprints(reference.fingerprint,
+                ProjectSourceReferenceCodec::telemetryFingerprint(path, candidate)) != SourceFingerprintMatch::Match)
+                throw std::runtime_error("Recording changed. Relink its source before opening this lap.");
+        };
+        const auto decode = [&](qint64 available) {
+            auto primary = TelemetrySource::load(path, cancelled, available);
+            if (fusion.isEmpty()) return primary;
+            checkPrimary(primary);
+            const auto alternativeJson = fusion.value("alternativeReference").toObject();
+            const ProjectSourceReference alternativeReference{alternativeJson.value("relativePath").toString(),
+                alternativeJson.value("absolutePath").toString(), alternativeJson.value("fingerprint").toObject()};
+            const auto alternativePath = ProjectSourceReferenceCodec::resolve(alternativeReference, projectPath);
+            if (alternativePath.isEmpty())
+                throw std::runtime_error("The recording fused into this run is missing. Relink it, or remove the fusion.");
+            const auto alternativeBytes = QFileInfo(alternativePath).size();
+            if (alternativeBytes <= 0 || alternativeBytes > TelemetryImportLimits{}.maximumFileBytes)
+                throw ResourceLimitError("The fused recording exceeds the analysis size limit.");
+            if (TelemetrySource::contentSha256(alternativePath, alternativeBytes, cancelled).toHex()
+                != fusion.value("alternativeSourceRevision").toString().toLatin1()) {
+                result.staleReference = true;
+                throw std::runtime_error("The fused recording changed since the fusion was approved. Review it again.");
+            }
+            const auto alternative = TelemetrySource::load(alternativePath, cancelled, available);
+            if (ProjectSourceReferenceCodec::compareFingerprints(alternativeReference.fingerprint,
+                ProjectSourceReferenceCodec::telemetryFingerprint(alternativePath, alternative)) != SourceFingerprintMatch::Match)
+                throw std::runtime_error("The fused recording changed. Relink it before opening this lap.");
+            const auto clock = fusion.value("clock").toObject();
+            FusionPolicy policy;
+            const auto alternativeId = fusion.value("alternativeSourceId").toString();
+            for (const auto &value : fusion.value("rules").toArray()) {
+                const auto rule = value.toObject().value("rule").toString();
+                policy.rules.insert(value.toObject().value("key").toString(), {alternativeId,
+                    rule == QLatin1String("fillGaps") ? FusionRule::FillGaps
+                    : rule == QLatin1String("preferAlternative") ? FusionRule::PreferAlternative : FusionRule::PrimaryOnly});
+            }
+            const auto fused = fuseChannels(primary, source.value("sourceId").toString(),
+                {{alternativeId, &alternative, {clock.value("offsetSeconds").toDouble(), clock.value("driftPpm").toDouble()},
+                  QStringLiteral("aligned")}}, policy, cancelled);
+            return fusedSession(primary, fused);
+        };
+        const auto session = cache->load(cacheKey, cancelled, decode,
             [&](const TelemetrySession &candidate) {
                 if (TelemetrySource::contentSha256(path, bytes, cancelled).toHex() != contentRevision) {
                     result.staleReference = true;
                     throw std::runtime_error("Lap reference is stale: recording changed while opening it.");
                 }
-                if (ProjectSourceReferenceCodec::compareFingerprints(reference.fingerprint,
-                    ProjectSourceReferenceCodec::telemetryFingerprint(path, candidate)) != SourceFingerprintMatch::Match)
-                    throw std::runtime_error("Recording changed. Relink its source before opening this lap.");
+                if (fusion.isEmpty()) checkPrimary(candidate); // a fused session was checked before fusing
             });
         throwIfCancelled(cancelled);
         if (!std::isfinite(start) || !std::isfinite(end) || start < 0 || end <= start || end > session->duration)

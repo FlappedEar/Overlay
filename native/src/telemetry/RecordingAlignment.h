@@ -50,7 +50,7 @@ struct RecordingAlignment {
     QString reason;                        // why it is not "aligned"
     std::optional<double> declaredOffset;  // seconds, from the loggers' start timestamps
     std::optional<double> offset;          // measured, at candidate time 0
-    std::optional<double> driftPpm;        // with at least three agreeing windows
+    std::optional<double> driftPpm;        // with three agreeing windows, when resolvable over the overlap
     std::optional<double> uncertaintySeconds;
     double correlation = -1.0;             // whole-overlap speed correlation
     double peakUniqueness = 0.0;

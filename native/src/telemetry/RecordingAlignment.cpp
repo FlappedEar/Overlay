@@ -118,6 +118,17 @@ RecordingAlignment alignRecordings(const TelemetrySession &primary, const Teleme
             squares += error * error;
         }
         residual = std::sqrt(squares / (used.size() - 2));
+        // A drift is reported only when it moves the offset across the
+        // windows by clearly more than the offsets can be resolved; below
+        // that it would be precision the recordings do not have.
+        const double span = used.last()->candidateTime - used.first()->candidateTime;
+        if (std::abs(slope) * span < 2.0 * std::max(0.05, residual)) {
+            result.offset = meanO;
+            result.driftPpm.reset();
+            double spread = 0.0;
+            for (const auto *window : used) spread += (window->offset - meanO) * (window->offset - meanO);
+            residual = std::sqrt(spread / (used.size() - 1));
+        }
     } else if (!used.isEmpty()) {
         double sum = 0.0, low = used.first()->offset, high = low;
         for (const auto *window : used) {

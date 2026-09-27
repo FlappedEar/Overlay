@@ -27,6 +27,11 @@ inline constexpr qsizetype maximumIdCharacters = 128;
 // from carrying an unbounded or non-finite value, not to constrain real tracks.
 inline constexpr double maximumComparisonRangeMeters = 1'000'000.0;
 inline constexpr qsizetype maximumComparisonChannels = 4;
+// KAN-103: per-channel rules of one run's approved source fusion.
+inline constexpr qsizetype maximumFusionRules = 64;
+// An approved fusion clock: offsets up to a day, drift up to a logger's plausible 1000 ppm.
+inline constexpr double maximumFusionOffsetSeconds = 86400.0;
+inline constexpr double maximumFusionDriftPpm = 1000.0;
 inline constexpr qsizetype maximumTemplateNameCharacters = 160;
 inline constexpr qsizetype maximumTemplateDescriptionCharacters = 2048;
 

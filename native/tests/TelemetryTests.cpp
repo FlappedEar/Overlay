@@ -204,6 +204,7 @@ private slots:
     void keepsACompleteDayThroughMoveRelinkAndRecovery();
     void importsDroppedFilesAndFolders();
     void switchesTheActiveRunPrimaryWithoutStaleEditorState();
+    void reviewsSourceFusionInRunDetails();
     void showsCoastingOnTheOpenLap();
     void showsTrailBrakingInTheCornerAnalyzer();
     void coloursTheComparisonMapByAChannel();
@@ -4162,6 +4163,21 @@ QByteArray withColumns(const QByteArray &base, const QStringList &names, const s
 // with lateral peak `gScale` and braking/accelerating peaks gScale/2.
 // `vbo` with a constant 100 km/h velocity column appended (the route
 // fixtures have no speed channel).
+// KAN-103: a session recording with a non-periodic speed trace, optionally
+// an OBD coolant channel, and a speed bias for a disagreeing logger.
+QByteArray withSessionSpeed(const QByteArray &vbo, const bool coolant, const double speedBias = 0.0)
+{
+    QStringList out;
+    bool data = false;
+    for (const auto &line : QString::fromUtf8(vbo).split('\n')) {
+        if (line.startsWith("time latitude longitude")) { out << line + " velocity" + (coolant ? " coolant_temp-obd" : ""); continue; }
+        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
+        const double t = line.split(' ').first().toDouble();
+        const double speed = 90.0 + 25.0 * std::sin(0.11 * t) + 12.0 * std::sin(0.0007 * t * t) + speedBias;
+        out << line + QString(" %1").arg(speed, 0, 'f', 3) + (coolant ? QString(" %1").arg(88.0 + 0.02 * t, 0, 'f', 3) : "");
+    }
+    return out.join('\n').toUtf8();
+}
 QByteArray withVelocity(const QByteArray &vbo)
 {
     QStringList out;
@@ -8985,6 +9001,87 @@ void TelemetryTests::associatesTemperaturesWithLapPerformance()
         QTest::qWait(300);
         static_cast<void>(window->grabWindow().save(QDir(review).filePath("temperature-association.png")));
     }
+    QCOMPARE(warnings.size(), 0);
+}
+
+void TelemetryTests::reviewsSourceFusionInRunDetails()
+{
+    // KAN-103: Run details -> Fuse... shows the clock alignment and the
+    // resulting channels; a conflicting channel needs a rule before Approve
+    // is enabled; approving marks the recording Fused.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto primary = directory.filePath("session.vbo"), biased = directory.filePath("session-obd.vbo");
+    QVERIFY(writeBytes(primary, withSessionSpeed(warpedRouteVbo(true), false)));
+    QVERIFY(writeBytes(biased, withSessionSpeed(warpedRouteVbo(true), true, 8.0)));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QSignalSpy committed(&controller, &AppController::batchImportCommitted);
+    QVERIFY(controller.importAnalysisRuns("Fusion review", {QUrl::fromLocalFile(primary)}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    // Let the analysis settle first: it records its track inference as an
+    // edit, which (correctly) makes an attach review in flight stale.
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 20000);
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && !controller.outingLaps().isEmpty(), 20000);
+    QTest::qWait(500);
+    const auto runId = controller.activeRunId();
+    QVERIFY(controller.attachRunRecording(runId, QUrl::fromLocalFile(biased)));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.runRecordingReview().value("state").toString(), QString("review"), 20000);
+    QVERIFY(controller.confirmRunRecording());
+    QTRY_VERIFY_WITH_TIMEOUT(controller.runRecordingReview().isEmpty(), 20000);
+
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
+        {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->resize(1180, 720);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    auto *dialog = window->findChild<QObject *>("runDetailsDialog"); QVERIFY(dialog);
+    QVERIFY(QMetaObject::invokeMethod(dialog, "open"));
+    QTRY_VERIFY(dialog->property("opened").toBool());
+    const auto findVisible = [&](const QString &name) {
+        QQuickItem *found = nullptr;
+        std::function<void(QQuickItem *)> search = [&](QQuickItem *item) {
+            if (found || !item->isVisible()) return;
+            if (item->objectName() == name) { found = item; return; }
+            for (auto *child : item->childItems()) search(child);
+        };
+        search(window->contentItem());
+        return found;
+    };
+    QQuickItem *fuse = nullptr;
+    QTRY_VERIFY((fuse = findVisible("reviewRunFusion")) && fuse->isEnabled());
+    fuse->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.runRecordingReview().value("state").toString(), QString("fusionReview"), 30000);
+    QQuickItem *approve = nullptr, *rule = nullptr, *channels = nullptr;
+    QTRY_VERIFY((approve = findVisible("approveRunFusion")) && (rule = findVisible("runFusionRule-speed"))
+        && (channels = findVisible("runFusionChannels")));
+    QVERIFY(!approve->isEnabled()); // speed disagrees by 8 km/h: a rule is required
+    QVERIFY(findVisible("runRecordingReview")->property("text").toString().contains("lines up with the primary"));
+    const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    const auto capture = [&](const QString &name) {
+        if (review.isEmpty()) return;
+        auto *scroll = window->findChild<QQuickItem *>("runDetailsScroll");
+        auto *flick = scroll ? scroll->property("contentItem").value<QQuickItem *>() : nullptr;
+        QTest::qWait(300);
+        if (flick) flick->setProperty("contentY", std::max(0.0, flick->property("contentHeight").toDouble() - flick->height()));
+        QTest::qWait(300);
+        static_cast<void>(window->grabWindow().save(QDir(review).filePath(name)));
+    };
+    capture("fusion-review.png");
+    // "Fill the primary's gaps" (the second choice for a conflicting channel).
+    QVERIFY(QMetaObject::invokeMethod(rule, "activated", Q_ARG(int, 1)));
+    QTRY_VERIFY(approve->isEnabled());
+    QCOMPARE(dialog->property("fusionRules").toMap().value("speed").toString(), QString("fillGaps"));
+    approve->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY_WITH_TIMEOUT(controller.runRecordingReview().isEmpty(), 20000);
+    QQuickItem *state = nullptr;
+    QTRY_VERIFY((state = findVisible("recordingFusionState")) && state->property("text").toString() == "Fused");
+    QVERIFY(findVisible("removeRunFusion"));
+    capture("fusion-approved.png");
     QCOMPARE(warnings.size(), 0);
 }
 

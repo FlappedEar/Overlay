@@ -436,17 +436,37 @@ QJsonArray AnalysisController::outingLapSources() const
     const auto project = m_document.analysisProject();
     for (const auto &value : project.value("event").toObject().value("runs").toArray()) {
         const auto run = value.toObject();
-        for (const auto &item : run.value("sources").toObject().value("telemetry").toArray()) {
+        const auto telemetry = run.value("sources").toObject().value("telemetry").toArray();
+        for (const auto &item : telemetry) {
             const auto source = item.toObject();
             if (source.value("id") != run.value("primaryTelemetrySourceId")) continue;
-            sources.append(QJsonObject{{"eventId", project.value("event").toObject().value("id")}, {"runId", run.value("id")}, {"name", run.value("name")},
+            QJsonObject descriptor{{"eventId", project.value("event").toObject().value("id")}, {"runId", run.value("id")}, {"name", run.value("name")},
                 {"sourceId", source.value("id")}, {"reference", source.value("reference")},
                 {"expectedRevision", QString::fromLatin1(EventProjectCodec::sourceContentRevision(source))},
                 {"documentGeneration", QString::number(m_outingDocumentGeneration)},
                 {"runGeneration", QString::number(m_outingRunGenerations.value(run.value("id").toString()))},
                 {"inference", run.value("trackInference")}, {"inferenceVersion", trackInferenceVersion},
                 {"trackConfiguration", EventProjectCodec::trackConfiguration(run)},
-                {"derivationKey", QString::fromLatin1(EventProjectCodec::lapDerivationKey(run))}});
+                {"derivationKey", QString::fromLatin1(EventProjectCodec::lapDerivationKey(run))}};
+            // KAN-103: an approved fusion applies only while both recordings
+            // are the content it was reviewed against.
+            if (run.contains("fusion")) {
+                auto fusion = run.value("fusion").toObject();
+                QJsonObject alternative;
+                for (const auto &other : telemetry)
+                    if (other.toObject().value("id") == fusion.value("alternativeSourceId")) alternative = other.toObject();
+                const auto primaryRevision = EventProjectCodec::sourceContentRevision(source);
+                const auto alternativeRevision = EventProjectCodec::sourceContentRevision(alternative);
+                if (!primaryRevision.isEmpty() && primaryRevision == fusion.value("primarySourceRevision").toString().toLatin1()
+                    && !alternativeRevision.isEmpty()
+                    && alternativeRevision == fusion.value("alternativeSourceRevision").toString().toLatin1()) {
+                    fusion.insert("alternativeReference", alternative.value("reference"));
+                    descriptor.insert("fusion", fusion);
+                } else {
+                    descriptor.insert("fusionNeedsRevalidation", true);
+                }
+            }
+            sources.append(descriptor);
         }
     }
     return sources;
