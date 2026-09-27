@@ -132,6 +132,7 @@ DocumentController::DocumentController(DocumentHost &host, QString recoveryPath,
         }
     });
     initializeBatchImport();
+    initializeRunRecordings();
 }
 
 DocumentController::~DocumentController() = default;
@@ -157,6 +158,7 @@ void DocumentController::cancelProjectLoad()
 void DocumentController::cancelImport()
 {
     if (m_batchCancellation) m_batchCancellation->store(true);
+    if (m_recordingCancellation) m_recordingCancellation->store(true);
 }
 
 QUrl DocumentController::projectPath() const

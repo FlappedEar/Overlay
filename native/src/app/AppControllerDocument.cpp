@@ -23,6 +23,7 @@ void AppController::initializeDocument()
     connect(&m_document, &DocumentController::batchImportCommitted, this, &AppController::batchImportCommitted);
     connect(&m_document, &DocumentController::saveAsRequested, this, &AppController::saveAsRequested);
     connect(&m_document, &DocumentController::quitApproved, this, &AppController::quitApproved);
+    connect(&m_document, &DocumentController::runRecordingsChanged, this, &AppController::runRecordingsChanged);
 }
 
 bool AppController::acceptsEditorProject(const QJsonObject &project, const QString &projectPath)

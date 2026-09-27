@@ -52,6 +52,9 @@ class DocumentController final : public QObject, public AnalysisDocument {
     Q_PROPERTY(bool recoveryPending READ recoveryPending NOTIFY recoveryChanged)
     Q_PROPERTY(bool recoveryDegraded READ recoveryDegraded NOTIFY recoveryChanged)
     Q_PROPERTY(QString recoveryError READ recoveryError NOTIFY recoveryChanged)
+    // KAN-90: the pending attach review or primary change: state (checking,
+    // review, attaching, switching, error), runId, message, name, evidence.
+    Q_PROPERTY(QVariantMap runRecordingReview READ runRecordingReview NOTIFY runRecordingsChanged)
 
 public:
     DocumentController(DocumentHost &host, QString recoveryPath = {},
@@ -102,6 +105,18 @@ public:
     Q_INVOKABLE bool saveCurrentProject();
     Q_INVOKABLE bool saveProject(const QUrl &url);
     Q_INVOKABLE void resolveStartupRecovery(const QString &decision);
+    // KAN-90: a run's recordings (sourceId, name, format, primary, available).
+    Q_INVOKABLE QVariantList runRecordings(const QString &runId) const;
+    // Reads `url` and the run's primary off-thread and offers their match
+    // evidence for review; confirmRunRecording rechecks the file and adds it
+    // as an alternative (never the primary).
+    Q_INVOKABLE bool attachRunRecording(const QString &runId, const QUrl &url);
+    Q_INVOKABLE bool confirmRunRecording();
+    Q_INVOKABLE void cancelRunRecording();
+    // Makes an attached recording the run's primary after verifying it;
+    // the run's laps are derived again from it.
+    Q_INVOKABLE bool setRunPrimarySource(const QString &runId, const QString &sourceId);
+    [[nodiscard]] QVariantMap runRecordingReview() const { return m_recordingReview; }
 
     // For the host's editor state.
     // The stored project as last committed (no editor state applied).
@@ -117,7 +132,7 @@ public:
     [[nodiscard]] quint64 nextSourceGeneration() { return ++m_sourceGeneration; }
     [[nodiscard]] bool projectLoadRunning() const { return m_projectLoadWatcher.isRunning(); }
     void cancelProjectLoad();
-    [[nodiscard]] bool importRunning() const { return m_batchWatcher.isRunning() || m_folderScanWatcher.isRunning(); }
+    [[nodiscard]] bool importRunning() const { return m_batchWatcher.isRunning() || m_folderScanWatcher.isRunning() || m_recordingWatcher.isRunning(); }
     void cancelImport();
     void setProjectLoadState(bool loading, QString stage = {}, QString error = {});
     // While alive, changes are the document's own state, not user edits.
@@ -158,6 +173,7 @@ signals:
     void recoveryChanged();
     void saveAsRequested();
     void quitApproved();
+    void runRecordingsChanged();
     // Input, forwarded from the host's signal of the same name.
     void sourceLoadStateChanged();
 
@@ -193,6 +209,22 @@ private:
     void invalidateBatchImport();
     [[nodiscard]] bool batchContextMatches() const;
     void publishBatchRows();
+    struct RecordingWork {
+        enum class Kind { Attach, Confirm, Primary };
+        Kind kind = Kind::Attach;
+        QString sourceId;
+        QString path;
+        QString format;
+        QByteArray sha;
+        QJsonObject fingerprint;
+        QString gateRevision;
+        QVariantMap evidence;
+        QString error;
+        bool cancelled = false;
+    };
+    void initializeRunRecordings();
+    [[nodiscard]] bool recordingEditAllowed() const;
+    void setRecordingReview(QVariantMap review);
 
     DocumentHost &m_host;
     QSettings m_settings;
@@ -238,6 +270,13 @@ private:
     bool m_analysisImportAppend = false;
     QString m_analysisImportName;
     QStringList m_analysisImportMessages;
+    QFutureWatcher<RecordingWork> m_recordingWatcher;
+    std::shared_ptr<std::atomic_bool> m_recordingCancellation;
+    QVariantMap m_recordingReview;
+    RecordingWork m_recordingCandidate;
+    QString m_recordingRunId;
+    QString m_recordingDocumentId;
+    quint64 m_recordingRevision = 0;
 };
 
 } // namespace FlappedEar

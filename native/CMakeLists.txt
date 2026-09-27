@@ -153,6 +153,7 @@ qt_add_library(flappedear_telemetry_app STATIC
     src/app/DocumentController.cpp
     src/app/DocumentController.h
     src/app/DocumentControllerImport.cpp
+    src/app/DocumentControllerRecordings.cpp
     src/app/DocumentHost.h
     src/app/TelemetryController.cpp
     src/app/TelemetryController.h

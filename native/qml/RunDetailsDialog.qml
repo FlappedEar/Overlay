@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 Dialog {
     id: root
@@ -14,6 +15,34 @@ Dialog {
     closePolicy: Popup.CloseOnEscape
     property string editingRunId: ""
     property var captured: ({})
+    // KAN-90: the run's recordings and any pending attach review.
+    property var recordings: []
+    readonly property var review: appController.runRecordingReview
+    readonly property bool reviewForThisRun: review.runId === root.editingRunId && (review.state || "") !== ""
+    readonly property bool recordingBusy: ["checking", "attaching", "switching"].indexOf(review.state || "") >= 0
+    function evidenceText(evidence) {
+        if (!evidence) return "";
+        const lines = [qsTr("%1 recording, beside the primary %2.").arg(evidence.format || "?").arg(evidence.primaryFormat || "?")];
+        if (evidence.matched)
+            lines.push(qsTr("GPS traces agree: %1 samples compared, largest separation %2 m, durations differ by %3 s.")
+                .arg(evidence.comparedGpsSamples).arg(Number(evidence.maximumSeparationMeters).toFixed(1))
+                .arg(Number(evidence.gpsDurationDifferenceSeconds).toFixed(1)));
+        else
+            lines.push(qsTr("No GPS match with this run's primary was found. Add it only if you know it records this run."));
+        if (evidence.startDifferenceSeconds !== undefined)
+            lines.push(qsTr("The recordings start %1 s apart.").arg(Number(evidence.startDifferenceSeconds).toFixed(1)));
+        return lines.join("\n");
+    }
+    Connections {
+        target: appController
+        function onRunRecordingsChanged() { root.recordings = appController.runRecordings(root.editingRunId); }
+    }
+    FileDialog {
+        id: recordingFile
+        title: qsTr("Attach a recording of this run")
+        nameFilters: [qsTr("Telemetry (*.rcz *.vbo *.RCZ *.VBO)")]
+        onAccepted: appController.attachRunRecording(root.editingRunId, selectedFile)
+    }
     readonly property bool draftChanged: nameField.text !== (captured.name || "")
         || notesField.text !== (captured.notes || "")
         || conditionsField.text !== (captured.conditions || "")
@@ -29,6 +58,7 @@ Dialog {
         conditionsField.text = captured.conditions || "";
         setupField.text = captured.setupChanges || "";
         errorLabel.text = "";
+        recordings = appController.runRecordings(runId);
     }
     onOpened: {
         runPicker.currentIndex = runPicker.indexOfValue(appController.activeRunId);
@@ -111,6 +141,73 @@ Dialog {
                         placeholderText: qsTr("Unknown — enter changes made for this run")
                         Accessible.name: qsTr("Setup changes")
                         textFormat: TextEdit.PlainText
+                    }
+                    Label { text: qsTr("Recordings"); font.weight: Font.DemiBold; Layout.topMargin: 6 }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b2"
+                        font.pixelSize: 11
+                        text: qsTr("The primary recording supplies this run's laps and channels. Alternatives are kept beside it, never merged: a VBO carries RaceChrono's calculated G, an RCZ keeps the logger's own clock. Changing the primary derives the laps again, so results based on the old laps need recomputing; check this run's video sync too.")
+                    }
+                    Repeater {
+                        objectName: "runRecordingList"
+                        model: root.recordings
+                        delegate: RowLayout {
+                            id: recordingRow
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Label {
+                                Layout.fillWidth: true
+                                elide: Text.ElideMiddle
+                                text: recordingRow.modelData.name + " · " + recordingRow.modelData.format
+                                color: recordingRow.modelData.available ? "#dce4ee" : "#ff9585"
+                            }
+                            Label {
+                                visible: recordingRow.modelData.primary || !recordingRow.modelData.available
+                                text: recordingRow.modelData.primary ? qsTr("Primary") : qsTr("Missing")
+                                color: recordingRow.modelData.primary ? "#55e6a5" : "#ff9585"
+                            }
+                            FeButton {
+                                objectName: "makePrimaryRecording"
+                                visible: !recordingRow.modelData.primary
+                                compact: true
+                                text: qsTr("Make primary")
+                                enabled: recordingRow.modelData.available && !root.recordingBusy && !root.draftChanged
+                                onClicked: appController.setRunPrimarySource(root.editingRunId, recordingRow.modelData.sourceId)
+                            }
+                        }
+                    }
+                    FeButton {
+                        objectName: "attachRunRecording"
+                        text: qsTr("Attach a recording…")
+                        enabled: !root.recordingBusy && !root.draftChanged && root.editingRunId.length > 0
+                        onClicked: recordingFile.open()
+                    }
+                    Label {
+                        objectName: "runRecordingReview"
+                        Layout.fillWidth: true
+                        visible: root.reviewForThisRun
+                        wrapMode: Text.WordWrap
+                        color: root.review.state === "error" ? "#ff9585" : "#dce4ee"
+                        text: root.review.state === "review"
+                            ? qsTr("Review %1:").arg(root.review.name || "") + "\n" + root.evidenceText(root.review.evidence)
+                            : (root.review.message || "")
+                    }
+                    RowLayout {
+                        visible: root.reviewForThisRun && (root.review.state === "review" || root.review.state === "error")
+                        FeButton {
+                            objectName: "confirmRunRecording"
+                            visible: root.review.state === "review"
+                            accent: true
+                            text: qsTr("Add as an alternative")
+                            onClicked: appController.confirmRunRecording()
+                        }
+                        FeButton {
+                            objectName: "cancelRunRecording"
+                            text: root.review.state === "review" ? qsTr("Cancel") : qsTr("Dismiss")
+                            onClicked: appController.cancelRunRecording()
+                        }
                     }
                 }
             }
