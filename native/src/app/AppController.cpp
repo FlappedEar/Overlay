@@ -13,7 +13,7 @@
 #include "project/BoundedJsonLoader.h"
 #include "project/ProjectLimits.h"
 #include "project/EventProjectCodec.h"
-#include "sync/TelemetrySyncEngine.h"
+#include "telemetry/TelemetrySyncEngine.h"
 #include "telemetry/VboParser.h"
 #include "telemetry/TelemetrySource.h"
 
