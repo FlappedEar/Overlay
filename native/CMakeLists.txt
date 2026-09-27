@@ -132,14 +132,41 @@ target_include_directories(flappedear_telemetry_core PUBLIC src)
 target_link_libraries(flappedear_telemetry_core PUBLIC Qt6::Core PRIVATE ZLIB::ZLIBSTATIC)
 flappedear_enable_warnings(flappedear_telemetry_core)
 
+# KAN-124: the Telemetry app's controllers -- the project document and the
+# day analysis, with no overlay, video or export code and no Qt Gui, so the
+# same library serves macOS, iOS and Android.
+qt_add_library(flappedear_telemetry_app STATIC
+    src/app/AppLog.cpp
+    src/app/AppLog.h
+    src/app/AnalysisDocument.h
+    src/app/AnalysisController.cpp
+    src/app/AnalysisController.h
+    src/app/AnalysisControllerChannelSummaries.cpp
+    src/app/AnalysisControllerComparison.cpp
+    src/app/AnalysisControllerCornerAnalyzer.cpp
+    src/app/AnalysisControllerDayReport.cpp
+    src/app/AnalysisControllerOuting.cpp
+    src/app/AnalysisControllerSegmentReview.cpp
+    src/app/AnalysisControllerTheoreticalBest.cpp
+    src/app/DocumentController.cpp
+    src/app/DocumentController.h
+    src/app/DocumentControllerImport.cpp
+    src/app/DocumentHost.h
+    src/app/TelemetryController.cpp
+    src/app/TelemetryController.h
+    src/app/VideoLink.h
+)
+target_compile_features(flappedear_telemetry_app PUBLIC cxx_std_20)
+target_include_directories(flappedear_telemetry_app PUBLIC src)
+target_link_libraries(flappedear_telemetry_app PUBLIC flappedear_telemetry_core Qt6::Core Qt6::Concurrent)
+flappedear_enable_warnings(flappedear_telemetry_app)
+
 # The desktop overlay side: FFmpeg export, the QRhi frame renderer, GoPro,
 # synchronization, widgets and the app support used by the editor.
 qt_add_library(flappedear_overlay_core STATIC
     src/app/ApplicationIdentity.h
     src/app/GuiSessionLock.cpp
     src/app/GuiSessionLock.h
-    src/app/AppLog.cpp
-    src/app/AppLog.h
     src/app/PreviewPlayback.cpp
     src/app/PreviewPlayback.h
     src/export/EncoderDetector.cpp
@@ -193,7 +220,7 @@ qt_add_library(flappedear_overlay_core STATIC
 )
 target_compile_features(flappedear_overlay_core PUBLIC cxx_std_20)
 target_include_directories(flappedear_overlay_core PUBLIC src)
-target_link_libraries(flappedear_overlay_core PUBLIC flappedear_telemetry_core Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick)
+target_link_libraries(flappedear_overlay_core PUBLIC flappedear_telemetry_app flappedear_telemetry_core Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick)
 # QRhi is a Qt Gui private API. Keep it implementation-only: no public headers
 # in flappedear_overlay_core expose QRhi types.
 target_link_libraries(flappedear_overlay_core PRIVATE Qt6::GuiPrivate)
@@ -207,7 +234,7 @@ qt_add_resources(flappedear_overlay_core "flappedear_templates"
 
 # Both halves, for the combined desktop application and its tests.
 add_library(flappedear_core INTERFACE)
-target_link_libraries(flappedear_core INTERFACE flappedear_overlay_core flappedear_telemetry_core)
+target_link_libraries(flappedear_core INTERFACE flappedear_overlay_core flappedear_telemetry_app flappedear_telemetry_core)
 
 set(FLAPPEDEAR_PLATFORM_ICON)
 if(APPLE)
@@ -221,23 +248,8 @@ elseif(WIN32)
 endif()
 
 qt_add_executable(flappedear_native MACOSX_BUNDLE
-    src/app/DocumentControllerImport.cpp
-    src/app/DocumentController.cpp
-    src/app/DocumentController.h
-    src/app/DocumentHost.h
     src/app/AppControllerDocument.cpp
-    src/app/AnalysisControllerComparison.cpp
-    src/app/AnalysisControllerOuting.cpp
-    src/app/AnalysisControllerSegmentReview.cpp
-    src/app/AnalysisControllerCornerAnalyzer.cpp
-    src/app/AnalysisControllerTheoreticalBest.cpp
-    src/app/AnalysisControllerChannelSummaries.cpp
-    src/app/AnalysisControllerDayReport.cpp
-    src/app/VideoLink.h
     src/app/AppControllerAnalysis.cpp
-    src/app/AnalysisController.cpp
-    src/app/AnalysisController.h
-    src/app/AnalysisDocument.h
     src/app/AppController.cpp
     src/app/AppController.h
     src/main.cpp

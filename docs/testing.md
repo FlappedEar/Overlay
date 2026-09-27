@@ -1425,6 +1425,21 @@ Telemetry app will. It derives the laps of two recordings with
 The run sources are built the way the project provides them: reference and
 fingerprint, derivation digest, and the import's timing-gate revision.
 
+**Telemetry controllers without the editor.** `flappedear_telemetry_app_tests`
+links only `flappedear_telemetry_app` (Qt Core, no Gui) and drives
+`TelemetryController`:
+- imports two recordings, derives laps and a comparison group;
+- approves segments and computes the day report (best lap, theoretical
+  best, consistency);
+- saves, reopens in a fresh controller and gets the same report, with the
+  document clean.
+
+A second test opens a project that carries editor state (the active run's
+sync and video, chart channels). It edits the run, saves it into another
+folder, and checks that the state survives and the video and recording
+still resolve. Without the reference rebase in
+`TelemetryController::withEditorState` the video check fails.
+
 **Refactor check on real data.** With `FLAPPEDEAR_REPORT_DUMP=/path/report.json`,
 `analyzesPrivateTrackDayCorners` writes the day report with sorted keys.
 Dump before and after a refactor, then normalise the per-import identities:
