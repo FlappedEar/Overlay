@@ -128,6 +128,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/DrivingStates.h
     src/telemetry/MapLayers.cpp
     src/telemetry/MapLayers.h
+    src/telemetry/TemperatureAssociation.cpp
+    src/telemetry/TemperatureAssociation.h
     src/telemetry/TelemetryFolderScan.cpp
     src/telemetry/TelemetryFolderScan.h
     src/telemetry/TelemetryImportPlan.cpp

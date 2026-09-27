@@ -207,6 +207,7 @@ private slots:
     void showsCoastingOnTheOpenLap();
     void showsTrailBrakingInTheCornerAnalyzer();
     void coloursTheComparisonMapByAChannel();
+    void associatesTemperaturesWithLapPerformance();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -6167,6 +6168,40 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
         QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 180000);
         QTest::qWait(500);
         QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("car-driver.png"))); reachable("car-driver");
+        // KAN-100: temperature associations over the eligible laps, and the
+        // first card's association block on screen.
+        const auto findVisual = [](auto &&self, QQuickItem *item, const QString &name) -> QQuickItem * {
+            if (item->objectName() == name) return item;
+            for (auto *child : item->childItems()) if (auto *found = self(self, child, name)) return found;
+            return nullptr;
+        };
+        auto *carDriverScroll = findVisual(findVisual, window->contentItem(), "carDriverScroll");
+        auto *association = findVisual(findVisual, window->contentItem(), "carDriverAssociation0");
+        if (carDriverScroll && association) {
+            auto *content = carDriverScroll->property("contentItem").value<QQuickItem *>();
+            const double y = association->mapToItem(content, QPointF(0, 0)).y();
+            carDriverScroll->setProperty("contentY", std::max(0.0, std::min(y - 40.0,
+                carDriverScroll->property("contentHeight").toDouble() - carDriverScroll->height())));
+            QTest::qWait(500);
+            QVERIFY(window->grabWindow().save(QDir(reviewDirectory).filePath("temperature-association.png")));
+            reachable("temperature-association");
+        }
+        const auto associations = controller.outingTemperatureAssociations();
+        qInfo().noquote() << QString("  temperature associations over %1 eligible laps").arg(associations.value("eligibleLaps").toInt());
+        const auto rho = [](const QVariantMap &correlation) {
+            return correlation.value("available").toBool()
+                ? QString("%1 (%2, n=%3)").arg(correlation.value("coefficient").toDouble(), 0, 'f', 2)
+                      .arg(correlation.value("strength").toString()).arg(correlation.value("count").toInt())
+                : QString("unavailable %1 (n=%2)").arg(correlation.value("unavailableReason").toString()).arg(correlation.value("count").toInt());
+        };
+        for (const auto &value : associations.value("channels").toList()) {
+            const auto channel = value.toMap();
+            qInfo().noquote() << QString("  %1: lap time %2; acceleration %3; order %4%5; low coverage %6, not recorded %7")
+                .arg(channel.value("channel").toString(), rho(channel.value("lapTime").toMap()),
+                     rho(channel.value("acceleration").toMap()), rho(channel.value("order").toMap()),
+                     channel.value("confoundedByOrder").toBool() ? " CONFOUNDED" : "")
+                .arg(channel.value("lowCoverageLaps").toInt()).arg(channel.value("notRecordedLaps").toInt());
+        }
         QVERIFY(QMetaObject::invokeMethod(progressionDialog, "close"));
     }
     if (auto *reportDialog = window->findChild<QObject *>("dayReportDialog")) {
@@ -8810,6 +8845,120 @@ void TelemetryTests::coloursTheComparisonMapByAChannel()
     // Back to plain A/B lines.
     QVERIFY(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 0)));
     QTRY_VERIFY(!layerCanvas->isVisible() && !legend->isVisible());
+    QCOMPARE(warnings.size(), 0);
+}
+
+void TelemetryTests::associatesTemperaturesWithLapPerformance()
+{
+    // KAN-100: each recorded temperature against lap time and strong
+    // acceleration over the comparison group's eligible laps, with counts,
+    // the laps behind it and the time-of-day confound; too few laps claim
+    // nothing, and excluding laps changes the population.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    // Four sessions whose coolant starts warmer each time (80, 85, 90, 95).
+    QList<QUrl> files;
+    for (int run = 0; run < 4; ++run) {
+        const auto path = directory.filePath(QString("run-%1.vbo").arg(run));
+        QVERIFY(writeBytes(path, withVelocity(fullM4Vbo(run % 2 == 0, 140, 80 + 5 * run, 1.0 - 0.05 * run))));
+        files.append(QUrl::fromLocalFile(path));
+    }
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Warm day", files.mid(0, 2)));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
+    // Nothing until the channel summaries are ready.
+    QVERIFY(controller.outingTemperatureAssociations().value("channels").toList().isEmpty());
+    controller.requestOutingChannelSummaries();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 30000);
+    auto associations = controller.outingTemperatureAssociations();
+    QCOMPARE(associations.value("algorithm").toString(), QString("spearman-rank-v1"));
+    QCOMPARE(associations.value("eligibleLaps").toInt(), 6);
+    auto coolant = associations.value("channels").toList().value(0).toMap();
+    QCOMPARE(coolant.value("channel").toString(), QString("coolant_temp-obd"));
+    // Six laps: below the minimum of eight, so nothing is claimed.
+    QCOMPARE(coolant.value("lapTime").toMap().value("unavailableReason").toString(), QString("tooFewSamples"));
+    QCOMPARE(coolant.value("lapTime").toMap().value("count").toInt(), 6);
+    QVERIFY(!coolant.value("confoundedByOrder").toBool());
+    QCOMPARE(coolant.value("observations").toList().size(), 6);
+
+    // Two more sessions: twelve laps, the coolant warming through the day.
+    QVERIFY(controller.importAnalysisRuns("Warm day", files.mid(2, 2)));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 4 && !controller.outingLapsLoading(), 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("idle"), 30000);
+    controller.requestOutingChannelSummaries();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 30000);
+    associations = controller.outingTemperatureAssociations();
+    QCOMPARE(associations.value("eligibleLaps").toInt(), 12);
+    coolant = associations.value("channels").toList().value(0).toMap();
+    const auto lapTime = coolant.value("lapTime").toMap(), acceleration = coolant.value("acceleration").toMap();
+    QVERIFY(lapTime.value("available").toBool());
+    QCOMPARE(lapTime.value("count").toInt(), 12);
+    QVERIFY(std::abs(lapTime.value("coefficient").toDouble()) <= 1.0);
+    QVERIFY(acceleration.value("available").toBool()); // from longacc-calc
+    // The coolant only rises through the day: the order confound is flagged.
+    QVERIFY(coolant.value("order").toMap().value("coefficient").toDouble() > 0.95);
+    QVERIFY(coolant.value("confoundedByOrder").toBool());
+    const auto observations = coolant.value("observations").toList();
+    QCOMPARE(observations.size(), 12);
+    for (const auto &value : observations) {
+        const auto observation = value.toMap();
+        QVERIFY(observation.value("temperature").toDouble() >= 80.0 && observation.value("temperature").toDouble() < 110.0);
+        QVERIFY(observation.value("lapTime").toDouble() > 0.0);
+        QVERIFY(observation.value("coverage").toDouble() >= 0.8);
+        QVERIFY(observation.contains("strongAccelerationG"));
+    }
+
+    // Excluding laps removes them from the population.
+    int excluded = 0;
+    for (const auto &value : observations) {
+        if (excluded == 5) break;
+        QVERIFY(controller.setOutingLapExcluded(value.toMap().value("reference").toMap(), true, "Traffic"));
+        ++excluded;
+    }
+    QTRY_COMPARE(controller.outingTemperatureAssociations().value("eligibleLaps").toInt(), 7);
+    coolant = controller.outingTemperatureAssociations().value("channels").toList().value(0).toMap();
+    QCOMPARE(coolant.value("lapTime").toMap().value("unavailableReason").toString(), QString("tooFewSamples"));
+
+    // The Car & driver card shows the association and its laps.
+    for (const auto &value : observations) controller.setOutingLapExcluded(value.toMap().value("reference").toMap(), false);
+    QTRY_COMPARE(controller.outingTemperatureAssociations().value("eligibleLaps").toInt(), 12);
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick\nWindow { width: 900; height: 900; visible: true; CarDriverView { anchors.fill: parent } }",
+        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    const auto findVisual = [](auto &&self, QQuickItem *item, const QString &name) -> QQuickItem * {
+        if (item->objectName() == name) return item;
+        for (auto *child : item->childItems()) if (auto *found = self(self, child, name)) return found;
+        return nullptr;
+    };
+    const auto find = [&](const QString &name) { return findVisual(findVisual, window->contentItem(), name); };
+    QQuickItem *lapTimeLabel = nullptr;
+    QTRY_VERIFY((lapTimeLabel = find("carDriverAssociationLapTime0")));
+    QTRY_VERIFY(lapTimeLabel->property("text").toString().contains("12 laps"));
+    QVERIFY(lapTimeLabel->property("text").toString().startsWith("Lap time: ρ "));
+    QVERIFY(find("carDriverAssociationAcceleration0")->property("text").toString().startsWith("Strong acceleration: ρ "));
+    auto *confound = find("carDriverAssociationConfound0"); QVERIFY(confound);
+    QVERIFY(confound->isVisible());
+    QVERIFY(confound->property("text").toString().contains("cannot be told apart"));
+    QVERIFY(find("carDriverAssociationScatter0")->isVisible());
+    auto *laps = find("carDriverAssociationLaps0"); QVERIFY(laps);
+    QVERIFY(!laps->isVisible());
+    auto *show = find("carDriverAssociationShowLaps0"); QVERIFY(show);
+    QVERIFY(show->property("text").toString().contains("12"));
+    show->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(laps->isVisible());
+    QTRY_COMPARE(laps->childItems().size(), 13); // 12 laps and the Repeater
+    const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!review.isEmpty()) {
+        QTest::qWait(300);
+        static_cast<void>(window->grabWindow().save(QDir(review).filePath("temperature-association.png")));
+    }
     QCOMPARE(warnings.size(), 0);
 }
 

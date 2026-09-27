@@ -131,6 +131,11 @@ void AppController::requestOutingChannelSummaries()
     m_analysis.requestOutingChannelSummaries();
 }
 
+QVariantMap AppController::outingTemperatureAssociations() const
+{
+    return m_analysis.outingTemperatureAssociations();
+}
+
 QVariantMap AppController::outingDayReport() const
 {
     return m_analysis.outingDayReport();

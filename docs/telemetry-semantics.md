@@ -413,3 +413,59 @@ loss) has every layer:
   gearbox 98–104 °C and intake 30–33 °C.
 
 The logger declares no units for speed and the pedals, so none are shown.
+
+## Temperatures and lap performance (KAN-100)
+
+**Progression → Car & driver** now shows, under each recorded temperature,
+how that temperature moved together with lap performance over the day. The
+metrics are lap time and **strong acceleration**, the 90th percentile of the
+lap's positive longitudinal G samples. A percentile is used rather than the
+peak so that one noisy sample does not decide it. Strong acceleration needs
+the `longitudinalAcceleration` channel, in g or undeclared units, with at
+least 20 positive samples.
+
+**Which laps count.** The population is the comparison group's eligible
+laps, as for consistency (KAN-62): same layout and direction, and not
+excluded, stale or invalid. A lap's temperature is its time-weighted mean
+under the KAN-67 plausibility policy. It is used only when the sensor
+covered at least 80 % of the lap. Laps left out for low coverage, or for
+lacking a valid reading, are counted and shown.
+
+**How the association is measured.** The measure (`telemetry/
+TemperatureAssociation`, `spearman-rank-v1`) is Spearman's rank correlation
+ρ: both series are ranked, tied values share their average rank, and the
+Pearson correlation of the ranks is reported.
+- It needs at least 8 laps, and both series must vary. Otherwise the line
+  says why and claims nothing.
+- |ρ| below 0.3 is "weak", below 0.6 "moderate", and anything higher
+  "strong".
+- Each line gives ρ, its strength, the number of laps and what the sign
+  meant here, for example "hotter laps were quicker".
+
+**Time of day.** Temperature is also correlated with the order of laps
+through the day: runs in recording order, laps in run order. When |ρ| with
+that order is at least 0.6, the card warns that the association cannot be
+told apart from everything else that changed over the day: the driver,
+tyres, track and fuel.
+
+The card also has:
+- a scatter of every lap (temperature across, quicker laps up);
+- **Show laps**, which lists each lap with its temperature, lap time and
+  strong acceleration.
+
+The note under the scatter states that the result describes how the two
+moved together on this day. It does not establish a critical temperature or
+a cause.
+
+**On the Jastrząb day:** 23 eligible laps, all with full sensor coverage.
+
+| Temperature | ρ with lap time | ρ with strong acceleration | ρ with lap order |
+| --- | --- | --- | --- |
+| Coolant | −0.84 | +0.84 | +0.86 |
+| Engine oil | −0.77 | +0.79 | +0.83 |
+| Gearbox | −0.77 | +0.80 | +0.81 |
+| Intake | −0.65 | +0.75 | +0.82 |
+
+Every temperature rose through the day while the laps got quicker, so all
+four are flagged: the hotter laps are the later, faster ones, and this data
+cannot separate temperature from the day's progression.
