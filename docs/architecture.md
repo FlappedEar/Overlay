@@ -20,7 +20,7 @@ flowchart TD
 
 ## Libraries (KAN-123)
 
-The code builds as two static libraries. This is the first step of the
+The code builds as three static libraries. This is the first step of the
 product split (`docs/product-split-plan.md`, epic KAN-121):
 
 - **`flappedear_telemetry_core`** holds `src/telemetry` and `src/project`:
@@ -34,12 +34,26 @@ product split (`docs/product-split-plan.md`, epic KAN-121):
   from the document layer's video-free helpers. An event (v3) document may
   omit the overlay `scene` (an analysis-only day); a scene that is present
   must still be valid.
+- **`flappedear_telemetry_app`** (KAN-124) holds the Telemetry app's
+  controllers:
+  - `DocumentController` and `AnalysisController`;
+  - `TelemetryController`, which pairs them with no editor, no video and
+    no export;
+  - `AppLog`.
+
+  It links the telemetry core with **Qt Core and Concurrent only** (no
+  Gui). The `flappedear_telemetry_app_boundary` test fails if these files
+  include overlay, video, export, editor or Gui headers.
+  `flappedear_telemetry_app_tests` drives a whole day through
+  `TelemetryController` with `QTEST_GUILESS_MAIN`: import, laps, segments,
+  the day report, save and reopen.
 - **`flappedear_overlay_core`** holds export (FFmpeg, the QRhi frame
   renderer), GoPro, synchronization, widgets and the editor's app support.
-  It links the telemetry core plus Qt Gui, Qml, Quick and GuiPrivate.
-- `flappedear_core` is an interface target over both, used by the current
-  combined application and its app-level tests. Pure test targets link only
-  `flappedear_telemetry_core`.
+  It links the telemetry app and core plus Qt Gui, Qml, Quick and
+  GuiPrivate.
+- `flappedear_core` is an interface target over all three. The current
+  combined application and its app-level tests use it. Pure test targets
+  link only `flappedear_telemetry_core`.
 
 ## Application
 
@@ -115,7 +129,9 @@ through `DocumentHost` (`src/app/DocumentHost.h`):
 - the verified analysis a saved project carries;
 - whether the document is busy (an export).
 
-A Telemetry app hosts a document without an editor.
+`TelemetryController` hosts a document without an editor. Its project keeps
+the editor state another app saved. On Save As it rebases the active run's
+recording and video references for the new folder, as the editor does.
 
 `AppController` implements `DocumentHost` and `VideoLink` and forwards its
 QML API unchanged. It still applies lap exclusions to the editor's own lap

@@ -20,23 +20,9 @@ target_link_libraries(flappedear_probe_test_helper PRIVATE Qt6::Core)
 flappedear_enable_warnings(flappedear_probe_test_helper)
 
 qt_add_executable(flappedear_native_tests
-    ../src/app/DocumentControllerImport.cpp
-    ../src/app/DocumentController.cpp
-    ../src/app/DocumentController.h
-    ../src/app/DocumentHost.h
     ../src/app/AppControllerDocument.cpp
-    ../src/app/AnalysisControllerComparison.cpp
-    ../src/app/AnalysisControllerOuting.cpp
-    ../src/app/AnalysisControllerSegmentReview.cpp
-    ../src/app/AnalysisControllerCornerAnalyzer.cpp
-    ../src/app/AnalysisControllerTheoreticalBest.cpp
-    ../src/app/AnalysisControllerChannelSummaries.cpp
-    ../src/app/AnalysisControllerDayReport.cpp
     TelemetryTests.cpp
     ../src/app/AppControllerAnalysis.cpp
-    ../src/app/AnalysisController.cpp
-    ../src/app/AnalysisController.h
-    ../src/app/AnalysisDocument.h
     ../src/app/AppController.cpp
     ../src/app/AppController.h
 )
@@ -179,6 +165,11 @@ target_compile_features(flappedear_outing_pipeline_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_outing_pipeline_tests PRIVATE flappedear_telemetry_core Qt6::Test)
 flappedear_enable_warnings(flappedear_outing_pipeline_tests)
 add_test(NAME flappedear_outing_pipeline_tests COMMAND flappedear_outing_pipeline_tests)
+qt_add_executable(flappedear_telemetry_app_tests TelemetryAppTests.cpp)
+target_compile_features(flappedear_telemetry_app_tests PRIVATE cxx_std_20)
+target_link_libraries(flappedear_telemetry_app_tests PRIVATE flappedear_telemetry_app Qt6::Test)
+flappedear_enable_warnings(flappedear_telemetry_app_tests)
+add_test(NAME flappedear_telemetry_app_tests COMMAND flappedear_telemetry_app_tests)
 qt_add_executable(flappedear_driving_variability_tests DrivingVariabilityTests.cpp)
 target_compile_features(flappedear_driving_variability_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_driving_variability_tests PRIVATE flappedear_telemetry_core Qt6::Test)
@@ -214,3 +205,5 @@ set_tests_properties(flappedear_startup_smoke PROPERTIES
 )
 add_test(NAME flappedear_telemetry_core_boundary
     COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../src -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckTelemetryCoreBoundary.cmake)
+add_test(NAME flappedear_telemetry_app_boundary
+    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../src -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckTelemetryAppBoundary.cmake)

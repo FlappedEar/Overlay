@@ -59,7 +59,7 @@ Merged later on 26 September 2026, which completes **M4**:
 | KAN-73 | "Where to look next": observations apart from hypotheses (`FocusAreas.h`) | #83 |
 | KAN-74 | M4 acceptance `docs/kan74-m4-acceptance.md`, plus a fix: Save As no longer discards computed results | #84 |
 
-KAN-124 (split phase 2) steps 1–9 are merged (#85, #87–#92, #94, #95):
+KAN-124 (split phase 2) steps 1–10 are merged (#85, #87–#92, #94–#96):
 - **Step 1:** analysis reaches video only through `VideoLink`, and its guards
   use `documentBusy()`.
 - **Steps 2–7:** these moved into `flappedear_telemetry_core`:
@@ -78,6 +78,11 @@ KAN-124 (split phase 2) steps 1–9 are merged (#85, #87–#92, #94, #95):
   recovery, open/save/quit, run selection, import) and implements
   `AnalysisDocument`. The editor state stored in the project comes through
   `DocumentHost`, which `AppController` implements.
+- **Step 10:** `TelemetryController` pairs the document and analysis with
+  no editor. It lives with them in `flappedear_telemetry_app` (Qt Core
+  only; boundary test), and `flappedear_telemetry_app_tests` runs a whole
+  day through it headless. This is the controller the Telemetry app
+  (KAN-125) builds its UI on.
 
 To verify a refactor, set `FLAPPEDEAR_REPORT_DUMP` on the private real-day
 test and diff the dumps after normalising identities (see
