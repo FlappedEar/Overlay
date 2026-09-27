@@ -82,4 +82,13 @@ struct StageAFailureDiagnostics {
 [[nodiscard]] QVariantMap stageAFailureDiagnosticDetails(const StageAFailureDiagnostics &diagnostics);
 [[nodiscard]] QString formatStageAFailureDiagnostics(const StageAFailureDiagnostics &diagnostics);
 
+// KAN-75: a failed export whose diagnostics show the disk filled up (ENOSPC)
+// gets a plain message instead of the stage's technical error, which moves
+// into the diagnostics. Other failures are returned unchanged.
+struct ExportFailureReport {
+    QString error;
+    QString diagnostics;
+};
+[[nodiscard]] ExportFailureReport describeExportFailure(const QString &error, const QString &diagnostics);
+
 } // namespace FlappedEar

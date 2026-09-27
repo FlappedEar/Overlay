@@ -69,6 +69,7 @@
 #include <QScopeGuard>
 #include <QSemaphore>
 #include <QStandardPaths>
+#include <QStorageInfo>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QUuid>
@@ -87,6 +88,7 @@
 #ifdef Q_OS_UNIX
 #include <signal.h>
 #include <unistd.h>
+#include <fcntl.h>
 #endif
 
 using namespace FlappedEar;
@@ -193,6 +195,9 @@ private slots:
     void publishesAndClearsLapStateWithController();
     void derivesNavigableLapFragmentsAndHotlapExportRange();
     void protectsEveryDaySourceFromExport();
+    void keepsOutputSafeWhenTheDestinationFills_data();
+    void keepsOutputSafeWhenTheDestinationFills();
+    void describesOutOfSpaceExportFailures();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
@@ -7620,6 +7625,185 @@ void TelemetryTests::protectsEveryDaySourceFromExport()
     QVERIFY(!controller.startExport(QUrl::fromLocalFile(unrelated), 32, 32, 30, 1, 8'000'000, false, false, {}, {}, false));
     QCOMPARE(controller.exportState(), QString("overwriteConfirmationRequired"));
     QCOMPARE(readBytes(unrelated), QByteArray("earlier export"));
+}
+
+void TelemetryTests::keepsOutputSafeWhenTheDestinationFills_data()
+{
+    QTest::addColumn<QString>("stage");
+    QTest::newRow("full before export (preflight)") << QStringLiteral("preflight");
+    QTest::newRow("fills during Stage A (overlay)") << QStringLiteral("renderingOverlay");
+    QTest::newRow("fills during Stage B (final encode)") << QStringLiteral("encodingVideo");
+    QTest::newRow("cancelled during Stage B") << QStringLiteral("cancel");
+    QTest::newRow("full at final publication") << QStringLiteral("publication");
+}
+
+void TelemetryTests::keepsOutputSafeWhenTheDestinationFills()
+{
+    // KAN-75 (C07): a real, small volume (a disk image) that runs out of
+    // space before or during the export. The worker must fail within a
+    // bounded time, the existing target and unrelated files on the volume
+    // stay intact, and cleanup removes only transaction-owned artifacts.
+    // Stage A's overlay lives on the volume in the overlay case, Stage B's
+    // staging output in the other two.
+#ifndef Q_OS_MACOS
+    QSKIP("The filling-volume test uses hdiutil (macOS).");
+#else
+    QFETCH(QString, stage);
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the filling-destination test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QString image = directory.filePath("volume.sparseimage"), mount = directory.filePath("volume");
+    QVERIFY(QDir().mkpath(mount));
+    const auto hdiutil = [](const QStringList &arguments) {
+        QProcess process;
+        process.start(QStringLiteral("/usr/bin/hdiutil"), arguments);
+        return process.waitForFinished(60'000) && process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
+    };
+    // Sparse, so it costs real disk only as it fills. Export preflight keeps
+    // a 2 GiB reserve, so the volume must be larger than that to start.
+    if (!hdiutil({"create", "-size", "2560m", "-type", "SPARSE", "-fs", "HFS+", "-volname", "FlappedEarFill", "-o", image})
+        || !hdiutil({"attach", "-nobrowse", "-noautoopen", "-mountpoint", mount, image}))
+        QSKIP("Could not create or attach a disk image here.");
+    const auto detach = qScopeGuard([&] { hdiutil({"detach", mount, "-force"}); });
+
+    const QString source = directory.filePath("synthetic.rcz"), video = directory.filePath("input.mov");
+    QVERIFY(writeBytes(source, RczFixture::zip(RczFixture::members())));
+    QProcess encoder;
+    encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=30:d=20",
+                           "-c:v", "libx264", "-pix_fmt", "yuv420p", video});
+    QVERIFY(encoder.waitForFinished(30'000) && encoder.exitCode() == 0);
+
+    const bool overlayOnVolume = stage == "renderingOverlay";
+    const bool cancelling = stage == "cancel";
+    const bool publishing = stage == "publication";
+    const QString cancelPath = directory.filePath("cancel");
+    // Stage A writes its overlay to the temporary directory: put that on the volume.
+    const QByteArray previousTemp = qgetenv("TMPDIR");
+    if (overlayOnVolume) qputenv("TMPDIR", QFile::encodeName(mount));
+    const auto restoreTemp = qScopeGuard([&] {
+        if (previousTemp.isEmpty()) qunsetenv("TMPDIR"); else qputenv("TMPDIR", previousTemp);
+    });
+    const QString outputDirectory = overlayOnVolume ? directory.filePath("out") : mount;
+    QVERIFY(QDir().mkpath(outputDirectory));
+    const QString output = QDir(outputDirectory).filePath("export.mp4");
+    const QString bystander = QDir(mount).filePath("bystander.mp4");
+    QVERIFY(writeBytes(output, "previous export"));
+    QVERIFY(writeBytes(bystander, "unrelated file"));
+    auto transaction = std::make_unique<ExportOutputTransaction>();
+    QCOMPARE(transaction->prepare(output, video, {source}, true).status, ExportOutputTransaction::PreparationStatus::Ready);
+    const auto id = transaction->transactionId();
+    const QString overlay = QDir::temp().filePath(QStringLiteral("flappedear-overlay-%1.mkv").arg(id));
+    const auto manifestPath = ExportArtifactManifest::manifestPathFor(id);
+    QString error;
+    QVERIFY2(ExportArtifactManifest::create({id, QDateTime::currentMSecsSinceEpoch(), overlay,
+        transaction->stagingPath(), output, QCoreApplication::applicationPid(), "preparing"}, &error), qPrintable(error));
+    auto manifestCleanup = qScopeGuard([&] { static_cast<void>(ExportArtifactManifest::cleanupOwned(manifestPath)); });
+
+    // Fills the volume at once: reserve every free block for a filler file
+    // (F_PREALLOCATE, no data written), then write until the file system refuses.
+    const QString filler = QDir(mount).filePath("filler.bin");
+    const auto fill = [&filler, &mount] {
+        QFile file(filler);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Append)) return;
+        const qint64 available = QStorageInfo(mount).bytesAvailable();
+        fstore_t store{F_ALLOCATEALL, F_PEOFPOSMODE, 0, static_cast<off_t>(available), 0};
+        if (fcntl(file.handle(), F_PREALLOCATE, &store) == 0) static_cast<void>(ftruncate(file.handle(), store.fst_bytesalloc));
+        file.seek(file.size());
+        const QByteArray small(4096, '\0');
+        while (file.write(small) == small.size() && file.flush()) {}
+    };
+    if (stage == "preflight") fill();
+
+    WidgetModel widgets;
+    const QString config = directory.filePath("worker.json");
+    QVERIFY(writeBytes(config, QJsonDocument(QJsonObject{{"vboPath", source}, {"inputPath", video},
+        {"outputPath", transaction->stagingPath()}, {"manifestPath", manifestPath}, {"temporaryOverlayPath", overlay},
+        {"widgets", widgets.toJson()}, {"sync", QJsonObject{{"offset", .1}, {"timeScale", 1.0}}},
+        {"firstFrame", 0}, {"lastFrame", 599}, {"audioEnabled", false}, {"encoder", "libx265"},
+        {"cancelPath", cancelPath}}).toJson()));
+    QProcess worker;
+    QByteArray events;
+    bool filled = stage == "preflight" || publishing;
+    QElapsedTimer sinceCancel;
+    const QByteArray trigger = QByteArray("\"state\":\"") + (cancelling ? QByteArray("encodingVideo") : stage.toUtf8()) + '"';
+    QObject::connect(&worker, &QProcess::readyReadStandardOutput, &worker, [&] {
+        const auto chunk = worker.readAllStandardOutput();
+        events += chunk;
+        if (filled || !chunk.contains(trigger)) return;
+        filled = true;
+        if (!cancelling) { fill(); return; }
+        sinceCancel.start();
+        static_cast<void>(writeBytes(cancelPath, "cancel"));
+    });
+    QElapsedTimer elapsed; elapsed.start();
+    worker.start(QStringLiteral(FLAPPEDEAR_NATIVE_PATH), {"--export-worker", config});
+    QVERIFY(worker.waitForStarted());
+    QTRY_VERIFY_WITH_TIMEOUT(worker.state() == QProcess::NotRunning, 90'000);
+    events += worker.readAllStandardOutput() + worker.readAllStandardError();
+    QByteArray reason;
+    for (const auto &line : events.split('\n'))
+        if (line.contains("\"state\":\"failed\"") || line.contains("\"passed\":false")) reason = line;
+    qInfo().noquote() << stage << "worker ended after" << elapsed.elapsed() << "ms" << reason;
+    QVERIFY2(filled, "the export never reached the stage that should fill the volume");
+    if (publishing) {
+        // The export completed and validated; the volume fills before the
+        // atomic replace. Publication either succeeds with the new, valid
+        // file or fails leaving the previous export exactly as it was.
+        QVERIFY2(worker.exitStatus() == QProcess::NormalExit && worker.exitCode() == 0, events.right(2000).constData());
+        fill();
+        QVERIFY(QStorageInfo(mount).bytesAvailable() < 1024 * 1024);
+        const bool committed = transaction->commit(&error);
+        qInfo().noquote() << "publication on a full volume" << (committed ? "succeeded" : "failed: " + error);
+        if (committed) {
+            QCOMPARE(MediaProbe::probe(output, {}, true).videoFrameCount, 600);
+            QCOMPARE(readBytes(bystander), QByteArray("unrelated file"));
+            QVERIFY(QFile::remove(filler));
+            return;
+        }
+        QCOMPARE(readBytes(output), QByteArray("previous export"));
+    } else if (cancelling) {
+        qInfo().noquote() << "cancel honoured after" << sinceCancel.elapsed() << "ms";
+        QVERIFY2(events.contains("\"state\":\"cancelled\""), events.right(2000).constData());
+        QVERIFY2(sinceCancel.elapsed() < 10'000, "cancellation must be bounded");
+    } else {
+        // The worker fails; it never reports a finished export on a full volume.
+        QVERIFY2(worker.exitStatus() != QProcess::NormalExit || worker.exitCode() != 0, events.right(2000).constData());
+        QVERIFY2(elapsed.elapsed() < 60'000, "failure on a full volume must be bounded");
+        // It failed where intended: refused before writing, or out of space mid-stage.
+        const QString userError = QJsonDocument::fromJson(reason).object().value("error").toString();
+        if (stage == "preflight") QVERIFY2(userError.contains("Required estimate"), reason.constData());
+        else {
+            QVERIFY2(!userError.contains("Required estimate") && !userError.isEmpty(), reason.constData());
+            // The user is told the disk is full, not an FFmpeg pipe error.
+            QVERIFY2(userError.contains("ran out of space") || userError.contains("fell below"), qPrintable(userError));
+        }
+    }
+    // The controller's failure path: remove what the manifest owns, drop the transaction.
+    QVERIFY2(ExportArtifactManifest::cleanupOwned(manifestPath, &error), qPrintable(error));
+    manifestCleanup.dismiss();
+    const QString staging = transaction->stagingPath();
+    transaction.reset(); // as the controller drops it
+    QCOMPARE(readBytes(output), QByteArray("previous export"));
+    QCOMPARE(readBytes(bystander), QByteArray("unrelated file"));
+    QVERIFY2(!QFileInfo::exists(staging), qPrintable(staging));
+    QVERIFY2(!QFileInfo::exists(overlay), qPrintable(overlay));
+    QStringList left = QDir(mount).entryList(QDir::Files | QDir::Hidden | QDir::NoDotAndDotDot);
+    left.removeAll("filler.bin"); left.removeAll("bystander.mp4"); left.removeAll("export.mp4");
+    left.removeIf([](const QString &name) { return name.startsWith("._") || name == ".DS_Store"; });
+    QVERIFY2(left.isEmpty(), qPrintable(left.join(", ")));
+#endif
+}
+
+void TelemetryTests::describesOutOfSpaceExportFailures()
+{
+    const auto full = describeExportFailure(QStringLiteral("FFmpeg composition failed."),
+        QStringLiteral("[out#0/mp4] Could not write header: No space left on device"));
+    QVERIFY(full.error.contains("ran out of space"));
+    QVERIFY(full.diagnostics.startsWith("Original error: FFmpeg composition failed."));
+    QVERIFY(full.diagnostics.contains("No space left on device"));
+    const auto other = describeExportFailure(QStringLiteral("FFmpeg composition failed."), QStringLiteral("Invalid argument"));
+    QCOMPARE(other.error, QStringLiteral("FFmpeg composition failed."));
+    QCOMPARE(other.diagnostics, QStringLiteral("Invalid argument"));
 }
 
 void TelemetryTests::routesNewDocumentSaveAsThroughPendingQuit()

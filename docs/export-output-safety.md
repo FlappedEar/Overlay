@@ -83,6 +83,41 @@ Free-space checks do not require a staging, temporary, or final artifact to exis
 is resolved upward to its nearest existing filesystem ancestor, while diagnostics retain the original
 intended path.
 
+## Full and filling destinations (KAN-75)
+
+`TelemetryTests::keepsOutputSafeWhenTheDestinationFills` runs the real
+export worker against a real volume that runs out of space. The volume is a
+2.5 GiB sparse HFS+ disk image made with `hdiutil`; it is larger than the
+2 GiB preflight reserve so an export can start. The volume already holds the
+previous export at the target and an unrelated file. A filler reserves every
+free block at once (`F_PREALLOCATE`) when the worker reports the stage:
+
+| Case | What happens |
+|---|---|
+| Full before the export | Preflight refuses ("Required estimate …") before writing |
+| Fills during Stage A (overlay on the volume) | FFmpeg fails with ENOSPC, or the storage monitor stops the export when the temporary volume falls below its reserve |
+| Fills during Stage B (staging output on the volume) | FFmpeg fails with ENOSPC |
+| Cancelled during Stage B | Cancellation is honoured in 29–569 ms (three runs) |
+| Full at final publication | The export completed and validated. Commit is a same-volume rename, needs no new blocks and publishes the valid file |
+
+In every case except the successful publication:
+- the worker ends within the bound;
+- the previous export and the unrelated file are unchanged;
+- after the controller's cleanup (the manifest's owned paths, then the
+  transaction), no staging output or overlay remains.
+
+**Clear message when the disk fills.** When a failed export's diagnostics
+show ENOSPC ("No space left on device"), the worker reports "The disk ran
+out of space during the export. Nothing was written to the chosen file.
+Free some space, or choose another destination, and export again."
+(`describeExportFailure`). Previously the user saw the stage's technical
+error, such as "FFmpeg composition failed." or a raw-frame pipe error. The
+technical error is kept at the top of the diagnostics.
+
+**Limitation:** a slow (throttled) destination is not simulated. macOS has
+no throttled file system without admin rights. Cancellation is measured on
+the disk image, which is fast.
+
 ## Active artifact manifests and recovery
 
 Before a worker is started, the controller writes an atomic versioned JSON manifest in the system temporary directory. It records the export UUID, creation time, worker PID, state, temporary FFV1 path, staging path, and final target for diagnostics. The manifest is the authorization record: only its validated overlay and staging paths may be removed automatically; the final target is never a cleanup candidate.

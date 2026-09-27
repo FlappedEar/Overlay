@@ -542,9 +542,10 @@ int exportWorker(const QString &configPath)
             return EXIT_SUCCESS;
         }
         if (!result.success) {
+            const auto failure = FlappedEar::describeExportFailure(result.error, result.diagnostics);
             emitEvent({{"type", "log"}, {"state", "failed"}, {"level", "error"},
                        {"operation", "failed"}, {"message", "Export failed"},
-                       {"error", result.error}, {"diagnostics", result.diagnostics}});
+                       {"error", failure.error}, {"diagnostics", failure.diagnostics}});
             return EXIT_FAILURE;
         }
         const QString completionState = result.validationWarning.isEmpty()
