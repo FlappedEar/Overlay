@@ -130,6 +130,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/telemetry/DrivingStates.h
     src/telemetry/MapLayers.cpp
     src/telemetry/MapLayers.h
+    src/telemetry/TyreData.cpp
+    src/telemetry/TyreData.h
     src/telemetry/ChannelFusion.cpp
     src/telemetry/ChannelFusion.h
     src/telemetry/RecordingAlignment.cpp
@@ -352,6 +354,7 @@ qt_add_qml_module(flappedear_native
         qml/widgets/GForceData.qml
         qml/widgets/F1GForceRadarWidget.qml
         qml/widgets/GForceMagnitudeBarWidget.qml
+        qml/widgets/TyresWidget.qml
         qml/widgets/HeartRateWidget.qml
         qml/widgets/ComparisonTileWidget.qml
         qml/widgets/PedalsWidget.qml

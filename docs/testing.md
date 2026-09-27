@@ -2231,3 +2231,26 @@ Exact macOS Debug/Release PR/main test and installed-startup evidence is recorde
 in [KAN-20](https://kozucharkadiusz.atlassian.net/browse/KAN-20). The coordinator
 lacks a native Qt/CMake/CTest toolchain. Windows remains paused; private recording
 performance and physical Mac acceptance are not inferred from hosted tests.
+
+## KAN-132: tyre temperature and pressure
+
+Core tests (`TelemetryCoreTests`) cover:
+- **Channel mapping:** RaceChrono CAN names, declared bar, psi and °F units, a
+  pressure outside every unit range, and names that are not one corner's tyre
+  value (no corner, two corners, both kinds, a brake temperature). A recording
+  without tyre channels maps nothing.
+- **Readings:** placeholders before a sensor's first report, interpolation
+  between valid samples, no bridging across a placeholder or a gap, no value
+  after the recording or at a non-finite time, and an implausible temperature
+  as no data.
+
+`TelemetryTests` checks that:
+- preview (Main.qml) shows the primed frame's values and dashes;
+- the inspector switches pressure to psi;
+- the offscreen export scene draws the front-left corner once its sensor
+  reports.
+
+`FLAPPEDEAR_REAL_DAY` adds `readsPrivateTyreData`, which gives each corner's
+coverage and range per session, and a real mid-session export frame
+(`tyres-export-real.png` when `FLAPPEDEAR_LAYOUT_REVIEW_DIR` is set). Private
+results are in `telemetry-semantics.md`.

@@ -205,6 +205,7 @@ Item {
                     case "customValue": return "widgets/CustomValueWidget.qml";
                     case "retroCustomValue": return "widgets/RetroCustomValueWidget.qml";
                     case "track": return "widgets/TrackWidget.qml";
+                    case "tyres": return "widgets/TyresWidget.qml";
                     default: return "";
                     }
                 }

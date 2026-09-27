@@ -15,8 +15,10 @@
 #include "telemetry/TelemetrySource.h"
 #include "telemetry/TrackGeometry.h"
 #include "telemetry/TrackInference.h"
+#include "telemetry/TyreData.h"
 #include "telemetry/VboParser.h"
 
+#include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QJsonDocument>
@@ -49,6 +51,9 @@ private slots:
     void infersRoutesFromOrderedCompleteLaps();
     void matchesLongCircuitsByCrossTrackDistance();
     void flagsALapThatLeavesTheOtherLapsLine();
+    void mapsTyreChannelsPerCorner();
+    void readsTyreValuesWithoutPlaceholdersOrGaps();
+    void readsPrivateTyreData();
     void rejectsMalformedLapExclusions_data();
     void rejectsMalformedLapExclusions();
     void groupsOnlyDatedUnambiguousAlternatives();
@@ -1242,4 +1247,136 @@ void TelemetryCoreTests::combinesDroppedFilesAndFolders()
 }
 
 QTEST_GUILESS_MAIN(TelemetryCoreTests)
+namespace {
+
+TelemetryChannel tyreChannel(const QString &name, const QVector<float> &values, const QString &unit = {})
+{
+    TelemetryChannel channel;
+    channel.name = name;
+    channel.unit = unit;
+    for (qsizetype index = 0; index < values.size(); ++index) channel.timestamps.append(index / 10.0);
+    channel.values = values;
+    return channel;
+}
+
+} // namespace
+
+void TelemetryCoreTests::mapsTyreChannelsPerCorner()
+{
+    TelemetrySession session;
+    const auto add = [&session](const TelemetryChannel &channel) { session.channels.insert(channel.name, channel); };
+    // RaceChrono CAN names (kPa, °C), a declared unit, and names that are not
+    // one corner's tyre value.
+    add(tyreChannel(QStringLiteral("tyre_temp_fl-canbus"), {0, 41, 42}));
+    add(tyreChannel(QStringLiteral("tyre_pressure_fl-canbus"), {0, 214, 217}));
+    add(tyreChannel(QStringLiteral("Tire Pressure RR"), {32, 33}, QStringLiteral("psi")));
+    add(tyreChannel(QStringLiteral("tyre_pressure_rl"), {2.1f, 2.2f}));
+    add(tyreChannel(QStringLiteral("tyre_temp_fr"), {100, 104}, QStringLiteral("°F")));
+    add(tyreChannel(QStringLiteral("tyre_pressure_fr"), {5000, 5000}));      // no plausible unit
+    add(tyreChannel(QStringLiteral("tyre_temp"), {40}));                     // no corner
+    add(tyreChannel(QStringLiteral("tyre_temp_fl_fr"), {40}));               // two corners
+    add(tyreChannel(QStringLiteral("brake_temp_rl"), {300}));                // not a tyre
+    add(tyreChannel(QStringLiteral("tyre_temp_pressure_rl"), {40}));         // both kinds
+
+    const TyreChannelMap map = mapTyreChannels(session);
+    QVERIFY(map.hasAny());
+    QCOMPARE(map.temperature[0], QStringLiteral("tyre_temp_fl-canbus"));
+    QCOMPARE(map.pressure[0], QStringLiteral("tyre_pressure_fl-canbus"));
+    QCOMPARE(map.pressureUnit[0], PressureUnit::Kilopascal);
+    QCOMPARE(map.temperature[1], QStringLiteral("tyre_temp_fr"));
+    QVERIFY(map.temperatureFahrenheit[1]);
+    QCOMPARE(map.pressureUnit[1], PressureUnit::Unknown);
+    QVERIFY(map.temperature[2].isEmpty());
+    QCOMPARE(map.pressureUnit[2], PressureUnit::Bar);
+    QCOMPARE(map.pressureUnit[3], PressureUnit::Psi);
+    QVERIFY(map.temperature[3].isEmpty());
+
+    QVERIFY(!mapTyreChannels(TelemetrySession{}).hasAny());
+    // Only placeholders: no unit, so no pressure is ever shown.
+    QCOMPARE(classifyPressureUnit(tyreChannel(QStringLiteral("p"), {0, 0, 0})), PressureUnit::Unknown);
+    QCOMPARE(classifyPressureUnit(tyreChannel(QStringLiteral("p"), {0, 0, 30})), PressureUnit::Psi);
+}
+
+void TelemetryCoreTests::readsTyreValuesWithoutPlaceholdersOrGaps()
+{
+    TelemetrySession session;
+    // FL: 0 placeholders until the sensor reports at 0.3 s, then kPa.
+    auto temperature = tyreChannel(QStringLiteral("tyre_temp_fl-canbus"), {0, 0, 0, 40, 42, 44, 46});
+    auto pressure = tyreChannel(QStringLiteral("tyre_pressure_fl-canbus"), {0, 0, 0, 200, 210, 220, 230});
+    // A 2 s gap before the last pressure sample: nothing is bridged.
+    pressure.timestamps.last() = 2.5;
+    session.channels.insert(temperature.name, temperature);
+    session.channels.insert(pressure.name, pressure);
+    const auto fahrenheit = tyreChannel(QStringLiteral("tyre_temp_fr"), {104, 104}, QStringLiteral("F"));
+    session.channels.insert(fahrenheit.name, fahrenheit);
+    const TyreChannelMap map = mapTyreChannels(session);
+
+    const auto fl = [&](double time) { return tyreReadingAt(session, map, TyreCorner::FrontLeft, time); };
+    QVERIFY(!fl(0.1).temperatureCelsius && !fl(0.1).pressureBar);
+    QVERIFY(!fl(0.25).temperatureCelsius); // between a placeholder and a reading
+    QCOMPARE(*fl(0.3).temperatureCelsius, 40.0);
+    QCOMPARE(*fl(0.3).pressureBar, 2.0);
+    QVERIFY(qAbs(*fl(0.35).temperatureCelsius - 41.0) < 1e-6);
+    QVERIFY(qAbs(*fl(0.35).pressureBar - 2.05) < 1e-6);
+    QVERIFY(fl(0.55).temperatureCelsius);
+    QVERIFY(!fl(1.5).pressureBar);          // inside the gap
+    QVERIFY(!fl(3.0).pressureBar);          // after the recording
+    QVERIFY(!fl(std::numeric_limits<double>::quiet_NaN()).temperatureCelsius);
+
+    QCOMPARE(*tyreReadingAt(session, map, TyreCorner::FrontRight, 0.0).temperatureCelsius, 40.0);
+    const TyreReading missing = tyreReadingAt(session, map, TyreCorner::RearLeft, 0.3);
+    QVERIFY(!missing.temperatureCelsius && !missing.pressureBar);
+
+    // Implausible values are no data, never clamped.
+    TelemetrySession hot;
+    const auto implausible = tyreChannel(QStringLiteral("tyre_temp_rr"), {400, 400});
+    hot.channels.insert(implausible.name, implausible);
+    QVERIFY(!tyreReadingAt(hot, mapTyreChannels(hot), TyreCorner::RearRight, 0.05).temperatureCelsius);
+}
+
+void TelemetryCoreTests::readsPrivateTyreData()
+{
+    // Opt-in: every session of a real day (FLAPPEDEAR_REAL_DAY, private VBO
+    // recordings) sampled once a second, with each corner's coverage and range.
+    const auto path = qEnvironmentVariable("FLAPPEDEAR_REAL_DAY");
+    if (path.isEmpty()) QSKIP("FLAPPEDEAR_REAL_DAY is not set");
+    for (const auto &file : QDir(path).entryInfoList({"*.vbo"}, QDir::Files, QDir::Name)) {
+        const auto session = TelemetrySource::load(file.absoluteFilePath());
+        const TyreChannelMap map = mapTyreChannels(session);
+        if (!map.hasAny()) { qInfo().noquote() << file.baseName().left(24) << "no tyre channels"; continue; }
+        const auto names = session.channelNames();
+        double start = std::numeric_limits<double>::infinity(), end = -start;
+        for (const auto &name : names) {
+            const auto &timestamps = session.channels.value(name).timestamps;
+            if (timestamps.isEmpty()) continue;
+            start = std::min(start, timestamps.first());
+            end = std::max(end, timestamps.last());
+        }
+        for (int corner = 0; corner < tyreCornerCount; ++corner) {
+            QVERIFY(!map.pressure[corner].isEmpty() && !map.temperature[corner].isEmpty());
+            QCOMPARE(map.pressureUnit[corner], PressureUnit::Kilopascal);
+            int samples = 0, temperatures = 0, pressures = 0;
+            double minT = 1e9, maxT = -1e9, minP = 1e9, maxP = -1e9;
+            for (double time = start; time <= end; time += 1.0, ++samples) {
+                const auto reading = tyreReadingAt(session, map, static_cast<TyreCorner>(corner), time);
+                if (reading.temperatureCelsius) {
+                    ++temperatures;
+                    minT = std::min(minT, *reading.temperatureCelsius); maxT = std::max(maxT, *reading.temperatureCelsius);
+                }
+                if (reading.pressureBar) {
+                    ++pressures;
+                    minP = std::min(minP, *reading.pressureBar); maxP = std::max(maxP, *reading.pressureBar);
+                }
+            }
+            qInfo().noquote() << QString("%1 %2: temperature %3% %4..%5 °C · pressure %6% %7..%8 bar")
+                .arg(file.baseName().left(24), tyreCornerCode(static_cast<TyreCorner>(corner)))
+                .arg(100.0 * temperatures / samples, 0, 'f', 0).arg(minT, 0, 'f', 0).arg(maxT, 0, 'f', 0)
+                .arg(100.0 * pressures / samples, 0, 'f', 0).arg(minP, 0, 'f', 2).arg(maxP, 0, 'f', 2);
+            QVERIFY(temperatures > samples / 2 && pressures > samples / 2);
+            QVERIFY(minT > 0.0 && maxT < 150.0);
+            QVERIFY(minP > 0.5 && maxP < 5.0);
+        }
+    }
+}
+
 #include "TelemetryCoreTests.moc"
