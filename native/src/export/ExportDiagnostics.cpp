@@ -168,4 +168,14 @@ QString formatStageAFailureDiagnostics(const StageAFailureDiagnostics &diagnosti
     return result;
 }
 
+ExportFailureReport describeExportFailure(const QString &error, const QString &diagnostics)
+{
+    const bool outOfSpace = diagnostics.contains(QStringLiteral("No space left on device"))
+        || error.contains(QStringLiteral("No space left on device"));
+    if (!outOfSpace) return {error, diagnostics};
+    return {QStringLiteral("The disk ran out of space during the export. Nothing was written to the "
+                           "chosen file. Free some space, or choose another destination, and export again."),
+            QStringLiteral("Original error: %1\n%2").arg(error, diagnostics)};
+}
+
 } // namespace FlappedEar
