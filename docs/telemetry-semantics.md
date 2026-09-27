@@ -302,3 +302,29 @@ Rules:
 - coasting falls from 21 % of the lap in Session 1 to 8–14 % in the faster
   later sessions;
 - time on the accelerator rises from 59 % to 63–67 %.
+
+## Coasting (KAN-92)
+
+`summarizeCoasting` (`telemetry/CoastingAnalysis`, algorithm `coasting-v1`)
+turns the coasting state into episodes. Each episode has a start and end
+(time and lap progress), a duration and a distance (speed integrated over
+the episode). The summary adds per-approved-segment totals (a segment with
+none keeps a zero row) and lap totals, with the provenance of the coasting
+state. The lap view's **Coasting** pane shows it:
+- the lap total, and where the result comes from (recorded pedals,
+  inferred from G, or why it cannot be told);
+- a row per segment;
+- each episode. Selecting one moves the lap cursor to it, so the map,
+  charts and video follow.
+
+The episodes are drawn in orange on the lap map. Segment rows and positions
+need the lap's progress axis, which the pane requests.
+
+Coasting is presented as an observation. A lift can settle the car or be
+forced by traffic, so it is never called a mistake or a loss. A recording
+without speed, or with neither pedals nor longitudinal G, shows why coasting
+cannot be told rather than zero.
+
+**On the Jastrząb day:** the best lap (Session 5 LAP 2, 1:49.898) coasts
+14.8 s over 226 m in 14 episodes (13.5 % of the lap), from the recorded
+pedals. Most of it is in Corners 9–16 (5.4 s) and Corners 5–6 (4.8 s).

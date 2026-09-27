@@ -2,11 +2,14 @@
 // braking, accelerating, cornering and coasting from measured pedals or,
 // labelled inferred, from longitudinal G; hysteresis, gaps and units handled.
 
+#include "telemetry/CoastingAnalysis.h"
 #include "telemetry/DrivingStates.h"
 #include "telemetry/LapTiming.h"
 #include "telemetry/TelemetrySource.h"
 
 #include <QDir>
+#include <QJsonObject>
+#include <tuple>
 
 #include <QtTest>
 #include <cmath>
@@ -73,6 +76,7 @@ private slots:
     void infersPedalsFromAccelerationWithoutClaimingMeasurement();
     void leavesGapsAndUnusableChannelsUnknown();
     void separatesOverlapsAndSpikes();
+    void summarizesCoastingBySegmentAndLap();
     void classifiesPrivateBestLaps();
 };
 
@@ -187,6 +191,58 @@ void DrivingStatesTests::separatesOverlapsAndSpikes()
     const auto spiked = classifyDrivingStates(blip, 0.0, 10.0);
     QVERIFY(spiked.braking.active.isEmpty());
     QCOMPARE(spiked.braking.rejectedSpikes, 1);
+}
+
+void DrivingStatesTests::summarizesCoastingBySegmentAndLap()
+{
+    // KAN-92: at 36 km/h (10 m/s) the lap coasts 4-5 s and 7-8 s. Progress
+    // is 10 m per second, so those are 40-50 m and 70-80 m, which fall in
+    // the "Approach" and "Exit" segments.
+    const auto session = sessionWith({{"brake", makeChannel("brake_pos-obd", "%", brake)},
+        {"throttle", makeChannel("accelerator_pos-obd", "%", throttle)},
+        {"speed", makeChannel("velocity", "km/h", [](double) { return 36.0; })}});
+    QVector<ProgressSegment> trace(1);
+    for (int k = 0; k < sampleCount; ++k) {
+        ProjectedSample sample;
+        sample.telemetryTime = k * dt;
+        sample.progressMeters = k * dt * 10.0;
+        trace[0].samples.append(sample);
+    }
+    ApprovedSegmentation approved;
+    approved.valid = true;
+    for (const auto &[id, start, end] : {std::tuple{"approach", 0.0, 50.0}, std::tuple{"corner", 50.0, 70.0},
+                                         std::tuple{"exit", 70.0, 100.0}})
+        approved.segments.append(QJsonObject{{"id", id}, {"name", QString(id).toUpper()}, {"type", "sector"},
+            {"startProgressMeters", start}, {"endProgressMeters", end}});
+    const auto summary = summarizeCoasting(session, 0.0, 10.0, &trace, &approved);
+    QVERIFY(summary.valid);
+    QCOMPARE(summary.algorithm, QString("coasting-v1"));
+    QCOMPARE(summary.provenance, QString("measured"));
+    QCOMPARE(summary.episodes.size(), 2);
+    QVERIFY(std::abs(summary.coastingSeconds - 2.0) < 0.15);
+    QVERIFY(std::abs(summary.coastingMeters - 20.0) < 1.5);
+    QCOMPARE(summary.episodes[0].segmentId, QString("approach"));
+    QCOMPARE(summary.episodes[1].segmentId, QString("exit"));
+    QVERIFY(std::abs(*summary.episodes[0].startProgressMeters - 40.0) < 1.0);
+    QCOMPARE(summary.segments.size(), 3); // every segment listed, zero rows kept
+    QCOMPARE(summary.segments[1].segmentId, QString("corner"));
+    QCOMPARE(summary.segments[1].episodes, 0);
+    QVERIFY(summary.segments[1].seconds < 0.1);
+    QVERIFY(std::abs(summary.segments[0].meters - 10.0) < 1.5);
+    QVERIFY(std::abs(summary.segments[2].meters - 10.0) < 1.5);
+    QVERIFY(std::abs(summary.knownSeconds - 10.0) < 0.1);
+
+    // Without progress or segments the lap totals remain.
+    const auto bare = summarizeCoasting(session, 0.0, 10.0);
+    QCOMPARE(bare.episodes.size(), 2);
+    QVERIFY(bare.segments.isEmpty());
+    QVERIFY(!bare.episodes[0].startProgressMeters);
+
+    // Without pedals and acceleration it cannot be told: unknown, not zero.
+    const auto unknown = summarizeCoasting(sessionWith({{"speed", makeChannel("velocity", "km/h", speed)}}), 0.0, 10.0);
+    QCOMPARE(unknown.provenance, QString("unknown"));
+    QCOMPARE(unknown.unresolvedReason, QString("pedalStateUnknown"));
+    QVERIFY(unknown.episodes.isEmpty());
 }
 
 void DrivingStatesTests::classifiesPrivateBestLaps()

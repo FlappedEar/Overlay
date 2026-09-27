@@ -14,6 +14,8 @@ Rectangle {
     // Static geometry: repainted only when the review changes, never on playback.
     property bool segmentReview: false
     property int selectedSegmentIndex: -1
+    // KAN-92: coasting episodes of the open lap, drawn over the track.
+    property var coastingLayers: []
     // KAN-49: while a boundary is being placed, a tap reports its normalized map point.
     property bool pickingProgress: false
     signal progressPicked(real x, real y)
@@ -136,6 +138,35 @@ Rectangle {
                             context.lineWidth = selectedLayer ? 9 : 7;
                         }
                         strokeLayer(context, layer);
+                    }
+                }
+            }
+        }
+        Canvas {
+            id: coastingCanvas
+            objectName: "coastingMapLayer"
+            anchors.fill: parent
+            visible: root.coastingLayers.length > 0
+            property var layers: root.coastingLayers
+            onLayersChanged: requestPaint()
+            onAvailableChanged: if (available) requestPaint()
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            onPaint: {
+                const context = getContext("2d");
+                context.reset();
+                context.lineCap = "round";
+                context.lineJoin = "round";
+                context.strokeStyle = "#ff9a4d";
+                context.lineWidth = 6;
+                for (const layer of layers) {
+                    for (const points of layer.polylines) {
+                        if (points.length < 2) continue;
+                        context.beginPath();
+                        context.moveTo(Number(points[0].x) * width, Number(points[0].y) * height);
+                        for (let index = 1; index < points.length; ++index)
+                            context.lineTo(Number(points[index].x) * width, Number(points[index].y) * height);
+                        context.stroke();
                     }
                 }
             }

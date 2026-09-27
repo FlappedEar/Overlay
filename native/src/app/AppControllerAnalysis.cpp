@@ -546,4 +546,9 @@ bool AppController::retryOutingAnalysis()
     return m_analysis.retryOutingAnalysis();
 }
 
+QVariantMap AppController::outingLapCoasting() const
+{
+    return m_analysis.outingLapCoasting();
+}
+
 } // namespace FlappedEar

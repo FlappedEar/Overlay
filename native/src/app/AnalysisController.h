@@ -261,6 +261,10 @@ public:
     Q_INVOKABLE QVariantList outingLapBrakingMetrics() const;
     // KAN-54: throttle pickup and the following-straight interval per approved corner.
     Q_INVOKABLE QVariantList outingLapExitMetrics() const;
+    // KAN-92: coasting of the open lap (see telemetry/CoastingAnalysis):
+    // totals, episodes and, once the lap's progress axis is ready, segment
+    // rows and map layers.
+    Q_INVOKABLE QVariantMap outingLapCoasting() const;
     Q_INVOKABLE QVariantMap outingLapSeries(const QString &channel, int maximumPoints) const;
     Q_INVOKABLE QVariantMap outingLapSeries(
         const QString &channel, double startTime, double endTime, int maximumPoints) const;
