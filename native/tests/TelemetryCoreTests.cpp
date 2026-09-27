@@ -48,6 +48,7 @@ private slots:
     void rejectsMalformedLapReferences();
     void infersRoutesFromOrderedCompleteLaps();
     void matchesLongCircuitsByCrossTrackDistance();
+    void flagsALapThatLeavesTheOtherLapsLine();
     void rejectsMalformedLapExclusions_data();
     void rejectsMalformedLapExclusions();
     void groupsOnlyDatedUnambiguousAlternatives();
@@ -190,6 +191,35 @@ void TelemetryCoreTests::matchesLongCircuitsByCrossTrackDistance()
     auto reversed = circuit(0.0, 0.0, 0.0);
     reversed.direction = QStringLiteral("clockwise");
     QVERIFY(!routesMatch(reference, reversed));
+}
+
+void TelemetryCoreTests::flagsALapThatLeavesTheOtherLapsLine()
+{
+    // KAN-137: laps on a 200 m-radius circle driven on slightly different
+    // lines (up to 5 m apart) stay on route; a lap that runs 17 m wide for
+    // about 60 m (off track) leaves every other lap's line and is flagged.
+    const auto lap = [](const int number, const double offset, const double excursion) {
+        LapTrace trace;
+        trace.lapNumber = number;
+        for (int i = 0; i < 600; ++i) {
+            const double angle = 2.0 * std::numbers::pi * i / 600.0;
+            const bool wide = excursion > 0 && angle > 1.0 && angle < 1.3;
+            const double radius = 200.0 + offset + (wide ? excursion : 0.0);
+            trace.points.append({i * 0.1, radius * std::cos(angle), radius * std::sin(angle)});
+        }
+        return trace;
+    };
+    const QVector<LapTrace> traces{lap(1, 0.0, 0.0), lap(2, 3.0, 0.0), lap(3, -3.0, 0.0), lap(4, 5.0, 0.0), lap(5, 1.0, 17.0)};
+    const auto deviations = lapLineDeviations(traces, {1, 2, 3, 4, 5});
+    QCOMPARE(deviations.size(), 5);
+    for (const int number : {1, 2, 3, 4}) QVERIFY2(deviations.value(number) <= maximumLineDeviationMeters,
+        qPrintable(QString("lap %1: %2 m").arg(number).arg(deviations.value(number))));
+    QVERIFY(deviations.value(5) > maximumLineDeviationMeters);
+    // Only the given laps count, and fewer than three give no verdict.
+    QVERIFY(lapLineDeviations(traces, {1, 5}).isEmpty());
+    QVERIFY(!lapLineDeviations(traces, {1, 2, 5}).isEmpty());
+    QVERIFY(lapLineDeviations({}, {}).isEmpty());
+    QVERIFY_THROWS_EXCEPTION(OperationCancelled, static_cast<void>(lapLineDeviations(traces, {1, 2, 3, 4, 5}, [] { return true; })));
 }
 
 void TelemetryCoreTests::infersRoutesFromOrderedCompleteLaps()

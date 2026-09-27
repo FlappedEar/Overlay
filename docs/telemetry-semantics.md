@@ -634,6 +634,9 @@ of offering proposals that cannot be approved.
 - All three sessions now resolve to one clockwise layout (before the
   cross-track route matching, only Session 2 did).
 - 16 segments are created automatically from Session 3 LAP 3 (2:13.774).
+- Laps that leave the other laps' line by more than 12 m, such as the
+  off-track Session 2 LAP 2, are excluded from ranking (KAN-137; see the
+  route rules in `event-project-format.md`).
 - The theoretical best is 2:11.541, and most time is in Corners 10–11
   (+0.514 s).
 

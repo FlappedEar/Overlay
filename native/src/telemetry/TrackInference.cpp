@@ -89,6 +89,58 @@ bool routesMatch(const RouteShape &a, const RouteShape &b, const CancellationChe
     return false;
 }
 
+QHash<int, double> lapLineDeviations(const QVector<LapTrace> &traces, const QSet<int> &lapNumbers, const CancellationCheck &cancelled)
+{
+    QHash<int, double> result;
+    constexpr double cell = 4.0;
+    const double cap = maximumLineDeviationMeters + 4.0;
+    QVector<const LapTrace *> used;
+    qsizetype points = 0;
+    for (const auto &trace : traces)
+        if (lapNumbers.contains(trace.lapNumber) && trace.points.size() >= 2) { used.append(&trace); points += trace.points.size(); }
+    if (used.size() < 3 || points > 4'000'000) return result;
+    // Every point of every lap in a 4 m grid, to find other laps' paths nearby.
+    const auto key = [](const qint64 x, const qint64 y) { return (x << 32) ^ (y & 0xffffffff); };
+    QHash<qint64, QVector<QPair<int, int>>> grid;
+    for (int lap = 0; lap < used.size(); ++lap)
+        for (int index = 0; index < used[lap]->points.size(); ++index) {
+            const auto &point = used[lap]->points[index];
+            grid[key(qint64(std::floor(point.eastMeters / cell)), qint64(std::floor(point.northMeters / cell)))].append({lap, index});
+        }
+    const auto pointOf = [](const LapTracePoint &point) { return QPointF(point.eastMeters, point.northMeters); };
+    const auto toSegment = [](const QPointF &p, const QPointF &a, const QPointF &b) {
+        const QPointF ab = b - a;
+        const double length2 = ab.x() * ab.x() + ab.y() * ab.y();
+        const double t = length2 > 0 ? std::clamp(((p - a).x() * ab.x() + (p - a).y() * ab.y()) / length2, 0.0, 1.0) : 0.0;
+        return distance(p, a + ab * t);
+    };
+    const int reach = int(std::ceil(cap / cell));
+    for (int lap = 0; lap < used.size(); ++lap) {
+        throwIfCancelled(cancelled);
+        double worst = 0.0;
+        for (const auto &sample : used[lap]->points) {
+            const QPointF p = pointOf(sample);
+            const qint64 cx = qint64(std::floor(p.x() / cell)), cy = qint64(std::floor(p.y() / cell));
+            double nearest = cap;
+            for (int dx = -reach; dx <= reach; ++dx)
+                for (int dy = -reach; dy <= reach; ++dy) {
+                    const auto found = grid.constFind(key(cx + dx, cy + dy));
+                    if (found == grid.cend()) continue;
+                    for (const auto &[other, index] : *found) {
+                        if (other == lap) continue;
+                        const auto &path = used[other]->points;
+                        const QPointF q = pointOf(path[index]);
+                        if (index > 0) nearest = std::min(nearest, toSegment(p, pointOf(path[index - 1]), q));
+                        if (index + 1 < path.size()) nearest = std::min(nearest, toSegment(p, q, pointOf(path[index + 1])));
+                    }
+                }
+            worst = std::max(worst, nearest);
+        }
+        result.insert(used[lap]->lapNumber, worst);
+    }
+    return result;
+}
+
 TrackInference inferTrack(const LapSession &laps, const bool longitudeIsWestPositive, const CancellationCheck &cancelled)
 {
     throwIfCancelled(cancelled);
@@ -127,6 +179,11 @@ TrackInference inferTrack(const LapSession &laps, const bool longitudeIsWestPosi
         throwIfCancelled(cancelled);
         if (routesMatch(result.route, shape(trace, origin, longitudeIsWestPositive), cancelled)) result.matchingLaps.insert(trace.lapNumber);
     }
+    // KAN-137: the overall shape can match while a lap leaves the line every
+    // other lap took (off track, a detour, the pit lane); that lap is off route.
+    const auto deviations = lapLineDeviations(laps.lapTraces, result.matchingLaps, cancelled);
+    for (auto it = deviations.cbegin(); it != deviations.cend(); ++it)
+        if (it.value() > maximumLineDeviationMeters) result.matchingLaps.remove(it.key());
     result.reason.clear();
     return result;
 }

@@ -496,6 +496,21 @@ layout or the reverse direction still fails the same limits. The algorithm name
 stays `gps-route-v1`: this only admits laps that were wrongly rejected, and
 runs that matched before keep their layout identities and approved segments.
 
+The route shape limits are loose enough for a lap that runs wide or cuts off
+at a single corner. A second check (KAN-137) therefore compares the laps that
+matched in one run against each other. For each point of a lap, it takes the
+cross-track distance to the nearest point of any other lap in that run. The
+lap's deviation is the largest of those distances. A lap whose deviation is
+more than 12 metres leaves the line every other lap took: it went off track,
+took a detour or used the pit lane. It is reported as `different-recorded-route`
+and stays out of automatic ranking and progression. The check needs at least
+three matching laps in the run and is cooperatively cancellable.
+
+On the real days, normal laps deviate by at most 11.2 m. The laps flagged are
+Jastrząb Session 2 LAP 4 (43 m) and Session 5 LAP 5 (19 m), and at Silesia
+Ring five laps between 12.3 m and 16.0 m. One of those is Session 2 LAP 2,
+where the driver went off track.
+
 Up to 64 evenly distributed complete traces establish a representative using
 complete-link clustering. A cluster must contain at least two laps and 60% of
 usable candidates. Conflicting routes remain unresolved. Every complete trace is
