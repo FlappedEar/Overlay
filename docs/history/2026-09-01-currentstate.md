@@ -1,6 +1,6 @@
 # Historical checkpoint — 1 September 2026
 
-Archived on 11 September 2026. The text below is retained as historical evidence and deferred design context; it does not describe the current implementation or CI policy. See [current state](../../currentstate.md), [roadmap](../../ROADMAP.md), and [beta acceptance](../beta-acceptance.md).
+Archived on 11 September 2026. The text below is retained as historical evidence and deferred design context; it does not describe the current implementation or CI policy. See the [delivery ledger](../product-delivery.md) and [beta acceptance](../beta-acceptance.md); the later checkpoints are [12 September state](2026-09-12-currentstate.md) and [12 September roadmap](2026-09-12-roadmap.md).
 
 # VBOOverlay / FlappedEar Telemetry — Current Development State
 

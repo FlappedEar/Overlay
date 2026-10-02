@@ -9,6 +9,27 @@ merged PR #56). Before starting, run `git fetch origin && git log --oneline
 origin/main -20` and check Jira for tickets you assume are still open. Trust
 that check over this file.
 
+## Update — 2 October 2026
+
+- Merged since 27 September: KAN-132 tyres widget (#125), KAN-134 hotlap tile
+  (#121), KAN-135 lap-time decimals (#122), KAN-136 automatic segments (#123),
+  KAN-137 off-track laps (#124), and the KAN-138 user guide (#126–#128).
+- An independent read-only audit of `main` at `ca66169` produced the
+  stabilisation epic **KAN-144** (KAN-145 to KAN-161). It found recovery loss
+  when quitting at the recovery prompt, an auto-sync search range that can
+  auto-apply an offset one lap away, two VBO memory blow-ups and a fixed
+  30 s final-validation timeout. Finish KAN-144 before new features; it gates M5.
+- `main` at `ca66169` was red in Debug on the post-import attach race
+  (`TelemetryTests.cpp:8831`): KAN-143 fixes the tests, KAN-150 the product side.
+- The M2–M4 epics (KAN-7, KAN-8, KAN-9) are closed.
+- **Owner decision, 2 October 2026:** two applications. The desktop overlay
+  editor targets macOS and Windows; Flapped Ear Telemetry targets macOS,
+  Windows, iOS and Android. `AGENTS.md` and `product-vision.md` record it. Windows builds and CI
+  stay paused until the owner resumes them. The other KAN-122 decisions (store
+  licence, identities, desktop analysis window, devices) are open.
+- `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
+  `docs/product-delivery.md` and Jira are the only status records.
+
 ## Project
 
 VBOOverlay / "Flapped Ear Telemetry": a Qt 6 / C++20 / QML macOS desktop app
@@ -123,7 +144,7 @@ and no video.
 - KAN-94–96 (realistic potential) and KAN-108–109 (Explain this lap) depend
   on KAN-86. KAN-98–99 (comparable visits) depend on KAN-89.
 - KAN-106 (chapter export) is paused; see above.
-- KAN-132 (tyre data) needs the phase-0 decision on its data source.
+- KAN-132 (tyre data) is done: the source is RaceChrono's CAN tyre channels in the VBO (merged in #125).
 
 KAN-124 (split phase 2) steps 1–11 are merged (#85, #87–#92, #94–#97):
 - **Step 1:** analysis reaches video only through `VideoLink`, and its guards
@@ -187,17 +208,19 @@ report takes about 7 s in Release, with a peak of 150 MiB. See
 The owner wants **two products in one repository**:
 
 - **Flapped Ear Telemetry:** a quick iPhone, iPad and Android app to view
-  the day's telemetry at the track. Nobody carries a laptop to the track.
+  the day's telemetry at the track (nobody carries a laptop to the track),
+  also built for macOS and Windows (owner decision, 2 October 2026).
 - **Flapped Ear Overlays:** the desktop video-overlay editor. Planned
   additions are tyre pressure and temperature, and a helmet camera without
   GPS, which needs manual sync of multiple video sources.
 
 Read `docs/product-split-plan.md` (epic KAN-121, tickets KAN-122–132) before
-any structural work. Phase 0 (KAN-122) lists owner decisions that are still
-open: the Qt store licence, updating the direction documents
-(`product-vision.md` and `AGENTS.md` still say one macOS app), bundle
-identities, and the tyre data source. Phases 1–3 need none of them except
-identities (phase 3).
+any structural work. Phase 0 (KAN-122): the platforms were decided on
+2 October 2026 (desktop editor on macOS and Windows, Telemetry on macOS,
+Windows, iOS and Android) and the tyre data source is settled (KAN-132).
+Still open: the Qt store licence, bundle identities, whether the overlay
+editor keeps a day-analysis window, and target devices. Phases 1–3 need none of them except identities
+(phase 3).
 
 Split rules already in force after KAN-123:
 - `src/telemetry` and `src/project` form `flappedear_telemetry_core`, which

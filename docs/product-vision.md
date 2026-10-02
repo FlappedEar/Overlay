@@ -1,14 +1,17 @@
 # Flapped Ear Telemetry — product contract
 
 Established 12 September 2026 from the owner's original analysis proposal and
-subsequent decisions. This document preserves the destination across agents and
+subsequent decisions. Updated 2 October 2026 with the owner's decision to build two
+applications (KAN-122). This document preserves the destination across agents and
 implementation sessions. Implementation and execution status belong in
 [product delivery](product-delivery.md), not in this vision.
 
 ## Product promise
 
-One macOS-first application combines a video overlay editor/generator with a
-track-day performance analyzer. Its analysis answers:
+Two applications from one repository share the telemetry core: a desktop video
+overlay editor/generator for macOS and Windows (working name **Flapped Ear
+Overlays**), and **Flapped Ear Telemetry**, a track-day performance analyzer for
+macOS, Windows, iOS and Android. The analysis answers:
 
 **Where did I lose time? What differed? What might explain it? What should I
 focus on next?**
@@ -19,10 +22,13 @@ and more charts are foundations, not completion of this promise.
 
 ## Durable decisions
 
-- Product name: **Flapped Ear Telemetry**. Existing internal identifiers may
-  remain for compatibility; user-facing naming must be consistent.
-- Keep this repository and native Qt/C++/QML architecture. Analysis and overlay
-  editing are workspaces in one application, with shared parsing and timing.
+- Product names: **Flapped Ear Telemetry** is the analysis app; the desktop
+  editor's working name is **Flapped Ear Overlays**. Bundle identities and the
+  migration of existing settings are still to be decided (KAN-122). Existing internal
+  identifiers may remain for compatibility; user-facing naming must be consistent.
+- Keep this repository and native Qt/C++/QML architecture. Both applications share
+  parsing, timing and analysis through the Qt-Core-only telemetry core. Whether the
+  overlay editor keeps a day-analysis window is still open (KAN-122).
 - Event → Run → Lap. An event groups the day; a run owns recording sources,
   optional video, sync and setup/conditions notes. Lap identity includes its run.
 - Analyze across runs without concatenating paddock breaks. Recording time,
@@ -31,8 +37,10 @@ and more charts are foundations, not completion of this promise.
   source workflow. Alternative files are not channel fusion.
 - Prefer VBO when the user needs RaceChrono's exported calculated G channels.
   RCZ preserves native sensor clocks. Keep provenance and explain this choice.
-- Current engineering focus is macOS; preserve existing Windows CI. No second
-  application, unsolicited framework replacement, or silent scope reduction.
+- Platforms: the desktop editor targets macOS and Windows; Flapped Ear Telemetry
+  targets macOS, Windows, iOS and Android. macOS remains the active development
+  platform, and Windows builds and CI stay paused until the owner resumes them. No unsolicited framework
+  replacement or silent scope reduction.
 
 ## Complete feature ledger
 

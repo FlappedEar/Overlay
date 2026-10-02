@@ -74,7 +74,7 @@ def main():
 
     smoke_installed(executable, sdk, repo / "ci-logs/candidate-smoke.txt")
 
-    for name in ("README.md", "ROADMAP.md", "currentstate.md", "THIRD_PARTY_NOTICES.md"):
+    for name in ("README.md", "THIRD_PARTY_NOTICES.md"):
         shutil.copyfile(repo / name, stage / name)
     shutil.copytree(repo / "docs", stage / "docs", dirs_exist_ok=True)
     shutil.copytree(repo / ".github/workflows", stage / ".github/workflows", dirs_exist_ok=True)

@@ -2,7 +2,7 @@
 
 Updated 12 September 2026. Application version: **0.2.0**. Status: **internal candidate preparation; beta approval pending; macOS-first event analysis development**.
 
-The September 1 handoff is preserved in [the historical checkpoint](docs/history/2026-09-01-currentstate.md). Its open/closed statements describe that older baseline.
+The September 1 handoff is preserved in [the historical checkpoint](2026-09-01-currentstate.md). Its open/closed statements describe that older baseline.
 
 ## Implemented
 
@@ -13,7 +13,7 @@ The September 1 handoff is preserved in [the historical checkpoint](docs/history
 - Verified RaceChrono Pro 10.2.4 VBO timing gates convert centre/direction vectors into perpendicular finite gates. Generic VBO endpoints remain unchanged; unverified identified RaceChrono versions omit gates with a warning.
 - Debug/Release CI and internal Release deployment are defined for macOS ARM64 and Windows x64 with Qt 6.8.3. Successful Release jobs attach candidate archives, hashes and build manifests after installed startup with the build SDK hidden.
 
-- Windows Release CI builds an unsigned NSIS 3.12 installer, with per-user shortcuts/registration, installed startup, uninstall/reinstall and preservation checks. See [installer contract](docs/windows-installer.md).
+- Windows Release CI builds an unsigned NSIS 3.12 installer, with per-user shortcuts/registration, installed startup, uninstall/reinstall and preservation checks. See [installer contract](../windows-installer.md).
 
 ## Evidence
 
@@ -23,7 +23,7 @@ Local native compilation is unavailable in this Work environment. Native
 verification for this slice is tracked against the exact head of
 [PR #7](https://github.com/arekkozuch/VBOOverlay/pull/7); consult its checks and
 validation record rather than the historical results below. See the
-[working delivery plan](docs/event-analysis-plan.md).
+[working delivery plan](../event-analysis-plan.md).
 
 | Evidence | Result / boundary |
 |---|---|
@@ -37,9 +37,9 @@ CI skips for private media and hardware remain visible. A hosted renderer or ins
 
 ## Remaining before beta approval
 
-Follow [beta acceptance](docs/beta-acceptance.md) and record results against the exact archive hash. Required remaining work includes real-video synchronization/export, physical hardware-encoder checks, clean installation, dependency notices/signing decisions, and an accepted supported-platform scope.
+Follow [beta acceptance](../beta-acceptance.md) and record results against the exact archive hash. Required remaining work includes real-video synchronization/export, physical hardware-encoder checks, clean installation, dependency notices/signing decisions, and an accepted supported-platform scope.
 
-Additional audit hardening remains open: lap-reference GPS gaps, VBO pre-allocation/derived-time bounds, Unix descendants after leader exit, production UUID log retention, coordinate-unit ambiguity, and slow/filling export destinations. [ROADMAP.md](ROADMAP.md) tracks these explicitly; they are not closed by the two latest fixes.
+Additional audit hardening remains open: lap-reference GPS gaps, VBO pre-allocation/derived-time bounds, Unix descendants after leader exit, production UUID log retention, coordinate-unit ambiguity, and slow/filling export destinations. [ROADMAP.md](2026-09-12-roadmap.md) tracks these explicitly; they are not closed by the two latest fixes.
 
 Multi-run event work has begun as a separate development slice within this same
 application. It does not broaden the existing single-session beta acceptance
@@ -48,8 +48,8 @@ acceptance, sectors and theoretical best laps remain outside that beta scope.
 
 ## Documentation map
 
-- [README](README.md): capabilities, build prerequisites and limitations.
-- [Architecture](docs/architecture.md), [project format](docs/project-format.md), [telemetry semantics](docs/telemetry-semantics.md), [RCZ format](docs/rcz-format.md): implementation contracts.
-- [Export pipeline](docs/export-pipeline.md), [color policy](docs/media-color-policy.md), [output safety](docs/export-output-safety.md): rendering, timing and destination guarantees.
-- [Testing](docs/testing.md): automated and private evidence; [beta acceptance](docs/beta-acceptance.md): candidate walkthrough and approval record.
-- [Third-party notices](THIRD_PARTY_NOTICES.md): dependency inventory and remaining distribution work.
+- [README](../../README.md): capabilities, build prerequisites and limitations.
+- [Architecture](../architecture.md), [project format](../project-format.md), [telemetry semantics](../telemetry-semantics.md), [RCZ format](../rcz-format.md): implementation contracts.
+- [Export pipeline](../export-pipeline.md), [color policy](../media-color-policy.md), [output safety](../export-output-safety.md): rendering, timing and destination guarantees.
+- [Testing](../testing.md): automated and private evidence; [beta acceptance](../beta-acceptance.md): candidate walkthrough and approval record.
+- [Third-party notices](../../THIRD_PARTY_NOTICES.md): dependency inventory and remaining distribution work.

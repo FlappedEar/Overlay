@@ -15,8 +15,6 @@ The owner has authorized coordinator implementation again. For shared-repository
 work, implement the requested task, open a focused PR and validate it through
 macOS CI. If the local native toolchain is unavailable, say so; hosted CI supplies
 the synthetic build/test gate, not private-media or owner-operated acceptance.
-Do not start a separate CI run for task 016: the owner accepted its local report
-and requested moving directly to task 017. The next task's CI includes that base.
 
 When the owner requests local Codex execution, use the following handoff.
 

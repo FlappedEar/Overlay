@@ -1,6 +1,6 @@
 # Flapped Ear Telemetry — event analysis delivery
 
-Updated 13 September 2026. The complete scope is now maintained in
+Updated 2 October 2026. The complete scope is now maintained in
 [product-vision.md](product-vision.md); actual status, blockers, milestones,
 forecasts and acceptance live in [product-delivery.md](product-delivery.md).
 This page is an entry point, not a competing roadmap.
@@ -60,9 +60,9 @@ source/configuration changes and exclusions invalidate affected slots. Starting
 another document clears the pair. Pair selection and inspection do not activate
 an editor run, alter synchronization or dirty the saved project.
 
-These are in-memory analysis selections. Saving an A/B workspace, shared progress,
-distance delta and paired traces/charts belong to subsequent M2 tasks. The existing
-single-lap inspector remains the evidence view for each selected lap.
+Shared track progress, distance delta, paired traces and charts, and saving the
+A/B selection were added later in M2 (KAN-31 to KAN-41); see [testing](testing.md).
+The single-lap inspector remains the evidence view for each selected lap.
 
 ## Shared comparison source budget (KAN-30)
 
@@ -87,13 +87,17 @@ than their physical size. Parser input/section/JSON/decompression scratch keeps
 its existing separate hard limits; editor telemetry, day-summary derivation and
 bounded per-lap map geometry are outside this source-cache budget.
 
-## Next product outcomes
+## Product outcomes
 
-1. M1 synthetic acceptance is recorded in [KAN-28](kan28-m1-acceptance.md), with local private-VBO evidence separate.
-2. Extend independent cross-run A/B with shared track progress, delta and paired map/channels.
-3. Reviewed corners/sectors, metrics and sector theoretical.
-4. Ranked losses, consistency, G-G, available thermal/HR data and automatic report.
-5. Full Mac journey/overlay-export acceptance, then remaining advanced F00–F20 work.
+Outcomes 1–4 are delivered; their milestone epics (M1–M4) were closed on
+2 October 2026 after every task was done. Outcome 5 is next, after the
+stabilisation epic KAN-144.
+
+1. Day results (M1): [KAN-28](kan28-m1-acceptance.md), with local private-VBO evidence separate.
+2. Independent cross-run A/B with shared track progress, delta and paired map/channels (M2): [KAN-42](kan42-m2-acceptance.md).
+3. Reviewed corners/sectors, metrics and sector theoretical (M3): [KAN-58](kan58-m3-acceptance.md).
+4. Ranked losses, consistency, G-G, available thermal/HR data and the day report (M4): [KAN-74](kan74-m4-acceptance.md).
+5. Full Mac journey/overlay-export acceptance (M5), then remaining advanced F00–F20 work (M6).
 
 A timed interval, usable spatial reference and comparable event lap are distinct.
 GPS continuity alone cannot establish compatibility; repeated route geometry,

@@ -1,6 +1,6 @@
 # Project format and external sources
 
-`.fetproject` remains version 2. Source metadata is an optional extension of that format, so old v2 documents do not require a version bump or manual conversion. Unknown top-level and nested fields are retained when the application overlays known edits and saves.
+Single-recording `.fetproject` documents remain version 2; event documents use version 3 (see [event project format](event-project-format.md)). Source metadata is an optional extension of that format, so old v2 documents do not require a version bump or manual conversion. Unknown top-level and nested fields are retained when the application overlays known edits and saves.
 
 ## Resource limits
 

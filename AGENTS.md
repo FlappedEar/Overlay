@@ -88,9 +88,14 @@
 - Preview widget geometry is derived from loaded media display geometry, never from transient
   `VideoOutput` decoded-frame state. User-accessible playback end is the last actual video frame,
   not the media-duration boundary after it.
-- Current owner direction (2026-09-13): focus on macOS only. Do not start Windows builds,
-  tests, packaging or installer validation until the owner explicitly resumes them. This
-  supersedes older dual-platform gates in Jira and historical documentation. The owner
+- Current owner direction (2026-10-02): the repository delivers two applications that share the
+  telemetry core: a desktop overlay editor (working name Flapped Ear Overlays) for macOS and
+  Windows, and Flapped Ear Telemetry for macOS, Windows, iOS and Android. Keep
+  `flappedear_telemetry_core` and `flappedear_telemetry_app` free of Gui, overlay, video and
+  platform-specific code so that they build for all four platforms. macOS remains the active development platform. The 2026-09-13
+  pause still applies: do not start Windows builds, tests, packaging or installer validation
+  until the owner explicitly resumes them. This supersedes older dual-platform gates in Jira and
+  historical documentation. The owner
   resumed macOS Cloud CI after the quota pause. Run the applicable local macOS
   build/test gate and hosted Debug/Release validation for published changes. Report
   real-media and hardware-encoder validation separately. An explicit
