@@ -63,6 +63,24 @@ QtObject {
     property int outingLapVideoPositionMilliseconds: 0
     property var segmentReviewMapLayers: []
     property var comparisonSlots: []
+    property bool comparisonPairReady: false
+    property real comparisonProgressAxisLength: 0
+    property var comparisonAvailableChannels: []
+    property var preferredComparisonChannels: []
+    property string comparisonFocusSegmentId: ""
+    property int comparisonVideoRevision: 0
+    function comparisonPreferredChannels() { return preferredComparisonChannels; }
+    function comparisonPersistedChannels() { return []; }
+    function comparisonPersistedRangeMeters() { return ({}); }
+    function persistComparisonChannels() {}
+    function persistComparisonRange() {}
+    function comparisonVideo(slot) { return ({ "state": "no-video" }); }
+    function comparisonChannelSeriesByProgress(slot, channel, start, end, points) { return data.comparisonSeries(slot, channel, start, end, points); }
+    function comparisonDeltaSeriesByProgress(start, end, points) { return data.comparisonDelta(start, end, points); }
+    function comparisonOverlayTrack(slot) { return data.overlayTrack(slot); }
+    function comparisonPositionAtProgress(slot, meters) { return data.positionAtProgress(slot, meters); }
+    function comparisonMapLayerOptions() { return data.mapLayerOptions(); }
+    function comparisonMapLayer(layerId, slot) { return data.mapLayer(layerId, slot); }
 
     function outingLapSeries(channel, start, end, points) { return data.series(channel, start, end, points); }
     function outingLapValueText(channel) { return data.valueText(channel, outingLapCursor); }

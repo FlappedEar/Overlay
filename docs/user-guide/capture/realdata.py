@@ -393,3 +393,123 @@ if __name__ == "__main__":
         print(f"LAP {lap['number']}: {int(m)}:{s:06.3f}{'  best' if lap['isBest'] else ''}")
     print("direction", direction(rec, rec.best_lap()), "deviations", line_deviations(rec))
     print("start", utc_text(rec, 0.0))
+
+
+class Comparison:
+    """Lap A and lap B on lap A's track-progress axis (metres from the timing gate).
+
+    Lap B samples are projected onto lap A's GPS path near their expected
+    progress, so a corner lines up for both laps even on different lines."""
+
+    def __init__(self, rec: Recording, lap_a: dict, lap_b: dict, window_m: float = 60.0):
+        self.rec, self.laps = rec, (lap_a, lap_b)
+        self.ia = list(range(rec.index_at(lap_a["start"]), rec.index_at(lap_a["end"]) + 1))
+        self.ib = list(range(rec.index_at(lap_b["start"]), rec.index_at(lap_b["end"]) + 1))
+        self.pa = [rec.local(rec.lat[i], rec.lon[i]) for i in self.ia]
+        self.da = [0.0]
+        for a, b in zip(self.pa, self.pa[1:]):
+            self.da.append(self.da[-1] + math.dist(a, b))
+        self.length = self.da[-1]
+        pb = [rec.local(rec.lat[i], rec.lon[i]) for i in self.ib]
+        db = [0.0]
+        for a, b in zip(pb, pb[1:]):
+            db.append(db[-1] + math.dist(a, b))
+        scale = self.length / max(1e-9, db[-1])
+        self.progress_b = []
+        last = 0.0
+        for k, p in enumerate(pb):
+            expected = db[k] * scale
+            best = None
+            for j in range(1, len(self.pa)):
+                if self.da[j] < expected - window_m or self.da[j - 1] > expected + window_m:
+                    continue
+                a, b = self.pa[j - 1], self.pa[j]
+                dx, dy = b[0] - a[0], b[1] - a[1]
+                l2 = dx * dx + dy * dy
+                if l2 <= 1e-12:
+                    continue
+                f = min(max(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2, 0.0), 1.0)
+                d2 = (p[0] - a[0] - dx * f) ** 2 + (p[1] - a[1] - dy * f) ** 2
+                if best is None or d2 < best[0]:
+                    best = (d2, self.da[j - 1] + (self.da[j] - self.da[j - 1]) * f)
+            value = best[1] if best else expected
+            last = max(last, value)  # progress never runs backwards
+            self.progress_b.append(last)
+        self.time_a = [rec.times[i] - lap_a["start"] for i in self.ia]
+        self.time_b = [rec.times[i] - lap_b["start"] for i in self.ib]
+
+    def _axis(self, slot):
+        return (self.da, self.ia) if slot == 0 else (self.progress_b, self.ib)
+
+    @staticmethod
+    def _interp(xs, ys, x):
+        i = bisect.bisect_left(xs, x)
+        if i <= 0:
+            return ys[0]
+        if i >= len(xs):
+            return ys[-1]
+        x0, x1 = xs[i - 1], xs[i]
+        return ys[i - 1] if x1 == x0 else ys[i - 1] + (ys[i] - ys[i - 1]) * (x - x0) / (x1 - x0)
+
+    def channel_series(self, slot, name, start, end, points):
+        column = self.rec.app_channels().get(name)
+        if column is None:
+            return {"reason": "channelMissing"}
+        xs, idx = self._axis(slot)
+        values = self.rec.raw_columns[column]
+        span = max(1e-9, end - start)
+        out = [{"x": (x - start) / span, "y": values[i]} for x, i in zip(xs, idx)
+               if start <= x <= end and math.isfinite(values[i])]
+        step = max(1, len(out) // max(2, points))
+        out = out[::step]
+        if not out:
+            return {}
+        ys = [p["y"] for p in out]
+        return {"segments": [out], "brakingUp": name == "longacc-calc", "minimum": min(ys), "maximum": max(ys),
+                "unit": ""}
+
+    def delta_series(self, start, end, points):
+        span = max(1e-9, end - start)
+        out = []
+        n = max(2, points)
+        for k in range(n):
+            x = start + span * k / (n - 1)
+            ta = self._interp(self.da, self.time_a, x)
+            tb = self._interp(self.progress_b, self.time_b, x)
+            out.append({"x": (x - start) / span, "y": ta - tb})
+        ys = [p["y"] for p in out]
+        return {"segments": [out], "minimum": min(ys), "maximum": max(ys), "unit": "s"}
+
+    def _normalizer(self):
+        pts = self.pa + [self.rec.local(self.rec.lat[i], self.rec.lon[i]) for i in self.ib]
+        xs, ys = [p[0] for p in pts], [-p[1] for p in pts]
+        cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+        scale = max(1.0, max(max(xs) - min(xs), max(ys) - min(ys)))
+        return lambda p: {"x": (p[0] - cx) / scale + 0.5, "y": (-p[1] - cy) / scale + 0.5}
+
+    def overlay_track(self, slot):
+        norm = self._normalizer()
+        idx = self.ia if slot == 0 else self.ib
+        return [[norm(self.rec.local(self.rec.lat[i], self.rec.lon[i])) for i in idx]]
+
+    def position_at(self, slot, meters):
+        norm = self._normalizer()
+        xs, idx = self._axis(slot)
+        k = min(range(len(xs)), key=lambda j: abs(xs[j] - meters))
+        i = idx[k]
+        return norm(self.rec.local(self.rec.lat[i], self.rec.lon[i]))
+
+    def progress_at_time(self, slot, seconds_into_lap):
+        xs, _ = self._axis(slot)
+        times = self.time_a if slot == 0 else self.time_b
+        return self._interp(times, xs, seconds_into_lap)
+
+    def speed_layer(self, slot):
+        column = self.rec.app_channels()["velocity"]
+        norm = self._normalizer()
+        idx = self.ia if slot == 0 else self.ib
+        values = [self.rec.raw_columns[column][i] for i in idx]
+        points = [norm(self.rec.local(self.rec.lat[i], self.rec.lon[i])) for i in idx]
+        return {"valid": True, "id": "speed", "label": "Speed", "scale": "sequential", "slot": slot,
+                "negativeLabel": "", "positiveLabel": "", "channel": "velocity", "unit": "", "provenance": "recorded",
+                "polylines": [{"points": points, "values": values}], "minimum": min(values), "maximum": max(values)}

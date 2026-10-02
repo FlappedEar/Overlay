@@ -39,10 +39,41 @@ def settle(app, seconds=0.8):
 class AnalysisData(QObject):
     """Series, values and map points computed from the recording for the open lap."""
 
-    def __init__(self, recording, lap):
+    def __init__(self, recording, lap, compare_with=None):
         super().__init__()
         self._rec = recording
         self._track, self._point_at = realdata.normalized_track(recording, lap["start"], lap["end"])
+        self.comparison = realdata.Comparison(recording, lap, compare_with) if compare_with else None
+
+    @Slot(int, str, float, float, int, result="QVariantMap")
+    def comparisonSeries(self, slot, channel, start, end, points):
+        return self.comparison.channel_series(slot, channel, start, end, points)
+
+    @Slot(float, float, int, result="QVariantMap")
+    def comparisonDelta(self, start, end, points):
+        return self.comparison.delta_series(start, end, points)
+
+    @Slot(int, result="QVariantList")
+    def overlayTrack(self, slot):
+        return self.comparison.overlay_track(slot)
+
+    @Slot(int, float, result="QVariantMap")
+    def positionAtProgress(self, slot, meters):
+        return self.comparison.position_at(slot, meters)
+
+    @Slot(result="QVariantList")
+    def mapLayerOptions(self):
+        # Same fixed options as AnalysisControllerMapLayers; availability from this recording.
+        return [{"id": "speed", "label": "Speed", "available": True, "temperature": False},
+                {"id": "delta", "label": "Δ time (A−B)", "available": True, "temperature": False},
+                {"id": "lateralG", "label": "Lateral G", "available": True, "temperature": False},
+                {"id": "longitudinalG", "label": "Longitudinal G", "available": True, "temperature": False},
+                {"id": "throttle", "label": "Throttle", "available": True, "temperature": False},
+                {"id": "brake", "label": "Brake (measured)", "available": True, "temperature": False}]
+
+    @Slot(str, int, result="QVariantMap")
+    def mapLayer(self, layer_id, slot):
+        return self.comparison.speed_layer(slot) if layer_id == "speed" else {"valid": False, "reason": "notCaptured"}
 
     def track(self):
         return [self._track]
@@ -94,7 +125,8 @@ def main() -> None:
                    "reference": {"runId": RUN_ID}}
     channels = list(rec.app_channels())
     lap_row = next(row for row in rows if row["type"] == "LAP" and row["lapNumber"] == best["number"])
-    data = AnalysisData(rec, best)
+    reference = next(lap for lap in rec.laps if lap["number"] == 3)
+    data = AnalysisData(rec, best, reference)
 
     engine = QQmlApplicationEngine()
     engine.addImportPath(str(work))
@@ -148,6 +180,31 @@ def main() -> None:
     }.items():
         controller.setProperty(key, value)
     shot("analysis-lap-detail")
+
+    # Lap comparison: the best lap (A) against lap 3 (B).
+    ref_row = next(row for row in rows if row["type"] == "LAP" and row["lapNumber"] == reference["number"])
+    def slot(row):
+        lap = {"runName": RUN_NAME, "lapNumber": row["lapNumber"], "durationSeconds": row["durationSeconds"],
+               "compatibilityGroupId": "group-1"}
+        return {"state": "ready", "lap": lap, "statusText": f"Ready · {group_label}", "statusIsWarning": False}
+    for key, value in {
+        "selectedOutingLap": {},
+        "comparisonSlots": [slot(lap_row), slot(ref_row)],
+        "comparisonPairReady": True,
+        "comparisonProgressAxisLength": data.comparison.length,
+        # The recording's own names for speed, throttle and brake (ComparisonDetailPanel defaults).
+        "preferredComparisonChannels": ["velocity", "accelerator_pos-obd", "brake_pos-obd"],
+        "comparisonAvailableChannels": channels,
+        "comparisonViewOpen": True,
+    }.items():
+        controller.setProperty(key, value)
+    settle(app, 1.0)
+    panel = window.findChild(QObject, "comparisonDetailPanel")
+    panel.setProperty("hoverDistanceMeters", data.comparison.progress_at_time(0, MOMENT_IN_BEST_LAP))
+    overlay = window.findChild(QObject, "comparisonOverlayMap")
+    overlay.setProperty("layerSlot", 0)
+    overlay.setProperty("layerId", "speed")
+    shot("analysis-comparison")
 
 
 if __name__ == "__main__":
