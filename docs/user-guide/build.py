@@ -79,8 +79,8 @@ def load_pages() -> dict[str, dict]:
         collector = _LinkCollector()
         collector.feed(body)
         pages[path.stem] = {
-            "title": match["title"],
-            "nav": match["nav"],
+            "title": html.unescape(match["title"]),
+            "nav": html.unescape(match["nav"]),
             "body": body,
             "ids": collector.ids,
             "hrefs": collector.hrefs,
@@ -135,6 +135,22 @@ def render_toc(page: dict) -> str:
     return f'<nav class="toc" aria-label="On this page"><p>On this page</p><ul>{links}</ul></nav>'
 
 
+def place_toc(body: str, toc: str) -> str:
+    """Insert the table of contents after the lead paragraph (or the h1)."""
+    if not toc:
+        return body
+    for marker in ('<p class="lead">', "<h1"):
+        start = body.find(marker)
+        if start == -1:
+            continue
+        closing = "</p>" if marker.startswith("<p") else "</h1>"
+        end = body.find(closing, start)
+        if end != -1:
+            end += len(closing)
+            return body[:end] + "\n" + toc + body[end:]
+    return toc + "\n" + body
+
+
 def render_pager(pages: dict[str, dict], current: str) -> str:
     ordered = [stem for _, stems in NAV for stem in stems]
     index = ordered.index(current)
@@ -169,7 +185,6 @@ TEMPLATE = """<!doctype html>
 {nav}
   </nav>
   <main id="content">
-{toc}
 <article>
 {body}
 </article>
@@ -206,8 +221,7 @@ def build(output: Path) -> None:
             site=SITE_NAME,
             repo=REPOSITORY,
             nav=render_nav(pages, stem),
-            toc=render_toc(page),
-            body=page["body"].strip(),
+            body=place_toc(page["body"].strip(), render_toc(page)),
             pager=render_pager(pages, stem),
         )
         (output / f"{stem}.html").write_text(document, encoding="utf-8")

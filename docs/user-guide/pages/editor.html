@@ -1,0 +1,94 @@
+<!-- title: The editor window | nav: Editor window -->
+<h1 id="editor-window">The editor window</h1>
+<p class="lead">The editor is where you load a video and a telemetry file, arrange overlay widgets on the picture, set timing and export the result.</p>
+
+<h2 id="welcome">Welcome screen</h2>
+<p>When no project, video or event is open, the application shows the Welcome screen, headed <em>Your track day, in detail</em>. It offers two paths:</p>
+<ul>
+  <li><strong>Lap Analysis →</strong> closes the Welcome screen and opens the <a href="analysis.html">Analysis window</a>. Video is not needed for analysis.</li>
+  <li>The three cards build an overlay project:
+    <ol>
+      <li><strong>1 · Video clip</strong>: <strong>Choose video</strong> picks an MP4 or MOV file.</li>
+      <li><strong>2 · Telemetry</strong>: <strong>Choose telemetry</strong> picks a VBO or RCZ file. This step is optional at this point.</li>
+      <li><strong>Saved project</strong>: <strong>Open project…</strong> resumes a saved <code>.fetproject</code>.</li>
+    </ol>
+  </li>
+</ul>
+<p><strong>Enter Studio →</strong> becomes available once a video is chosen and opens the editor. You can return to this screen with <strong>File › Welcome</strong>.</p>
+
+<h2 id="layout">Window layout</h2>
+<p>The window cannot be made smaller than 1180 × 720 pixels; it opens at 1440 × 900 the first time and remembers its position and size afterwards. From top to bottom and left to right it contains:</p>
+<table>
+  <tr><th>Area</th><th>Contents</th></tr>
+  <tr><td>Header bar</td><td>Logo, current video file name (or <em>No video selected</em>), current telemetry file name (or <em>No telemetry selected</em>), a <code>SYNC x.xxx s</code> pill when a non-zero timing offset is set, and the buttons <strong>Open video</strong>, <strong>Open telemetry</strong> and <strong>Export</strong>. When a project's source is missing or does not match, a <strong>… missing · Locate…</strong> or <strong>… mismatch · Locate…</strong> button appears here.</td></tr>
+  <tr><td>Left sidebar</td><td><strong>Layout template</strong>, <strong>Add widget</strong> and <strong>Layers</strong> sections, in one vertical scroll area.</td></tr>
+  <tr><td>Preview</td><td>The video, letter-boxed to its display size, with the overlay drawn on top.</td></tr>
+  <tr><td>Right sidebar</td><td>The Inspector, with the tabs <strong>WIDGET</strong>, <strong>DATA</strong> and <strong>CUES</strong>.</td></tr>
+  <tr><td>Transport bar</td><td>Play/pause, current timecode, timeline slider, end timecode, <strong>ANALYSIS</strong> and full-screen (<strong>⛶</strong>) buttons.</td></tr>
+  <tr><td>Status bar</td><td>The latest status message, the widget count and a dot that turns green when both video and telemetry are ready.</td></tr>
+</table>
+<p>At the minimum window size every sidebar control is still reachable by scrolling the sidebar.</p>
+
+<h2 id="menus">Menus</h2>
+<h3 id="menu-file">File</h3>
+<table>
+  <tr><th>Item</th><th>What it does</th></tr>
+  <tr><td>New Project</td><td>Starts a new project with the default <em>Track Day</em> layout. Asks to save first if there are unsaved changes.</td></tr>
+  <tr><td>Welcome</td><td>Shows the Welcome screen.</td></tr>
+  <tr><td>Open Project…</td><td>Opens a <code>.fetproject</code> file.</td></tr>
+  <tr><td>Save Project</td><td>Saves the project. A project that was never saved opens Save As instead.</td></tr>
+  <tr><td>Save Project As…</td><td>Saves under a new name. <code>.fetproject</code> is added if missing.</td></tr>
+  <tr><td>Export…</td><td>Opens the <a href="export.html">Export dialog</a>. Available only when both a video and telemetry are loaded.</td></tr>
+  <tr><td>Open Video…</td><td>Opens one or more video files. See <a href="importing.html#video">Importing video</a>.</td></tr>
+  <tr><td>Open telemetry…</td><td>Opens one VBO or RCZ file.</td></tr>
+  <tr><td>Import telemetry runs…</td><td>Imports up to 64 telemetry files as runs of a track-day event. See <a href="importing.html#runs">Importing a track day</a>.</td></tr>
+  <tr><td>Quit</td><td>Quits. Asks first if an export is running or there are unsaved changes.</td></tr>
+</table>
+<h3 id="menu-view">View</h3>
+<ul>
+  <li><strong>Enter Full Screen / Exit Full Screen</strong>: full-screen preview.</li>
+  <li><strong>Lap Analysis</strong>: shows or hides the Analysis window.</li>
+  <li><strong>Keyboard Shortcuts</strong>: a short reminder of the main shortcuts. The complete list is on <a href="shortcuts.html">Keyboard shortcuts</a>.</li>
+</ul>
+<h3 id="menu-help">Help</h3>
+<p><strong>About Flapped Ear Telemetry</strong> shows a short description of the application.</p>
+
+<h2 id="preview">Working in the preview</h2>
+<p>With no video loaded, the preview shows <em>Open an MP4 or MOV to start building the overlay</em> and a <strong>Choose video</strong> button. Drag-and-drop of files is not supported; use the button or the File menu.</p>
+<p>Once a video is ready, the overlay widgets are drawn on top of it and can be edited directly:</p>
+<ul>
+  <li><strong>Click</strong> a widget to select it. <strong>Shift-click</strong> adds it to, or removes it from, the selection.</li>
+  <li><strong>Drag</strong> a widget to move it. It stays inside the picture. Dragging a grouped widget moves the whole group.</li>
+  <li><strong>Drag the green handle</strong> at the bottom-right corner of the selected widget to resize it.</li>
+  <li><strong>Click empty space</strong> to clear the selection.</li>
+  <li><strong>Double-click</strong> a widget or the picture to toggle full screen.</li>
+</ul>
+<p>If the video cannot be decoded, the preview shows <em>Video playback failed</em> with the reason.</p>
+
+<h2 id="transport">Playback and the timeline</h2>
+<p>Timecodes are shown as SMPTE <code>HH:MM:SS:FF</code> (hours, minutes, seconds, frames; non-drop-frame). The end timecode is the last real frame of the video, and playback stops on that frame.</p>
+<p>Use the play/pause button or <kbd>Space</kbd>, drag the slider, or use the arrow keys to seek (see <a href="shortcuts.html">Keyboard shortcuts</a>). If the selected widget has <a href="widgets.html#cues">cues</a>, green marks above the slider show where they are.</p>
+
+<h2 id="layers">Layers and groups</h2>
+<p>The <strong>Layers · N</strong> section lists every widget in the scene. Each row shows a marker (● selected, ◆ grouped, ○ other), the layer name and an eye button that hides or shows the widget. Hidden layers are dimmed and are not exported.</p>
+<ul>
+  <li>Click a row to select that layer (and the rest of its group). Shift-click to add or remove it from a multi-selection.</li>
+  <li><strong>Group</strong> (<kbd>⌘G</kbd>) joins two or more selected layers so they move together.</li>
+  <li><strong>Ungroup</strong> (<kbd>⇧⌘G</kbd>) separates the group of the selected layer.</li>
+  <li><kbd>Delete</kbd> or <kbd>Backspace</kbd> removes the selected layers. There is no confirmation.</li>
+</ul>
+<div class="note"><p>The editor has no undo/redo, no layer locking and no control for stacking order. Save the project before making large changes you might want to reverse.</p></div>
+
+<h2 id="inspector">The Inspector</h2>
+<p>The right sidebar has three tabs:</p>
+<ul>
+  <li><strong>WIDGET</strong>: every setting of the selected widget. See <a href="widgets.html#common-settings">Widget settings</a>.</li>
+  <li><strong>DATA</strong>: timing between video and telemetry, and the live value of every telemetry channel at the playhead. See <a href="synchronization.html">Synchronizing video and telemetry</a>.</li>
+  <li><strong>CUES</strong>: timed appearances of the selected widget. See <a href="widgets.html#cues">Cues</a>.</li>
+</ul>
+
+<h2 id="full-screen">Full-screen preview</h2>
+<p>Enter full screen from <strong>View › Enter Full Screen</strong>, the <strong>⛶</strong> button, the system full-screen shortcut or by double-clicking the preview. The video fills the screen and a floating bar provides play/pause, timecode and a scrub slider. During playback the bar hides after about 2.6 seconds and returns when you move the mouse or press a key. <kbd>Esc</kbd> leaves full screen.</p>
+
+<h2 id="status">Status bar messages</h2>
+<p>Most actions report their result in the status bar, for example <em>Telemetry opened: N samples, M numeric channels.</em> or <em>Project saved: name</em>. If automatic recovery data cannot be written, the status bar shows an amber warning with a <strong>SAVE</strong> button; see <a href="projects.html#recovery">Recovery</a>.</p>

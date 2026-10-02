@@ -128,7 +128,7 @@ figure img { max-width: 100%; height: auto; border: 1px solid var(--border); bor
 figcaption { font-size: .88rem; color: var(--muted); }
 
 .toc {
-  margin: 0 0 1.5rem; padding: .8rem 1rem; border: 1px solid var(--border);
+  margin: 1.5rem 0; padding: .8rem 1rem; border: 1px solid var(--border);
   border-radius: 10px; background: var(--surface); font-size: .92rem;
 }
 .toc p { margin: 0 0 .3rem; font-weight: 600; }

@@ -1,0 +1,142 @@
+<!-- title: Lap analysis | nav: Lap analysis -->
+<h1 id="analysis">Lap analysis</h1>
+<p class="lead">The Analysis window turns a day of recordings into a chronological lap list, then lets you open any lap to inspect its map and channels. Video is optional.</p>
+
+<div class="note"><p>Analysis results are observations from your recordings. They describe what differed between laps, not what caused it, and they are not driving instructions. Several analysis features are still being validated on real track data; see <a href="limitations.html">Limitations</a>.</p></div>
+
+<h2 id="open">Opening the Analysis window</h2>
+<ul>
+  <li>On the Welcome screen click <strong>Lap Analysis →</strong>.</li>
+  <li>In the editor choose <strong>View › Lap Analysis</strong>, press <kbd>⇧⌘A</kbd>, or click <strong>ANALYSIS</strong> in the transport bar.</li>
+</ul>
+<p>The Analysis window is separate from the editor and remembers its size and layout. Its header reads <strong>LAP ANALYSIS</strong> followed by the event name.</p>
+
+<h2 id="start">Starting an outing</h2>
+<p>With nothing loaded, the window shows <strong>Start an outing</strong>:</p>
+<ol class="steps">
+  <li>Enter an <strong>Outing name</strong> (required).</li>
+  <li>Click <strong>Add RCZ / VBO files…</strong>, or <strong>Add a folder…</strong> (optionally with <strong>Include subfolders</strong>), or drop files or a folder on the window.</li>
+</ol>
+<p>Each recording becomes a run. Matching VBO/RCZ exports of the same session share one run. More about importing, pairing and limits: <a href="importing.html#runs">Importing a track day</a>.</p>
+<p>While importing, the window shows the progress and a <strong>Cancel</strong> button. Problems are listed under <strong>Import notes</strong>.</p>
+
+<h2 id="lap-timing">How laps are found</h2>
+<p>Laps come from the start/finish line (timing gate) recorded in the telemetry file, for example the RaceChrono track's start line, and from GPS:</p>
+<ul>
+  <li><strong>OUT</strong>: from the start of the recording to the first crossing.</li>
+  <li><strong>LAP n</strong>: between two crossings in the same direction.</li>
+  <li><strong>IN</strong>: from the last crossing to the end of the recording.</li>
+  <li><strong>UNKNOWN</strong>: the whole recording, when no crossing could be found.</li>
+</ul>
+<p>Lap timing needs exactly one valid start gate and usable GPS. Manual start/finish placement is not available. If laps are missing, see <a href="troubleshooting.html#laps">No laps found</a>.</p>
+
+<h2 id="day-results">Day results</h2>
+<p>After import, the window shows <strong>Day results</strong>: every recorded section of every run in one list, with buttons for the day's results above it.</p>
+
+<h3 id="groups">Comparison groups</h3>
+<p>Laps are only ranked and compared against laps driven on the same layout, in the same direction, with the same timing gate. The application builds these <strong>comparison groups</strong> automatically from repeated GPS laps and the recorded gates, and labels them like <em>Group 1 · Detected route · Clockwise</em>.</p>
+<ul>
+  <li>Choose a group in the group list. <strong>Automatic</strong> returns to the automatically chosen group.</li>
+  <li>When there are several groups, a strip of cards shows each group's best lap and run bests; click a card to select it.</li>
+  <li>If a run was grouped wrongly or its direction is unknown, use <a href="#correct-grouping">Correct grouping…</a>.</li>
+</ul>
+
+<h3 id="lap-list">The lap list</h3>
+<table>
+  <tr><th>Column</th><th>Content</th></tr>
+  <tr><td>#</td><td>Row number</td></tr>
+  <tr><td>Start · UTC</td><td>Recorded start time of the section, or <em>Time unavailable</em></td></tr>
+  <tr><td>Type</td><td>LAP n, OUT, IN or UNKNOWN</td></tr>
+  <tr><td>Run</td><td>Run name, plus notes such as <em>Best day in group</em>, <em>Best of run</em>, <em>GPS gap</em>, <em>Invalid GPS</em> or <em>Excluded: reason</em></td></tr>
+  <tr><td>Duration</td><td>m:ss.sss</td></tr>
+</table>
+<p>Rows with a recorded time come first, in time order; rows without one follow in import order. Click a row (or press <kbd>Return</kbd>) to open it. A lap's second line says whether it is <em>Eligible</em> for the selected group or from a <em>Different recorded route</em>.</p>
+
+<h3 id="eligibility">Eligible and excluded laps</h3>
+<p>Only <strong>eligible</strong> laps take part in rankings, best laps, comparisons and day results. A lap is not eligible when, for example:</p>
+<ul>
+  <li>it is not a complete timed lap (OUT, IN, UNKNOWN);</li>
+  <li>its GPS has a gap or invalid values (<em>Incomplete GPS</em>, <em>Invalid GPS</em>); its measured time is still shown;</li>
+  <li>it is on a different layout, in the opposite direction, or with different timing gates;</li>
+  <li>it leaves the line all other laps of the run took by more than 12 metres (off track, a detour or the pit lane; needs at least 3 laps);</li>
+  <li>you excluded it.</li>
+</ul>
+<p><strong>Ranking details…</strong> shows the best lap of each run (<strong>Best by run</strong>) and every ineligible lap with its reasons (<strong>Applied exclusions</strong>). The best lap is the shortest eligible lap; equal times are decided by the earlier recording.</p>
+
+<h3 id="exclude">Excluding a lap</h3>
+<p>Open the lap, type a reason (for example <em>traffic</em> or <em>cooldown</em>) under <strong>Lap eligibility</strong>, and click <strong>Exclude lap</strong>. The lap stays in the list, marked <em>Excluded</em>, and rankings are recalculated. <strong>Restore lap</strong> undoes it. Exclusions are saved with the project.</p>
+
+<h3 id="results-buttons">Result buttons</h3>
+<table>
+  <tr><th>Button</th><th>Opens</th></tr>
+  <tr><td>Best day · time · run · LAP n</td><td>The best eligible lap of the selected group</td></tr>
+  <tr><td>Compare laps…</td><td><a href="comparison.html">Lap comparison</a></td></tr>
+  <tr><td>Run details…</td><td><a href="#run-details">Run details</a></td></tr>
+  <tr><td>Day report…</td><td><a href="day-report.html#day-report">Day report</a></td></tr>
+  <tr><td>Progression…</td><td><a href="day-report.html#progression">Run progression</a></td></tr>
+  <tr><td>Theoretical best…</td><td><a href="day-report.html#theoretical-best">Theoretical best</a></td></tr>
+  <tr><td>Time losses…</td><td><a href="day-report.html#time-losses">Largest time losses</a></td></tr>
+  <tr><td>Ranking details…</td><td>Best laps per run and applied exclusions</td></tr>
+</table>
+<p>If recordings were moved or failed to load, <strong>Retry recordings</strong> appears.</p>
+
+<h2 id="correct-grouping">Correct grouping</h2>
+<p><strong>Correct grouping…</strong> sets a recording's layout and direction yourself:</p>
+<ol class="steps">
+  <li>Choose the <strong>Recording</strong>. <strong>Inspect GPS trace…</strong> opens one of its laps so you can check the route.</li>
+  <li>Enter a <strong>Layout name</strong>. Use the same name for every recording on the same layout.</li>
+  <li>Choose the direction: <strong>Clockwise</strong> or <strong>Counterclockwise</strong>.</li>
+  <li>Optionally tick <strong>Apply to recordings with matching GPS routes</strong>, then click <strong>Apply correction</strong>.</li>
+</ol>
+<p><strong>Use detected route</strong> removes your correction. Recordings with different or unresolved timing gates stay in separate groups. Changing a configuration can leave saved lap exclusions unmatched; they are then kept but not applied.</p>
+
+<h2 id="run-details">Run details</h2>
+<p><strong>Run details…</strong> edits information about each run. These notes do not change lap timing.</p>
+<ul>
+  <li><strong>Run name</strong> (required), <strong>Notes</strong>, <strong>Conditions</strong> (weather, track) and <strong>Setup changes</strong>. Leave unknown details blank. Click <strong>Save details</strong>.</li>
+  <li><strong>Recordings</strong>: the run's primary recording and alternatives.
+    <ul>
+      <li><strong>Attach a recording…</strong> adds another file of the same session as an alternative after showing the GPS evidence.</li>
+      <li><strong>Make primary</strong> makes an alternative the recording used for laps and analysis. Laps are derived again; check the video synchronization afterwards.</li>
+      <li><strong>Check clock</strong> measures how the alternative's clock lines up with the primary (offset, drift, uncertainty). It only reports; both recordings stay usable on their own.</li>
+      <li><strong>Fuse…</strong> adds channels from an alternative to the primary, after a successful clock check. Each channel that conflicts needs a rule (keep the primary, fill the primary's gaps, or prefer the alternative) before <strong>Approve fusion</strong> is enabled. Channels with different units are not fused. <strong>Remove fusion</strong> undoes it.</li>
+    </ul>
+  </li>
+</ul>
+<p>A typical use: a VBO from RaceChrono with calculated G as primary, and the RCZ of the same session as alternative.</p>
+
+<h2 id="lap-detail">Inspecting a lap</h2>
+<p>Click a row to open the lap. <strong>← All laps</strong> or <kbd>Esc</kbd> returns to the list. The header shows the section, its time and the run.</p>
+
+<h3 id="lap-map">Track map and video</h3>
+<ul>
+  <li><strong>TRACK POSITION</strong> shows the lap's GPS trace with a dot at the cursor. GPS gaps are left open.</li>
+  <li>When the lap belongs to the active run and that run's synchronized video covers the lap, the video is shown above the map. Moving the cursor moves the video, and playing the video moves the cursor. Otherwise a message explains why no video is shown.</li>
+</ul>
+
+<h3 id="lap-charts">Channel charts</h3>
+<ul>
+  <li>Up to <strong>four channels</strong>. Choose a channel and click <strong>Add channel</strong>; change a row's channel with its selector; remove it with <strong>×</strong>. Your choice is remembered for other laps.</li>
+  <li>The default channels are speed, lateral G and longitudinal G, when recorded.</li>
+  <li>The horizontal axis is time within the lap. Hover over a chart to move the cursor; each row shows the value at the cursor.</li>
+  <li>Drag across a chart to zoom all rows to that range. Double-click or <strong>Reset zoom</strong> to return.</li>
+  <li>The <strong>Section time</strong> slider below moves the cursor through the lap.</li>
+  <li>Gaps in the data break the line; nothing is drawn across them.</li>
+</ul>
+<div class="note"><p>Longitudinal G is drawn with braking <strong>upward</strong> in lap and comparison charts, so braking zones appear as peaks. The values shown keep their recorded sign (braking is negative). The G-G diagram and the map layer use the opposite orientation: accelerating up, braking down.</p></div>
+
+<h3 id="coasting">Coasting</h3>
+<p>On a complete lap, the <strong>Coasting</strong> button shows time spent at speed with neither pedal pressed:</p>
+<ul>
+  <li>a summary (time, distance, number of episodes, share of the lap);</li>
+  <li>where the result comes from: the recorded brake and accelerator pedals, or inferred from longitudinal G when no pedal channels were recorded;</li>
+  <li>coasting per approved segment (if the lap's segments are approved);</li>
+  <li>a list of episodes. Select one to move the cursor there; episodes are drawn in orange on the map.</li>
+</ul>
+<p>Coasting is not a mistake by itself: a lift can settle the car or be forced by traffic.</p>
+
+<h3 id="review-segments">Review segments</h3>
+<p>The <strong>Review segments</strong> button opens the corner and straight segmentation for the lap's layout. See <a href="segments.html">Track segments</a>.</p>
+
+<h2 id="single-recording">Single-recording projects</h2>
+<p>For an editor project with one video and one telemetry file (not an event), the Analysis window shows the video, track map, channel charts and a <strong>LAP TIMING</strong> table. Click a lap in the table to move the video to its start. In this mode the editor's playback keys also work in the Analysis window.</p>

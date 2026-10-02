@@ -1,0 +1,52 @@
+<!-- title: Limitations and status | nav: Limitations -->
+<h1 id="limitations">Limitations and status</h1>
+<p class="lead">Flapped Ear Telemetry is in development (version 0.2.0). This page lists what is known not to work yet, so you can plan around it.</p>
+
+<h2 id="status">Status</h2>
+<ul>
+  <li>There is no public release. Test builds are not signed with a Developer ID or notarized.</li>
+  <li>Development and testing focus on macOS (Apple Silicon). Windows builds are paused.</li>
+  <li>Automated tests use synthetic data. Real-recording testing has covered a limited number of recordings and one Mac setup. Analysis features based on segments, corners, coasting, driving states and temperatures still await feedback from real track use.</li>
+</ul>
+
+<h2 id="video">Video and export</h2>
+<ul>
+  <li>Only MP4 and MOV files can be opened. Export writes H.265/HEVC MP4 only, at the source frame rate or half of it, never upscaled.</li>
+  <li>HDR (HLG, PQ) and Log footage, video with rotation metadata, and video with non-square pixels can be edited but not exported. HDR is never silently converted to SDR.</li>
+  <li>GoPro chapter recordings play as one timeline but cannot be exported yet. Automatic synchronization reads GPS from the first chapter only, and relinking moves only the first chapter.</li>
+  <li>FFmpeg is not included and must support the required filters; older versions such as 6.1.1 fail.</li>
+  <li>The HEVC encoder is chosen automatically and cannot be selected.</li>
+  <li><em>Completed with warning</em> is used only when 1 to 10 frames are missing at the very end; any other validation failure fails the export.</li>
+</ul>
+
+<h2 id="telemetry">Telemetry</h2>
+<ul>
+  <li>Supported formats: VBO and RaceChrono RCZ. VBO is verified with RaceChrono Pro 10.2.4. Other VBO sources need a declared coordinate unit for GPS, and other RaceChrono versions lose their timing gates.</li>
+  <li>RCZ: one uninterrupted, non-resumed session per file; no calculated G.</li>
+  <li>Lap timing requires exactly one recorded start gate and usable GPS. Manual start/finish placement is not available.</li>
+  <li>There is no automatic gear channel recognition.</li>
+  <li>Automatic synchronization needs GoPro GPS and always uses a time scale of 1.</li>
+  <li>Alternative recordings are never combined automatically. Channel fusion needs a successful clock check and your approval, and has been validated with synthetic data only.</li>
+</ul>
+
+<h2 id="editor">Editor</h2>
+<ul>
+  <li>No undo/redo, layer locking or layer stacking order control in the overlay editor.</li>
+  <li>No drag-and-drop into the editor window (the Analysis window accepts dropped recordings).</li>
+  <li>The Logo widget shows only the application logo; custom images are not supported.</li>
+  <li>Some widget settings exist only in templates and have no control in the Inspector (for example the Retro Custom icon and stacking, and comparison tile labels). The Speed widget's <em>Show speed gauge</em> option has no visible effect.</li>
+  <li>Template import and export failures are not reported with a message.</li>
+  <li>There is no preferences window, and project files do not open by double-clicking in Finder.</li>
+</ul>
+
+<h2 id="analysis">Analysis</h2>
+<ul>
+  <li>No background map tiles; maps show the GPS trace only.</li>
+  <li>Single-lap charts use time on the horizontal axis; comparison charts use track position. This cannot be switched.</li>
+  <li>Segments are approved per run. The Corner Analyzer needs the same approved segments on both laps.</li>
+  <li>Theoretical best is a sum of the fastest sectors. A validated "realistic potential" lap is not implemented.</li>
+  <li>Day-level results are calculated within one track configuration and one day. Reusable track and vehicle profiles and comparisons across days are not implemented.</li>
+  <li>The day report does not open automatically after import.</li>
+  <li>Session trends are drawn in recording order without showing the length of breaks.</li>
+  <li>Values are shown without units when the recording does not declare them.</li>
+</ul>
