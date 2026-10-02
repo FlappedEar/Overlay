@@ -26,6 +26,10 @@
   <tr><td>45 % to 75 %</td><td>POSSIBLE SYNCHRONIZATION FOUND</td><td><em>Review this candidate before changing timing.</em> Nothing changes until you click <strong>Apply</strong>.</td></tr>
   <tr><td>Below 45 %</td><td>POSSIBLE SYNCHRONIZATION FOUND</td><td><em>Low confidence: current timing was not changed.</em> You can still <strong>Apply</strong> or <strong>Ignore</strong> it.</td></tr>
 </table>
+<figure>
+  <img src="assets/screens/editor-sync-result.png" alt="Editor after Auto Sync, with the SYNC badge in the header and the result in the status bar" width="1440" height="860" loading="lazy">
+  <figcaption>Auto Sync on the Session 5 GoPro clip: an offset of 74.953 s, applied automatically (correlation 1.000, confidence 81 %, 13033 GPS samples). The header badge and the status bar show the result.</figcaption>
+</figure>
 <p>Confidence considers how well the speed traces match, whether the best match is clearly better than any other, and how long the overlap is. With less than 20 seconds of overlap, a result is never applied automatically.</p>
 <p>Before applying a medium or low result, scrub to a recognisable moment (a stop, a hard braking point, the start line) and check that the overlay agrees with the picture.</p>
 
@@ -51,7 +55,7 @@
 <h2 id="manual">Manual timing</h2>
 <figure class="narrow">
   <img src="assets/screens/editor-inspector-data.png" alt="Inspector DATA tab" width="350" height="860" loading="lazy">
-  <figcaption>The DATA tab. <strong>Live channels</strong> lists every channel with its value at the playhead, which helps when lining up the offset by hand.</figcaption>
+  <figcaption>The DATA tab after Auto Sync: the <em>SYNC APPLIED</em> card, and the applied offset under <strong>Manual timing</strong>. <strong>Live channels</strong> lists every channel with its value at the playhead, which helps when lining up the offset by hand.</figcaption>
 </figure>
 <p>Under <strong>Manual timing</strong> in the DATA tab:</p>
 <ul>

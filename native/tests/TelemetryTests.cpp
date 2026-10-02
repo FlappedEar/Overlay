@@ -35,6 +35,7 @@
 #include "telemetry/TrackGeometry.h"
 #include "telemetry/TelemetryGeometry.h"
 #include "telemetry/TyreData.h"
+#include "UserGuideCapture.h"
 #include "telemetry/VboParser.h"
 #include "RczFixture.h"
 #include "EventProjectFixture.h"
@@ -200,6 +201,7 @@ private slots:
     void derivesNavigableLapFragmentsAndHotlapExportRange();
     void showsOneHotlapAndExportsItByDefault();
     void showsTyreTemperatureAndPressurePerCorner();
+    void capturesUserGuideScreens();
     void protectsEveryDaySourceFromExport();
     void keepsOutputSafeWhenTheDestinationFills_data();
     void keepsOutputSafeWhenTheDestinationFills();
@@ -8046,6 +8048,31 @@ void TelemetryTests::showsTyreTemperatureAndPressurePerCorner()
             QVERIFY2(error.toString().contains("Cannot open: qrc:"), qPrintable(error.toString()));
 }
 
+void TelemetryTests::capturesUserGuideScreens()
+{
+    // Opt-in (KAN-138): the user guide's screenshots from the application's
+    // own controller and QML with a real onboard video and its recording.
+    // FLAPPEDEAR_GUIDE_CAPTURE_DIR receives the PNGs. FLAPPEDEAR_GUIDE_VIDEO
+    // and FLAPPEDEAR_GUIDE_VBO are a matching GoPro clip and VBO;
+    // FLAPPEDEAR_GUIDE_DAY (optional) is the folder of that day's VBOs and
+    // FLAPPEDEAR_GUIDE_CHAPTERS (optional) a comma-separated chaptered clip.
+    // Private media is read in place and never copied.
+    UserGuideCaptureOptions options;
+    options.outputDirectory = qEnvironmentVariable("FLAPPEDEAR_GUIDE_CAPTURE_DIR");
+    options.video = qEnvironmentVariable("FLAPPEDEAR_GUIDE_VIDEO");
+    options.recording = qEnvironmentVariable("FLAPPEDEAR_GUIDE_VBO");
+    if (options.outputDirectory.isEmpty() || options.video.isEmpty() || options.recording.isEmpty())
+        QSKIP("FLAPPEDEAR_GUIDE_CAPTURE_DIR, FLAPPEDEAR_GUIDE_VIDEO and FLAPPEDEAR_GUIDE_VBO are not set");
+    if (const QString day = qEnvironmentVariable("FLAPPEDEAR_GUIDE_DAY"); !day.isEmpty())
+        for (const auto &file : QDir(day).entryInfoList({"*.vbo", "*.VBO"}, QDir::Files, QDir::Name))
+            options.day << file.absoluteFilePath();
+    const QString chapters = qEnvironmentVariable("FLAPPEDEAR_GUIDE_CHAPTERS");
+    if (!chapters.isEmpty()) options.chapters = chapters.split(',', Qt::SkipEmptyParts);
+    QTemporaryDir scratch; QVERIFY(scratch.isValid());
+    options.scratchDirectory = scratch.path();
+    captureUserGuide(options);
+}
+
 void TelemetryTests::derivesNavigableLapFragmentsAndHotlapExportRange()
 {
     const QString ffmpeg = FfmpegTools::ffmpegPath();
@@ -14999,5 +15026,20 @@ void TelemetryTests::syncsOptionalRealRecording()
     }
 }
 
+// AppController starts its export worker as this executable with
+// --export-worker. That is handed to the application's own worker, so a
+// controller export in a test (the user-guide capture) runs for real.
+#define main telemetryTestsMain
 QTEST_MAIN(TelemetryTests)
+#undef main
+
+int main(int argc, char *argv[])
+{
+    if (argc == 3 && QByteArray(argv[1]) == "--export-worker") {
+        QCoreApplication app(argc, argv);
+        return QProcess::execute(QStringLiteral(FLAPPEDEAR_NATIVE_PATH),
+            {QStringLiteral("--export-worker"), QString::fromLocal8Bit(argv[2])});
+    }
+    return telemetryTestsMain(argc, argv);
+}
 #include "TelemetryTests.moc"

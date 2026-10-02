@@ -17,7 +17,7 @@
 <h2 id="view">The comparison view</h2>
 <figure>
   <img src="assets/screens/analysis-comparison.png" alt="Lap comparison of LAP 4 against LAP 3: track map coloured by speed, and delta time, velocity, accelerator and brake charts on a shared distance axis" width="1440" height="900" loading="lazy">
-  <figcaption>LAP 4 (A, 2:18.643) against LAP 3 (B, 2:22.519) of the Jastrząb session of 29 August 2026 (RaceChrono Pro VBO). The cursor is 494 m into the lap, where lap A is 2.92 s ahead and 21.6 km/h faster. The map colours lap A's line by its recorded speed.</figcaption>
+  <figcaption>Session 5 LAP 2 (A, 1:49.898) against LAP 3 (B, 1:52.585), Jastrząb, 29 August 2026. At the cursor, 654 m into the lap, lap A is 0.07 s ahead and 2.0 km/h faster.</figcaption>
 </figure>
 <p>The header shows both laps (run, lap number, time) and their status. If the two laps belong to incompatible track configurations, a warning says so. <strong>← All laps</strong> or <kbd>Esc</kbd> returns to the list.</p>
 
@@ -53,7 +53,15 @@
 
 <h3 id="gg">G-G diagram</h3>
 <p>A scatter of lateral against longitudinal G for both laps over the current zoom range (<em>Whole lap</em> or <em>Selected stretch</em>). Accelerating is up, braking down, with rings every 0.5 g. The table lists <strong>Peak lateral</strong>, <strong>Peak braking</strong>, <strong>Peak combined</strong> and the number of <strong>Samples</strong> for A and B.</p>
+<figure>
+  <img src="assets/screens/analysis-gg.png" alt="Comparison with the G-G column" width="1440" height="900" loading="lazy">
+  <figcaption>The G-G column over the whole lap: peak combined 1.02 g for A and 1.01 g for B.</figcaption>
+</figure>
 <p>These are observed accelerations, not a share of available grip. Values beyond ±4 g are treated as faulty and left out; peaks use every remaining sample.</p>
 
 <h3 id="video">Side-by-side video</h3>
 <p>When both runs have synchronized video, the <strong>Video</strong> column shows lap A and lap B at the same point on track. Press play: one lap plays in real time and the other keeps its place on track, so it runs ahead or behind where the laps differ. Charts and map follow. If a run has no video, its video is missing or changed, or its footage does not cover the point, a message says so.</p>
+<figure>
+  <img src="assets/screens/analysis-comparison-video.png" alt="Comparison with the Video column showing lap A and lap B" width="1440" height="900" loading="lazy">
+  <figcaption>Side-by-side video: both laps at the same point on track, from the Session 5 GoPro clip.</figcaption>
+</figure>

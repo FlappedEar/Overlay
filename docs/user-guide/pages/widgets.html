@@ -4,7 +4,7 @@
 
 <figure>
   <img src="assets/screens/template-circuit-pro.png" alt="Circuit Pro template: arc gauge, dial gauge, pedals, G-force, track map and data strip over the video" width="1280" height="720">
-  <figcaption>The <em>Circuit Pro</em> template. Every widget picture on this page shows the same moment of the Jastrząb session of 29 August 2026 (RaceChrono Pro VBO): 27 s into the best lap, at 66.7 km/h while braking (18 %) into a corner. The video picture is a placeholder.</figcaption>
+  <figcaption>The <em>Circuit Pro</em> template. Every widget picture on this page shows the same moment of Session 5 at Jastrząb on 29 August 2026 (GoPro clip and RaceChrono Pro VBO): 38 s into the best lap (LAP 2), accelerating at 58.6 km/h on 88 % throttle.</figcaption>
 </figure>
 
 <h2 id="adding">Adding and arranging widgets</h2>
@@ -31,8 +31,8 @@
 
 <h3 id="w-speed">Speed</h3>
 <figure class="inline-widget">
-  <img src="assets/screens/widget-speed.png" alt="Speed widget showing 67 km/h" width="344" height="228" loading="lazy">
-  <figcaption>Speed: 66.7 km/h.</figcaption>
+  <img src="assets/screens/widget-speed.png" alt="Speed widget showing 67 km/h" width="344" height="229" loading="lazy">
+  <figcaption>Speed: 59 km/h.</figcaption>
 </figure>
 <p>Label, large value and unit on a panel. Automatic source: speed. The value is converted from km/h to mph only when <strong>Unit</strong> is exactly <code>mph</code> (lower case); any other unit text only changes the label. The <em>Show speed gauge</em> option currently has no visible effect.</p>
 
@@ -53,7 +53,7 @@
 <h3 id="w-pedals">Pedals</h3>
 <figure class="inline-widget">
   <img src="assets/screens/widget-pedals.png" alt="Pedals widget: throttle 0 %, brake 18 %" width="536" height="196" loading="lazy">
-  <figcaption>Throttle (accelerator pedal) 0 %, brake 18 %.</figcaption>
+  <figcaption>Throttle (accelerator pedal) 88 %, brake 0 %.</figcaption>
 </figure>
 <p>Two rows, throttle and brake, each with a percentage and a fill bar.</p>
 <table>
@@ -69,7 +69,7 @@
 <h3 id="w-gforce">G-Force, F1 G-Force Radar and G-Force Bar</h3>
 <div class="gallery">
   <figure>
-    <img src="assets/screens/widget-gforce.png" alt="G-Force widget" width="324" height="261" loading="lazy">
+    <img src="assets/screens/widget-gforce.png" alt="G-Force widget" width="325" height="261" loading="lazy">
     <figcaption>G-Force</figcaption>
   </figure>
   <figure>
@@ -77,8 +77,8 @@
     <figcaption>F1 G-Force Radar</figcaption>
   </figure>
   <figure>
-    <img src="assets/screens/widget-gforce-bar.png" alt="G-Force Bar widget showing 0.65" width="516" height="164" loading="lazy">
-    <figcaption>G-Force Bar: combined 0.65 g</figcaption>
+    <img src="assets/screens/widget-gforce-bar.png" alt="G-Force Bar widget showing 0.65" width="517" height="164" loading="lazy">
+    <figcaption>G-Force Bar: combined 0.66 g</figcaption>
   </figure>
 </div>
 <p>All three use a lateral and a longitudinal channel. Each axis has its own channel selector and an <strong>Invert … axis</strong> option, which flips only the display, not the data. Both axes must have a value; otherwise the dot is hidden and the value shows <code>—</code>.</p>
@@ -113,7 +113,7 @@
 
 <h3 id="w-retro-custom">Retro Custom</h3>
 <figure class="inline-widget">
-  <img src="assets/screens/widget-retro-custom.png" alt="Retro Custom widget showing COOLANT 91 °C" width="440" height="120" loading="lazy">
+  <img src="assets/screens/widget-retro-custom.png" alt="Retro Custom widget showing COOLANT 91 °C" width="440" height="121" loading="lazy">
   <figcaption>Retro Custom bound to <code>coolant_temp-obd</code>, label COOLANT.</figcaption>
 </figure>
 <p>A single-row panel: icon, label, value and unit. Labels <code>OIL</code>, <code>ATF</code> and <code>COOLANT</code> get a matching icon automatically. Like Custom, it needs a chosen channel. Extra settings: <strong>Panel color</strong>, <strong>Value color</strong>, <strong>Label color</strong> and <strong>Text when channel is unavailable</strong>.</p>
@@ -137,7 +137,7 @@
 
 <h3 id="w-data-strip">Data strip</h3>
 <figure class="inline-widget">
-  <img src="assets/screens/widget-data-strip.png" alt="Data strip with speed, RPM, throttle and brake" width="862" height="185" loading="lazy">
+  <img src="assets/screens/widget-data-strip.png" alt="Data strip with speed, RPM, throttle and brake" width="862" height="186" loading="lazy">
   <figcaption>Data strip with its default four channels.</figcaption>
 </figure>
 <p>Four value slots in one panel (default speed, RPM, throttle, brake). Under <strong>Overlay channels</strong>: <strong>Columns</strong> (1–4; fewer columns wrap the slots into rows), <strong>Separators</strong>, <strong>Separator color</strong>, and for each <strong>CHANNEL 1–4</strong> a channel, <strong>Label</strong>, <strong>Unit</strong> and <strong>Decimals</strong>.</p>
@@ -146,7 +146,7 @@
 <div class="gallery">
   <figure>
     <img src="assets/screens/widget-lap-best.png" alt="Best lap time tile: lap 3, 2:22.52" width="382" height="207" loading="lazy">
-    <figcaption>Best lap time: lap 3 is the best completed so far</figcaption>
+    <figcaption>Best lap time: LAP 1 (1:55.45) is the best completed so far</figcaption>
   </figure>
   <figure>
     <img src="assets/screens/widget-lap-current.png" alt="Current lap time tile: lap 4, 0:27.00" width="382" height="207" loading="lazy">
@@ -154,7 +154,7 @@
   </figure>
   <figure>
     <img src="assets/screens/widget-lap-delta.png" alt="Lap delta tile: −2.97" width="382" height="207" loading="lazy">
-    <figcaption>Lap delta: 2.97 s ahead of lap 3</figcaption>
+    <figcaption>Lap delta: 2.30 s ahead of LAP 1</figcaption>
   </figure>
   <figure>
     <img src="assets/screens/widget-speed-best.png" alt="Best-lap speed tile: 46" width="382" height="207" loading="lazy">
@@ -191,23 +191,23 @@
 <h3 id="w-retro">Retro widgets</h3>
 <div class="gallery">
   <figure>
-    <img src="assets/screens/widget-retro-rpm.png" alt="Retro RPM tachometer at 3205" width="536" height="444" loading="lazy">
+    <img src="assets/screens/widget-retro-rpm.png" alt="Retro RPM tachometer at 3205" width="536" height="445" loading="lazy">
     <figcaption>Retro RPM</figcaption>
   </figure>
   <figure>
-    <img src="assets/screens/widget-retro-gear.png" alt="Retro gear showing a dash" width="363" height="120" loading="lazy">
+    <img src="assets/screens/widget-retro-gear.png" alt="Retro gear showing a dash" width="363" height="121" loading="lazy">
     <figcaption>Retro gear: no gear channel selected</figcaption>
   </figure>
   <figure>
-    <img src="assets/screens/widget-retro-pedal.png" alt="Retro pedal showing throttle 0 %" width="363" height="120" loading="lazy">
+    <img src="assets/screens/widget-retro-pedal.png" alt="Retro pedal showing throttle 0 %" width="363" height="121" loading="lazy">
     <figcaption>Retro pedal</figcaption>
   </figure>
   <figure>
-    <img src="assets/screens/widget-retro-speed.png" alt="Retro speed arc showing 64 km/h" width="593" height="347" loading="lazy">
+    <img src="assets/screens/widget-retro-speed.png" alt="Retro speed arc showing 64 km/h" width="594" height="348" loading="lazy">
     <figcaption>Retro speed (see the note below)</figcaption>
   </figure>
   <figure>
-    <img src="assets/screens/widget-nameplate.png" alt="Nameplate with DRIVER and 39.4" width="516" height="164" loading="lazy">
+    <img src="assets/screens/widget-nameplate.png" alt="Nameplate with DRIVER and 39.4" width="517" height="164" loading="lazy">
     <figcaption>Nameplate with its fallback texts</figcaption>
   </figure>
 </div>
@@ -224,7 +224,7 @@
 
 <h3 id="w-logo">Logo</h3>
 <figure class="inline-widget">
-  <img src="assets/screens/widget-logo.png" alt="Logo widget" width="286" height="228" loading="lazy">
+  <img src="assets/screens/widget-logo.png" alt="Logo widget" width="286" height="229" loading="lazy">
   <figcaption>Logo</figcaption>
 </figure>
 <p>Shows the Flapped Ear Telemetry logo. Custom images are not supported. Settings: <strong>Logo opacity</strong> and <strong>Logo scale</strong>.</p>
