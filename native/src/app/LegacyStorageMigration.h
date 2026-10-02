@@ -8,7 +8,7 @@ class QSettings;
 
 namespace FlappedEar::LegacyStorageMigration {
 
-// KAN-125: the desktop editor was renamed from Flapped Ear Telemetry to Flapped Ear
+// KAN-125: the desktop editor was renamed from FlappedEar Telemetry to FlappedEar
 // Overlays, and its storage identity from "FlappedEar Telemetry" to "FlappedEar Overlays".
 // The first launch under the new identity brings the old preferences, layout templates,
 // recovery snapshot and logs across, once. Nothing is deleted or overwritten: preferences

@@ -8,7 +8,8 @@ Windows Release CI compiles `packaging/windows/installer.nsi` using
 [NSIS 3.12](https://nsis.sourceforge.io/Download). This is an unsigned internal
 candidate, not beta distribution approval. The existing portable ZIP remains available.
 
-KAN-125 renamed the desktop app to **Flapped Ear Overlays**, but this installer, its
+KAN-125 renamed the desktop app to **FlappedEar Overlays** (spelled without a space
+since KAN-171), but this installer, its
 build and test scripts still use the previous name; rename them, with an upgrade path
 from the previous install directory, when Windows work resumes (KAN-162). KAN-18 set the
 display name, executable, shortcuts and candidate filenames to

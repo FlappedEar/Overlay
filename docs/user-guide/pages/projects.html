@@ -50,7 +50,7 @@
 <p>If recovery data cannot be written (for example the disk is full), the status bar shows <em>Automatic recovery could not be saved. Save the project manually to protect your changes.</em> with a <strong>SAVE</strong> button. Writing is retried every few seconds.</p>
 
 <h2 id="single-instance">One editor at a time</h2>
-<p>Only one copy of the application can run per user. A second start shows <em>Flapped Ear Overlays is already running. Use the existing window, or close it before opening another.</em> This protects recovery data and templates. Exports already running are not affected.</p>
+<p>Only one copy of the application can run per user. A second start shows <em>FlappedEar Overlays is already running. Use the existing window, or close it before opening another.</em> This protects recovery data and templates. Exports already running are not affected.</p>
 
 <h2 id="files">Where files are stored</h2>
 <p>Paths below are for macOS and follow the standard Qt locations for this application. They are given for troubleshooting; you do not normally need to open them.</p>
@@ -63,4 +63,4 @@
   <tr><td>Preferences (window positions, last project, selected template, analysis channels)</td><td>macOS preferences for the application</td></tr>
   <tr><td>Temporary export files</td><td>The system temporary folder; removed after each export</td></tr>
 </table>
-<p>Replacing the application with a newer version keeps all of these. Remove only the application bundle, never these folders, when upgrading. Builds named Flapped Ear Telemetry kept the same items under <code>FlappedEar Telemetry</code> folders; the first start of Flapped Ear Overlays moves them to the folders above and copies the preferences. Anything that could not be moved stays in the old folder, and the app tells you where.</p>
+<p>Replacing the application with a newer version keeps all of these. Remove only the application bundle, never these folders, when upgrading. Builds named FlappedEar Telemetry kept the same items under <code>FlappedEar Telemetry</code> folders; the first start of FlappedEar Overlays moves them to the folders above and copies the preferences. Anything that could not be moved stays in the old folder, and the app tells you where.</p>

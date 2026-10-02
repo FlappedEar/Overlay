@@ -728,16 +728,16 @@ void TelemetryTests::usesOverlaysIdentityWithItsOwnStorage()
         QGuiApplication::setApplicationDisplayName(oldDisplay);
     });
     // Compare production paths without reading or writing production preferences.
-    // KAN-125: Flapped Ear Overlays owns its own storage; the previous identity's
+    // KAN-125: FlappedEar Overlays owns its own storage; the previous identity's
     // tree is reached only by LegacyStorageMigration (StorageMigrationTests).
     QCoreApplication::setOrganizationName("FlappedEar");
     QCoreApplication::setOrganizationDomain("flappedear.com");
     QCoreApplication::setApplicationName(ApplicationIdentity::legacyStorageName);
-    QGuiApplication::setApplicationDisplayName("Flapped Ear Telemetry");
+    QGuiApplication::setApplicationDisplayName("FlappedEar Telemetry");
     const QString legacySettingsPath = QSettings().fileName();
     const QString legacyDataPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     ApplicationIdentity::initialize();
-    QCOMPARE(QGuiApplication::applicationDisplayName(), QString("Flapped Ear Overlays"));
+    QCOMPARE(QGuiApplication::applicationDisplayName(), QString("FlappedEar Overlays"));
     QCOMPARE(QCoreApplication::applicationName(), QString("FlappedEar Overlays"));
     QCOMPARE(QCoreApplication::organizationName(), QString("FlappedEar"));
     QCOMPARE(QCoreApplication::organizationDomain(), QString("flappedear.com"));
@@ -1861,7 +1861,7 @@ void TelemetryTests::followsOutingLapVideoPositionWithinLapBounds()
     QVERIFY(controller.followOutingLapVideoPosition(qRound64((end - 10.0 + 5.0) * 1000.0)));
     QCOMPARE(controller.outingLapCursor(), end);
 
-    // KAN-124: analysis without a video link (Flapped Ear Telemetry) has no
+    // KAN-124: analysis without a video link (FlappedEar Telemetry) has no
     // lap video and never follows one; the cursor stays where it is.
     auto *link = controller.m_analysis.m_videoLink;
     controller.m_analysis.m_videoLink = nullptr;
@@ -13146,7 +13146,7 @@ void TelemetryTests::persistsExportDiagnosticsAndRetainsKnownLogs()
     QString error;
     auto log = PersistentExportLog::create(
         directory.path(), QStringLiteral("a83f91c2d4e5f678"),
-        QStringLiteral("Flapped Ear Overlays Export Log\nExport ID: a83f91c2d4e5f678"), &error, started);
+        QStringLiteral("FlappedEar Overlays Export Log\nExport ID: a83f91c2d4e5f678"), &error, started);
     QVERIFY2(log, qPrintable(error));
     const QString activePath = log->path();
     QVERIFY(log->append(QStringLiteral("[lifecycle] Preparing")));

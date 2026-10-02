@@ -7,7 +7,7 @@
 
 namespace FlappedEar {
 
-// KAN-124: the analysis side's only view of video. Flapped Ear Telemetry has
+// KAN-124: the analysis side's only view of video. FlappedEar Telemetry has
 // no video and no link; Overlays implements it with the loaded run's synced
 // footage. Analysis code (the KAN-39 lap video, opening a comparison lap at a
 // position) asks through this interface and never reads video, sync or

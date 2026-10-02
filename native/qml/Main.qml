@@ -383,7 +383,7 @@ ApplicationWindow {
         title: qsTr("Recover unsaved changes?")
         contentItem: Label {
             width: 400
-            text: qsTr("Flapped Ear Overlays found changes that were not saved to the project file. Recover them as an unsaved document, or discard them and open the saved project?")
+            text: qsTr("FlappedEar Overlays found changes that were not saved to the project file. Recover them as an unsaved document, or discard them and open the saved project?")
             wrapMode: Text.WordWrap
             color: "#e8edf4"
         }
@@ -431,7 +431,7 @@ ApplicationWindow {
             startupNoticeDialog.open()
     }
 
-    // KAN-125: items the move from Flapped Ear Telemetry left in their old place.
+    // KAN-125: items the move from FlappedEar Telemetry left in their old place.
     Dialog {
         id: startupNoticeDialog
         objectName: "startupNoticeDialog"
@@ -439,11 +439,11 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         width: 560
-        title: qsTr("Your data from Flapped Ear Telemetry")
+        title: qsTr("Your data from FlappedEar Telemetry")
         standardButtons: Dialog.Ok
         contentItem: Label {
             width: 500
-            text: qsTr("Flapped Ear Overlays is the new name of this app. Nothing was deleted or overwritten, but not everything could be moved:") + "\n\n" + appController.startupNotice
+            text: qsTr("FlappedEar Overlays is the new name of this app. Nothing was deleted or overwritten, but not everything could be moved:") + "\n\n" + appController.startupNotice
             wrapMode: Text.WrapAtWordBoundaryOrAnywhere
             textFormat: Text.PlainText
             color: "#e8edf4"
@@ -904,8 +904,8 @@ ApplicationWindow {
     }
     FileDialog {
         id: projectOpenDialog
-        title: qsTr("Open Flapped Ear Overlays project")
-        nameFilters: [qsTr("Flapped Ear projects (*.fetproject)")]
+        title: qsTr("Open FlappedEar Overlays project")
+        nameFilters: [qsTr("FlappedEar projects (*.fetproject)")]
         onAccepted: {
             window.clearWidgetSelection();
             appController.requestOpenProject(selectedFile);
@@ -913,10 +913,10 @@ ApplicationWindow {
     }
     FileDialog {
         id: projectSaveDialog
-        title: qsTr("Save Flapped Ear Overlays project")
+        title: qsTr("Save FlappedEar Overlays project")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "fetproject"
-        nameFilters: [qsTr("Flapped Ear projects (*.fetproject)")]
+        nameFilters: [qsTr("FlappedEar projects (*.fetproject)")]
         onAccepted: appController.saveProject(selectedFile)
         onRejected: {
             if (appController.pendingDestructiveAction.length > 0)
@@ -934,7 +934,7 @@ ApplicationWindow {
     FileDialog {
         id: templateImportDialog
         title: qsTr("Import layout template")
-        nameFilters: [qsTr("Flapped Ear templates (*.fettemplate *.json)")]
+        nameFilters: [qsTr("FlappedEar templates (*.fettemplate *.json)")]
         onAccepted: {
             const templateId = appController.widgetModel.importTemplate(selectedFile);
             if (templateId)
@@ -946,7 +946,7 @@ ApplicationWindow {
         title: qsTr("Export layout template")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "fettemplate"
-        nameFilters: [qsTr("Flapped Ear templates (*.fettemplate)")]
+        nameFilters: [qsTr("FlappedEar templates (*.fettemplate)")]
         onAccepted: {
             const item = window.selectedTemplate();
             if (item)
@@ -1874,7 +1874,7 @@ ApplicationWindow {
                 ColumnLayout {
                     spacing: -1
                     Label {
-                        text: "Flapped Ear"
+                        text: "FlappedEar"
                         color: "#f1f5fa"
                         font.family: "Helvetica Neue"
                         font.pixelSize: 15
@@ -2647,7 +2647,7 @@ ApplicationWindow {
                 ColumnLayout {
                     spacing: -2
                     Label {
-                        text: "Flapped Ear"
+                        text: "FlappedEar"
                         color: "#f2f6fb"
                         font.family: "Helvetica Neue"
                         font.pixelSize: 21

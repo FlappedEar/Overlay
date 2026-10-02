@@ -379,8 +379,8 @@ qt_add_qml_module(flappedear_native
 )
 
 set_target_properties(flappedear_native PROPERTIES
-    OUTPUT_NAME "Flapped Ear Overlays"
-    MACOSX_BUNDLE_BUNDLE_NAME "Flapped Ear Overlays"
+    OUTPUT_NAME "FlappedEar Overlays"
+    MACOSX_BUNDLE_BUNDLE_NAME "FlappedEar Overlays"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.flappedear.overlays"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.0"
     MACOSX_BUNDLE_BUNDLE_VERSION "1"

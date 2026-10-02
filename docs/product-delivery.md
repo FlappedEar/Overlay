@@ -1,4 +1,4 @@
-# Flapped Ear Telemetry — audit and delivery ledger
+# FlappedEar Telemetry — audit and delivery ledger
 
 Audit date: 13 September 2026; M1 acceptance and reforecast for [KAN-28].
 Original KAN-12 audit: 12 September 2026 (retained in Git history).
@@ -21,7 +21,7 @@ This section supersedes the dated baseline below where they differ. The root
 | M4 losses and report ([KAN-9]) | 16 of 16 | Done; epic closed 2 October 2026 |
 | M5 core acceptance ([KAN-10]) | 6 of 12 | Open: KAN-80 and KAN-81 (matching video), KAN-83 (clean machine), KAN-84 (Windows, paused), KAN-85 (notices), KAN-86 (closure) |
 | M6 full vision ([KAN-11]) | 14 of 24 | Open: KAN-89, KAN-94–KAN-96, KAN-98, KAN-99, KAN-106, KAN-108–KAN-110 |
-| Product split (KAN-121, superseded by KAN-165) | Phases 1–2 and KAN-132 done; KAN-121 closed; KAN-125 rename merged | Separate repositories (2 October 2026). Stage 1: Flapped Ear Overlays standalone in this repository (KAN-125; decision 3 in KAN-122). Stage 2: Flapped Ear Telemetry, a new Flutter app from a blank page in its own repository and Jira project (decision KAN-167; architect handover KAN-168; KAN-126–KAN-130 move to the new project), with one `.fetproject` format compatible between both apps (KAN-170). Stage 3, deferred: remove the analysis from Overlays only once Telemetry is mature (gate KAN-169, then KAN-166); until then Overlays stays as it is. Platforms: Overlays macOS and Windows; Telemetry macOS, Windows, iOS and Android |
+| Product split (KAN-121, superseded by KAN-165) | Phases 1–2 and KAN-132 done; KAN-121 closed; KAN-125 rename merged | Separate repositories (2 October 2026). Stage 1: FlappedEar Overlays standalone in this repository (KAN-125; decision 3 in KAN-122). Stage 2: FlappedEar Telemetry, a new Flutter app from a blank page in its own repository and Jira project (decision KAN-167; architect handover KAN-168; KAN-126–KAN-130 move to the new project), with one `.fetproject` format compatible between both apps (KAN-170). Stage 3, deferred: remove the analysis from Overlays only once Telemetry is mature (gate KAN-169, then KAN-166); until then Overlays stays as it is. Platforms: Overlays macOS and Windows; Telemetry macOS, Windows, iOS and Android |
 | Stabilisation (KAN-144) | 0 of 17 | From the independent audit of 2 October 2026; it gates M5 |
 
 - **CI:** Native CI builds macOS arm64 Debug and Release with Qt 6.8.3 and runs 39
@@ -112,7 +112,7 @@ verified-source loader, bounded row service and detail view for subsequent work.
 | C05 | VBO bulk split/derived time budgets | [KAN-14] / PR #15 implements bounded line/field scanning (integration evidence in Jira); [KAN-15] implements derived-time/conversion checks (integration evidence in Jira); [KAN-17] adds checked bidirectional transforms and bounded auto-sync search (integration evidence in Jira) |
 | C06 | Coordinate interpretation ambiguity | [KAN-16] implements explicit exporter/header evidence shared by samples and gates; unresolved units withhold GPS with a warning. Quadrant, zero-crossing and conflict regressions; exact integration evidence in Jira |
 | C07 | Slow/full export destination behavior | [KAN-75] exercises a real filling volume (a disk image): preflight refusal, out of space in Stage A and Stage B, cancellation, and publication on a full volume. The target and unrelated files stay intact, cleanup touches only owned artifacts, and the user is told the disk is full. Remaining: a throttled (slow) destination, which needs tooling macOS does not offer without admin rights |
-| C08 | User-visible name/package drift | [KAN-18] standardizes Flapped Ear Telemetry display/About/bundle/package names with settings/recovery preservation checks; macOS integration evidence in Jira; Windows execution paused |
+| C08 | User-visible name/package drift | [KAN-18] standardizes FlappedEar Telemetry display/About/bundle/package names with settings/recovery preservation checks; macOS integration evidence in Jira; Windows execution paused |
 
 M1 implements compatibility and exclusion rules beyond C02. Route evidence,
 direction and timing-definition identity govern grouping; the same date alone

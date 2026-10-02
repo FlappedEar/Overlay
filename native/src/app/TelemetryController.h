@@ -9,7 +9,7 @@
 
 namespace FlappedEar {
 
-// KAN-124: Flapped Ear Telemetry's controller -- a project document and its
+// KAN-124: FlappedEar Telemetry's controller -- a project document and its
 // day analysis with no overlay editor, no video and no export. It hosts the
 // document with nothing of its own stored in the project, so a project
 // saved here keeps the editor state another app wrote, untouched. Built in

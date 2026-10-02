@@ -1,4 +1,4 @@
-// Flapped Ear Telemetry's controller stack without the overlay editor
+// FlappedEar Telemetry's controller stack without the overlay editor
 // (KAN-124): a project document and its day analysis, driven headless the
 // way the Telemetry app will drive them. Links only flappedear_telemetry_app
 // (Qt Core and Concurrent, no Gui): import, laps, segments, the day report,

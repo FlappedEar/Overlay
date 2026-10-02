@@ -1,6 +1,6 @@
-# Flapped Ear Telemetry: handover to the architect
+# FlappedEar Telemetry: handover to the architect
 
-Written on 2 October 2026 for the architect of the new Flapped Ear Telemetry app
+Written on 2 October 2026 for the architect of the new FlappedEar Telemetry app
 ([KAN-168]). The reference revision is `arekkozuch/VBOOverlay` at `0ec7416`. Paths are
 relative to this repository, which is public. Everything here is cross-reference
 material: it describes behaviour, data and decisions, not code to reuse.
@@ -9,8 +9,8 @@ material: it describes behaviour, data and decisions, not code to reuse.
 
 The owner's decisions of 2 October 2026:
 
-- **Two applications.** Flapped Ear Overlays, this repository, is the desktop
-  video-overlay editor for macOS and Windows (Qt 6, C++20, QML). Flapped Ear
+- **Two applications.** FlappedEar Overlays, this repository, is the desktop
+  video-overlay editor for macOS and Windows (Qt 6, C++20, QML). FlappedEar
   Telemetry is the track-day analysis app for macOS, Windows, iOS and Android.
 - **Telemetry is a Flutter app** ([KAN-167]).
 - **A blank page.** It is built in a new repository, `FlappedEar/Telemetry`, with
@@ -120,7 +120,7 @@ Sources: [`handover.md`](../handover.md) "Owner direction and preferences", the 
 ## Identity and storage
 
 - Bundle and application identifier: `com.flappedear.telemetry`.
-- Until 2 October 2026 the desktop editor itself was called Flapped Ear Telemetry
+- Until 2 October 2026 the desktop editor itself was called FlappedEar Telemetry
   and used `com.flappedear.telemetry`. Its Qt data still sits in the
   `FlappedEar Telemetry` locations listed in
   [application identity](application-identity.md#moving-existing-data) until
@@ -129,6 +129,12 @@ Sources: [`handover.md`](../handover.md) "Owner direction and preferences", the 
 - On a Mac that ran the old Overlays candidates, macOS may already hold state
   keyed by `com.flappedear.telemetry`, such as a preferences domain or privacy
   permissions. Medium confidence; check before the first release.
+- The brand is written **FlappedEar**, without a space (owner direction, KAN-171), so
+  the app is "FlappedEar Telemetry". That is also the old Overlays app's Qt storage
+  name. Any default location derived from a company and product name (for example
+  `FlappedEar` / `FlappedEar Telemetry` in a Windows runner's version resource) must
+  not resolve to the Qt locations above. Verify each platform's default directories
+  before the first release (medium confidence that Flutter's defaults differ).
 
 ## The shared contract: `.fetproject`
 
