@@ -8487,6 +8487,10 @@ void TelemetryTests::keepsAnalysisControlsReachableAtMinimumSize()
     QStringList failures;
     const auto check = [&](const QString &state) {
         QTest::qWait(400);
+        // A grab polishes and renders the scene first: a tab bar's list view
+        // positions its delegates only when polished, and item geometry
+        // read between polishes can be stale.
+        static_cast<void>(window->grabWindow());
         const auto problems = unreachableControls(window);
         for (const auto &problem : problems) failures << state + ": " + problem;
         if (!reviewDirectory.isEmpty())
@@ -8853,6 +8857,9 @@ void TelemetryTests::switchesTheActiveRunPrimaryWithoutStaleEditorState()
     QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
     QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 20000);
     QCOMPARE(controller.telemetryName(), QString("session.vbo"));
+    // The analysis settles first: it can still change the document, which
+    // (correctly) turns a pending attach into "The project changed meanwhile".
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 20000);
     const auto runId = controller.activeRunId();
     QVERIFY(controller.attachRunRecording(runId, QUrl::fromLocalFile(alternative)));
     QTRY_COMPARE_WITH_TIMEOUT(controller.runRecordingReview().value("state").toString(), QString("review"), 20000);
