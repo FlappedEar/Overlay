@@ -2,9 +2,10 @@
 
 Proposed 26 September 2026 on the owner's request. **Status (2 October 2026):
 phases 1 and 2 are implemented** (KAN-123 and KAN-124, closed 27 September), and
-the tyre widget (KAN-132) is merged. The phase-0 owner decisions (KAN-122) and
-phases 3–5 are open, and the direction documents (`product-vision.md`,
-`AGENTS.md`) still describe one application. The code survey below describes
+the tyre widget (KAN-132) is merged. **Owner decision (2 October 2026):** two
+applications, the desktop overlay editor for macOS and Windows and Flapped Ear
+Telemetry for iOS and Android. The other phase-0 decisions (KAN-122: store licence,
+identities, the desktop analysis window, devices) and phases 3–5 are open. The code survey below describes
 the code before phase 1.
 Jira: epic [KAN-121], tickets [KAN-122]–[KAN-132].
 Decisions marked **Owner decision** must be made before the phase that depends
@@ -21,7 +22,7 @@ neither case well, so the product becomes two, kept in **one repository**:
 
 | | **Flapped Ear Telemetry** | **Flapped Ear Overlays** |
 | --- | --- | --- |
-| Platforms | iPhone, iPad, Android phones and tablets; a macOS build for development and desktop use | macOS desktop |
+| Platforms | iPhone, iPad, Android phones and tablets (owner decision, 2 October 2026) | macOS and Windows desktop (owner decision, 2 October 2026) |
 | Job | Import the day's VBO/RCZ files from RaceChrono via the share sheet, then show laps, best lap vs theoretical best on the map, time losses, section progression and the Corner Analyzer, to prepare the next run | Video + telemetry overlay editing and export, GoPro auto-sync, multiple video sources with manual sync, tyre pressure/temperature widgets |
 | Video | None | Required |
 | Works offline at the track | Yes | Not needed |
@@ -160,22 +161,23 @@ Changes:
 1. **Qt licence for app-store distribution.** Qt for iOS links statically,
    and LGPL obligations inside the App Store need care: either a commercial
    or small-business Qt licence, or LGPL compliance with relinkable object
-   files. This must be verified with Qt before any store release. It does
-   not block development, the simulator or TestFlight-style internal
-   testing.
-2. **Product direction documents.** `docs/product-vision.md` currently says
-   "one macOS-first application", "no second application", and
-   `AGENTS.md` says macOS only. The owner updates these, or asks an agent
-   to draft the change for approval.
+   files. This must be verified with Qt before any store release, for the
+   App Store and Google Play alike. It does not block development, the
+   simulator or TestFlight-style internal testing.
+2. **Product direction documents.** Decided 2 October 2026: two applications,
+   the desktop editor for macOS and Windows and Flapped Ear Telemetry for iOS
+   and Android. `docs/product-vision.md` and `AGENTS.md` record it. Windows
+   builds and CI stay paused until the owner resumes them.
 3. **Names and identities.** Today's desktop bundle is named "Flapped Ear
    Telemetry" (`com.flappedear.telemetry`) but *is* the overlay editor. The
    proposal:
    - Overlays becomes `com.flappedear.overlays`, with a one-time migration
      of settings, templates and recovery storage.
    - Telemetry takes `com.flappedear.telemetry`.
-4. **Does Overlays keep a day-analysis window?** The recommendation is to
-   keep only what export needs (lap and range selection, sync) and move the
-   full analysis to Telemetry, which also has a macOS build.
+4. **Does Overlays keep a day-analysis window?** The earlier recommendation
+   was to keep only what export needs (lap and range selection, sync) and move
+   the full analysis to Telemetry. It assumed a macOS Telemetry build; with
+   Telemetry on iOS and Android only, this decision is open again.
 5. **Minimum OS versions and target devices,** starting with the owner's
    own phone and tablet.
 
@@ -189,7 +191,7 @@ behaviour and can proceed before decisions 1 and 5.
 | 0. Decisions ([KAN-122]) | Items 1–5 above answered | owner |
 | 1. Core separation ([KAN-123]) | `flappedear_telemetry_core` builds with Qt Core + zlib only. Cuts: `videoFingerprint` out of project code; `scene.widgets` optional; `PreviewPlayback`, `GuiSessionLock`, `AppLog` out of core; overlay code moved to `flappedear_overlay_core`; a CI job enforces the rule | M |
 | 2. Controller split ([KAN-124]) | `DocumentController`, `AnalysisController` (no video, `VideoLink` interface) and `OverlayController` extracted from `AppController` behind the same QML-facing API; `TelemetryTests.cpp` split to match | L (largest risk) |
-| 3. Two desktop apps ([KAN-125]) | Flapped Ear Overlays (the editor; new identity with migration) and Flapped Ear Telemetry for macOS (analysis UI), both built and tested in CI | M |
+| 3. Desktop app ([KAN-125]) | Flapped Ear Overlays (the editor; new identity with migration) built and tested in CI for macOS, and for Windows once resumed. A desktop Telemetry app is no longer a product target (owner decision, 2 October 2026); the desktop analysis scope follows decision 4 | M |
 | 4. Telemetry on phones and tablets ([KAN-126]–[KAN-129]) | iOS and Android targets, share-sheet/intent import into the sandbox, touch-first screens, CI builds for the iOS simulator and Android | L |
 | 5. On-track acceptance ([KAN-130]) | The owner uses the app on their phone at a real track day; internal test distribution | owner |
 | Overlays roadmap ([KAN-131], [KAN-132]) | Multiple video sources with manual sync; tyre pressure/temperature widgets | M each, after Phase 3 |

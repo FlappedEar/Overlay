@@ -21,8 +21,12 @@ that check over this file.
   30 s final-validation timeout. Finish KAN-144 before new features; it gates M5.
 - `main` at `ca66169` was red in Debug on the post-import attach race
   (`TelemetryTests.cpp:8831`): KAN-143 fixes the tests, KAN-150 the product side.
-- The M2–M4 epics (KAN-7, KAN-8, KAN-9) are closed. KAN-122 (owner decisions
-  for the product split) is still open.
+- The M2–M4 epics (KAN-7, KAN-8, KAN-9) are closed.
+- **Owner decision, 2 October 2026:** two applications. The desktop overlay
+  editor targets macOS and Windows; Flapped Ear Telemetry targets iOS and
+  Android. `AGENTS.md` and `product-vision.md` record it. Windows builds and CI
+  stay paused until the owner resumes them. The other KAN-122 decisions (store
+  licence, identities, desktop analysis window, devices) are open.
 - `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
   `docs/product-delivery.md` and Jira are the only status records.
 
@@ -210,11 +214,12 @@ The owner wants **two products in one repository**:
   GPS, which needs manual sync of multiple video sources.
 
 Read `docs/product-split-plan.md` (epic KAN-121, tickets KAN-122–132) before
-any structural work. Phase 0 (KAN-122) lists owner decisions that are still
-open: the Qt store licence, updating the direction documents
-(`product-vision.md` and `AGENTS.md` still say one macOS app), bundle
-identities, and the tyre data source. Phases 1–3 need none of them except
-identities (phase 3).
+any structural work. Phase 0 (KAN-122): the platforms were decided on
+2 October 2026 (desktop editor on macOS and Windows, Telemetry on iOS and
+Android) and the tyre data source is settled (KAN-132). Still open: the Qt
+store licence, bundle identities, whether the desktop app keeps a day-analysis
+window, and target devices. Phases 1–3 need none of them except identities
+(phase 3).
 
 Split rules already in force after KAN-123:
 - `src/telemetry` and `src/project` form `flappedear_telemetry_core`, which

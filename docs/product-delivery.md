@@ -21,7 +21,7 @@ This section supersedes the dated baseline below where they differ. The root
 | M4 losses and report ([KAN-9]) | 16 of 16 | Done; epic closed 2 October 2026 |
 | M5 core acceptance ([KAN-10]) | 6 of 12 | Open: KAN-80 and KAN-81 (matching video), KAN-83 (clean machine), KAN-84 (Windows, paused), KAN-85 (notices), KAN-86 (closure) |
 | M6 full vision ([KAN-11]) | 14 of 24 | Open: KAN-89, KAN-94–KAN-96, KAN-98, KAN-99, KAN-106, KAN-108–KAN-110 |
-| Product split (KAN-121) | Phases 1–2 and KAN-132 done | Phase-0 owner decisions (KAN-122) and phases 3–5 open |
+| Product split (KAN-121) | Phases 1–2 and KAN-132 done | Platforms decided 2 October 2026 (desktop editor: macOS and Windows; Telemetry: iOS and Android); other phase-0 decisions (KAN-122) and phases 3–5 open |
 | Stabilisation (KAN-144) | 0 of 17 | From the independent audit of 2 October 2026; it gates M5 |
 
 - **CI:** Native CI builds macOS arm64 Debug and Release with Qt 6.8.3 and runs 38

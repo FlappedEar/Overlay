@@ -1,6 +1,6 @@
 # Event projects (development v3)
 
-Flapped Ear Telemetry remains one macOS-first telemetry and overlay application.
+The event project format is shared by the current desktop application and the planned applications (desktop overlay editor on macOS and Windows, Flapped Ear Telemetry on iOS and Android; see [product split plan](product-split-plan.md)).
 The project schema is developmental: the owner confirmed that no existing user
 data needs migration protection. v3 gives events a single authoritative source
 model; the small existing v2 read/write path remains for single-recording files.

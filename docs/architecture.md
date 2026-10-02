@@ -1,6 +1,6 @@
 # Architecture
 
-Flapped Ear Telemetry is one native Qt 6 application for overlay editing/generation and telemetry analysis. C++ owns telemetry, media, project, synchronization, and export behavior; QML presents the editor and the reusable telemetry scene.
+Flapped Ear Telemetry is currently one native Qt 6 application for overlay editing/generation and telemetry analysis. By owner decision (2 October 2026) it is being split into a desktop overlay editor (macOS and Windows) and the Flapped Ear Telemetry app (iOS and Android); the library structure below is the first step. C++ owns telemetry, media, project, synchronization, and export behavior; QML presents the editor and the reusable telemetry scene.
 
 The [product vision](product-vision.md) defines the full intended analytical workflow;
 the [delivery plan](product-delivery.md) distinguishes implementation from remaining
