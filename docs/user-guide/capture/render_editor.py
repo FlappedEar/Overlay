@@ -80,7 +80,7 @@ def main() -> None:
     # The application uses the Basic Quick Controls style (native/src/main.cpp).
     QQuickStyle.setStyle("Basic")
     app = QGuiApplication(sys.argv)
-    app.setApplicationDisplayName("Flapped Ear Overlays")
+    app.setApplicationDisplayName("FlappedEar Overlays")
     work = Path(tempfile.mkdtemp(prefix="fet-editor-"))
     harness.stage_module(work)
     harness.register_branding(work)

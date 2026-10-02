@@ -1,19 +1,21 @@
 # Application identity and upgrades
 
-The desktop app is **Flapped Ear Overlays** (KAN-125, owner decision of 2 October 2026).
-Until then it was called **Flapped Ear Telemetry**. That name, and the bundle identifier
+The desktop app is **FlappedEar Overlays** (KAN-125, owner decision of 2 October 2026).
+Until then it was called **FlappedEar Telemetry**. That name, and the bundle identifier
 `com.flappedear.telemetry`, now belong to the separate analysis app, a new Flutter app
-in its own repository (KAN-165, KAN-167).
+in its own repository (KAN-165, KAN-167). The brand is written **FlappedEar**, without
+a space (owner direction, KAN-171); candidate builds of 2 October 2026 were still named
+`Flapped Ear Overlays.app`.
 
 | Purpose | Value |
 | --- | --- |
-| User-facing name and executable | `Flapped Ear Overlays` |
-| macOS bundle | `Flapped Ear Overlays.app` |
+| User-facing name and executable | `FlappedEar Overlays` |
+| macOS bundle | `FlappedEar Overlays.app` |
 | macOS bundle identifier | `com.flappedear.overlays` |
 | Qt storage application name | `FlappedEar Overlays` (previously `FlappedEar Telemetry`) |
 | Qt organization / domain | `FlappedEar` / `flappedear.com` (unchanged) |
 | Project / template extensions | `.fetproject` / `.fettemplate` (unchanged) |
-| Candidate archive prefix | `Flapped-Ear-Overlays-` |
+| Candidate archive prefix | `FlappedEar-Overlays-` |
 | Windows installer | Not renamed yet; see [Windows status](#project-opening-and-windows-status) |
 
 `ApplicationIdentity::initialize()` sets the visible display name and the storage name
@@ -22,7 +24,7 @@ and icon resource are unchanged.
 
 ## Moving existing data
 
-Because the storage name changed, the first start of Flapped Ear Overlays runs
+Because the storage name changed, the first start of FlappedEar Overlays runs
 `LegacyStorageMigration` once. It runs after the app holds its own session lock and
 before the log, the recovery store, the templates or the preferences are used.
 
@@ -54,19 +56,20 @@ overwriting, keeping preferences that already exist, waiting while the previous 
 runs, missing legacy storage, and the platform's real settings and QStandardPaths
 locations.
 
-The separate Flapped Ear Telemetry app must use its own storage locations. It must not
+The separate FlappedEar Telemetry app must use its own storage locations. It must not
 read, write or delete the `FlappedEar Telemetry` locations above, which remain only as
 the read-only source of this migration
 ([architect handover](telemetry-handover.md#identity-and-storage)).
 
 ## Replacing a macOS candidate
 
-1. Quit the running app, whether it is Flapped Ear Telemetry or Flapped Ear Overlays.
+1. Quit the running app, whether it is FlappedEar Telemetry or FlappedEar Overlays.
    Keep your projects and source media in their existing locations.
-2. Extract the new candidate and place `Flapped Ear Overlays.app` in the directory where
-   you keep the application. Remove the old `Flapped Ear Telemetry.app` (or older
-   `FlappedEar Telemetry.app`) bundle after replacing it; remove only the application
-   bundle, not application data.
+2. Extract the new candidate and place `FlappedEar Overlays.app` in the directory where
+   you keep the application. Remove the old `Flapped Ear Overlays.app`,
+   `Flapped Ear Telemetry.app` or `FlappedEar Telemetry.app` bundle after replacing it;
+   remove only the application bundle, not application data. The storage name did not
+   change with the 2 October spelling change, so nothing moves again.
 3. Launch the new bundle. Preferences, templates, the last project and recovery data come
    across on the first start; unsaved recovery still requires the same explicit Recover
    or Discard choice.

@@ -23,19 +23,19 @@ that check over this file.
   (`TelemetryTests.cpp:8831`): KAN-143 fixes the tests, KAN-150 the product side.
 - The M2–M4 epics (KAN-7, KAN-8, KAN-9) are closed.
 - **Owner decision, 2 October 2026:** two applications. The desktop overlay
-  editor targets macOS and Windows; Flapped Ear Telemetry targets macOS,
+  editor targets macOS and Windows; FlappedEar Telemetry targets macOS,
   Windows, iOS and Android. `AGENTS.md` and `product-vision.md` record it. Windows builds and CI
   stay paused until the owner resumes them. Of the other KAN-122 decisions,
   identities (KAN-125) and the desktop analysis window (kept until Telemetry
-  is mature, KAN-166) were decided later that day; the store licence and
-  devices are open.
-- **Separation (owner direction, 2 October 2026):** Flapped Ear Overlays is
+  is mature, KAN-166) were decided later that day, and mobile minimums are
+  iOS 15 and Android 8.0. The store licence is open.
+- **Separation (owner direction, 2 October 2026):** FlappedEar Overlays is
   finished first as a standalone app in this repository (epic KAN-165, stage 1:
-  the rename and data move, KAN-125, merged in PR #142). Flapped Ear Telemetry
+  the rename and data move, KAN-125, merged in PR #142). FlappedEar Telemetry
   is then built in a new repository (stage 2: KAN-167–KAN-170, KAN-126–KAN-130).
   KAN-121 is closed as superseded. Do not add Telemetry or mobile targets here.
 - **Telemetry is a new Flutter app (owner decision, 2 October 2026, KAN-167):**
-  a blank page in `FlappedEar/Telemetry` with its own Jira project, no shared
+  a blank page in `FlappedEar/Telemetry` with its own Jira space (FET), no shared
   code, this repository cross-referenced only. A new architect takes over from
   [`docs/telemetry-handover.md`](docs/telemetry-handover.md) (KAN-168). KAN-169 is the maturity gate that
   KAN-166 waits for.
@@ -48,10 +48,10 @@ that check over this file.
 
 ## Project
 
-VBOOverlay / "Flapped Ear Overlays" (renamed from "Flapped Ear Telemetry" by
+VBOOverlay / "FlappedEar Overlays" (renamed from "FlappedEar Telemetry" by
 KAN-125; bundle `com.flappedear.overlays`): a Qt 6 / C++20 / QML macOS desktop app
 combining a video overlay editor with track-day telemetry analysis (VBO/RCZ,
-GoPro). The analysis window and workflows stay until Flapped Ear Telemetry is mature (KAN-166, deferred). Repo `arekkozuch/VBOOverlay`. Jira project KAN, cloud ID
+GoPro). The analysis window and workflows stay until FlappedEar Telemetry is mature (KAN-166, deferred). Repo `arekkozuch/VBOOverlay`. Jira project KAN, cloud ID
 `315ac5b8-6fd1-4518-8b5f-4433bcc33447`.
 
 ## Where M3/M4 stand (end of this session)
@@ -225,10 +225,10 @@ report takes about 7 s in Release, with a peak of 150 MiB. See
 The owner wants **two products**. Since 2 October 2026 they live in
 **separate repositories**: Overlays here, Telemetry in a new one (KAN-165):
 
-- **Flapped Ear Telemetry:** a quick iPhone, iPad and Android app to view
+- **FlappedEar Telemetry:** a quick iPhone, iPad and Android app to view
   the day's telemetry at the track (nobody carries a laptop to the track),
   also built for macOS and Windows (owner decision, 2 October 2026).
-- **Flapped Ear Overlays:** the desktop video-overlay editor. Planned
+- **FlappedEar Overlays:** the desktop video-overlay editor. Planned
   additions are tyre pressure and temperature, and a helmet camera without
   GPS, which needs manual sync of multiple video sources.
 
@@ -238,7 +238,8 @@ any structural work. Phase 0 (KAN-122): the platforms were decided on
 Windows, iOS and Android) and the tyre data source is settled (KAN-132).
 Decided since: identities (decision 3, KAN-125) and the analysis window
 (decision 4: Overlays keeps it until Telemetry is mature; KAN-166, deferred).
-Still open: the Qt store licence and target devices.
+Decision 5 for mobile: iOS 15 and Android 8.0. Still open: the store licence
+and desktop minimum OS versions.
 
 Split rules already in force after KAN-123:
 - `src/telemetry` and `src/project` form `flappedear_telemetry_core`, which

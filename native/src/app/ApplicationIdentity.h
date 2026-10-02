@@ -4,11 +4,11 @@
 
 namespace FlappedEar::ApplicationIdentity {
 
-inline constexpr auto displayName = "Flapped Ear Overlays";
+inline constexpr auto displayName = "FlappedEar Overlays";
 inline constexpr auto storageName = "FlappedEar Overlays";
 inline constexpr auto organization = "FlappedEar";
 inline constexpr auto domain = "flappedear.com";
-// KAN-125: the storage identity before the rename to Flapped Ear Overlays.
+// KAN-125: the storage identity before the rename to FlappedEar Overlays.
 // LegacyStorageMigration brings its preferences and data across once at startup;
 // nothing else may read or write it.
 inline constexpr auto legacyStorageName = "FlappedEar Telemetry";

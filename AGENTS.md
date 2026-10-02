@@ -89,14 +89,14 @@
   `VideoOutput` decoded-frame state. User-accessible playback end is the last actual video frame,
   not the media-duration boundary after it.
 - Current owner direction (2026-10-02): two applications. This repository delivers the desktop
-  overlay editor, Flapped Ear Overlays, for macOS and Windows. Flapped Ear Telemetry (macOS,
+  overlay editor, FlappedEar Overlays, for macOS and Windows. FlappedEar Telemetry (macOS,
   Windows, iOS and Android) is a new Flutter app, started from a blank page in its own repository
-  (`FlappedEar/Telemetry`) and its own Jira project (epic KAN-165, decision KAN-167). It shares no
+  (`FlappedEar/Telemetry`) and its own Jira space, FET (epic KAN-165, decision KAN-167). It shares no
   code with this repository and only cross-references it; the architect handover is
   [docs/telemetry-handover.md](docs/telemetry-handover.md). Do not add Telemetry or mobile app
-  targets to this repository, and do not create code dependencies between the two repositories. The desktop app is Flapped Ear Overlays (`com.flappedear.overlays`,
+  targets to this repository, and do not create code dependencies between the two repositories. The desktop app is FlappedEar Overlays (`com.flappedear.overlays`,
   KAN-125). Keep it as it is: do not remove its Lap Analysis window, analysis workflows or other
-  features until Flapped Ear Telemetry is mature enough to replace them (KAN-166, deferred). Both
+  features until FlappedEar Telemetry is mature enough to replace them (KAN-166, deferred). Both
   apps read and write one `.fetproject` format, which must stay compatible between them (KAN-170).
   Keep `flappedear_telemetry_core` and `flappedear_telemetry_app` free of Gui, overlay, video and
   platform-specific code (the boundary checks enforce it); they are the behavioural reference

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Flapped Ear Overlays user guide into a static site.
+"""Build the FlappedEar Overlays user guide into a static site.
 
 Uses only the Python standard library. Each file in ``pages/`` is an HTML body
 fragment whose first line is a metadata comment:
@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 PAGES = ROOT / "pages"
 ASSETS = ROOT / "assets"
-SITE_NAME = "Flapped Ear Overlays"
+SITE_NAME = "FlappedEar Overlays"
 REPOSITORY = "https://github.com/arekkozuch/VBOOverlay"
 
 # Navigation groups and page order. Each entry is the page file stem.
@@ -178,7 +178,7 @@ TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
-<meta name="description" content="Flapped Ear Overlays user guide: {page_title}">
+<meta name="description" content="FlappedEar Overlays user guide: {page_title}">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -197,7 +197,7 @@ TEMPLATE = """<!doctype html>
 {body}
 </article>
 {pager}
-<footer>Flapped Ear Overlays is in development. This guide describes the application at the source revision it was built from; see <a href="limitations.html">Limitations</a>.</footer>
+<footer>FlappedEar Overlays is in development. This guide describes the application at the source revision it was built from; see <a href="limitations.html">Limitations</a>.</footer>
   </main>
 </div>
 <script>

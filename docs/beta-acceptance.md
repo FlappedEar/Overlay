@@ -15,7 +15,7 @@ The old single-session-only product scope is superseded by
 
 The current candidate is one Mac application for whole-day event analysis and
 video overlay editing/export. By owner decision (2 October 2026) the product is
-being split into a desktop overlay editor (macOS and Windows) and Flapped Ear
+being split into a desktop overlay editor (macOS and Windows) and FlappedEar
 Telemetry (macOS, Windows, iOS and Android); see [product split plan](product-split-plan.md). An event contains multiple runs with optional
 run-local video/sync. A run's video can be a GoPro chapter group played as one
 timeline (KAN-105); exporting a chaptered video is refused until KAN-106. First core and full-vision acceptance are distinct.
@@ -67,7 +67,7 @@ environment: its `--qt-root` directory is temporarily renamed during the startup
 1. Download a candidate from a successful workflow and verify its SHA-256 sidecar.
 2. Windows (execution paused since 13 September 2026): run the `*-setup.exe` candidate installer; see [Windows installer](windows-installer.md).
    Alternatively extract the portable archive and keep its complete tree, including
-   `stage/bin/Flapped Ear Overlays.exe`. macOS: extract `stage/Flapped Ear Overlays.app`.
+   `stage/bin/FlappedEar Overlays.exe`. macOS: extract `stage/FlappedEar Overlays.app`.
 3. Install compatible external FFmpeg and ffprobe. Both must resolve on PATH; macOS
    also searches `/opt/homebrew/bin` and `/usr/local/bin`. Record `ffmpeg -version` and
    `ffprobe -version`. Export checks a working HEVC encoder and the actual composition

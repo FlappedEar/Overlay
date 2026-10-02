@@ -1,4 +1,4 @@
-# Flapped Ear Telemetry — product contract
+# FlappedEar Telemetry — product contract
 
 Established 12 September 2026 from the owner's original analysis proposal and
 subsequent decisions. Updated 2 October 2026 with the owner's decision to build two
@@ -9,8 +9,8 @@ implementation sessions. Implementation and execution status belong in
 ## Product promise
 
 Two applications share the telemetry core: a desktop video overlay
-editor/generator for macOS and Windows (working name **Flapped Ear Overlays**),
-developed in this repository, and **Flapped Ear Telemetry**, a track-day
+editor/generator for macOS and Windows (working name **FlappedEar Overlays**),
+developed in this repository, and **FlappedEar Telemetry**, a track-day
 performance analyzer for macOS, Windows, iOS and Android, to be developed in its
 own repository (KAN-165). The analysis answers:
 
@@ -23,17 +23,17 @@ and more charts are foundations, not completion of this promise.
 
 ## Durable decisions
 
-- Product names: **Flapped Ear Telemetry** is the analysis app
-  (`com.flappedear.telemetry`); the desktop editor is **Flapped Ear Overlays**
+- Product names: **FlappedEar Telemetry** is the analysis app
+  (`com.flappedear.telemetry`); the desktop editor is **FlappedEar Overlays**
   (`com.flappedear.overlays`). The editor's first start under the new name moves
   existing preferences and data across without deleting anything (KAN-125). Existing internal
   identifiers may remain for compatibility; user-facing naming must be consistent.
-- Keep this repository and its native Qt/C++/QML architecture for Flapped Ear
-  Overlays. Flapped Ear Telemetry is a new Flutter app, started from a blank page in
+- Keep this repository and its native Qt/C++/QML architecture for FlappedEar
+  Overlays. FlappedEar Telemetry is a new Flutter app, started from a blank page in
   its own repository and Jira project; it shares no code with this repository and
   cross-references its behaviour, tests and documents (KAN-167;
   [architect handover](telemetry-handover.md)). The overlay editor stays as it is,
-  with its day-analysis window, until Flapped Ear Telemetry is mature enough to
+  with its day-analysis window, until FlappedEar Telemetry is mature enough to
   replace it (KAN-166, deferred). Both apps read and write one compatible
   `.fetproject` format (KAN-170).
 - Event → Run → Lap. An event groups the day; a run owns recording sources,
@@ -44,7 +44,7 @@ and more charts are foundations, not completion of this promise.
   source workflow. Alternative files are not channel fusion.
 - Prefer VBO when the user needs RaceChrono's exported calculated G channels.
   RCZ preserves native sensor clocks. Keep provenance and explain this choice.
-- Platforms: the desktop editor targets macOS and Windows; Flapped Ear Telemetry
+- Platforms: the desktop editor targets macOS and Windows; FlappedEar Telemetry
   targets macOS, Windows, iOS and Android. macOS remains the active development
   platform, and Windows builds and CI stay paused until the owner resumes them. No unsolicited framework
   replacement or silent scope reduction.

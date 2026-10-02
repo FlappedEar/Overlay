@@ -1,4 +1,4 @@
-# Flapped Ear Telemetry — event analysis delivery
+# FlappedEar Telemetry — event analysis delivery
 
 Updated 2 October 2026. The complete scope is now maintained in
 [product-vision.md](product-vision.md); actual status, blockers, milestones,

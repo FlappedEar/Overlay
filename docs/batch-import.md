@@ -1,4 +1,4 @@
-# Flapped Ear Telemetry: outings and multi-file import
+# FlappedEar Telemetry: outings and multi-file import
 
 Product scope and delivery status: [vision](product-vision.md),
 [audit and milestones](product-delivery.md).
@@ -12,7 +12,7 @@ automatically detect pit visits. Event-wide best laps across compatible runs are
 ## Which format should I export from RaceChrono?
 
 **Use VBO for analysis with RaceChrono's calculated lateral and longitudinal G.**
-Export the complete run with `latacc-calc` and `longacc-calc` enabled. Flapped Ear
+Export the complete run with `latacc-calc` and `longacc-calc` enabled. FlappedEar
 Telemetry uses these columns for automatic G-force channel selection when present.
 
 RCZ preserves the recorded GPS, OBD, heart-rate and device sensor channels at their
@@ -20,7 +20,7 @@ original sampling rates. It is useful as the source archive, but the currently
 supported RCZ reader does not reconstruct RaceChrono's calculated acceleration.
 In the inspected RCZ/VBO pair, those calculated columns exist only in the VBO
 export; the VBO has a common 10 Hz timeline. That rate is specific to this export,
-not a limit imposed by Flapped Ear Telemetry.
+not a limit imposed by FlappedEar Telemetry.
 
 Importing both formats does not combine their channels. Lap Analysis groups uniquely
 matching dated exports automatically. In advanced review, to keep both in one run,

@@ -41,7 +41,7 @@ struct ProjectLoadResult {
 // import. The host (today AppController, later each app) owns the sources it
 // loads and any editor state stored in the project (the active run's video,
 // synchronisation, overlay scene and chart channels), and says whether the
-// document is busy. Flapped Ear Telemetry hosts a document with no editor.
+// document is busy. FlappedEar Telemetry hosts a document with no editor.
 class DocumentHost {
 public:
     virtual ~DocumentHost() = default;

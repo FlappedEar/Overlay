@@ -1,6 +1,6 @@
-# Flapped Ear Overlays
+# FlappedEar Overlays
 
-Flapped Ear Overlays (formerly Flapped Ear Telemetry, bundle identifier `com.flappedear.overlays`) is a native desktop application for video telemetry overlay editing and generation. By owner decision (2 October 2026) the product is split into two applications: this desktop overlay editor for macOS and Windows, and the Flapped Ear Telemetry analysis app for macOS, Windows, iOS and Android (`com.flappedear.telemetry`), a new Flutter app started from a blank page in its own repository and Jira project, which shares no code with this one and cross-references it ([architect handover](docs/telemetry-handover.md)). This app keeps its Lap Analysis window and analysis workflows until Flapped Ear Telemetry is mature enough to replace them (KAN-166, deferred), and both apps read and write one compatible `.fetproject` format (KAN-170). The first start after the rename moves the previous preferences, templates, recovery data and logs across without deleting or overwriting anything ([application identity](docs/application-identity.md)). See the [product split plan](docs/product-split-plan.md).
+FlappedEar Overlays (formerly FlappedEar Telemetry, bundle identifier `com.flappedear.overlays`) is a native desktop application for video telemetry overlay editing and generation. By owner decision (2 October 2026) the product is split into two applications: this desktop overlay editor for macOS and Windows, and the FlappedEar Telemetry analysis app for macOS, Windows, iOS and Android (`com.flappedear.telemetry`), a new Flutter app started from a blank page in its own repository and Jira project, which shares no code with this one and cross-references it ([architect handover](docs/telemetry-handover.md)). This app keeps its Lap Analysis window and analysis workflows until FlappedEar Telemetry is mature enough to replace them (KAN-166, deferred), and both apps read and write one compatible `.fetproject` format (KAN-170). The first start after the rename moves the previous preferences, templates, recovery data and logs across without deleting or overwriting anything ([application identity](docs/application-identity.md)). See the [product split plan](docs/product-split-plan.md).
 
 ## Status
 
@@ -79,7 +79,7 @@ cmake -S . -B build-native \
   -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt
 cmake --build build-native --parallel
 ctest --test-dir build-native --output-on-failure
-open "build-native/native/Flapped Ear Overlays.app"
+open "build-native/native/FlappedEar Overlays.app"
 ```
 
 ## Continuous integration
@@ -143,6 +143,6 @@ The end-user list of limitations is in the [user guide](https://arekkozuch.githu
 
 ### Editor instance and recovery
 
-Run one Flapped Ear Overlays editor per user data directory. A second launch asks you to use
+Run one FlappedEar Overlays editor per user data directory. A second launch asks you to use
 or close the existing window, protecting unsaved recovery and custom templates.
 Export workers are unaffected. Close older builds before opening this version.

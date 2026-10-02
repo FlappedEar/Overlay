@@ -1695,9 +1695,9 @@ A successful cloud run verifies this synthetic regression gate. It does not cert
 For broadcast-HUD visual changes, render the same production QML acceptance composition against both supplied synthetic backgrounds:
 
 ```bash
-"build-native/native/Flapped Ear Overlays.app/Contents/MacOS/Flapped Ear Overlays" \
+"build-native/native/FlappedEar Overlays.app/Contents/MacOS/FlappedEar Overlays" \
   --render-visual-smoke docs/assets/motorsport-broadcast-acceptance.png
-"build-native/native/Flapped Ear Overlays.app/Contents/MacOS/Flapped Ear Overlays" \
+"build-native/native/FlappedEar Overlays.app/Contents/MacOS/FlappedEar Overlays" \
   --render-visual-smoke-dark docs/assets/motorsport-broadcast-acceptance-dark.png
 ```
 

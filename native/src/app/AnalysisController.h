@@ -45,7 +45,7 @@ namespace FlappedEar {
 // KAN-124: the day's analysis -- outing laps, lap detail, segment review,
 // comparison, theoretical best, time losses, channel summaries and the day
 // report. It reads and edits the project only through AnalysisDocument and
-// reaches video only through an optional VideoLink, so Flapped Ear Telemetry
+// reaches video only through an optional VideoLink, so FlappedEar Telemetry
 // can run it without the overlay editor. AppController forwards its QML API
 // here unchanged.
 class AnalysisController final : public QObject {
@@ -126,7 +126,7 @@ public:
     explicit AnalysisController(AnalysisDocument &document, QObject *parent = nullptr);
     ~AnalysisController() override;
 
-    // Null when there is no video support (Flapped Ear Telemetry).
+    // Null when there is no video support (FlappedEar Telemetry).
     void setVideoLink(VideoLink *link) { m_videoLink = link; }
     // KAN-136: approve the best lap's proposals automatically when a layout
     // has no approved segments (off by default; the Overlays app turns it on).
