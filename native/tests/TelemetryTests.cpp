@@ -228,6 +228,7 @@ private slots:
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
     void rendersTyresInExportScene();
+    void rendersPedalsWithoutLayoutLoops();
     void decodesOptionalRealVideoFrameWithNativeSink();
     void benchmarksCachedOptionalRealVboPresentationLookups();
     void persistsWidgetScenes();
@@ -13680,6 +13681,42 @@ void TelemetryTests::rendersCanvasWidgetsInFirstOffscreenFrames()
         frames.append(image);
     }
     QCOMPARE(frames[0], frames[1]);
+}
+
+namespace {
+QStringList *capturedLayoutWarnings = nullptr;
+void captureLayoutWarning(QtMsgType, const QMessageLogContext &, const QString &message)
+{
+    if (capturedLayoutWarnings && message.contains(QStringLiteral("recursive rearrange"))) capturedLayoutWarnings->append(message);
+}
+} // namespace
+
+void TelemetryTests::rendersPedalsWithoutLayoutLoops()
+{
+    // KAN-140: the pedals widget sized its rows from their own layout, and
+    // Qt Quick Layouts aborted a recursive rearrange on every template apply.
+    TelemetrySession session = speedSession(0.0, 2.0, 0.0);
+    WidgetModel widgets;
+    const int pedals = widgets.addWidget(QStringLiteral("pedals"));
+    QVERIFY(pedals >= 0);
+    QStringList warnings;
+    capturedLayoutWarnings = &warnings;
+    const auto previous = qInstallMessageHandler(captureLayoutWarning);
+    {
+        TelemetryFrameRenderer renderer;
+        QVERIFY2(renderer.initialize(&widgets, &session, nullptr, SyncTransform{}, QSize(1280, 720)), qPrintable(renderer.errorString()));
+        for (const double size : {0.25, 0.4, 0.15}) {
+            widgets.resizeWidget(pedals, size, size / 2);
+            QVERIFY(!renderer.renderFrame(1.0).isNull());
+        }
+        for (const QString &id : {"track-day", "motorsport-broadcast-smoke", "performance"}) {
+            QVERIFY(widgets.applyTemplate(id));
+            QVERIFY(!renderer.renderFrame(1.0).isNull());
+        }
+    }
+    qInstallMessageHandler(previous);
+    capturedLayoutWarnings = nullptr;
+    QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
 }
 
 void TelemetryTests::rendersTyresInExportScene()

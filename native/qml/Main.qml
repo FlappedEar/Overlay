@@ -568,7 +568,7 @@ ApplicationWindow {
         title: qsTr("About %1").arg(Application.displayName)
         standardButtons: Dialog.Close
         contentItem: Label {
-            text: qsTr("Video telemetry overlays and motorsport analysis.")
+            text: qsTr("Version %1").arg(Application.version) + "\n" + qsTr("Video telemetry overlays and motorsport analysis.")
             wrapMode: Text.WordWrap
         }
     }
@@ -583,7 +583,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         contentItem: Label {
             width: 390
-            text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+A  Telemetry Analysis\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nDelete / Backspace  Delete selected layer\nF11  Full screen · Escape  Exit or dismiss")
+            text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+Shift+A  Lap Analysis\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
             color: "#d8e0e9"
             wrapMode: Text.WordWrap
             font.pixelSize: 12
@@ -1181,7 +1181,7 @@ ApplicationWindow {
                 currentIndex: 1
                 onCurrentIndexChanged: exportDialog.updateBitrate()
             }
-            Label { text: qsTr("Video bitrate"); color: "#8b98a8"; font.pixelSize: 11 }
+            Label { text: qsTr("Video bitrate (Mbps)"); color: "#8b98a8"; font.pixelSize: 11 }
             FeTextField {
                 id: exportCustomBitrate; Layout.fillWidth: true
                 inputMethodHints: Qt.ImhFormattedNumbersOnly
@@ -2346,7 +2346,7 @@ ApplicationWindow {
                                 }
                                 Label {
                                     Layout.alignment: Qt.AlignHCenter
-                                    text: qsTr("Drop into the driver’s perspective")
+                                    text: qsTr("See your lap from the driver’s seat")
                                     color: "#c2ccd7"
                                     font.pixelSize: 14
                                     font.weight: Font.DemiBold

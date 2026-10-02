@@ -8,6 +8,10 @@ endif()
 
 qt_standard_project_setup(REQUIRES 6.8)
 
+# One product version: the macOS bundle and the About dialog (KAN-140).
+set(FLAPPEDEAR_VERSION "0.2.0")
+add_compile_definitions(FLAPPEDEAR_VERSION="${FLAPPEDEAR_VERSION}")
+
 function(flappedear_enable_warnings target)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /permissive-)
@@ -382,7 +386,7 @@ set_target_properties(flappedear_native PROPERTIES
     OUTPUT_NAME "Flapped Ear Overlays"
     MACOSX_BUNDLE_BUNDLE_NAME "Flapped Ear Overlays"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.flappedear.overlays"
-    MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.0"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${FLAPPEDEAR_VERSION}"
     MACOSX_BUNDLE_BUNDLE_VERSION "1"
     MACOSX_BUNDLE_ICON_FILE "FlappedEar.icns"
     WIN32_EXECUTABLE TRUE

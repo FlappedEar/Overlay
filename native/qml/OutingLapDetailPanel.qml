@@ -73,6 +73,7 @@ Rectangle {
                 if (mediaStatus === MediaPlayer.LoadedMedia) {
                     position = root.playbackPosition - root.chapterStartMilliseconds;
                     if (root.playbackRunning) play();
+                    else root.primePausedFrame();
                 }
             }
             onErrorOccurred: function(error, errorString) {
@@ -81,10 +82,44 @@ Rectangle {
             }
         }
     }
+    // KAN-140: a paused player on macOS (AVFoundation) shows no frame after a
+    // seek. As the editor does, play it muted until a frame at the position
+    // arrives, then pause; a timeout makes sure it stops.
+    property bool pausedFramePending: false
+    property real pausedFrameTarget: 0
+    function primePausedFrame() {
+        const player = lapVideoPlayerLoader.item;
+        if (!player || root.playbackRunning) return;
+        root.pausedFrameTarget = root.playbackPosition - root.chapterStartMilliseconds;
+        root.pausedFramePending = true;
+        pausedFrameTimeout.restart();
+        player.play();
+    }
+    Timer {
+        id: pausedFrameTimeout
+        interval: 2000
+        onTriggered: {
+            if (!root.pausedFramePending) return;
+            root.pausedFramePending = false;
+            if (lapVideoPlayerLoader.item && !root.playbackRunning) lapVideoPlayerLoader.item.pause();
+        }
+    }
+    Connections {
+        target: lapVideoOutput.videoSink
+        function onVideoFrameChanged(frame) {
+            const player = lapVideoPlayerLoader.item;
+            if (!root.pausedFramePending || !player || player.position < root.pausedFrameTarget) return;
+            root.pausedFramePending = false;
+            pausedFrameTimeout.stop();
+            if (!root.playbackRunning) player.pause();
+        }
+    }
     onPlaybackPositionChanged: {
         if (lapVideoPlayerLoader.item
-                && Math.abs(lapVideoPlayerLoader.item.position - (root.playbackPosition - root.chapterStartMilliseconds)) > 180)
+                && Math.abs(lapVideoPlayerLoader.item.position - (root.playbackPosition - root.chapterStartMilliseconds)) > 180) {
             lapVideoPlayerLoader.item.position = root.playbackPosition - root.chapterStartMilliseconds;
+            root.primePausedFrame();
+        }
         // Playback drives the analysis cursor while playing; scrubbing the
         // cursor drives video seeking otherwise (below) -- kept mutually
         // exclusive on root.playbackRunning so the two directions cannot
@@ -92,6 +127,7 @@ Rectangle {
         if (root.playbackRunning) appController.followOutingLapVideoPosition(Math.round(root.playbackPosition));
     }
     onPlaybackRunningChanged: {
+        root.pausedFramePending = false;
         if (!lapVideoPlayerLoader.item) return;
         if (root.playbackRunning) lapVideoPlayerLoader.item.play();
         else lapVideoPlayerLoader.item.pause();

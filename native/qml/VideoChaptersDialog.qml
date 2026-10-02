@@ -41,7 +41,7 @@ Dialog {
             else if (issue === "timingGap")
                 lines.push(qsTr("A chapter starts well after the previous one ended: something may be missing between them."));
             else if (issue === "orderFromNamesOnly")
-                lines.push(qsTr("The files carry no usable creation times, so the order comes from their names alone."));
+                lines.push(qsTr("The creation times do not tell the chapters apart (many cameras stamp every chapter alike), so the order comes from their names."));
         }
         return lines.join("\n");
     }
