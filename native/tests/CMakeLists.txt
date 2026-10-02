@@ -264,7 +264,9 @@ add_test(NAME flappedear_startup_smoke COMMAND flappedear_native --startup-smoke
 set_tests_properties(flappedear_startup_smoke PROPERTIES
     # Startup checks QML loading and controller/window lifecycle. Offscreen QPA
     # cannot supply a native window swapchain; QRhi pixels are tested separately.
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
+    # KAN-176: Windows GUI executables otherwise send Qt messages to OutputDebugString,
+    # so a local CTest run could neither see the pass line nor catch a QML error.
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
     PASS_REGULAR_EXPRESSION "Startup smoke passed"
     FAIL_REGULAR_EXPRESSION "ReferenceError;TypeError;Binding loop"
 )

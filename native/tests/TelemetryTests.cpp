@@ -13436,7 +13436,7 @@ void TelemetryTests::preservesFramesWithPositiveSourcePts()
     QByteArray pixels(300 * width * height * 3, '\0');
     for (int frame = 0; frame < 300; ++frame) for (int y = 0; y < height; ++y)
         for (int bit = 0; bit < 9; ++bit) for (int x = bit * 6; x < bit * 6 + 6; ++x)
-            for (int c = 0; c < 3; ++c) pixels[((frame * height + y) * width + x) * 3 + c] = (frame & (1 << bit)) ? char(255) : char(0);
+            for (int c = 0; c < 3; ++c) pixels[((frame * height + y) * width + x) * 3 + c] = (frame & (1 << bit)) ? '\xFF' : '\0';
     QVERIFY(writeBytes(raw, pixels));
     const int count = last - first + 1;
     QVERIFY(writeBytes(overlayRaw, QByteArray(count * width * height * 4, '\0')));
@@ -13960,10 +13960,14 @@ void TelemetryTests::preservesTenBitFullRangeColorThroughVideoToolboxExport()
     const QString ffmpeg = FfmpegTools::ffmpegPath();
     if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the Main10 color-fidelity test.");
     QProcess encoderQuery;
+    encoderQuery.setProcessChannelMode(QProcess::MergedChannels);
     encoderQuery.start(ffmpeg, {QStringLiteral("-hide_banner"), QStringLiteral("-h"),
                                 QStringLiteral("encoder=hevc_videotoolbox")});
+    // KAN-176: FFmpeg exits 0 for an unknown encoder and only prints
+    // "Codec '...' is not recognized by FFmpeg.", so the exit code alone does not skip.
     if (!encoderQuery.waitForStarted() || !encoderQuery.waitForFinished(10'000)
-        || encoderQuery.exitCode() != 0) {
+        || encoderQuery.exitCode() != 0
+        || encoderQuery.readAll().contains("is not recognized")) {
         QSKIP("This FFmpeg build does not provide VideoToolbox HEVC encoding.");
     }
 

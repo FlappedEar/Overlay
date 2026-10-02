@@ -20,9 +20,12 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <cmath>
+#ifdef Q_OS_MACOS
+// KAN-176: the full-day memory measurement uses Mach and BSD calls that exist only on macOS.
 #include <mach/mach.h>
 #include <sys/resource.h>
 #include <sys/sysctl.h>
+#endif
 
 using namespace FlappedEar;
 
@@ -116,25 +119,35 @@ int approveSegments(AnalysisController &analysis)
     analysis.closeOutingLap();
     return approved;
 }
-// Resident and peak resident memory of this process, in MiB (macOS).
+// Resident and peak resident memory of this process, in MiB. Measured on macOS
+// only; elsewhere -1, and the peak-memory budget is not checked.
 double residentMiB()
 {
+#ifdef Q_OS_MACOS
     mach_task_basic_info info{};
     mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
     if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) != KERN_SUCCESS)
         return -1;
     return static_cast<double>(info.resident_size) / (1024.0 * 1024.0);
+#else
+    return -1;
+#endif
 }
 
 double peakResidentMiB()
 {
+#ifdef Q_OS_MACOS
     rusage usage{};
     getrusage(RUSAGE_SELF, &usage);
     return static_cast<double>(usage.ru_maxrss) / (1024.0 * 1024.0); // bytes on macOS
+#else
+    return -1;
+#endif
 }
 
 QString hardwareModel()
 {
+#ifdef Q_OS_MACOS
     char model[256] = {};
     size_t size = sizeof(model);
     if (sysctlbyname("hw.model", model, &size, nullptr, 0) != 0) return QSysInfo::currentCpuArchitecture();
@@ -142,6 +155,9 @@ QString hardwareModel()
     size_t cpuSize = sizeof(cpu);
     sysctlbyname("machdep.cpu.brand_string", cpu, &cpuSize, nullptr, 0);
     return QString::fromLatin1(model) + " / " + QString::fromLatin1(cpu);
+#else
+    return QSysInfo::prettyProductName() + " / " + QSysInfo::currentCpuArchitecture();
+#endif
 }
 } // namespace
 
@@ -707,7 +723,11 @@ void TelemetryAppTests::measuresAPrivateFullDay()
     QVERIFY2(took("A/B charts (delta, speed, G-G)") < 250, "drawing the A/B charts' data");
     QVERIFY2(took("import (verify, group)") + took("lap derivation") < 30'000, "import to laps");
     QVERIFY2(took("day report") < 30'000, "the day report");
+#ifdef Q_OS_MACOS
     QVERIFY2(phases.last().peak < 512, "peak memory");
+#else
+    qInfo("Peak memory is measured on macOS only; its budget was not checked.");
+#endif
 }
 
 QTEST_GUILESS_MAIN(TelemetryAppTests)
