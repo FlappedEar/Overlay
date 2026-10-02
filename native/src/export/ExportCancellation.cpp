@@ -4,7 +4,27 @@
 
 #include <QFile>
 
+#ifdef Q_OS_UNIX
+#include <unistd.h>
+#endif
+
 namespace FlappedEar {
+
+ParentProcessWatch::ParentProcessWatch()
+{
+#ifdef Q_OS_UNIX
+    m_parent = static_cast<qint64>(::getppid());
+#endif
+}
+
+bool ParentProcessWatch::parentExited() const
+{
+#ifdef Q_OS_UNIX
+    return m_parent > 1 && static_cast<qint64>(::getppid()) != m_parent;
+#else
+    return false;
+#endif
+}
 
 ExportCancellationResult ExportCancellation::request(
     const QString &markerPath,

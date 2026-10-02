@@ -297,6 +297,8 @@ private slots:
     void cancelsBlockedRawFrameTransportPromptly();
     void cleansOnlyManifestOwnedArtifacts();
     void preservesLiveManifestForStartupRecovery();
+    void keepsStaleExportArtifactsFromCommandLineRuns();
+    void noticesWhenTheParentProcessExits();
     void supervisesUnixExportProcessTree();
     void stopsUnixWritersAcrossLeaderExit_data();
     void stopsUnixWritersAcrossLeaderExit();
@@ -11576,6 +11578,82 @@ void TelemetryTests::preservesLiveManifestForStartupRecovery()
     QVERIFY(!recovered.contains(manifestPath));
     QVERIFY(QFileInfo::exists(overlay));
     QVERIFY2(ExportArtifactManifest::cleanupOwned(manifestPath, &error), qPrintable(error));
+}
+
+void TelemetryTests::keepsStaleExportArtifactsFromCommandLineRuns()
+{
+    // KAN-156: only the application, holding its session lock, cleans stale
+    // export artifacts. A command-line run must not delete them: another
+    // export may own them before its worker PID is recorded.
+    QTemporaryDir destination;
+    QVERIFY(destination.isValid());
+    const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const QString overlay = QDir::temp().filePath(QStringLiteral("flappedear-overlay-%1.mkv").arg(id));
+    const QString staging = destination.filePath(QStringLiteral(".result.flappedear-%1.part.mp4").arg(id));
+    QVERIFY(writeBytes(overlay, "overlay"));
+    QVERIFY(writeBytes(staging, "staging"));
+    const ExportArtifactManifestData manifest{id, QDateTime::currentMSecsSinceEpoch(), overlay, staging,
+        destination.filePath("result.mp4"), 0, "stageA"};
+    QString error;
+    QVERIFY2(ExportArtifactManifest::create(manifest, &error), qPrintable(error));
+    const QString manifestPath = ExportArtifactManifest::manifestPathFor(id);
+
+    QProcess cli;
+    cli.start(QStringLiteral(FLAPPEDEAR_NATIVE_PATH), {QStringLiteral("--render-visual-smoke"), destination.filePath("smoke.png")});
+    QVERIFY(cli.waitForFinished(60'000));
+    QVERIFY2(QFileInfo::exists(manifestPath) && QFileInfo::exists(overlay) && QFileInfo::exists(staging),
+             "a command-line run deleted export artifacts it does not own");
+
+    // The application's janitor (here in-process) still recovers them.
+    QVERIFY(ExportArtifactManifest::recoverStale().contains(manifestPath));
+    QVERIFY(!QFileInfo::exists(overlay) && !QFileInfo::exists(staging));
+}
+
+void TelemetryTests::noticesWhenTheParentProcessExits()
+{
+    // KAN-156: an export worker stops when the application that started it
+    // is gone. A grandchild watches its parent, which then exits.
+#ifdef Q_OS_UNIX
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QByteArray report = directory.filePath("report").toLocal8Bit();
+    const pid_t child = ::fork();
+    QVERIFY(child >= 0);
+    if (child == 0) {
+        int ready[2];
+        if (::pipe(ready) != 0) ::_exit(2);
+        const pid_t grandchild = ::fork();
+        if (grandchild == 0) {
+            ::close(ready[0]);
+            const ParentProcessWatch watch;
+            const bool before = watch.parentExited();
+            ::write(ready[1], "1", 1);
+            ::close(ready[1]);
+            bool after = false;
+            for (int poll = 0; poll < 500 && !after; ++poll) { after = watch.parentExited(); ::usleep(10'000); }
+            if (FILE *file = std::fopen(report.constData(), "w")) {
+                std::fprintf(file, "%d %d", before ? 1 : 0, after ? 1 : 0);
+                std::fclose(file);
+            }
+            ::_exit(0);
+        }
+        ::close(ready[1]);
+        char byte = 0;
+        static_cast<void>(::read(ready[0], &byte, 1)); // the watch exists, then this parent exits
+        ::_exit(0);
+    }
+    // Qt's own child handling may already have reaped the child (ECHILD):
+    // either way it has exited, and the grandchild's report decides.
+    int status = 0;
+    const pid_t reaped = ::waitpid(child, &status, 0);
+    QVERIFY2(reaped == child || (reaped == -1 && errno == ECHILD), qPrintable(QString("waitpid: %1").arg(errno)));
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo(QString::fromLocal8Bit(report)).size() > 0, 10'000);
+    QCOMPARE(readBytes(QString::fromLocal8Bit(report)), QByteArray("0 1"));
+    // This process's parent is alive.
+    QVERIFY(!ParentProcessWatch().parentExited());
+#else
+    QSKIP("Parent-process watching is Unix-only here.");
+#endif
 }
 
 void TelemetryTests::supervisesUnixExportProcessTree()
