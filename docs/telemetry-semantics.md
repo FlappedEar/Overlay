@@ -255,6 +255,18 @@ the requested resolution fail explicitly. These are search resource/precision
 limits, not recording import or manual synchronization limits. Cancellation is
 checked during validation, each offset, sampling and correlation.
 
+**Search range and ranking (KAN-146).**
+
+- **Range.** The coarse search covers every offset (telemetry = video + offset) that leaves at least 20 s of overlap, in both directions. The camera may start before the logger, stop after it, run about as long, or run much longer. If either recording is shorter than 20 s, the shorter one must lie fully inside the other.
+- **Ranking.** Offsets with less than 20 s of overlap are ranked only when no offset has that much. A near-perfect correlation over a few samples is accidental.
+- **Global choice.** The coarse search ranks offsets by the evidence for the match: Fisher z of the correlation times the square root of the sample count minus 3. A strong match over a long overlap beats a perfect one over a short stretch.
+- **Refinement.** The ±5 s refinement at 10 Hz ranks by correlation alone, because its overlap is nearly constant.
+- **Uniqueness.** It compares the best offset with the strongest offset at least 5 s away, anywhere in that full range. Laps a whole lap apart therefore make a periodic result ambiguous rather than automatic.
+- **Correlation floor.** A candidate is applied automatically only when the speed traces correlate at 0.8 or more.
+- **Real check (private), Jastrząb day:**
+  - GoPro GX010089 with Session 5 still syncs automatically: offset 74.976 s, correlation 1.000, confidence 0.82. Before the change it was 74.953 s at 0.81. The two offsets differ by less than one 0.1 s refinement step, because the coarse grid now starts at a different fractional point.
+  - GX010091 with Session 6 syncs at the same offset as before, 7.817 s (correlation 0.998). Its confidence rose from 0.73 to 0.86, because the competing peak is now judged by its evidence. It is therefore applied automatically, where before it was only offered.
+
 The midpoint uses the standard overflow-safe operation; integer conversion must
 be range checked as specified by the [C++ numeric midpoint contract](https://eel.is/c++draft/numeric.ops.midpoint)
 and [floating-to-integer conversion rules](https://eel.is/c++draft/conv.fpint).

@@ -64,7 +64,17 @@ struct Result {
     double offset = 0.0;
     double score = -1.0;
     int samples = 0;
+    // Evidence for a positive correlation over this many samples (Fisher z
+    // times sqrt(n - 3)). It ranks the offsets: a near-perfect match over a
+    // short overlap is weaker evidence than a strong one over a long overlap.
+    double significance = -std::numeric_limits<double>::infinity();
 };
+
+double significanceOf(const double score, const int samples)
+{
+    if (samples <= 3 || !std::isfinite(score)) return -std::numeric_limits<double>::infinity();
+    return std::atanh(std::clamp(score, -0.999999, 0.999999)) * std::sqrt(static_cast<double>(samples - 3));
+}
 
 std::optional<double> interpolate(const TelemetryChannel &signal, const double time)
 {
@@ -116,6 +126,7 @@ SyncCandidate calculate(
     const double searchWindow,
     const double sampleRate,
     const double centerOffset,
+    const bool rankBySignificance,
     qint64 &remainingPairs,
     const CancellationCheck &cancelled)
 {
@@ -153,13 +164,26 @@ SyncCandidate calculate(
                 b.append(*bv);
             }
         }
-        results.append({offset, correlation(a, b, cancelled), static_cast<int>(a.size())});
+        const double score = correlation(a, b, cancelled);
+        results.append({offset, score, static_cast<int>(a.size()), significanceOf(score, static_cast<int>(a.size()))});
     }
     throwIfCancelled(cancelled);
-    std::sort(results.begin(), results.end(), [](const Result &left, const Result &right) {
-        return left.score > right.score;
+    // A correlation over a handful of overlapping points can be perfect by
+    // accident: offsets without the minimum overlap are ranked only when no
+    // offset has it (KAN-146).
+    const double minimumSamples = sampleRate * kMinimumSyncOverlapSeconds + 1.0;
+    const bool anyLongOverlap = std::any_of(results.cbegin(), results.cend(),
+        [minimumSamples](const Result &item) { return item.samples >= minimumSamples; });
+    if (anyLongOverlap)
+        results.erase(std::remove_if(results.begin(), results.end(),
+            [minimumSamples](const Result &item) { return item.samples < minimumSamples; }), results.end());
+    // The global search ranks by significance; the local refinement, where
+    // the overlap is nearly constant, by correlation alone.
+    std::stable_sort(results.begin(), results.end(), [rankBySignificance](const Result &left, const Result &right) {
+        return rankBySignificance ? left.significance > right.significance : left.score > right.score;
     });
     const Result best = results.constFirst();
+    // The strongest competing offset, at least 5 s away, over the whole range.
     double second = -1.0;
     for (const Result &item : results) {
         if (std::abs(item.offset - best.offset) >= 5.0) {
@@ -180,7 +204,7 @@ SyncCandidate calculate(
         / 100.0;
     // A correlation over a handful of points can be perfect by accident. Require
     // twenty seconds worth of usable resampled overlap before automatic use.
-    if (best.samples < sampleRate * kMinimumSyncOverlapSeconds + 1.0) {
+    if (best.samples < minimumSamples || best.score < kMinimumAutomaticSyncCorrelation) {
         candidate.confidence = std::min(candidate.confidence, kAutomaticSyncConfidenceThreshold - 0.01);
     }
     candidate.diagnostics = {best.score, uniqueness, best.samples, sampleRate, 0.0};
@@ -204,19 +228,23 @@ SyncCandidate TelemetrySyncEngine::synchronize(
     const TelemetryChannel &telemetrySpeed = *telemetryIt;
     validateSignal(videoSpeed, cancelled);
     validateSignal(telemetrySpeed, cancelled);
-    double minimum = telemetrySpeed.timestamps.constFirst() - videoSpeed.timestamps.constFirst();
-    double maximum = telemetrySpeed.timestamps.constLast() - videoSpeed.timestamps.constLast();
-    if (maximum < minimum) {
-        minimum = telemetrySpeed.timestamps.constFirst() - videoSpeed.timestamps.constLast();
-        maximum = telemetrySpeed.timestamps.constLast() - videoSpeed.timestamps.constFirst();
-    }
+    // Every offset (telemetry = video + offset) that leaves the minimum
+    // overlap, in both directions: the camera may start before the logger or
+    // stop after it (KAN-146). When either recording is shorter than that,
+    // the shorter one must lie fully inside the other.
+    const double videoFirst = videoSpeed.timestamps.constFirst(), videoLast = videoSpeed.timestamps.constLast();
+    const double telemetryFirst = telemetrySpeed.timestamps.constFirst(), telemetryLast = telemetrySpeed.timestamps.constLast();
+    const double requiredOverlap = std::min({kMinimumSyncOverlapSeconds, videoLast - videoFirst, telemetryLast - telemetryFirst});
+    double minimum = telemetryFirst - videoLast + requiredOverlap;
+    double maximum = telemetryLast - videoFirst - requiredOverlap;
+    if (maximum < minimum) std::swap(minimum, maximum);
     if (!std::isfinite(minimum) || !std::isfinite(maximum))
         throw std::runtime_error("Synchronization timestamp differences are not finite.");
     const double center = std::midpoint(minimum, maximum);
     const double window = std::max(1.0, (maximum - minimum) / 2.0);
     qint64 remainingPairs = kMaximumSyncSamplePairs;
-    const SyncCandidate coarse = calculate(videoSpeed, telemetrySpeed, window, 1.0, center, remainingPairs, cancelled);
-    SyncCandidate fine = calculate(videoSpeed, telemetrySpeed, 5.0, 10.0, coarse.offset, remainingPairs, cancelled);
+    const SyncCandidate coarse = calculate(videoSpeed, telemetrySpeed, window, 1.0, center, true, remainingPairs, cancelled);
+    SyncCandidate fine = calculate(videoSpeed, telemetrySpeed, 5.0, 10.0, coarse.offset, false, remainingPairs, cancelled);
     throwIfCancelled(cancelled);
     // Refinement estimates a more precise offset, but cannot erase competing
     // peaks outside its local window or improve the global evidence of uniqueness.
