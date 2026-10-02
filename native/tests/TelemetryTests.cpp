@@ -273,6 +273,8 @@ private slots:
     void reportsAmbiguousGpsSpeed();
     void retainsGlobalSyncAmbiguity();
     void rejectsAutomaticSyncWithShortOverlap();
+    void synchronizesWhenTheRecordingsOnlyPartlyOverlap();
+    void neverAutoAppliesAnotherLapOfPeriodicLaps();
     void gatesWeakSyncCandidates();
     void preservesTimingEditsDuringAutoSync_data();
     void preservesTimingEditsDuringAutoSync();
@@ -15142,6 +15144,88 @@ void TelemetryTests::rejectsAutomaticSyncWithShortOverlap()
     QVERIFY(candidate.diagnostics.validSamples <
             candidate.diagnostics.sampleRate * kMinimumSyncOverlapSeconds + 1.0);
     QVERIFY(!shouldAutoApplySyncCandidate(candidate));
+}
+
+void TelemetryTests::synchronizesWhenTheRecordingsOnlyPartlyOverlap()
+{
+    // KAN-146: one speed trace in world time; the telemetry clock is the
+    // video clock plus 100 s. The camera may start before the logger, stop
+    // after it, run about as long, or run much longer: the true offset is
+    // found in every case, not only when the video lies inside the telemetry.
+    constexpr double offset = 100.0;
+    // Aperiodic and trend-free, like a real speed trace: deterministic
+    // pseudo-random speeds at whole seconds, linearly interpolated, so no
+    // shift of a long stretch matches another.
+    const auto knot = [](double second) {
+        const double hashed = std::sin(second * 12.9898 + 78.233) * 43758.5453;
+        return 40.0 + 120.0 * (hashed - std::floor(hashed));
+    };
+    const auto trace = [&](double from, double to, double clockOffset) {
+        TelemetrySession session;
+        TelemetryChannel speed;
+        speed.name = QStringLiteral("speed");
+        for (double time = from; time <= to + 1e-9; time += 0.2) {
+            const double world = time - clockOffset, base = std::floor(world), fraction = world - base;
+            speed.timestamps.append(time);
+            speed.values.append(static_cast<float>(knot(base) + (knot(base + 1.0) - knot(base)) * fraction));
+        }
+        session.channels.insert(speed.name, speed);
+        session.aliases.insert(QStringLiteral("speed"), speed.name);
+        return session;
+    };
+    const auto video = [&](double from, double to) { return trace(from, to, 0.0); };
+    const auto logger = [&](double from, double to) { return trace(from + offset, to + offset, offset); };
+    struct Case { const char *name; TelemetrySession video, telemetry; };
+    const QList<Case> cases{
+        {"camera starts before the logger", video(0, 300), logger(30, 900)},
+        {"camera stops after the logger", video(0, 300), logger(-500, 260)},
+        {"near-equal durations", video(0, 300), logger(5, 302)},
+        {"video longer than the telemetry", video(0, 600), logger(200, 300)},
+    };
+    for (const auto &item : cases) {
+        const auto candidate = TelemetrySyncEngine::synchronize(item.video, item.telemetry);
+        QVERIFY2(qAbs(candidate.offset - offset) <= 0.11,
+                 qPrintable(QString("%1: offset %2").arg(item.name).arg(candidate.offset)));
+        QVERIFY2(candidate.diagnostics.validSamples >= candidate.diagnostics.sampleRate * kMinimumSyncOverlapSeconds,
+                 qPrintable(QString("%1: %2 samples").arg(item.name).arg(candidate.diagnostics.validSamples)));
+        QVERIFY2(shouldAutoApplySyncCandidate(candidate), qPrintable(QString("%1: confidence %2").arg(item.name).arg(candidate.confidence)));
+    }
+}
+
+void TelemetryTests::neverAutoAppliesAnotherLapOfPeriodicLaps()
+{
+    // KAN-146: exactly periodic 90 s laps at 10 Hz. Offsets a whole lap apart
+    // match equally well, so whichever is reported must not be applied
+    // automatically unless it is the true one.
+    const auto laps = [](double from, double to, double clockOffset) {
+        TelemetrySession session;
+        TelemetryChannel speed;
+        speed.name = QStringLiteral("speed");
+        for (double time = from; time <= to + 1e-9; time += 0.1) {
+            const double world = time - clockOffset;
+            const double phase = 2.0 * std::numbers::pi * std::fmod(world + 9000.0, 90.0) / 90.0;
+            speed.timestamps.append(time);
+            speed.values.append(static_cast<float>(120.0 + 40.0 * std::sin(phase) + 15.0 * std::sin(3.0 * phase + 0.4)));
+        }
+        session.channels.insert(speed.name, speed);
+        session.aliases.insert(QStringLiteral("speed"), speed.name);
+        return session;
+    };
+    struct Case { const char *name; double trueOffset; TelemetrySession video, telemetry; };
+    const QList<Case> cases{
+        {"video inside the logger", 70.0, laps(0, 300, 0), laps(-70 + 70, 600 + 70, 70)},
+        {"camera starts 30 s before the logger", -30.0, laps(0, 300, 0), laps(30 - 30, 600 - 30, -30)},
+        {"camera stops 40 s after the logger", 70.0, laps(0, 300, 0), laps(-300 + 70, 260 + 70, 70)},
+    };
+    for (const auto &item : cases) {
+        const auto candidate = TelemetrySyncEngine::synchronize(item.video, item.telemetry);
+        const bool applied = shouldAutoApplySyncCandidate(candidate);
+        qInfo().noquote() << QString("%1: offset %2 confidence %3 uniqueness %4 applied %5").arg(item.name)
+            .arg(candidate.offset, 0, 'f', 2).arg(candidate.confidence, 0, 'f', 3)
+            .arg(candidate.diagnostics.peakUniqueness, 0, 'f', 3).arg(applied);
+        QVERIFY2(!applied || qAbs(candidate.offset - item.trueOffset) <= 0.11,
+                 qPrintable(QString("%1: auto-applied %2 instead of %3").arg(item.name).arg(candidate.offset).arg(item.trueOffset)));
+    }
 }
 
 void TelemetryTests::syncsOptionalRealRecording()
