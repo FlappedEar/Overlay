@@ -7,7 +7,7 @@ cmake --build build-native --parallel
 ctest --test-dir build-native --output-on-failure
 ```
 
-Run the local gate appropriate to the change before claiming a behavior works. Cloud CI is enabled for macOS Debug and Release by owner direction; Windows remains paused. Follow the current [local task workflow](development-workflow.md).
+Run the local gate appropriate to the change before claiming a behavior works. Cloud CI is enabled for macOS Debug and Release by owner direction; Windows CI remains paused, and the owner validates Windows locally ([2 October 2026](windows-validation-2026-10-02.md)). Follow the current [local task workflow](development-workflow.md).
 
 The native suite assigns a unique test application identity and checks a default `QSettings` round trip before controller tests run. It retains the platform's native settings backend, including the Windows registry, and clears that test namespace afterward. Recovery cleanup failures use the existing injected deletion operation so stale-snapshot and Save As assertions run on every platform; these checks do not replace native Windows ACL-denial coverage. File-content checks close their read handles before attempting atomic replacement.
 

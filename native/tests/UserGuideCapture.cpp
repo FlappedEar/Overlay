@@ -48,14 +48,14 @@ class Shooter {
 public:
     explicit Shooter(QString directory) : m_directory(std::move(directory)) {}
 
-    bool window(QQuickWindow *target, const QString &name, const QRect &crop = {}, int settleMs = 700)
+    bool window(QQuickWindow *target, const QString &name, const QRect &windowCrop = {}, int settleMs = 700)
     {
         QTest::qWait(settleMs);
         QImage image = target->grabWindow();
         if (image.isNull()) return false;
         const qreal ratio = image.width() / qreal(target->width());
-        if (!crop.isNull())
-            image = image.copy(QRectF(crop.topLeft() * ratio, crop.size() * ratio).toAlignedRect());
+        if (!windowCrop.isNull())
+            image = image.copy(QRectF(windowCrop.topLeft() * ratio, windowCrop.size() * ratio).toAlignedRect());
         return save(image, name);
     }
     // `item` re-rendered at `size`, cropped to `area` (item coordinates).

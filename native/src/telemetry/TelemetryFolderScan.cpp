@@ -8,6 +8,14 @@
 #include <utility>
 
 namespace FlappedEar {
+namespace {
+// KAN-173: QDir omits "hidden" entries, but only Unix treats a leading dot as hidden.
+// On Windows the macOS AppleDouble sidecars ("._name.vbo") that SD cards and exFAT
+// drives carry would otherwise be imported as recordings, so dot entries are skipped
+// explicitly on every platform.
+bool isDotEntry(const QString &fileName) { return fileName.startsWith(QLatin1Char('.')); }
+bool isAppleDoubleSidecar(const QString &fileName) { return fileName.startsWith(QStringLiteral("._")); }
+} // namespace
 
 TelemetryFolderScan scanTelemetryFolder(const QString &folder, const bool includeSubfolders,
     const CancellationCheck &cancelled, TelemetryFolderScanLimits limits)
@@ -41,6 +49,7 @@ TelemetryFolderScan scanTelemetryFolder(const QString &folder, const bool includ
             const auto entries = QDir(path).entryInfoList(
                 QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::System, QDir::Name);
             for (const QFileInfo &entry : entries) {
+                if (isDotEntry(entry.fileName())) continue; // hidden on Unix; also on Windows (KAN-173)
                 throwIfCancelled(cancelled);
                 if (++inspected > limits.maximumEntries) { entryLimit = true; break; }
                 if (entry.isSymLink()) { ++links; continue; }
@@ -110,6 +119,8 @@ TelemetryFolderScan scanTelemetrySources(const QStringList &paths, const bool in
         }
         const QString suffix = info.suffix().toLower();
         if (!info.exists()) result.notes.append(QStringLiteral("%1: not found; not imported.").arg(name));
+        else if (isAppleDoubleSidecar(info.fileName()))
+            result.notes.append(QStringLiteral("%1: a macOS metadata file, not a recording; not imported.").arg(name));
         else if (info.isSymLink()) result.notes.append(QStringLiteral("%1: a link; not followed.").arg(name));
         else if (info.isFile() && (suffix == QStringLiteral("vbo") || suffix == QStringLiteral("rcz"))) add(info.absoluteFilePath());
         else result.notes.append(QStringLiteral("%1: not a VBO or RCZ recording; not imported.").arg(name));

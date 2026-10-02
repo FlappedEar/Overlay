@@ -8,6 +8,11 @@ endif()
 
 qt_standard_project_setup(REQUIRES 6.8)
 
+# KAN-176: TelemetryTests.cpp exceeds MSVC's default object-section limit (KAN-161 splits it).
+if(MSVC)
+    add_compile_options(/bigobj)
+endif()
+
 # One product version: the macOS bundle and the About dialog (KAN-140).
 set(FLAPPEDEAR_VERSION "0.2.0")
 add_compile_definitions(FLAPPEDEAR_VERSION="${FLAPPEDEAR_VERSION}")

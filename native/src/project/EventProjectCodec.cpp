@@ -278,12 +278,12 @@ bool EventProjectCodec::validate(const QJsonObject &project, QString *error)
             return fail(error, QStringLiteral("Track segment review decisions are invalid or exceed the bound."));
         }
         if (run.contains("trackInference")) {
-            const auto value = run.value("trackInference"); const auto inference = value.toObject();
+            const auto inferenceValue = run.value("trackInference"); const auto inference = inferenceValue.toObject();
             static const QRegularExpression digest("^[0-9a-f]{64}$");
             static const QRegularExpression gates("^gates-v1:[0-9a-f]{64}$");
             const auto revision = inference.value("sourceRevision").toString();
             const auto gate = inference.value("gateRevision");
-            if (!value.isObject() || !validText(inference.value("algorithm"), 128)
+            if (!inferenceValue.isObject() || !validText(inference.value("algorithm"), 128)
                 || revision.size() != 64 || !digest.match(revision).hasMatch()
                 || !(gate.isNull() || (gate.toString().size() == 73 && gates.match(gate.toString()).hasMatch()))
                 || !validText(inference.value("layoutId"), 128)

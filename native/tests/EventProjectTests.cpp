@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QTemporaryDir>
+#include <QJsonArray>
 #include <QtTest>
 #include <functional>
 #include <utility>
@@ -204,6 +205,11 @@ void EventProjectTests::boundsInferenceProvenanceAndRecoversIt()
         {"sourceRevision", QString(63, 'a')}, {"sourceRevision", 12}, {"gateRevision", "gates-v1:bad"},
         {"layoutId", "gps-route-v1:"}, {"layoutId", QString(129, 'x')}, {"direction", "unknown"}}) {
         auto invalid = inference; invalid.insert(field, value); run.insert("trackInference", invalid);
+        runs[0] = run; Fixture::setRuns(project, runs); QVERIFY(!ProjectLimits::validateProject(project));
+    }
+    // Provenance that is not an object at all is rejected too.
+    for (const QJsonValue &notAnObject : {QJsonValue(QStringLiteral("gps-route-v1")), QJsonValue(QJsonArray{inference})}) {
+        run.insert("trackInference", notAnObject);
         runs[0] = run; Fixture::setRuns(project, runs); QVERIFY(!ProjectLimits::validateProject(project));
     }
 }

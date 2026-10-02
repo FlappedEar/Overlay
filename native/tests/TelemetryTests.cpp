@@ -219,6 +219,7 @@ private slots:
     void reviewsGoProChapterGroups();
     void keepsVideoChaptersAsOneTimeline();
     void playsVideoChaptersAcrossBoundaries();
+    void keepsAPausedSeekWhenLoadedMediaRepeats();
     void showsSideBySideLapVideo();
     void showsCoastingOnTheOpenLap();
     void showsTrailBrakingInTheCornerAnalyzer();
@@ -9878,6 +9879,45 @@ void TelemetryTests::playsVideoChaptersAcrossBoundaries()
                 qPrintable(error.toString()));
 }
 
+void TelemetryTests::keepsAPausedSeekWhenLoadedMediaRepeats()
+{
+    // KAN-172: Qt's Windows backend reports LoadedMedia again after a paused seek.
+    // Once the preview is primed for a source, a repeat must not prime it again,
+    // which jumped the preview back to the start.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the paused-seek test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    QVERIFY(encodeChapter(ffmpeg, directory.filePath("paused-seek.mp4"), 3));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.loadVideo(QUrl::fromLocalFile(directory.filePath("paused-seek.mp4")));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 30000);
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create());
+    QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    if (!QTest::qWaitFor([&] { return controller.playbackTime() > 0.0; }, 15000))
+        QSKIP("Media playback is unavailable here.");
+    QTRY_VERIFY_WITH_TIMEOUT(!window->property("previewPrimeFramePending").toBool(), 15000);
+    QCOMPARE(window->property("previewPrimedSource").toString(), controller.videoChapterSource().toString());
+
+    // A repeated LoadedMedia for the primed source is ignored: no new prime, no reset.
+    QVariant primed;
+    QVERIFY(QMetaObject::invokeMethod(window, "previewMediaLoaded", Q_RETURN_ARG(QVariant, primed)));
+    QCOMPARE(primed.toBool(), false);
+    QVERIFY(!window->property("previewPrimeFramePending").toBool());
+
+    // A source that has not been primed yet is primed as before.
+    window->setProperty("previewPrimedSource", QString());
+    QVERIFY(QMetaObject::invokeMethod(window, "previewMediaLoaded", Q_RETURN_ARG(QVariant, primed)));
+    QCOMPARE(primed.toBool(), true);
+    QTRY_VERIFY_WITH_TIMEOUT(!window->property("previewPrimeFramePending").toBool(), 15000);
+}
+
 void TelemetryTests::showsSideBySideLapVideo()
 {
     // KAN-107: each lap of an A/B pair from different runs is shown on its
@@ -13436,7 +13476,7 @@ void TelemetryTests::preservesFramesWithPositiveSourcePts()
     QByteArray pixels(300 * width * height * 3, '\0');
     for (int frame = 0; frame < 300; ++frame) for (int y = 0; y < height; ++y)
         for (int bit = 0; bit < 9; ++bit) for (int x = bit * 6; x < bit * 6 + 6; ++x)
-            for (int c = 0; c < 3; ++c) pixels[((frame * height + y) * width + x) * 3 + c] = (frame & (1 << bit)) ? char(255) : char(0);
+            for (int c = 0; c < 3; ++c) pixels[((frame * height + y) * width + x) * 3 + c] = (frame & (1 << bit)) ? '\xFF' : '\0';
     QVERIFY(writeBytes(raw, pixels));
     const int count = last - first + 1;
     QVERIFY(writeBytes(overlayRaw, QByteArray(count * width * height * 4, '\0')));
@@ -13960,10 +14000,14 @@ void TelemetryTests::preservesTenBitFullRangeColorThroughVideoToolboxExport()
     const QString ffmpeg = FfmpegTools::ffmpegPath();
     if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the Main10 color-fidelity test.");
     QProcess encoderQuery;
+    encoderQuery.setProcessChannelMode(QProcess::MergedChannels);
     encoderQuery.start(ffmpeg, {QStringLiteral("-hide_banner"), QStringLiteral("-h"),
                                 QStringLiteral("encoder=hevc_videotoolbox")});
+    // KAN-176: FFmpeg exits 0 for an unknown encoder and only prints
+    // "Codec '...' is not recognized by FFmpeg.", so the exit code alone does not skip.
     if (!encoderQuery.waitForStarted() || !encoderQuery.waitForFinished(10'000)
-        || encoderQuery.exitCode() != 0) {
+        || encoderQuery.exitCode() != 0
+        || encoderQuery.readAll().contains("is not recognized")) {
         QSKIP("This FFmpeg build does not provide VideoToolbox HEVC encoding.");
     }
 

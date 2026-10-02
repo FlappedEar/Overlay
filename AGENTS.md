@@ -101,9 +101,11 @@
   Keep `flappedear_telemetry_core` and `flappedear_telemetry_app` free of Gui, overlay, video and
   platform-specific code (the boundary checks enforce it); they are the behavioural reference
   that the Telemetry app cross-references.
-  macOS remains the active development platform. The 2026-09-13 pause still applies: do not
-  start Windows builds, tests, packaging or installer validation until the owner explicitly
-  resumes them. This supersedes older dual-platform gates in Jira and
+  macOS remains the active development platform. On 2 October 2026 the owner resumed Windows
+  code changes: fix the Windows defects that the owner's local Windows validation finds
+  (KAN-172 to KAN-176; docs/windows-validation-2026-10-02.md), and the owner builds and tests on
+  Windows locally. Windows CI, packaging and installer validation stay paused until the owner
+  resumes them (KAN-162). This supersedes older dual-platform gates in Jira and
   historical documentation. The owner
   resumed macOS Cloud CI after the quota pause. Run the applicable local macOS
   build/test gate and hosted Debug/Release validation for published changes. Report
