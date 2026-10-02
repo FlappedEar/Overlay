@@ -33,6 +33,13 @@ The owner's decisions of 2 October 2026:
 - **Platforms:** macOS is the active development platform. Since 13 September 2026,
   Windows builds, tests and packaging have been paused until the owner resumes them.
   Confirm with the owner whether that pause also covers the new app.
+- **Minimum OS versions** (owner, 2 October 2026): iOS 15 and Android 8.0 (API
+  level 26) as the starting point. Desktop minimums are not decided; Flutter 3.47
+  supports macOS 12 and later and Windows 10 and later
+  ([Flutter supported platforms](https://docs.flutter.dev/reference/supported-platforms)).
+- **Where the work lives:** the Jira space [FET] ("FlappedEar Telemetry"), the
+  public repository `FlappedEar/Telemetry` (an initial README only), and the private
+  repository `FlappedEar/refdata` for the reference recordings.
 
 ## Product brief
 
@@ -83,17 +90,18 @@ Sources: [`handover.md`](../handover.md) "Owner direction and preferences", the 
 
 ## Readiness checklist
 
-**The owner, before the architect starts:**
+**The owner, before the architect starts** (status on 2 October 2026):
 
-- [ ] Create the new Jira project and choose its key. Optional: the existing KAN
-      project is still named "FlappedEar Telemetry", so renaming it would avoid
-      confusion.
-- [ ] Give the architect write access to `FlappedEar/Telemetry`. For Claude
-      sessions, install the Claude GitHub App on the `FlappedEar` organisation.
-- [ ] Choose the licence of the new repository.
-- [ ] Decide the minimum OS versions and target devices (KAN-122 decision 5), or
-      ask the architect to propose them.
-- [ ] Hand the private real-day recordings to the architect outside Git (see
+- [x] Create the new Jira space: [FET], "FlappedEar Telemetry". KAN is renamed
+      "FlappedEar Overlay".
+- [x] Give access to `FlappedEar/Telemetry`: the Claude GitHub App is installed on
+      the `FlappedEar` organisation.
+- [ ] Choose the licence of the new repository. Deferred by the owner ("I don't
+      care for license yet").
+- [x] Decide the minimum OS versions: iOS 15 and Android 8.0 to start with
+      (KAN-122 decision 5). Desktop minimums are open.
+- [x] Hand over the private real-day recordings: they are in the private
+      repository `FlappedEar/refdata` (see
       [Reference data](#reference-data-and-figures)).
 
 **The architect, first steps (suggestions, not prescriptions):**
@@ -558,9 +566,9 @@ separately because Telemetry never has video.
 
 Most tests build their recordings and documents in code: [`RczFixture.h`](../native/tests/RczFixture.h) builds RCZ archives, and [`EventProjectFixture.h`](../native/tests/EventProjectFixture.h) builds event documents.
 
-**The private real day.** The owner keeps these recordings out of Git.
+**The private real day.** The recordings are in the private repository `FlappedEar/refdata`. Never copy them into a public repository or into the app's repository: they contain GPS traces and heart rate.
 
-- **Dataset:** six VBO recordings from the Jastrząb circuit, 33.6 MiB in total, with 25 timed laps. RCZ exports of the same sessions also exist.
+- **Dataset:** six VBO recordings from the Jastrząb circuit, 33.6 MiB in total, with 25 timed laps. `FlappedEar/refdata` holds no RCZ files; RCZ support was developed against one private RaceChrono Pro 10.2.4 recording that is not there ([RCZ format](rcz-format.md)).
 - **Last reference figures** ([handover](../handover.md), "Real data"):
     * best lap 1:49.898 against a theoretical best of 1:47.905, so 1.993 s available;
     * focus areas: Corners 9–16 (+0.619 s against Session 6 · LAP 3); Corners 2–3 lost in 5 of 5 session bests; the braking point for Corners 5–6 spread over 20.6 m;
@@ -610,8 +618,9 @@ FLAPPEDEAR_REAL_DAY=/path/to/day ./build-native/native/tests/flappedear_telemetr
 
 ## Cross-references
 
-| KAN | Meaning for the new app |
+| Jira | Meaning for the new app |
 | --- | --- |
+| [FET] | The new Jira space, "FlappedEar Telemetry", for all Telemetry work |
 | [KAN-165] | Separation epic; stage 2 is this app |
 | [KAN-167] | Decision: Flutter, a blank page, no shared code |
 | [KAN-168] | This handover |
@@ -619,19 +628,20 @@ FLAPPEDEAR_REAL_DAY=/path/to/day ./build-native/native/tests/flappedear_telemetr
 | [KAN-169] | Maturity gate; the new project's parity milestone should link to it |
 | [KAN-166] | Deferred removal of the Overlays analysis window; waits for [KAN-169] |
 | [KAN-126]–[KAN-130] | Mobile targets, import, touch screens, memory budget and on-track acceptance; re-create in the new project |
-| [KAN-122] | Decision 5 (devices) is still open. Decision 1 (store licence) was about Qt and does not apply to a Flutter app without Qt |
+| [KAN-122] | Decision 5: iOS 15 and Android 8.0 to start with; desktop open. Decision 1 (store licence) was about Qt and does not apply to a Flutter app without Qt |
 | [KAN-162] | Windows, paused |
 
 ## Open decisions
 
-- The key of the new Jira project and the licence of the new repository (owner).
-- Minimum OS versions and target devices (owner; KAN-122 decision 5).
+- The licence of the new repository (owner; deferred).
+- Desktop minimum OS versions (owner and architect).
 - Where the shared fixtures live, and who owns schema changes ([KAN-170]).
 - Whether desktop or mobile ships first (owner and architect).
 - [Event projects](event-project-format.md) calls the schema developmental, with
   "no promise to maintain future migrations". With two apps and the no-data-loss
   condition, [KAN-170] should decide whether that still holds.
 
+[FET]: https://kozucharkadiusz.atlassian.net/browse/FET
 [KAN-122]: https://kozucharkadiusz.atlassian.net/browse/KAN-122
 [KAN-126]: https://kozucharkadiusz.atlassian.net/browse/KAN-126
 [KAN-130]: https://kozucharkadiusz.atlassian.net/browse/KAN-130

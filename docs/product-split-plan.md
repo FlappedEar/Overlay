@@ -5,8 +5,8 @@ phases 1 and 2 are implemented** (KAN-123 and KAN-124, closed 27 September), and
 the tyre widget (KAN-132) is merged. **Owner decision (2 October 2026):** two
 applications, the desktop overlay editor for macOS and Windows and Flapped Ear
 Telemetry for macOS, Windows, iOS and Android. Decisions 3 (identities) and 4
-(the desktop analysis window) followed the same day; the store licence and
-devices (KAN-122) are open. **Owner direction (2 October 2026, later the same
+(the desktop analysis window) followed the same day, and decision 5 for mobile
+(iOS 15 and Android 8.0) was answered; the store licence (KAN-122) is open. **Owner direction (2 October 2026, later the same
 day): separate repositories.** Flapped Ear Overlays is finished first as a
 standalone app in this repository; Flapped Ear Telemetry is then built in a new
 repository. Overlays stays as it is, with nothing removed, until Telemetry is
@@ -214,7 +214,9 @@ not apply to the Flutter app.
    desktop Telemetry reuses today's desktop analysis windows or the new
    touch-first QML.
 5. **Minimum OS versions and target devices** for all four platforms,
-   starting with the owner's own phone and tablet.
+   starting with the owner's own phone and tablet. Decided 2 October 2026 for
+   mobile: iOS 15 and Android 8.0 (API level 26) as the starting point. Desktop
+   minimums are open.
 6. **Telemetry technology and core sharing** ([KAN-167]). Decided 2 October
    2026: Flutter, from a blank page in a new repository with its own Jira
    project. No code is shared; this repository is cross-referenced only. Parsers

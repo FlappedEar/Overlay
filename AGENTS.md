@@ -91,7 +91,7 @@
 - Current owner direction (2026-10-02): two applications. This repository delivers the desktop
   overlay editor, Flapped Ear Overlays, for macOS and Windows. Flapped Ear Telemetry (macOS,
   Windows, iOS and Android) is a new Flutter app, started from a blank page in its own repository
-  (`FlappedEar/Telemetry`) and its own Jira project (epic KAN-165, decision KAN-167). It shares no
+  (`FlappedEar/Telemetry`) and its own Jira space, FET (epic KAN-165, decision KAN-167). It shares no
   code with this repository and only cross-references it; the architect handover is
   [docs/telemetry-handover.md](docs/telemetry-handover.md). Do not add Telemetry or mobile app
   targets to this repository, and do not create code dependencies between the two repositories. The desktop app is Flapped Ear Overlays (`com.flappedear.overlays`,

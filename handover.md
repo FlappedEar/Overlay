@@ -27,15 +27,15 @@ that check over this file.
   Windows, iOS and Android. `AGENTS.md` and `product-vision.md` record it. Windows builds and CI
   stay paused until the owner resumes them. Of the other KAN-122 decisions,
   identities (KAN-125) and the desktop analysis window (kept until Telemetry
-  is mature, KAN-166) were decided later that day; the store licence and
-  devices are open.
+  is mature, KAN-166) were decided later that day, and mobile minimums are
+  iOS 15 and Android 8.0. The store licence is open.
 - **Separation (owner direction, 2 October 2026):** Flapped Ear Overlays is
   finished first as a standalone app in this repository (epic KAN-165, stage 1:
   the rename and data move, KAN-125, merged in PR #142). Flapped Ear Telemetry
   is then built in a new repository (stage 2: KAN-167–KAN-170, KAN-126–KAN-130).
   KAN-121 is closed as superseded. Do not add Telemetry or mobile targets here.
 - **Telemetry is a new Flutter app (owner decision, 2 October 2026, KAN-167):**
-  a blank page in `FlappedEar/Telemetry` with its own Jira project, no shared
+  a blank page in `FlappedEar/Telemetry` with its own Jira space (FET), no shared
   code, this repository cross-referenced only. A new architect takes over from
   [`docs/telemetry-handover.md`](docs/telemetry-handover.md) (KAN-168). KAN-169 is the maturity gate that
   KAN-166 waits for.
@@ -238,7 +238,8 @@ any structural work. Phase 0 (KAN-122): the platforms were decided on
 Windows, iOS and Android) and the tyre data source is settled (KAN-132).
 Decided since: identities (decision 3, KAN-125) and the analysis window
 (decision 4: Overlays keeps it until Telemetry is mature; KAN-166, deferred).
-Still open: the Qt store licence and target devices.
+Decision 5 for mobile: iOS 15 and Android 8.0. Still open: the store licence
+and desktop minimum OS versions.
 
 Split rules already in force after KAN-123:
 - `src/telemetry` and `src/project` form `flappedear_telemetry_core`, which
