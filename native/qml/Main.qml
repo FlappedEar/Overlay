@@ -1881,7 +1881,7 @@ ApplicationWindow {
                         font.weight: Font.DemiBold
                     }
                     Label {
-                        text: "TELEMETRY"
+                        text: "OVERLAYS"
                         color: "#647386"
                         font.family: "Helvetica Neue"
                         font.pixelSize: 9
@@ -2654,7 +2654,7 @@ ApplicationWindow {
                         font.weight: Font.DemiBold
                     }
                     Label {
-                        text: "TELEMETRY"
+                        text: "OVERLAYS"
                         color: "#718092"
                         font.pixelSize: 9
                         font.letterSpacing: 2
