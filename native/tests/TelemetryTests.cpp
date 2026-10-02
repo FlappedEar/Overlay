@@ -4367,11 +4367,25 @@ void TelemetryTests::opensTheoreticalBestSectorThroughQml()
         if (sectors[i].toMap().contains("seconds")) { timedRow = i; timedId = sectors[i].toMap().value("segmentId").toString(); }
     QVERIFY(timedRow >= 0);
     auto *list = window->findChild<QQuickItem *>("theoreticalBestSectors"); QVERIFY(list);
-    QQuickItem *row = nullptr;
-    QTRY_VERIFY(QMetaObject::invokeMethod(list, "itemAtIndex", Q_RETURN_ARG(QQuickItem *, row), Q_ARG(int, timedRow)) && row);
-    QVERIFY(row->isEnabled());
-    row->forceActiveFocus(); QTest::keyClick(window, Qt::Key_Space);
-    QTRY_VERIFY(!dialog->property("visible").toBool());
+    // The analysis can still record its bookkeeping (track inference) after
+    // the result is ready; the open dialog then recalculates and its rows are
+    // recreated, so a key sent to an old row is lost (KAN-163, see KAN-150).
+    // Each attempt looks the row up again and activates it from the keyboard.
+    bool opened = false;
+    for (int attempt = 0; attempt < 10 && !opened; ++attempt) {
+        QTRY_COMPARE_WITH_TIMEOUT(controller.outingTheoreticalBest().value("state").toString(), QString("ready"), 30000);
+        QQuickItem *row = nullptr;
+        if (!QMetaObject::invokeMethod(list, "itemAtIndex", Q_RETURN_ARG(QQuickItem *, row), Q_ARG(int, timedRow)) || !row) {
+            QTest::qWait(100);
+            continue;
+        }
+        QVERIFY(row->isEnabled());
+        row->forceActiveFocus();
+        if (!QTest::qWaitFor([&] { return row->hasActiveFocus(); }, 1000)) continue;
+        QTest::keyClick(window, Qt::Key_Space);
+        opened = QTest::qWaitFor([&] { return !dialog->property("visible").toBool(); }, 1000);
+    }
+    QVERIFY2(opened, "activating the sector row did not open the comparison");
     QVERIFY(controller.comparisonViewOpen());
     auto *panel = window->findChild<QObject *>("comparisonSegmentPanel"); QVERIFY(panel);
     QTRY_VERIFY(panel->property("visible").toBool());
