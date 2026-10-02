@@ -320,6 +320,7 @@ private slots:
     void floorsConvertedFrameCounts_data();
     void floorsConvertedFrameCounts();
     void enforcesStrictTerminalFrameDeficitEvidence();
+    void boundsExportValidationAndWorkerDiagnostics();
     void derivesStablePreviewViewportAndLastFrameAdapter();
     void exposesReactivePreviewMetadataToQml();
     void plansBoundedStageBSourceAccess();
@@ -14078,6 +14079,46 @@ void TelemetryTests::schedulesFrameAddressedExportRangesExactly()
     QVERIFY(!ExportEngine::parseSmpteTimecode(QStringLiteral("not-a-timecode"), ntsc));
 }
 
+void TelemetryTests::boundsExportValidationAndWorkerDiagnostics()
+{
+    // KAN-148, 1: final validation reads every packet, so its timeout grows
+    // with the output. A 13 GB export at 100 MB/s needs about 130 s.
+    QCOMPARE(ExportEngine::finalValidationTimeoutMilliseconds(0), 30'000);
+    QCOMPARE(ExportEngine::finalValidationTimeoutMilliseconds(-5), 30'000);
+    QVERIFY(ExportEngine::finalValidationTimeoutMilliseconds(13'000'000'000LL) > 130'000 * 3);
+    QCOMPARE(ExportEngine::finalValidationTimeoutMilliseconds(std::numeric_limits<qint64>::max()), 2 * 3600 * 1000);
+
+    // 2: an FFmpeg tail as large as the GUI's whole message limit is cut to
+    // its end, where the real error is, so the worker's message stays valid.
+    QString tail;
+    while (tail.toUtf8().size() < ProcessOutputLimits::ffmpegDiagnosticTailBytes)
+        tail += QStringLiteral("frame=  1200 fps= 60 q=28.0 size=   10240KiB time=00:00:20.00 bitrate=4194.3kbits/s ż\n");
+    tail += QStringLiteral("Error while encoding: No space left on device");
+    const QString bounded = utf8Tail(tail, ProcessOutputLimits::workerMessageFieldBytes);
+    QVERIFY(bounded.toUtf8().size() <= ProcessOutputLimits::workerMessageFieldBytes);
+    QVERIFY(bounded.endsWith(QStringLiteral("No space left on device")));
+    QVERIFY(bounded.startsWith(QStringLiteral("[… earlier output omitted]")));
+    QVERIFY(!bounded.contains(QChar::ReplacementCharacter)); // cut on a character boundary
+    QCOMPARE(utf8Tail(QStringLiteral("short"), 64), QStringLiteral("short"));
+
+    // 3: start_pts is signed; absent is unknown, not zero.
+    const auto streamJson = [](const QByteArray &start) {
+        return QByteArray(R"({"format":{"duration":"10.0"},"streams":[{"codec_type":"video","codec_name":"hevc","width":32,"height":32,"r_frame_rate":"30/1","avg_frame_rate":"30/1","time_base":"1/30")")
+            + start + "}]}";
+    };
+    const auto negative = MediaProbe::parseJson(streamJson(R"(,"start_pts":-2)"));
+    QVERIFY(negative.videoStartKnown);
+    QCOMPARE(negative.videoStartTicks, qint64(-2));
+    const auto zero = MediaProbe::parseJson(streamJson(R"(,"start_pts":0)"));
+    QVERIFY(zero.videoStartKnown);
+    QCOMPARE(zero.videoStartTicks, qint64(0));
+    const auto missing = MediaProbe::parseJson(streamJson(""));
+    QVERIFY(!missing.videoStartKnown);
+    const auto text = MediaProbe::parseJson(streamJson(R"(,"start_pts":"-1001")"));
+    QVERIFY(text.videoStartKnown);
+    QCOMPARE(text.videoStartTicks, qint64(-1001));
+}
+
 void TelemetryTests::enforcesStrictTerminalFrameDeficitEvidence()
 {
     const auto evidence = [](const qint64 actualFrames) {
@@ -14091,6 +14132,7 @@ void TelemetryTests::enforcesStrictTerminalFrameDeficitEvidence()
         value.frameRate = {60'000, 1'001};
         value.finalMedia.timeBase = {1, 60'000};
         value.finalMedia.videoStartTicks = 0;
+        value.finalMedia.videoStartKnown = true;
         value.finalMedia.videoDurationTicks = actualFrames * 1'001;
         value.otherValidationPassed = true;
         value.outputTransactionSafe = true;
@@ -14107,6 +14149,14 @@ void TelemetryTests::enforcesStrictTerminalFrameDeficitEvidence()
              FinalOutputClassification::Failure);
     QCOMPARE(FinalOutputValidation::evaluate(evidence(101)).classification,
              FinalOutputClassification::Failure);
+    // KAN-148: the output must be shown to start at zero.
+    auto unknownStart = evidence(100);
+    unknownStart.finalMedia.videoStartKnown = false;
+    QVERIFY(!FinalOutputValidation::evaluate(unknownStart).startsAtOrigin);
+    QCOMPARE(FinalOutputValidation::evaluate(unknownStart).classification, FinalOutputClassification::Failure);
+    auto negativeStart = evidence(100);
+    negativeStart.finalMedia.videoStartTicks = -1'001;
+    QCOMPARE(FinalOutputValidation::evaluate(negativeStart).classification, FinalOutputClassification::Failure);
 
     auto stageAGeneratedShort = evidence(99);
     stageAGeneratedShort.stageAGeneratedFrames = 99;

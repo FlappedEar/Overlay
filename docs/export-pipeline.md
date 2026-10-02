@@ -82,6 +82,12 @@ and exact rational consistency of packet count, `duration_ts`, stream time base,
 and export rate. When FFmpeg's Stage-B progress frame count is available, it must
 equal the final ffprobe count. A real packet deficit or
 surplus fails with direction-specific diagnostics.
+
+KAN-148 adds three rules:
+
+- **Validation timeout.** Final validation reads every packet, so its timeout grows with the output: 30 s plus 1 s per 15 MB, at most 2 hours. A 13 GB export to a 100 MB/s disk is no longer failed after the whole encode.
+- **Start PTS.** `start_pts` is read as a signed value. The output's start must be reported and be zero; an absent start fails validation instead of being taken as zero.
+- **Negative-start sources.** A source whose video starts before zero is refused with a clear message, because frame-correct trimming assumes a non-negative start.
 After validation, an existing destination is replaced only if its prepare-time native regular-file
 identity, size, and modification state still match; otherwise encoding is reported as finished but the
 changed destination is preserved and commit fails.
@@ -97,4 +103,6 @@ The normal validation path records FFmpeg's final progress frame count and uses 
 For target-file transaction guarantees, see [export-output-safety.md](export-output-safety.md).
 # External process boundaries
 
-Every ffprobe/FFmpeg channel is treated as untrusted external input. FFprobe JSON is drained while the process runs and must fit within 4 MiB; overflow terminates the probe and reports the operation, limit, and observed bytes. FFmpeg stderr is retained as a 128 KiB newest-first diagnostic tail with truncation semantics. Machine-readable progress drops a pathological pending line above 16 KiB instead of growing indefinitely. The representative FFV1 storage sample counts and discards encoded stdout bytes, so sample output is not retained in RAM.
+Every ffprobe/FFmpeg channel is treated as untrusted external input. FFprobe JSON is drained while the process runs and must fit within 4 MiB; overflow terminates the probe and reports the operation, limit, and observed bytes. FFmpeg stderr is retained as a 128 KiB newest-first diagnostic tail with truncation semantics.
+
+Text fields in a worker message are cut to their last 32 KiB, marked "[… earlier output omitted]". That keeps each message well below the GUI's 128 KiB limit, and the end of an FFmpeg tail, which explains the error, still reaches the export log. The GUI applies the limit to each message line rather than to everything one read delivered (KAN-148). Machine-readable progress drops a pathological pending line above 16 KiB instead of growing indefinitely. The representative FFV1 storage sample counts and discards encoded stdout bytes, so sample output is not retained in RAM.

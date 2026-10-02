@@ -441,6 +441,15 @@ std::optional<ExactSeconds> sourceFrameTimestamp(
 
 } // namespace
 
+int ExportEngine::finalValidationTimeoutMilliseconds(const qint64 outputBytes)
+{
+    constexpr qint64 baseMilliseconds = 30'000;
+    constexpr qint64 bytesPerSecond = 15'000'000;
+    constexpr qint64 maximumMilliseconds = 2LL * 3600 * 1000;
+    const qint64 bytes = std::max<qint64>(0, outputBytes);
+    return static_cast<int>(std::min(maximumMilliseconds, baseMilliseconds + bytes / (bytesPerSecond / 1000)));
+}
+
 std::optional<ExportFrameRange> ExportEngine::frameRangeFromInclusiveFrames(
     const qint64 firstFrame, const qint64 lastFrame)
 {
@@ -713,6 +722,13 @@ ExportResult ExportEngine::exportVideo(
                 QStringLiteral("probeInput"), QStringLiteral("Input probed"), QStringLiteral("ffprobe"),
                 {{"codec", source.videoCodec}, {"width", source.videoSize.width()},
                  {"height", source.videoSize.height()}, {"duration", source.duration}});
+        if (source.videoStartTicks < 0) {
+            // Frame-correct trimming assumes a source that starts at or after
+            // zero; refuse rather than cut at the wrong frame (KAN-148).
+            result.error = QStringLiteral("The source video starts before zero (start_pts %1); exporting it is not supported yet.")
+                               .arg(source.videoStartTicks);
+            return result;
+        }
         const QSize outputSize = settings.outputSize.isValid() ? settings.outputSize : source.videoSize;
         // One exact rational governs overlay generation, framesync conversion,
         // progress, and final-media validation.
@@ -1542,7 +1558,8 @@ ExportResult ExportEngine::exportVideo(
                 QStringLiteral("probeFinalOutput"), QStringLiteral("Final validation started"));
         try {
             result.mediaInfo = MediaProbe::probe(
-                settings.outputPath, {}, false, 30'000,
+                settings.outputPath, {}, false,
+                finalValidationTimeoutMilliseconds(QFileInfo(settings.outputPath).size()),
                 probeObservations(settings, QStringLiteral("validatingOutput"),
                                   QStringLiteral("probeFinalOutput")),
                 [&settings] { return isCancelled(settings); }, true);

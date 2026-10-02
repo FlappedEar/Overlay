@@ -79,6 +79,21 @@ std::optional<qint64> jsonInteger(const QJsonValue &value)
     return ok && parsed > 0 ? std::optional<qint64>(parsed) : std::nullopt;
 }
 
+// A signed integer, for timestamps that may be negative or zero (KAN-148).
+std::optional<qint64> jsonSignedInteger(const QJsonValue &value)
+{
+    if (value.isDouble()) {
+        const double number = value.toDouble();
+        if (!std::isfinite(number) || std::trunc(number) != number
+            || std::abs(number) > static_cast<double>(std::numeric_limits<qint64>::max()))
+            return std::nullopt;
+        return static_cast<qint64>(number);
+    }
+    bool ok = false;
+    const qint64 parsed = value.toString().toLongLong(&ok);
+    return ok ? std::optional<qint64>(parsed) : std::nullopt;
+}
+
 MediaInfo runProbe(
     const QString &path,
     const QString &requestedFfprobePath,
@@ -293,7 +308,9 @@ MediaInfo MediaProbe::parseJson(const QByteArray &json, const QString &path)
                                               QStringLiteral("nb_frames"));
             info.videoPacketCount = jsonCount(stream, QStringLiteral("nb_read_packets"),
                                                QStringLiteral("nb_packets"));
-            info.videoStartTicks = jsonInteger(stream.value("start_pts")).value_or(0);
+            const auto startTicks = jsonSignedInteger(stream.value("start_pts"));
+            info.videoStartTicks = startTicks.value_or(0);
+            info.videoStartKnown = startTicks.has_value();
             info.videoDurationTicks = jsonInteger(stream.value("duration_ts")).value_or(0);
             info.videoStartTime = jsonNumber(stream.value("start_time"), info.startTime);
             info.videoDuration = jsonNumber(stream.value("duration"), info.duration);

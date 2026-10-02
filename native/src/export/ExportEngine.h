@@ -116,6 +116,10 @@ public:
         const MediaInfo &source, const MediaRational &requested = {});
     [[nodiscard]] static ExportResult exportVideo(
         const ExportSettings &settings, TelemetryFrameRenderer &renderer);
+    // Final validation reads every packet: its timeout grows with the file
+    // (30 s plus 1 s per 15 MB, at most 2 hours), so a long export to a slow
+    // disk is not failed after the whole encode (KAN-148).
+    [[nodiscard]] static int finalValidationTimeoutMilliseconds(qint64 outputBytes);
     [[nodiscard]] static std::optional<ExportFrameRange> frameRangeFromInclusiveFrames(
         qint64 firstFrame, qint64 lastFrame);
     [[nodiscard]] static std::optional<ExportFrameRange> fullVideoFrameRange(

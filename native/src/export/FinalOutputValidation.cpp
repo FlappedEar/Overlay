@@ -57,7 +57,8 @@ FinalOutputValidationResult FinalOutputValidation::evaluate(const FinalOutputEvi
         && evidence.temporaryOverlayFrames == evidence.expectedFrames;
     result.stageBProgressMatches = !evidence.stageBProgressFrames
         || *evidence.stageBProgressFrames == evidence.finalFrameCount;
-    result.startsAtOrigin = evidence.finalMedia.videoStartTicks == 0;
+    // An absent start cannot prove the output starts at zero (KAN-148).
+    result.startsAtOrigin = evidence.finalMedia.videoStartKnown && evidence.finalMedia.videoStartTicks == 0;
     result.contiguousCfrTiming = exactContiguousCfrTiming(evidence);
     if (!result.stageCountsMatch || !result.stageBProgressMatches || !result.startsAtOrigin
         || !result.contiguousCfrTiming || !evidence.otherValidationPassed
