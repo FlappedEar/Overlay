@@ -81,6 +81,7 @@ private slots:
     void enforcesVboResourceLimits();
     void boundsVboHeaderAndDecodedValues();
     void normalizesVboHeaderEdgeCases();
+    void buildsVboMetadataInFileOrder();
     void preservesVboScannerFormats();
     void boundsSeparatorHeavyVboRows();
     void enforcesVboScannerBoundaries();
@@ -684,6 +685,26 @@ void TelemetryCoreTests::boundsVboHeaderAndDecodedValues()
     const double growth = peakResidentMiB() - before;
     qInfo().noquote() << QString("peak resident growth %1 MiB").arg(growth, 0, 'f', 1);
     QVERIFY2(growth < 300.0, qPrintable(QString("peak memory grew by %1 MiB").arg(growth)));
+}
+
+void TelemetryCoreTests::buildsVboMetadataInFileOrder()
+{
+    // KAN-182: metadata follows the file's section order, not QHash's
+    // per-process seed. Generated keys number lines by the metadata size at
+    // insertion, and a key repeated in a later section replaces the earlier one.
+    QString text = QStringLiteral("free line\n[zeta]\nshared = from zeta\nzeta line\n");
+    for (int index = 0; index < 24; ++index)
+        text += QStringLiteral("[section%1]\nline %1\n").arg(index);
+    text += QStringLiteral("[alpha]\nshared = from alpha\nalpha line\n"
+                           "[column names]\ntime lat long\n[data]\n000000.00 0 0\n000000.10 0 0\n");
+    const auto session = VboParser::parse(text);
+    QCOMPARE(session.metadata.value(".0"), QString("free line"));
+    QCOMPARE(session.metadata.value("zeta.2"), QString("zeta line"));
+    for (int index = 0; index < 24; ++index)
+        QCOMPARE(session.metadata.value(QStringLiteral("section%1.%2").arg(index).arg(index + 3)),
+                 QStringLiteral("line %1").arg(index));
+    QCOMPARE(session.metadata.value("shared"), QString("from alpha"));
+    QCOMPARE(session.metadata.value("alpha.27"), QString("alpha line"));
 }
 
 void TelemetryCoreTests::normalizesVboHeaderEdgeCases()
