@@ -39,7 +39,7 @@
 
 <figure>
   <img src="assets/screens/analysis-day-results.png" alt="Day results with the Best day button, comparison group and a chronological list of OUT, LAP 1 to 4 and IN sections" width="1440" height="900" loading="lazy">
-  <figcaption>Day results for the Jastrząb session of 29 August 2026 (RaceChrono Pro VBO): one run, the out-lap, four timed laps and the in-lap. The application detected the route as clockwise; LAP 4 (2:18.643) is the best lap in the group.</figcaption>
+  <figcaption>Day results for the six sessions at Jastrząb on 29 August 2026 (RaceChrono Pro VBOs): one clockwise group with 23 of 25 laps eligible. The day's best lap is Session 5 LAP 2 (1:49.898).</figcaption>
 </figure>
 
 <h3 id="groups">Comparison groups</h3>
@@ -97,6 +97,10 @@
   <li>Choose the direction: <strong>Clockwise</strong> or <strong>Counterclockwise</strong>.</li>
   <li>Optionally tick <strong>Apply to recordings with matching GPS routes</strong>, then click <strong>Apply correction</strong>.</li>
 </ol>
+<figure>
+  <img src="assets/screens/analysis-correct-grouping.png" alt="Correct track grouping dialog" width="1440" height="900" loading="lazy">
+  <figcaption>The <strong>Correct track grouping</strong> dialog.</figcaption>
+</figure>
 <p><strong>Use detected route</strong> removes your correction. Recordings with different or unresolved timing gates stay in separate groups. Changing a configuration can leave saved lap exclusions unmatched; they are then kept but not applied.</p>
 
 <h2 id="run-details">Run details</h2>
@@ -112,6 +116,10 @@
     </ul>
   </li>
 </ul>
+<figure>
+  <img src="assets/screens/analysis-run-details.png" alt="Run details dialog" width="1440" height="900" loading="lazy">
+  <figcaption>The <strong>Run details</strong> dialog.</figcaption>
+</figure>
 <p>A typical use: a VBO from RaceChrono with calculated G as primary, and the RCZ of the same session as alternative.</p>
 
 <h2 id="lap-detail">Inspecting a lap</h2>
@@ -119,7 +127,7 @@
 
 <figure>
   <img src="assets/screens/analysis-lap-detail.png" alt="Lap detail for LAP 4 with track position map and speed, lateral G and longitudinal G charts" width="1440" height="900" loading="lazy">
-  <figcaption>LAP 4 of the Jastrząb session: the GPS trace with the cursor 27 s into the lap, and the recorded <code>velocity</code>, <code>latacc-calc</code> and <code>longacc-calc</code> channels. Braking shows as upward peaks in the longitudinal G chart. No video was loaded.</figcaption>
+  <figcaption>Session 5 LAP 2 (1:49.898) with its onboard video, synchronized by Auto Sync. The cursor is 37.6 s into the lap; the charts show the recorded <code>velocity</code>, <code>latacc-calc</code> and <code>longacc-calc</code> channels. Braking shows as upward peaks in the longitudinal G chart.</figcaption>
 </figure>
 
 <h3 id="lap-map">Track map and video</h3>
@@ -147,6 +155,10 @@
   <li>coasting per approved segment (if the lap's segments are approved);</li>
   <li>a list of episodes. Select one to move the cursor there; episodes are drawn in orange on the map.</li>
 </ul>
+<figure>
+  <img src="assets/screens/analysis-coasting.png" alt="Coasting panel with the summary and the list of episodes, and the episodes in orange on the map" width="1440" height="900" loading="lazy">
+  <figcaption>Coasting on Session 5 LAP 2: 14.8 s over 14 episodes (13.5 % of the lap), from the recorded pedals. The episodes are orange on the map.</figcaption>
+</figure>
 <p>Coasting is not a mistake by itself: a lift can settle the car or be forced by traffic.</p>
 
 <h3 id="review-segments">Review segments</h3>

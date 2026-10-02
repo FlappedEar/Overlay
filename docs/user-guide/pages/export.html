@@ -15,7 +15,7 @@
 
 <figure>
   <img src="assets/screens/export-dialog.png" alt="Export dialog in Single lap · hotlap mode with source summary, output file, resolution, frame rate, quality, bitrate and lap range" width="1440" height="1040" loading="lazy">
-  <figcaption>The Export dialog in <strong>Single lap · hotlap</strong> mode. The lap list and the range (best lap 2:18.643 plus a 6-second handle on each side) come from the Jastrząb recording; the source summary describes the placeholder video.</figcaption>
+  <figcaption>The Export dialog in <strong>Single lap · hotlap</strong> mode for the Session 5 GoPro clip (3840×2160, 59.94 fps, HEVC Main 10). The range is the best lap, LAP 2 (1:49.898), plus a 6-second handle on each side: 2:01.905 in all.</figcaption>
 </figure>
 
 <h3 id="source">Source</h3>
@@ -64,6 +64,22 @@
   <li><strong>Details</strong> shows a technical report (stages, timings, frame counts, free space, encoder). It opens automatically when an export fails or ends with a warning.</li>
   <li><strong>Very verbose</strong> shows the live FFmpeg log. Scrolling up stops it from following new lines; <strong>Jump to latest</strong> resumes following. <strong>Copy all</strong> copies the whole log.</li>
 </ul>
+<figure>
+  <img src="assets/screens/export-progress.png" alt="Export progress window while the overlay is rendered" width="1440" height="860" loading="lazy">
+  <figcaption>An 8-second export of Session 5 at 1920×1080 while the overlay is rendered.</figcaption>
+</figure>
+<figure>
+  <img src="assets/screens/export-details.png" alt="Export progress with Details open" width="1440" height="860" loading="lazy">
+  <figcaption><strong>Details</strong>: the technical report of the running export.</figcaption>
+</figure>
+<figure>
+  <img src="assets/screens/export-verbose.png" alt="Export progress with Very verbose showing the live log" width="1440" height="860" loading="lazy">
+  <figcaption><strong>Very verbose</strong>: the live log.</figcaption>
+</figure>
+<figure>
+  <img src="assets/screens/export-complete.png" alt="Export complete window" width="1440" height="860" loading="lazy">
+  <figcaption><em>Export complete</em>: the file passed validation. The final encoder was Apple VideoToolbox HEVC.</figcaption>
+</figure>
 <p>The progress window ends with one of: <em>Export complete</em>, <em>Export completed with warning</em>, <em>Export failed</em> or <em>Export cancelled</em>. <em>Completed with warning</em> means the file was written but a few frames are missing at the very end; check the result before using it.</p>
 <p>Every export writes a log file, kept even when the export fails or is cancelled. The ten most recent logs are kept; see <a href="projects.html#files">Where files are stored</a>.</p>
 

@@ -20,6 +20,8 @@ target_link_libraries(flappedear_probe_test_helper PRIVATE Qt6::Core)
 flappedear_enable_warnings(flappedear_probe_test_helper)
 
 qt_add_executable(flappedear_native_tests
+    UserGuideCapture.cpp
+    UserGuideCapture.h
     ../src/app/AppControllerDocument.cpp
     TelemetryTests.cpp
     ../src/app/AppControllerAnalysis.cpp
@@ -42,6 +44,14 @@ qt_add_resources(flappedear_native_tests "flappedear_test_qml"
         ../qml/widgets/RetroTachometerWidget.qml
         ../qml/widgets/TelemetryPanel.qml
         ../qml/widgets/TyresWidget.qml
+)
+# The application's logo, so production QML loaded by tests (and the user-guide
+# capture) shows it as the application does.
+qt_add_resources(flappedear_native_tests "flappedear_test_branding"
+    PREFIX "/flappedear"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/.."
+    FILES
+        ../resources/branding/app-logo.png
 )
 target_compile_definitions(flappedear_native_tests PRIVATE
     GUI_SESSION_LOCK_HELPER_PATH="$<TARGET_FILE:flappedear_gui_session_lock_helper>"

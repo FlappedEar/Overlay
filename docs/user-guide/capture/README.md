@@ -1,5 +1,54 @@
 # User-guide screenshot capture
 
+## Native capture (the current pictures)
+
+The pictures in `assets/screens/` come from the application itself: its own
+`AppController` and production QML, driven step by step by the opt-in test
+`TelemetryTests::capturesUserGuideScreens` (`native/tests/UserGuideCapture.cpp`),
+with a real onboard video and its recording. The capture imports the day
+through **Import runs**, opens the video, runs **Auto Sync**, exports a short
+clip for real, and walks through the editor, the templates, every widget and
+Lap Analysis. `template-save-popup.png` is the only picture still made by the
+QML-only scripts below.
+
+The media is private. It is read in place, never copied or committed:
+
+```bash
+cmake --build build-native --parallel
+FLAPPEDEAR_GUIDE_CAPTURE_DIR=/path/to/output \
+FLAPPEDEAR_GUIDE_VIDEO=/path/to/GX010089.MP4 \
+FLAPPEDEAR_GUIDE_VBO=/path/to/session_20260829_160659_jastrząb_kaizenvtec.vbo \
+FLAPPEDEAR_GUIDE_DAY=/path/to/folder/with/that/days/vbos \
+FLAPPEDEAR_GUIDE_CHAPTERS=/path/to/GX010091.MP4,/path/to/GX020091.MP4 \
+QTEST_FUNCTION_TIMEOUT=3600000 \
+build-native/native/tests/flappedear_native_tests capturesUserGuideScreens
+cp /path/to/output/*.png docs/user-guide/assets/screens/
+python3 docs/user-guide/build.py
+```
+
+- `FLAPPEDEAR_GUIDE_VIDEO` and `FLAPPEDEAR_GUIDE_VBO` are a matching GoPro clip
+  and VBO. The clip needs GoPro GPS for Auto Sync.
+- `FLAPPEDEAR_GUIDE_DAY` (optional) is the folder of that day's VBOs. They are
+  imported as one event; the recording's run becomes the active one.
+- `FLAPPEDEAR_GUIDE_CHAPTERS` (optional) is a GoPro recording in chapters, for
+  the Video chapters dialog.
+- It runs on macOS with a display, in about two and a half minutes. The test
+  export goes to `/tmp/FlappedEar/` and is deleted afterwards.
+- The pictures show the moment 38 s into the recording's best lap. Captions
+  quote values from the pictures: when the media or the application changes,
+  check the captions too.
+
+Capture notes:
+
+- The day is imported first, and the video is opened only after the
+  automatic segments exist. Opening it earlier currently loses them.
+- A paused player on macOS shows no frame after a seek, so the lap view
+  plays the moment for two seconds before its picture.
+- The test executable hands `--export-worker` to the application's own
+  worker, so a controller export in a test runs for real.
+
+## QML-only capture (no application build or media)
+
 These scripts render the user-guide pictures from the application's own QML
 (`native/qml`) with a real RaceChrono recording. The C++ controllers are replaced
 by small stand-ins, filled from the recording. They live in `harness.py`,
