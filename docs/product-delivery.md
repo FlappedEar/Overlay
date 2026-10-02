@@ -6,6 +6,33 @@ Product scope: [product contract](product-vision.md).
 This is the current delivery authority; old checkpoints and narrow beta documents
 must not override it. Feature implementation is not the same as runtime acceptance.
 
+## Status on 2 October 2026
+
+This section supersedes the dated baseline below where they differ. The root
+`currentstate.md` and `ROADMAP.md` were archived to `docs/history/` on 2 October
+2026 (KAN-159); this ledger and Jira are the only status records.
+
+| Milestone | Tasks done | State |
+| --- | --- | --- |
+| M0 reliable baseline ([KAN-4]) | 8 of 8 | Done |
+| M1 day results ([KAN-6]) | 10 of 10 | Done |
+| M2 A/B comparison ([KAN-7]) | 14 of 14 | Done; epic closed 2 October 2026 |
+| M3 sectors and corners ([KAN-8]) | 20 of 20 | Done; epic closed 2 October 2026 |
+| M4 losses and report ([KAN-9]) | 16 of 16 | Done; epic closed 2 October 2026 |
+| M5 core acceptance ([KAN-10]) | 6 of 12 | Open: KAN-80 and KAN-81 (matching video), KAN-83 (clean machine), KAN-84 (Windows, paused), KAN-85 (notices), KAN-86 (closure) |
+| M6 full vision ([KAN-11]) | 14 of 24 | Open: KAN-89, KAN-94–KAN-96, KAN-98, KAN-99, KAN-106, KAN-108–KAN-110 |
+| Product split (KAN-121) | Phases 1–2 and KAN-132 done | Phase-0 owner decisions (KAN-122) and phases 3–5 open |
+| Stabilisation (KAN-144) | 0 of 17 | From the independent audit of 2 October 2026; it gates M5 |
+
+- **CI:** Native CI builds macOS arm64 Debug and Release with Qt 6.8.3 and runs 38
+  CTest registrations (35 Qt Test executables, the startup smoke and two library
+  boundary checks). `main` at `ca66169` failed in Debug on a post-import test race
+  (KAN-143, KAN-150); Release passed. Windows execution remains paused.
+- **Evidence:** synthetic CI plus one private real day without video (KAN-77,
+  KAN-79). The owner's real-video acceptance (M5) has not been executed.
+- **Open technical items** outside Jira tasks are listed in
+  [open technical items](#open-technical-items).
+
 ## Verified baseline
 
 This reconciliation uses `main` at
@@ -27,8 +54,8 @@ results belong in their Jira completion records.
   and visualization foundations do not satisfy an entire F00–F20 capability.
 - **CI verification** means the configured synthetic coverage passed on that
   source state. Current Native CI builds macOS arm64 Debug and Release with Qt
-  6.8.3: seven CTest registrations, 501 Qt Test passes, zero failures and eight
-  explicit private/hardware skips per configuration. Release also exercises
+  6.8.3: 38 CTest registrations on 2 October 2026 (the seven-registration,
+  501-pass figure describes the 13 September baseline). Release also exercises
   deployment and SDK-isolated package startup. Windows execution remains paused.
 - **Physical acceptance** requires an identified candidate, environment and
   executed scenario. KAN-26 includes local Mac/Qt 6.11 execution and six private
@@ -48,8 +75,8 @@ work, not evidence that a future capability already works. Ranges are inclusive.
 
 | ID | Implementation at `5d71a1a` | Remaining outcome and Jira ownership |
 | --- | --- | --- |
-| F00 | Partial: transactional multi-file import, portable event projects, day metadata, automatic track identity and persistent decisions | Folder/drop, reusable profiles and existing-run alternatives: [KAN-87]–[KAN-90]; whole-product acceptance remains in M5/M6 |
-| F01 | Partial: inspectable OUT/LAP/IN, stable references, exclusions and compatible best-run/day rankings; automatic GPS layout/direction grouping | Independent A/B, shared progress and delta: [KAN-29]–[KAN-42] |
+| F00 | Partial: transactional multi-file import, portable event projects, day metadata, automatic track identity and persistent decisions; folder and drag-and-drop import (KAN-87, KAN-88); attaching recordings to existing runs after evidence review (KAN-90) | Reusable vehicle and track profiles: [KAN-89] (needs a product decision); whole-product acceptance remains in M5/M6 |
+| F01 | Partial: inspectable OUT/LAP/IN, stable references, exclusions and compatible best-run/day rankings; automatic GPS layout/direction grouping; independent A/B on a shared track-progress axis with delta, paired traces, map and optional video ([KAN-29]–[KAN-42]) | M2 delivered; physical acceptance in M5 ([KAN-86]); audit defects in track progress are tracked in KAN-152 |
 | F02 | Partial: versioned, validated segment data model (KAN-43); smoothed heading/curvature feature derivation on the shared axis (KAN-44); automatic straight/corner proposals with boundary uncertainty (KAN-45); geometric entry/apex/exit proposals (KAN-46); measured/inferred braking-onset candidates (KAN-47); proposal review with approve/reject/edit, map overlay and an identified approved revision (KAN-48); approved-segment editing with split/merge, map picking and session undo/redo (KAN-49); persisted review decisions and calculation-revision stamps (KAN-50) | Synthetic M3 acceptance recorded in `docs/kan58-m3-acceptance.md` ([KAN-58]); real-track feedback pending |
 | F03 | Partial: non-overlapping loss windows per approved segment for an A/B pair, with corner continuation onto the following straight and signed increments kept separate from the running delta (KAN-59); day ranking of every eligible lap's largest observed losses against the group's best lap, with segment, compared laps, coverage and method (KAN-60); a loss opens its A/B pair in the Corner Analyzer on that window, lap A or B opens at the window with the run's video when available, and returning keeps the ranking (KAN-61) | Non-overlapping ranked losses and evidence navigation: [KAN-59]–[KAN-61]; acceptance: [KAN-74] |
 | F04 | Partial: per-sector theoretical best across a compatible population, with the donor lap for each sector and the total withheld when any sector is uncovered (KAN-56); actual best, theoretical and difference with per-sector losses, opening the donor lap in the Corner Analyzer (KAN-57) | Synthetic acceptance recorded ([KAN-58]); real-track feedback pending; separately validated realistic potential: [KAN-94]–[KAN-96] |
@@ -93,6 +120,10 @@ does not establish compatibility. OUT/IN and route outliers remain inspectable.
 
 ## Dependency-ordered delivery
 
+> Status note (2 October 2026): steps 001–064 (M0–M4) are done; see
+> [Status on 2 October 2026](#status-on-2-october-2026). The step counts below
+> describe the 13 September reconciliation.
+
 The backlog contains **100 separate numbered Tasks plus seven milestone Epics**.
 Steps 001–017 are complete; this reconciliation is step 018. After its closure,
 82 numbered tasks (019–100) remain. Jira holds live status and acceptance criteria.
@@ -131,6 +162,9 @@ These are retained historical estimates, superseded for near-term planning by
 the [measured M1 reforecast](kan28-m1-acceptance.md#measured-cycle-time-and-reforecast).
 
 ### Two-week owner target — 27 September 2026
+
+> Historical (flagged 2 October 2026): the 27 September target has passed. The
+> forecast below is owner-authored and is retained as recorded.
 
 The owner set a two-week deadline on 13 September, before the next track visit.
 **27 September is the planning target**, derived from that instruction, not a
@@ -172,6 +206,38 @@ turns is implied.
 The owner's near-term benefit arrives incrementally: integrated PR #11 gives day/lap inspection;
 M1 gives day results; M2 gives actionable comparison; M4 gives the original
 loss-to-corner-to-evidence experience. None is called full completion prematurely.
+
+## Open technical items
+
+Moved from the archived [roadmap of 12 September 2026](history/2026-09-12-roadmap.md)
+on 2 October 2026; only items that are still open are listed. Audit defects are
+tracked separately in KAN-144.
+
+- **Export destinations:** a slow (throttled) destination remains unvalidated (C07);
+  the fixed final-validation timeout is KAN-148.
+- **Real media:** broader final-media and preview/export validation on real
+  recordings, including the owner's matching GoPro video for the full day (KAN-80,
+  KAN-81).
+- **Colour and transforms:** colour-managed HDR/HLG/PQ/Log preservation (rejected
+  today, never silently converted); rotation and sample-aspect-ratio display
+  transforms end to end (export fails fast today).
+- **Resolution:** production 8K validation on representative renderer and encoder
+  hardware.
+- **Video:** export across GoPro chapter boundaries (KAN-106); multiple video
+  sources with manual sync (KAN-131).
+- **Telemetry sources:** RaceChrono VBO exporter versions other than Pro 10.2.4;
+  VBO channel units are not stored (a fingerprint migration is needed first).
+- **Lap timing:** a manual Start/Finish override.
+- **Analysis UX:** more than four channels (KAN-113), interval selection with map
+  highlighting (KAN-114), readable axes, units and grids (KAN-115), chart
+  annotations.
+- **Map:** interactive map tiles and offline-safe map export behaviour.
+- **Distribution:** Developer ID signing and notarization, distribution notices
+  and source access (KAN-85, KAN-160), clean-machine acceptance (KAN-83), retained
+  artifacts, installation UX and an update strategy.
+- **Windows (paused):** broader GPU/encoder and installed-dependency coverage,
+  heavy 4K GUI responsiveness, ACL-denied filesystem coverage, multi-instance
+  export-log safety and Windows code signing (KAN-84).
 
 ## Whole-product acceptance record
 

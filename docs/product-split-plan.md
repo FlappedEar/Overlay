@@ -1,9 +1,14 @@
 # Product split plan: Flapped Ear Telemetry and Flapped Ear Overlays
 
-Proposed 26 September 2026 on the owner's request. **Status: proposal.**
+Proposed 26 September 2026 on the owner's request. **Status (2 October 2026):
+phases 1 and 2 are implemented** (KAN-123 and KAN-124, closed 27 September), and
+the tyre widget (KAN-132) is merged. The phase-0 owner decisions (KAN-122) and
+phases 3–5 are open, and the direction documents (`product-vision.md`,
+`AGENTS.md`) still describe one application. The code survey below describes
+the code before phase 1.
 Jira: epic [KAN-121], tickets [KAN-122]–[KAN-132].
-Nothing here is implemented yet. Decisions marked **Owner decision** must be
-made before the phase that depends on them.
+Decisions marked **Owner decision** must be made before the phase that depends
+on them.
 
 ## Why
 
@@ -197,8 +202,7 @@ behaviour and can proceed before decisions 1 and 5.
 - M4 **UI** tickets should be designed for the Telemetry app's touch UI
   once Phase 2 lands. Until then, desktop UI stays small and reuses
   Canvas-based QML, which also runs on mobile.
-- KAN-66 (A/B G-G scatter) is half done (pairs, peaks, peak-preserving
-  decimation). Finish it as a reusable panel.
+- KAN-66 (A/B G-G scatter) was completed as a reusable panel in PR #74.
 - M5 "physical Mac acceptance" splits into on-device Telemetry acceptance
   and Mac acceptance for Overlays.
 

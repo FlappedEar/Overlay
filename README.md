@@ -4,7 +4,9 @@ Flapped Ear Telemetry is one native desktop application for video telemetry over
 
 ## Status
 
-The Qt 6/C++20/QML application combines a working overlay editor/export pipeline with macOS-first track-day analysis under development. Event import, a chronological outing lap list and interactive individual-lap details are implemented; cross-run A/B comparison, corner analysis and automatic time-loss reports remain unfinished. The [product vision](docs/product-vision.md) preserves the complete intended scope, and the [delivery plan](docs/product-delivery.md) tracks remaining work and acceptance. Distribution still requires the exact candidate's [acceptance evidence](docs/beta-acceptance.md). See [current state](currentstate.md) for implementation and validation boundaries.
+Version 0.2.0, in development; no release is approved. The overlay editor and export pipeline work, and the track-day analysis implements milestones M0–M4: whole-day import, compatible rankings, independent A/B lap comparison, reviewed segments and the Corner Analyzer, sector theoretical best, ranked time losses, consistency, G-G, temperature and heart-rate summaries, and the day report. These are validated by synthetic CI tests and one private real day without video; the owner's real-video acceptance (M5) is still open.
+
+The [product vision](docs/product-vision.md) defines the complete intended scope. The [delivery ledger](docs/product-delivery.md) is the single current status record: what is implemented, what remains, and the acceptance evidence. Distribution still requires the exact candidate's [acceptance evidence](docs/beta-acceptance.md).
 
 ## User guide
 
@@ -14,16 +16,21 @@ Its sources live in [docs/user-guide](docs/user-guide/README.md).
 ## Current capabilities
 
 Saved events use **Event → Run → Lap**, with independent source references and
-video synchronization per run. Analysis can import a whole outing and list its
-OUT/LAP/IN segments chronologically when recording timestamps are available.
-Opening a row shows that segment's map and telemetry with a shared cursor,
-without requiring video. This is individual-lap inspection, not yet A/B or
-event-wide performance analysis. See the [event implementation plan](docs/event-analysis-plan.md).
+video synchronization per run. Analysis imports a whole day (files, folders or
+drag and drop) and lists each outing's OUT/LAP/IN laps chronologically when
+recording timestamps are available. Opening a lap shows its map and telemetry
+with a shared cursor, without requiring video. From there it compares two laps
+from compatible runs, reviews automatic straight and corner segments, and links
+ranked time losses to the Corner Analyzer and the day report. The
+[user guide](https://arekkozuch.github.io/VBOOverlay/) describes every screen.
 
 - MP4/MOV playback with timeline controls and preview overlays.
 - RaceChrono and VBOX VBO telemetry import, plus native single-session RaceChrono RCZ import ([supported format](docs/rcz-format.md)).
 - Multi-file outing import and advanced import review, duplicate/error reporting, persisted source groups, and event save/reopen. The outing workflow selects VBO for unique RCZ/VBO matches supported by recording-date/time and GPS evidence; ambiguous sources stay separate. Grouping retains alternatives without combining channels.
 - Chronological outing laps and interactive single-lap speed/G/channel detail with a synchronized map cursor; missing timestamps and source failures remain visible.
+- Independent A/B lap comparison on a shared track-progress axis: delta time, channels, map layers, G-G and optional side-by-side video from each run's own footage.
+- Automatic segment proposals with review and editing, Corner Analyzer metrics, sector theoretical best, ranked time losses, consistency, temperature and heart-rate summaries, and a day report with links to its evidence.
+- GoPro chapter groups reviewed before loading and played as one continuous timeline. Exporting a chaptered video is not available yet (KAN-106).
 - GoPro GPMF GPS extraction and GPS-speed auto synchronization.
 - A visual widget editor, projects, built-in layouts, and shareable templates. Both editor sidebars remain fully scrollable at the supported 1180×720 minimum size.
 - Lazily loaded synchronized telemetry analysis, including charts and a track view; its secondary decoder exists only while the Analysis window is open.
@@ -43,7 +50,7 @@ original signed values.
 
 ## Keyboard controls
 
-Space plays or pauses. Left/Right seek five seconds; Shift+Left/Right seek thirty seconds; Home/End seek to the first/last actual video frame. These playback shortcuts are disabled while typing or operating a focused editor control. Ctrl/Cmd+E opens Export, Ctrl/Cmd+Shift+A toggles Telemetry Analysis, and F11/Escape enter and leave full screen. Full-screen preview provides the same visible transport and scrubber as the editor.
+Space plays or pauses. Left/Right seek five seconds; Shift+Left/Right seek thirty seconds; Home/End seek to the first/last actual video frame. These playback shortcuts are disabled while typing or operating a focused editor control. Ctrl/Cmd+E opens Export and Ctrl/Cmd+Shift+A toggles Lap Analysis. The platform full-screen shortcut (⌃⌘F on macOS) enters full screen and Escape leaves it; the F1 help still lists F11 (KAN-140). Full-screen preview provides the same visible transport and scrubber as the editor.
 
 Very Verbose export diagnostics follow the live tail until the user scrolls into history. Historical inspection stays fixed while new lines arrive; **Jump to latest** explicitly resumes following.
 
@@ -119,19 +126,20 @@ A private RaceChrono fixture has been validated with 32,718 samples, 49 channels
 
 ## Current limitations
 
-- Windows runtime/export validation currently covers one known Windows 11 / Qt 6.11 / MSVC 2022 / Intel Iris Plus / Quick Sync configuration, not a broad hardware matrix.
-- Internal candidate packaging is automated; clean-machine acceptance, distribution notices and publisher signing/notarization remain pending.
-- A source currently contains one video file; multi-chapter timelines are not implemented.
+- Real-media coverage is limited: one private track day without video plus earlier GoPro/VBO checks. The owner's full-day walkthrough with matching video (M5) is open.
+- Defects found by the independent audit of 2 October 2026 are tracked in Jira epic KAN-144; open technical items are listed in the [delivery ledger](docs/product-delivery.md#open-technical-items).
+- Internal candidate packaging is automated; clean-machine acceptance, distribution notices and Developer ID signing/notarization remain pending.
+- Windows builds and validation are paused. Earlier results covered one Windows 11 / Qt 6.11 / MSVC 2022 / Intel Iris Plus / Quick Sync configuration.
+- Chaptered GoPro videos play as one timeline, but exporting them is refused until KAN-106; auto-sync reads GPS from the first chapter only.
 - Export requires compatible external FFmpeg at runtime, including the production overlay filters; the application fails early when these are absent.
 - Identified RaceChrono VBO versions other than Pro 10.2.4 retain telemetry but omit unverified timing gates with a warning.
-- GPS-incomplete laps retain their measured timings but are excluded from spatial references and best-lap ranking, with explicit quality/no-delta states. Independent cross-run A/B comparison still requires compatibility and shared-progress alignment; see [the capability ledger](docs/product-delivery.md#actual-capability-audit).
-- Additional parser, export-process and destination hardening remains tracked in [ROADMAP.md](ROADMAP.md).
+- VBO channel units are not stored, so VBO values are shown without units; RCZ units are kept.
+- GPS-incomplete laps retain their measured timings but are excluded from spatial references and best-lap ranking, with explicit quality/no-delta states. A/B comparison and rankings require compatible runs (layout, direction and timing gate).
 - Rotation and sample-aspect-ratio display-transform preservation, HDR/Log color-managed preservation, and production 8K validation remain pending. One real HERO11 5312×2988 10-bit SDR fixture has passed native and 3840×2160 macOS exports; this is not a broader hardware guarantee.
-- Real-media coverage remains limited.
 - Interactive map tiles are pending; the local GPS track view works without map tiles.
-- Lap timing remains source-gate based: it requires exactly one valid RaceChrono Start gate and usable synchronized GPS. Manual Start/Finish overrides, sectors, and theoretical-best analysis are not implemented yet.
+- Lap timing requires exactly one valid RaceChrono Start gate and usable synchronized GPS; a manual Start/Finish override is not implemented.
 
-For remaining work, see [ROADMAP.md](ROADMAP.md). Developer contribution rules are in [AGENTS.md](AGENTS.md), and local test guidance is in [docs/testing.md](docs/testing.md).
+The end-user list of limitations is in the [user guide](https://arekkozuch.github.io/VBOOverlay/limitations.html). For remaining work, see the [delivery ledger](docs/product-delivery.md). Developer contribution rules are in [AGENTS.md](AGENTS.md), and local test guidance is in [docs/testing.md](docs/testing.md).
 
 ### Editor instance and recovery
 

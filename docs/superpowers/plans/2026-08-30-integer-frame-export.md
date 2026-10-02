@@ -1,6 +1,6 @@
 # Integer Frame Export Implementation Plan
 
-> Historical design/implementation plan. Status and validation statements below describe the original planning checkpoint. For current implementation, verified exporter geometry and remaining release gates, use [current state](../../../currentstate.md), [testing](../../testing.md) and [beta acceptance](../../beta-acceptance.md).
+> Historical design/implementation plan. Status and validation statements below describe the original planning checkpoint. For current implementation, verified exporter geometry and remaining release gates, use the [delivery ledger](../../product-delivery.md), [testing](../../testing.md) and [beta acceptance](../../beta-acceptance.md).
 
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

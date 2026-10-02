@@ -1,6 +1,6 @@
 # Lap Timing Foundation Implementation Plan
 
-> Historical design/implementation plan. Status and validation statements below describe the original planning checkpoint. For current implementation, verified exporter geometry and remaining release gates, use [current state](../../../currentstate.md), [testing](../../testing.md) and [beta acceptance](../../beta-acceptance.md).
+> Historical design/implementation plan. Status and validation statements below describe the original planning checkpoint. For current implementation, verified exporter geometry and remaining release gates, use the [delivery ledger](../../product-delivery.md), [testing](../../testing.md) and [beta acceptance](../../beta-acceptance.md).
 
 
 > **Status:** Production tasks 1–4 are implemented on `main`. This is a historical execution record, not an instruction to invoke Superpowers. Automated/macOS/private-fixture validation remains deferred.

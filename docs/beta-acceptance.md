@@ -15,9 +15,8 @@ The old single-session-only product scope is superseded by
 
 The requested product is one Mac application for whole-day event analysis and
 video overlay editing/export. An event contains multiple runs with optional
-run-local video/sync. Current video handling still supports one file per run;
-chapter assembly and advanced analysis remain tracked capabilities, not implied
-by event persistence. First core and full-vision acceptance are distinct.
+run-local video/sync. A run's video can be a GoPro chapter group played as one
+timeline (KAN-105); exporting a chaptered video is refused until KAN-106. First core and full-vision acceptance are distinct.
 
 The delivery ledger's end-to-end checklist is mandatory for core completion.
 The existing installation/export/recovery procedures below remain useful gates;
@@ -64,7 +63,7 @@ environment: its `--qt-root` directory is temporarily renamed during the startup
 ## Installation and prerequisites for acceptance
 
 1. Download a candidate from a successful workflow and verify its SHA-256 sidecar.
-2. Windows: run the `*-setup.exe` candidate installer; see [Windows installer](windows-installer.md).
+2. Windows (execution paused since 13 September 2026): run the `*-setup.exe` candidate installer; see [Windows installer](windows-installer.md).
    Alternatively extract the portable archive and keep its complete tree, including
    `stage/bin/Flapped Ear Telemetry.exe`. macOS: extract `stage/Flapped Ear Telemetry.app`.
 3. Install compatible external FFmpeg and ffprobe. Both must resolve on PATH; macOS
@@ -123,6 +122,6 @@ the application-data `exports` directory; use the path shown in diagnostics. Inc
 the terminal error and relevant log, with personal paths redacted. Share private media
 only by explicit agreement. A small synthetic reproducer is preferable when available.
 
-The remaining audit hardening items stay tracked in [ROADMAP.md](../ROADMAP.md).
+Open hardening items are tracked in the [delivery ledger](product-delivery.md#open-technical-items) and Jira epic KAN-144.
 No data-loss, incorrect timing or unsafe-output defect is acceptable merely because
 the build has a beta label.

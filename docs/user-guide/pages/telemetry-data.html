@@ -60,8 +60,8 @@
 <h3 id="tyres">Tyre channels</h3>
 <p>The Tyres widget finds channels whose name contains <code>tyre</code> or <code>tire</code>, either <code>temp</code>/<code>temperature</code> or <code>pressure</code>/<code>press</code>, and one corner: <code>fl</code>, <code>fr</code>, <code>rl</code> or <code>rr</code> (also <code>lf</code>, <code>rf</code>, <code>lr</code>). Example: <code>tyre_temp_fl</code>.</p>
 <ul>
-  <li>Temperature is shown in °C; a channel declared in °F is converted.</li>
-  <li>Pressure in bar, psi or kPa is converted to the chosen display unit. If the file does not declare the unit, it is judged from typical values.</li>
+  <li>Temperature is shown in °C. A channel declared in °F is converted; units are only read from RCZ files, so a VBO channel is always treated as °C.</li>
+  <li>Pressure in bar, psi or kPa is converted to the chosen display unit. If the unit is not declared (always the case for VBO files), it is judged from typical values.</li>
   <li>An exact 0 is treated as "no reading yet", because tyre-pressure sensors report 0 before their first reading.</li>
 </ul>
 

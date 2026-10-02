@@ -9,6 +9,23 @@ merged PR #56). Before starting, run `git fetch origin && git log --oneline
 origin/main -20` and check Jira for tickets you assume are still open. Trust
 that check over this file.
 
+## Update — 2 October 2026
+
+- Merged since 27 September: KAN-132 tyres widget (#125), KAN-134 hotlap tile
+  (#121), KAN-135 lap-time decimals (#122), KAN-136 automatic segments (#123),
+  KAN-137 off-track laps (#124), and the KAN-138 user guide (#126–#128).
+- An independent read-only audit of `main` at `ca66169` produced the
+  stabilisation epic **KAN-144** (KAN-145 to KAN-161). It found recovery loss
+  when quitting at the recovery prompt, an auto-sync search range that can
+  auto-apply an offset one lap away, two VBO memory blow-ups and a fixed
+  30 s final-validation timeout. Finish KAN-144 before new features; it gates M5.
+- `main` at `ca66169` was red in Debug on the post-import attach race
+  (`TelemetryTests.cpp:8831`): KAN-143 fixes the tests, KAN-150 the product side.
+- The M2–M4 epics (KAN-7, KAN-8, KAN-9) are closed. KAN-122 (owner decisions
+  for the product split) is still open.
+- `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
+  `docs/product-delivery.md` and Jira are the only status records.
+
 ## Project
 
 VBOOverlay / "Flapped Ear Telemetry": a Qt 6 / C++20 / QML macOS desktop app
@@ -123,7 +140,7 @@ and no video.
 - KAN-94–96 (realistic potential) and KAN-108–109 (Explain this lap) depend
   on KAN-86. KAN-98–99 (comparable visits) depend on KAN-89.
 - KAN-106 (chapter export) is paused; see above.
-- KAN-132 (tyre data) needs the phase-0 decision on its data source.
+- KAN-132 (tyre data) is done: the source is RaceChrono's CAN tyre channels in the VBO (merged in #125).
 
 KAN-124 (split phase 2) steps 1–11 are merged (#85, #87–#92, #94–#97):
 - **Step 1:** analysis reaches video only through `VideoLink`, and its guards

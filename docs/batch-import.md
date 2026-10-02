@@ -7,7 +7,7 @@ Lap quality: start-to-start measured times remain visible even with incomplete
 GPS. Such laps carry a GPS warning, are excluded from spatial references and do
 not show a numeric delta or BEST badge. Best-of-run badges use GPS-continuous
 laps only; they do not establish cross-run layout/conditions compatibility or
-automatically detect pit visits. Event-wide ranking is still pending.
+automatically detect pit visits. Event-wide best laps across compatible runs are shown in Day results.
 
 ## Which format should I export from RaceChrono?
 
@@ -176,10 +176,11 @@ those edits and import again. Existing saved projects remain on disk. Appending
 keeps current unsaved edits, the active run, its video/sync and all existing IDs.
 
 The multi-file dialog does not turn the existing **Open telemetry…** action
-into an append action. Folder discovery and drag/drop are not part of this
-iteration. It also does not add event best times or cross-run lap comparison.
-Appending creates new runs; attaching another export to an existing run is not
-supported by this dialog. Import complementary exports together to group them.
+into an append action. Folders and drag and drop are handled by folder and
+drop import (KAN-87, KAN-88). Event best times and cross-run lap comparison live
+in the Analysis window, not in this dialog. Appending creates new runs;
+attaching another export to an existing run is done in Run details (KAN-90),
+not in this dialog. Import complementary exports together to group them.
 
 ## Source groups and duplicate policy
 
