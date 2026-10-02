@@ -156,3 +156,15 @@ footer { margin-top: 2.5rem; font-size: .85rem; color: var(--muted); }
   .toc ul { columns: 1; }
   .pager { flex-direction: column; }
 }
+
+figure.narrow { max-width: 22rem; }
+figure.inline-widget { max-width: 30rem; margin: .8rem 0 1rem; }
+.gallery {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 1rem; margin: 1.2rem 0;
+}
+.gallery figure { margin: 0; }
+.gallery figcaption { margin-top: .3rem; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; align-items: start; }
+.pair figure { margin: 0; }
+.data-note { font-size: .88rem; color: var(--muted); border-left: 3px solid var(--border); padding-left: .8rem; }
