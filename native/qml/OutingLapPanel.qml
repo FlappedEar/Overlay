@@ -11,8 +11,7 @@ Rectangle {
     readonly property var pendingRuns: (analysisStatus.runs || []).filter(run => run.state !== "ready")
     readonly property var resolvedGroups: appController.outingCompatibilityGroups.filter(group => group.resolved && group.available)
     function duration(seconds) {
-        const minutes = Math.floor(seconds / 60);
-        return minutes + ":" + (seconds - minutes * 60).toFixed(3).padStart(6, "0");
+        return appController.formatLapTime(seconds, 3);
     }
     RunDetailsDialog { id: runDetailsDialog }
     ComparisonLapDialog { id: comparisonLapDialog }

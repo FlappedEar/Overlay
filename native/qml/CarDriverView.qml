@@ -31,8 +31,7 @@ Item {
         return (root.associations.channels || []).find(channel => channel.channel === name) || null;
     }
     function lapTimeText(seconds) {
-        const minutes = Math.floor(seconds / 60);
-        return minutes + ":" + (seconds - minutes * 60).toFixed(1).padStart(4, "0");
+        return appController.formatLapTime(seconds, 1);
     }
     // One line per metric: the coefficient, its strength, the laps behind it,
     // and what the sign means in these laps. Never a cause.

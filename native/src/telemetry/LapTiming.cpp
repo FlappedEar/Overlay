@@ -552,4 +552,19 @@ LapSession deriveSourceLapSession(
     return detectLaps(session, *startGate, options, cancelled);
 }
 
+QString formatLapTime(const double seconds, const int decimals)
+{
+    if (!std::isfinite(seconds) || seconds < 0.0) return {};
+    const int places = std::clamp(decimals, 0, 3);
+    const qint64 unitsPerSecond = places == 0 ? 1 : places == 1 ? 10 : places == 2 ? 100 : 1000;
+    // Bounded well below qint64 for any lap time; very long times still format.
+    const double scaled = std::min(seconds * static_cast<double>(unitsPerSecond), 9.0e15);
+    const qint64 total = std::llround(scaled);
+    const qint64 perMinute = 60 * unitsPerSecond;
+    const qint64 minutes = total / perMinute, rest = total % perMinute;
+    QString text = QStringLiteral("%1:%2").arg(minutes).arg(rest / unitsPerSecond, 2, 10, QLatin1Char('0'));
+    if (places > 0) text += QStringLiteral(".%1").arg(rest % unitsPerSecond, places, 10, QLatin1Char('0'));
+    return text;
+}
+
 } // namespace FlappedEar

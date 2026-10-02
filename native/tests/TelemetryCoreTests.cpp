@@ -58,6 +58,7 @@ private slots:
     void matchesLongCircuitsByCrossTrackDistance();
     void flagsALapThatLeavesTheOtherLapsLine();
     void mapsTyreChannelsPerCorner();
+    void formatsLapTimesRoundedBeforeMinutes();
     void readsTyreValuesWithoutPlaceholdersOrGaps();
     void readsPrivateTyreData();
     void rejectsMalformedLapExclusions_data();
@@ -1379,6 +1380,29 @@ TelemetryChannel tyreChannel(const QString &name, const QVector<float> &values, 
 }
 
 } // namespace
+
+void TelemetryCoreTests::formatsLapTimesRoundedBeforeMinutes()
+{
+    // KAN-149: rounding first, then minutes; never "x:60".
+    QCOMPARE(formatLapTime(59.96, 1), QStringLiteral("1:00.0"));
+    QCOMPARE(formatLapTime(59.95, 1), QStringLiteral("1:00.0")); // half away from zero
+    QCOMPARE(formatLapTime(59.94, 1), QStringLiteral("0:59.9"));
+    QCOMPARE(formatLapTime(60.0, 1), QStringLiteral("1:00.0"));
+    QCOMPARE(formatLapTime(59.995, 2), QStringLiteral("1:00.00"));
+    QCOMPARE(formatLapTime(119.996, 2), QStringLiteral("2:00.00"));
+    QCOMPARE(formatLapTime(119.995, 2), QStringLiteral("2:00.00"));
+    QCOMPARE(formatLapTime(119.994, 2), QStringLiteral("1:59.99"));
+    QCOMPARE(formatLapTime(3599.9995, 3), QStringLiteral("60:00.000"));
+    QCOMPARE(formatLapTime(3599.9994, 3), QStringLiteral("59:59.999"));
+    QCOMPARE(formatLapTime(100.234, 2), QStringLiteral("1:40.23"));
+    QCOMPARE(formatLapTime(100.234, 3), QStringLiteral("1:40.234"));
+    QCOMPARE(formatLapTime(65.4, 0), QStringLiteral("1:05"));
+    QCOMPARE(formatLapTime(0.0, 3), QStringLiteral("0:00.000"));
+    QCOMPARE(formatLapTime(5.5, 9), QStringLiteral("0:05.500")); // at most 3 decimals
+    QVERIFY(formatLapTime(-0.001, 2).isEmpty());
+    QVERIFY(formatLapTime(std::numeric_limits<double>::quiet_NaN(), 2).isEmpty());
+    QVERIFY(formatLapTime(std::numeric_limits<double>::infinity(), 2).isEmpty());
+}
 
 void TelemetryCoreTests::mapsTyreChannelsPerCorner()
 {

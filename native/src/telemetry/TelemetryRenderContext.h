@@ -54,6 +54,8 @@ public:
     // when recorded and valid at that time; `available` is false when the
     // recording has no tyre channels at all.
     Q_INVOKABLE QVariantMap tyreValues() const;
+    // KAN-149: lap times for the tiles, rounded before minutes are split.
+    Q_INVOKABLE QString formatLapTime(double seconds, int decimals) const { return FlappedEar::formatLapTime(seconds, decimals); }
 
 public slots:
     void setTime(double time);

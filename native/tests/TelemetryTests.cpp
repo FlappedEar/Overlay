@@ -7969,6 +7969,9 @@ void TelemetryTests::showsOneHotlapAndExportsItByDefault()
     QTRY_COMPARE(hotlapTile->property("decimals").toInt(), 3);
     QVERIFY(QMetaObject::invokeMethod(hotlapTile, "formatTime", Q_RETURN_ARG(QVariant, formatted), Q_ARG(QVariant, 100.234)));
     QCOMPARE(formatted.toString(), QString("1:40.234"));
+    // KAN-149: the tile (also what an export renders) rounds before minutes.
+    QVERIFY(QMetaObject::invokeMethod(hotlapTile, "formatTime", Q_RETURN_ARG(QVariant, formatted), Q_ARG(QVariant, 119.9996)));
+    QCOMPARE(formatted.toString(), QString("2:00.000"));
     model->setSetting(tile, "timingDecimals", 2);
 
     // The inspector for the tile.
