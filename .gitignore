@@ -13,3 +13,4 @@ __MACOSX/
 *.rcz
 
 __pycache__/
+docs/user-guide/_site/
