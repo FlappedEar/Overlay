@@ -1,10 +1,46 @@
 # Windows validation by the owner (2 October 2026)
 
-The owner built and tested FlappedEar Overlays on Windows locally. Nothing from
-that run was committed; this page records it. As `AGENTS.md` requires, results
-from real recordings are reported separately from synthetic tests.
+The owner built and tested FlappedEar Overlays on Windows locally, twice: once on
+`c8f0c9f`, then again after the fixes, on `fa79447`. Nothing from either run was
+committed; this page records both. As `AGENTS.md` requires, results from real
+recordings are reported separately from synthetic tests.
 
-## Environment
+## Retest after the fixes (`fa79447`)
+
+`fa79447` was the head of [PR #146](https://github.com/arekkozuch/VBOOverlay/pull/146),
+which was then merged as `1a96ae3`. The environment is the same as below, with the
+NVIDIA driver at 617.14. Everything passes, with no failures and no local workarounds.
+
+**Synthetic tests**
+- **Build:** a clean Release build passes, with no errors and no compiler warnings
+  in project code ([KAN-176]).
+- **CTest:** 39 of 39 pass. The `._*` folder-import test that failed before now
+  passes ([KAN-173]).
+
+**Real recordings (reported separately)**
+- **Data:** same results as the first run. The VBO parses with 9,093 samples and
+  3 laps; auto-sync gives an offset of 7.817 s at correlation 0.998.
+- **End to end in the app:** import, sync, seek, and an export that passed
+  validation, with no test changes.
+- **Paused seek ([KAN-172]):** fixed. The preview lands 38 s into lap 3 and shows
+  live values (53 km/h, 4,020 rpm, 91% throttle, heart rate 147) instead of
+  jumping back to the start.
+- **NVIDIA encoder ([KAN-174]):** fixed. The app selected NVENC on its own. The
+  encoder ran at 46.5 fps against 43.0 fps on Quick Sync, but the whole 8 s 1080p
+  export still took about 22 s, so the encoder is not the bottleneck for short
+  1080p exports ([KAN-177]).
+
+**Still open**
+- An MP4 trimmed without re-encoding (with an edit list) still has its frames
+  miscounted, so the export is refused ([KAN-175]).
+- About 135 harmless "access denied" registry warnings during test cleanup
+  ([KAN-179]).
+- An unknown command-line flag, such as the removed `--export-test`, opens the
+  editor instead of reporting an error ([KAN-178]).
+
+## First run (`c8f0c9f`)
+
+### Environment
 
 - **System and build:** Windows 11 Pro; MSVC 2022 (Enterprise), Ninja, Release build.
 - **Qt and FFmpeg:** Qt 6.11.0 msvc2022_64 with the Qt Multimedia FFmpeg 7.1.3
@@ -14,14 +50,14 @@ from real recordings are reported separately from synthetic tests.
 - **Revision:** `main` at `c8f0c9f` (#135). This is before the FlappedEar
   Overlays rename, and 21 commits before `978dc2a`.
 
-## Synthetic tests
+### Synthetic tests
 
 - **Build:** passed after four local changes, now [KAN-176].
 - **CTest:** 37 of 38 entries passed; 20 cases are skipped by design. The one
   failure was the folder-scan test ([KAN-173]).
 - **Startup smoke:** passed, once `QT_FORCE_STDERR_LOGGING` was set ([KAN-176]).
 
-## Real recordings (reported separately)
+### Real recordings (reported separately)
 
 | Check | Result |
 | --- | --- |
@@ -36,20 +72,20 @@ from real recordings are reported separately from synthetic tests.
 **Not tested:** importing a day of several recordings; the installer and
 packaging; frame-by-frame inspection of the exported file.
 
-## Findings
+### Findings
 
 | Finding | Ticket | Status |
 | --- | --- | --- |
-| Seeking while paused jumps back to the start (the Windows backend reports `LoadedMedia` again) | [KAN-172] | Fixed; owner to verify on Windows |
-| Folder import picks up macOS `._*` metadata files | [KAN-173] | Fixed |
-| NVENC is never selected (the encoder probe used a 64×64 frame) | [KAN-174] | Fixed (256×256 probe); owner to verify with NVENC |
-| An MP4 with an edit list fails to export: frames are counted from packets, and validation refuses the output | [KAN-175] | Open; to re-check on current `main` |
-| Build and test portability (Mach headers, `/bigobj`, smoke logging, VideoToolbox skip) and three MSVC warnings | [KAN-176] | Fixed |
+| Seeking while paused jumps back to the start (the Windows backend reports `LoadedMedia` again) | [KAN-172] | Fixed; verified on Windows (retest) |
+| Folder import picks up macOS `._*` metadata files | [KAN-173] | Fixed; verified on Windows (retest) |
+| NVENC is never selected (the encoder probe used a 64×64 frame) | [KAN-174] | Fixed (256×256 probe); verified on Windows (retest) |
+| An MP4 with an edit list fails to export: frames are counted from packets, and validation refuses the output | [KAN-175] | Open; reproduced in the retest |
+| Build and test portability (Mach headers, `/bigobj`, smoke logging, VideoToolbox skip) and three MSVC warnings | [KAN-176] | Fixed; verified on Windows (retest) |
 | No GPU choice for rendering; CPU-side 10-bit composition limits export speed | [KAN-177] | Recorded idea; not scheduled |
-| `--export-test` rejected every export | — | Obsolete: KAN-156 removed that mode |
-| About 135 harmless "access denied" registry warnings during test cleanup | — | Unchanged |
+| `--export-test` rejected every export | — | Obsolete: KAN-156 removed that mode. An unknown flag now opens the editor ([KAN-178]) |
+| About 135 harmless "access denied" registry warnings during test cleanup | [KAN-179] | Open |
 
-## Intel and NVIDIA
+### Intel and NVIDIA
 
 The source was 600 frames of the real 4K 10-bit clip.
 
@@ -96,3 +132,5 @@ paused until the owner resumes them ([KAN-162], [KAN-84]).
 [KAN-175]: https://kozucharkadiusz.atlassian.net/browse/KAN-175
 [KAN-176]: https://kozucharkadiusz.atlassian.net/browse/KAN-176
 [KAN-177]: https://kozucharkadiusz.atlassian.net/browse/KAN-177
+[KAN-178]: https://kozucharkadiusz.atlassian.net/browse/KAN-178
+[KAN-179]: https://kozucharkadiusz.atlassian.net/browse/KAN-179
