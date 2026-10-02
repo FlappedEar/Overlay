@@ -3,14 +3,19 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 Item {
+    id: pedals
     property var frame: parent.frame
     anchors.fill: parent
+    // One pedal row's share of the widget, from the widget's own fixed size:
+    // sizes taken from the rows' layout would feed back into it (KAN-140).
+    readonly property real rowHeight: Math.max(0, (height - 2 * panel.innerPadding - pedalColumn.spacing) / 2)
     TelemetryPanel {
         id: panel
         anchors.fill: parent
         frame: parent.frame
     }
     ColumnLayout {
+        id: pedalColumn
         anchors.fill: parent
         anchors.margins: panel.innerPadding
         spacing: Math.max(5 * frame.sceneScale, height * 0.045)
@@ -43,7 +48,7 @@ Item {
                 property real pedalValue: hasValue ? Number(pedalRaw) : 0
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.max(panel.panelLabelSize * 1.12, parent.height * 0.38)
+                    Layout.preferredHeight: Math.max(panel.panelLabelSize * 1.12, pedals.rowHeight * 0.38)
                     Label {
                         Layout.fillWidth: true
                         text: frame.widgetSettings[modelData.labelKey] || (modelData.fallback === "throttle" ? "Throttle" : "Brake")
@@ -63,7 +68,7 @@ Item {
                 }
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.max(11 * frame.sceneScale, parent.parent.height * 0.28)
+                    Layout.preferredHeight: Math.max(11 * frame.sceneScale, pedals.rowHeight * 0.28)
                     radius: Number(frame.widgetSettings.barRadius ?? 5) * frame.sceneScale
                     color: frame.neutralTrack
                     Rectangle {
