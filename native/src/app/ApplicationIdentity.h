@@ -22,6 +22,9 @@ inline void initialize()
     QCoreApplication::setOrganizationDomain(domain);
     QCoreApplication::setApplicationName(storageName);
     QGuiApplication::setApplicationDisplayName(displayName);
+#ifdef FLAPPEDEAR_VERSION
+    QCoreApplication::setApplicationVersion(QStringLiteral(FLAPPEDEAR_VERSION));
+#endif
 }
 
 } // namespace FlappedEar::ApplicationIdentity

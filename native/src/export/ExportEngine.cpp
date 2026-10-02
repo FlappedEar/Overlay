@@ -59,7 +59,8 @@ QString rateString(const MediaRational &rate)
 
 bool isCancelled(const ExportSettings &settings)
 {
-    return !settings.cancellationFilePath.isEmpty() && QFileInfo::exists(settings.cancellationFilePath);
+    return (!settings.cancellationFilePath.isEmpty() && QFileInfo::exists(settings.cancellationFilePath))
+        || (settings.cancelled && settings.cancelled());
 }
 
 bool updateManifestState(const ExportSettings &settings, const QString &state)

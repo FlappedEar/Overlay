@@ -1931,7 +1931,7 @@ Rectangle {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Match the GoPro GPS speed trace against the VBOX recording. Processing runs in the background.")
+                        text: qsTr("Match the GoPro GPS speed trace against the telemetry's speed (VBO or RCZ). Processing runs in the background.")
                         color: "#718092"
                         wrapMode: Text.WordWrap
                         font.pixelSize: 11

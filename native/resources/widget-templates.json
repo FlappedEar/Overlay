@@ -201,12 +201,12 @@
         { "type": "retroTachometer", "x": 0.025, "y": 0.17, "width": 0.18, "height": 0.32, "settings": { "source": "rpm", "label": "RPM" } },
         { "type": "speed", "x": 0.21, "y": 0.26, "width": 0.09, "height": 0.15, "settings": { "source": "speed", "label": "Speed", "unit": "km/h" } },
         { "type": "pedals", "x": 0.31, "y": 0.26, "width": 0.16, "height": 0.135, "settings": { "acceleratorSource": "throttle", "brakeSource": "brake" } },
-        { "type": "retroCustomValue", "x": 0.48, "y": 0.26, "width": 0.18, "height": 0.045, "settings": { "source": "oil", "label": "OIL", "unit": "°C", "decimals": 0, "icon": "◒", "stackPosition": "top" } },
+        { "type": "retroCustomValue", "x": 0.48, "y": 0.26, "width": 0.18, "height": 0.045, "settings": { "source": "engine_oil_temp-obd", "label": "OIL", "unit": "°C", "decimals": 0, "icon": "◒", "stackPosition": "top" } },
         { "type": "retroCustomValue", "x": 0.48, "y": 0.305, "width": 0.18, "height": 0.045, "settings": { "source": "atf", "label": "ATF", "unit": "°C", "decimals": 0, "icon": "⚙", "stackPosition": "middle" } },
-        { "type": "retroCustomValue", "x": 0.48, "y": 0.35, "width": 0.18, "height": 0.045, "settings": { "source": "coolant", "label": "COOLANT", "unit": "°C", "decimals": 0, "icon": "♨", "stackPosition": "bottom" } },
+        { "type": "retroCustomValue", "x": 0.48, "y": 0.35, "width": 0.18, "height": 0.045, "settings": { "source": "coolant_temp-obd", "label": "COOLANT", "unit": "°C", "decimals": 0, "icon": "♨", "stackPosition": "bottom" } },
         { "type": "heartRate", "x": 0.675, "y": 0.26, "width": 0.095, "height": 0.15, "settings": { "source": "heartRate", "label": "HR", "unit": "bpm" } },
-        { "type": "f1GForceRadar", "x": 0.815, "y": 0.105, "width": 0.145, "height": 0.265, "settings": { "lateralSource": "lateralG", "longitudinalSource": "longitudinalG" } },
-        { "type": "gForceMagnitudeBar", "x": 0.80, "y": 0.385, "width": 0.17, "height": 0.105, "settings": { "lateralSource": "lateralG", "longitudinalSource": "longitudinalG", "labelText": "G-Force" } }
+        { "type": "f1GForceRadar", "x": 0.815, "y": 0.105, "width": 0.145, "height": 0.265, "settings": { "lateralSource": "", "longitudinalSource": "" } },
+        { "type": "gForceMagnitudeBar", "x": 0.80, "y": 0.385, "width": 0.17, "height": 0.105, "settings": { "lateralSource": "", "longitudinalSource": "", "labelText": "G-Force" } }
       ]
     },
     {

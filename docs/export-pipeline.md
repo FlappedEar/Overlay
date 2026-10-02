@@ -106,3 +106,10 @@ For target-file transaction guarantees, see [export-output-safety.md](export-out
 Every ffprobe/FFmpeg channel is treated as untrusted external input. FFprobe JSON is drained while the process runs and must fit within 4 MiB; overflow terminates the probe and reports the operation, limit, and observed bytes. FFmpeg stderr is retained as a 128 KiB newest-first diagnostic tail with truncation semantics.
 
 Text fields in a worker message are cut to their last 32 KiB, marked "[… earlier output omitted]". That keeps each message well below the GUI's 128 KiB limit, and the end of an FFmpeg tail, which explains the error, still reaches the export log. The GUI applies the limit to each message line rather than to everything one read delivered (KAN-148). Machine-readable progress drops a pathological pending line above 16 KiB instead of growing indefinitely. The representative FFV1 storage sample counts and discards encoded stdout bytes, so sample output is not retained in RAM.
+
+## Worker lifecycle and stale artifacts (KAN-156)
+
+- **Parent exit.** An export worker stops when the application that started it is gone, for example after a crash. It notices that it has been reparented, cancels cooperatively and removes its temporary files. It does not encode on into a hidden staging file.
+- **Stale artifacts.** Stale export artifacts, meaning the temporary overlay and the staging file named in an export manifest whose worker has exited, are cleaned only by the application at startup, while it holds its single-instance session lock. Command-line modes never clean them, because another export could own them before its worker PID is recorded.
+- **No command-line export.** There is no command-line export mode; the former `--export-test` hard-coded overwrite consent.
+- **Manifest location.** Manifests are still written to the system temporary folder. A later change will move them, because macOS can purge that folder.

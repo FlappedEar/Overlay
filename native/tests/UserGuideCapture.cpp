@@ -354,7 +354,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QVERIFY(bestIndex >= 0 && !otherLap.isEmpty());
     QVERIFY(controller.selectOutingLap(bestIndex));
     QTRY_COMPARE_WITH_TIMEOUT(controller.outingLapDetailState(), QStringLiteral("ready"), 60000);
-    // A paused macOS player shows no frame after a seek: play the moment briefly.
+    // Play the moment briefly: the lap view's cursor follows the video only while it plays.
     QVERIFY(seek(moment - 2.0));
     QVERIFY(QMetaObject::invokeMethod(window, "togglePlayback"));
     QTest::qWait(2000);

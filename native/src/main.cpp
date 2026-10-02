@@ -8,6 +8,7 @@
 #include "export/ExportFormat.h"
 #include "export/ExportDiagnostics.h"
 #include "export/ExportProgress.h"
+#include "export/ExportCancellation.h"
 #include "export/ExportOutputTransaction.h"
 #include "export/ExportArtifactManifest.h"
 #include "telemetry/VboParser.h"
@@ -170,67 +171,6 @@ int renderVisualSmoke(const QString &path, const bool darkBackground)
     return EXIT_SUCCESS;
 }
 
-int exportTest(const QString &inputPath, const QString &outputPath)
-{
-    FlappedEar::ExportOutputTransaction outputTransaction;
-    const auto preparation = outputTransaction.prepare(outputPath, inputPath, {}, true);
-    if (preparation.status != FlappedEar::ExportOutputTransaction::PreparationStatus::Ready) {
-        qCritical().noquote() << (preparation.error.isEmpty()
-            ? QStringLiteral("Export target requires explicit overwrite approval.") : preparation.error);
-        return EXIT_FAILURE;
-    }
-    const FlappedEar::TelemetrySession session = FlappedEar::VboParser::parse(
-        u"[column names]\ntime speed\n[data]\n0 0\n10 100");
-    FlappedEar::WidgetModel widgets;
-    widgets.resetDefaults();
-    const FlappedEar::MediaInfo input = FlappedEar::MediaProbe::probe(inputPath);
-    FlappedEar::TelemetryFrameRenderer renderer;
-    if (!renderer.initialize(
-            &widgets, &session, nullptr, FlappedEar::SyncTransform{}, input.videoSize)) {
-        qCritical().noquote() << renderer.errorString();
-        return EXIT_FAILURE;
-    }
-    FlappedEar::ExportSettings settings;
-    settings.inputPath = inputPath;
-    settings.outputPath = outputTransaction.stagingPath();
-    settings.outputSize = input.videoSize;
-    settings.frameRate = FlappedEar::ExportEngine::effectiveFrameRate(input);
-    settings.videoBitrate = FlappedEar::ExportFormat::recommendedVideoBitrate(
-        settings.outputSize, settings.frameRate, input.bitDepth.value_or(8));
-    const FlappedEar::ExportResult result = FlappedEar::ExportEngine::exportVideo(settings, renderer);
-    if (!result.success) {
-        qCritical().noquote() << result.error;
-        if (!result.diagnostics.isEmpty()) qCritical().noquote() << result.diagnostics;
-        return EXIT_FAILURE;
-    }
-    QString commitError;
-    if (!result.validationWarning.isEmpty() || !outputTransaction.commit(&commitError)) {
-        qCritical().noquote() << (commitError.isEmpty()
-            ? QStringLiteral("Export validation did not pass; output was not committed.") : commitError);
-        return EXIT_FAILURE;
-    }
-    if (!result.validationWarning.isEmpty()) {
-        qWarning().noquote() << QStringLiteral("Video export completed, but automatic validation failed.");
-        qWarning().noquote() << result.validationWarning;
-        if (!result.diagnostics.isEmpty()) qWarning().noquote() << result.diagnostics;
-    }
-    qInfo().noquote() << QStringLiteral(
-        "HEVC export completed: %1 submitted / %10 encoded frames in %2 ms (%3 fps); render=%4 ms, polish=%5 ms, "
-        "syncRender=%6 ms, readback=%7 ms, cpuCopy=%8 ms, ffmpegWrite=%9 ms, maxQueued=%11 MiB, temporaryOverlay=%12 MiB.")
-                             .arg(result.renderedFrames).arg(result.elapsedMilliseconds)
-                             .arg(result.renderedFrames * 1000.0 / qMax<qint64>(1, result.elapsedMilliseconds), 0, 'f', 2)
-                             .arg(result.renderMilliseconds)
-                             .arg(result.polishNanoseconds / 1'000'000)
-                             .arg(result.syncRenderNanoseconds / 1'000'000)
-                             .arg(result.readbackNanoseconds / 1'000'000)
-                             .arg(result.cpuCopyNanoseconds / 1'000'000)
-                             .arg(result.ffmpegWriteNanoseconds / 1'000'000)
-                             .arg(result.encodedFrames)
-                             .arg(result.maximumQueuedBytes / (1024.0 * 1024.0), 0, 'f', 1)
-                             .arg(result.temporaryOverlayBytes / (1024.0 * 1024.0), 0, 'f', 1);
-    return EXIT_SUCCESS;
-}
-
 int benchmarkRender(const QSize size, const int frames)
 {
     const FlappedEar::TelemetrySession session = syntheticTrackSession();
@@ -360,8 +300,10 @@ int exportWorker(const QString &configPath)
         emitEvent({{"type", "log"}, {"level", "info"}, {"component", "export"},
                    {"message", "Export worker started"}});
         const QString cancellationPath = config.value("cancelPath").toString();
-        const auto cancelled = [cancellationPath] {
-            return !cancellationPath.isEmpty() && QFileInfo::exists(cancellationPath);
+        // Also stop when the application that started this worker has gone (KAN-156).
+        const auto parent = std::make_shared<FlappedEar::ParentProcessWatch>();
+        const auto cancelled = [cancellationPath, parent] {
+            return (!cancellationPath.isEmpty() && QFileInfo::exists(cancellationPath)) || parent->parentExited();
         };
         currentOperation = QStringLiteral("parseTelemetry");
         currentMessage = QStringLiteral("Reading telemetry data");
@@ -447,6 +389,7 @@ int exportWorker(const QString &configPath)
         }
         settings.audioEnabled = config.value("audioEnabled").toBool(true);
         settings.cancellationFilePath = config.value("cancelPath").toString();
+        settings.cancelled = [parent] { return parent->parentExited(); };
         settings.temporaryOverlayPath = config.value("temporaryOverlayPath").toString();
         settings.manifestPath = config.value("manifestPath").toString();
         const double sourceRangeStart = FlappedEar::ExportEngine::exportRelativeTime(
@@ -631,7 +574,6 @@ int main(int argc, char *argv[])
     const QString command = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString{};
     const bool renderVisualSmokeMode = argc == 3 && command == "--render-visual-smoke";
     const bool renderVisualSmokeDarkMode = argc == 3 && command == "--render-visual-smoke-dark";
-    const bool exportTestMode = argc == 4 && QString::fromLocal8Bit(argv[1]) == "--export-test";
     const bool exportWorkerMode = argc == 3 && QString::fromLocal8Bit(argv[1]) == "--export-worker";
     const bool benchmarkRenderMode = argc == 5 && QString::fromLocal8Bit(argv[1]) == "--benchmark-render";
     const bool startupSmokeMode = argc == 2 && QString::fromLocal8Bit(argv[1]) == "--startup-smoke";
@@ -643,7 +585,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     FlappedEar::ApplicationIdentity::initialize();
     const bool applicationMode = !renderStillMode && !renderVisualSmokeMode && !renderVisualSmokeDarkMode
-        && !exportTestMode && !exportWorkerMode
+        && !exportWorkerMode
         && !benchmarkRenderMode && !startupSmokeMode;
     std::unique_ptr<FlappedEar::GuiSessionLock> guiSessionLock;
     FlappedEar::LegacyStorageMigration::Result storageMigration;
@@ -676,8 +618,9 @@ int main(int argc, char *argv[])
                 FlappedEar::AppLog::info(QStringLiteral("Moved: %1").arg(path));
             for (const QString &warning : storageMigration.warnings) FlappedEar::AppLog::warn(warning);
         }
-    }
-    if (!exportWorkerMode) {
+        // Stale export artifacts are cleaned only while this session lock is
+        // held: a command-line run must not delete a running export's staging
+        // file (KAN-156).
         QStringList janitorDiagnostics;
         const QStringList recovered = FlappedEar::ExportArtifactManifest::recoverStale(&janitorDiagnostics);
         for (const QString &path : recovered) qInfo().noquote() << QStringLiteral("Recovered owned stale export artifacts: %1").arg(path);
@@ -692,9 +635,6 @@ int main(int argc, char *argv[])
     }
     if (renderVisualSmokeDarkMode) {
         return renderVisualSmoke(QString::fromLocal8Bit(argv[2]), true);
-    }
-    if (exportTestMode) {
-        return exportTest(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]));
     }
     if (exportWorkerMode) {
         return exportWorker(QString::fromLocal8Bit(argv[2]));

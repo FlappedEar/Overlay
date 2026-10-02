@@ -42,6 +42,7 @@ qt_add_resources(flappedear_native_tests "flappedear_test_qml"
         ../qml/widgets/RetroGrandPrixWidget.qml
         ../qml/widgets/RetroSpeedArcWidget.qml
         ../qml/widgets/RetroTachometerWidget.qml
+        ../qml/widgets/PedalsWidget.qml
         ../qml/widgets/TelemetryPanel.qml
         ../qml/widgets/TyresWidget.qml
 )
