@@ -700,3 +700,15 @@ as a dash, and so is a moment where its channel has no valid value.
 - One exception is Session 1 FR, which reads 3.08 bar for about three
   seconds. That is what was recorded, and it is shown as is.
 - The Jastrząb day has no tyre channels, so the widget shows dashes there.
+
+## Day results belong to their day (KAN-151)
+
+The theoretical best (with time losses and sector progression) and the
+channel summaries are computed in the background.
+
+- **Another day opening** (another project, or a new or imported event):
+  - every such request is given a new number, so a result still on its way is discarded;
+  - the work is cancelled;
+  - what is shown is cleared.
+- **The same day's sources changing**, for example its video opening: results are kept.
+- **Workers still running** count as work in progress, so they are cancelled before the application quits.

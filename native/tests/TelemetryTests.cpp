@@ -176,6 +176,7 @@ private slots:
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
     void createsSegmentsAutomaticallyFromTheBestLap();
+    void discardsDayResultsFromThePreviousDay();
     void keepsAutomaticSegmentsWhenTheRunChangesDuringCreation();
     void reviewsSegmentProposalsForTheOpenLap();
     void editsApprovedSegmentsWithUndo();
@@ -5861,6 +5862,72 @@ void TelemetryTests::keepsAutomaticSegmentsWhenTheRunChangesDuringCreation()
         qInfo().noquote() << action << (created ? "kept" : "LOST") << "·" << controller.statusText();
         QVERIFY2(created, qPrintable(action));
     }
+}
+
+void TelemetryTests::discardsDayResultsFromThePreviousDay()
+{
+    // KAN-151: a theoretical best or channel summary started on day A must
+    // not be published for day B. Day B's project is opened from day A, and
+    // day A's results complete (under test control) while B's laps still
+    // load: the window in which invalidation used to wait.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto dayA = directory.filePath("day-a.vbo"), dayB = directory.filePath("day-b.vbo");
+    QVERIFY(writeBytes(dayA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
+    QVERIFY(writeBytes(dayB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
+    const auto projectB = directory.filePath("day-b.fetproject"), projectA = directory.filePath("day-a.fetproject");
+    {
+        AppController other(nullptr, directory.filePath("recovery-b.json"));
+        QSignalSpy committed(&other, &AppController::batchImportCommitted);
+        QVERIFY(other.importAnalysisRuns("Day B", {QUrl::fromLocalFile(dayB)}));
+        QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(other.vboLoadState() == "ready" && !other.outingLapsLoading(), 30000);
+        QVERIFY(other.saveProject(QUrl::fromLocalFile(projectB)));
+    }
+    QSettings().remove("project/path"); // start on day A, not the remembered day B
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.setAutomaticSegments(true);
+    QSignalSpy committed(&controller, &AppController::batchImportCommitted);
+    QVERIFY(controller.importAnalysisRuns("Day A", {QUrl::fromLocalFile(dayA)}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 30000);
+    QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading()
+        && controller.statusText().contains("created automatically"), 60000);
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectA))); // clean, so Open does not ask
+
+    controller.requestOutingTheoreticalBest();
+    controller.requestOutingChannelSummaries();
+    QCOMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("loading"));
+    // Day A's results, held back until day B is opening.
+    auto &analysis = controller.m_analysis;
+    const auto staleBest = analysis.m_theoreticalBestRequest;
+    const auto staleSummaries = analysis.m_channelSummariesRequest;
+    QPromise<AnalysisController::TheoreticalBestResult> best; best.start();
+    QPromise<AnalysisController::ChannelSummariesResult> summaries; summaries.start();
+    analysis.m_theoreticalBestWatcher.setFuture(best.future());
+    analysis.m_channelSummariesWatcher.setFuture(summaries.future());
+
+    controller.requestOpenProject(QUrl::fromLocalFile(projectB));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.eventName(), QString("Day B"), 30000);
+    AnalysisController::TheoreticalBestResult staleBestResult;
+    staleBestResult.request = staleBest;
+    staleBestResult.error = QStringLiteral("day A");
+    best.addResult(staleBestResult); best.finish();
+    AnalysisController::ChannelSummariesResult staleSummaryResult;
+    staleSummaryResult.request = staleSummaries;
+    staleSummaryResult.runs = {QVariantMap{{"runName", "Day A run"}}};
+    summaries.addResult(staleSummaryResult); summaries.finish();
+    // While B's laps load, and once they have loaded, nothing of day A shows.
+    const auto showsDayA = [&] {
+        const auto runs = controller.outingChannelSummaries().value("runs").toList();
+        return controller.outingTheoreticalBest().value("message").toString() == "day A"
+            || (!runs.isEmpty() && runs.first().toMap().value("runName") == "Day A run");
+    };
+    for (int step = 0; step < 40; ++step) {
+        QTest::qWait(25);
+        QVERIFY2(!showsDayA(), qPrintable(QString("day A's results shown for day B (laps loading: %1)").arg(controller.outingLapsLoading())));
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 30000);
+    QVERIFY(!showsDayA());
 }
 
 void TelemetryTests::createsSegmentsAutomaticallyFromTheBestLap()
