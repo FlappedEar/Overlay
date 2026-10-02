@@ -61,6 +61,8 @@ struct ExportSettings {
     qint64 audioBitrate = 192'000;
     bool audioEnabled = true;
     QString cancellationFilePath;
+    // Also polled for cancellation, for example a vanished parent (KAN-156).
+    std::function<bool()> cancelled;
     QString temporaryOverlayPath;
     QString manifestPath;
     std::function<void(const QString &state)> stateCallback;
