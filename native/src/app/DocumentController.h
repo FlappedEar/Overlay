@@ -295,7 +295,10 @@ private:
     RecordingWork m_recordingCandidate;
     QString m_recordingRunId;
     QString m_recordingDocumentId;
-    quint64 m_recordingRevision = 0;
+    // A recording review depends only on the event's recordings (KAN-150): the
+    // day's own analysis bookkeeping, such as a verified track inference, does
+    // not make it stale. Applying it builds on the current project.
+    QByteArray m_recordingSources;
 };
 
 } // namespace FlappedEar

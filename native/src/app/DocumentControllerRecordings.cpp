@@ -130,7 +130,7 @@ bool DocumentController::attachRunRecording(const QString &runId, const QUrl &ur
         return false;
     }
     m_recordingRunId = runId;
-    m_recordingRevision = m_documentState.revision();
+    m_recordingSources = eventSourcesSignature();
     m_recordingDocumentId = m_documentId;
     m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
     const auto cancellation = m_recordingCancellation;
@@ -187,7 +187,7 @@ bool DocumentController::attachRunRecording(const QString &runId, const QUrl &ur
 bool DocumentController::confirmRunRecording()
 {
     if (m_recordingReview.value("state") != "review" || m_recordingWatcher.isRunning()) return false;
-    if (m_recordingDocumentId != m_documentId || m_recordingRevision != m_documentState.revision()) {
+    if (m_recordingDocumentId != m_documentId || m_recordingSources != eventSourcesSignature()) {
         setRecordingReview({{"state", "error"}, {"runId", m_recordingRunId},
             {"message", tr("The project changed. Choose the recording again.")}});
         return false;
@@ -238,7 +238,7 @@ bool DocumentController::setRunPrimarySource(const QString &runId, const QString
         return false;
     }
     m_recordingRunId = runId;
-    m_recordingRevision = m_documentState.revision();
+    m_recordingSources = eventSourcesSignature();
     m_recordingDocumentId = m_documentId;
     m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
     const auto cancellation = m_recordingCancellation;
@@ -302,7 +302,7 @@ bool DocumentController::checkRunRecordingAlignment(const QString &runId, const 
         return false;
     }
     m_recordingRunId = runId;
-    m_recordingRevision = m_documentState.revision();
+    m_recordingSources = eventSourcesSignature();
     m_recordingDocumentId = m_documentId;
     m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
     const auto cancellation = m_recordingCancellation;
@@ -354,7 +354,7 @@ bool DocumentController::reviewRunFusion(const QString &runId, const QString &so
         return false;
     }
     m_recordingRunId = runId;
-    m_recordingRevision = m_documentState.revision();
+    m_recordingSources = eventSourcesSignature();
     m_recordingDocumentId = m_documentId;
     m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
     const auto cancellation = m_recordingCancellation;
@@ -420,7 +420,7 @@ bool DocumentController::approveRunFusion(const QVariantMap &rules)
     if (m_recordingReview.value("state") != "fusionReview" || m_recordingWatcher.isRunning()
         || !m_recordingReview.value("preview").toMap().value("approvable").toBool())
         return false;
-    if (m_recordingDocumentId != m_documentId || m_recordingRevision != m_documentState.revision()) {
+    if (m_recordingDocumentId != m_documentId || m_recordingSources != eventSourcesSignature()) {
         setRecordingReview({{"state", "error"}, {"runId", m_recordingRunId},
             {"message", tr("The project changed. Review the fusion again.")}});
         return false;
@@ -492,14 +492,14 @@ void DocumentController::initializeRunRecordings()
         // A review is for the document it was made against.
         if (!m_recordingReview.isEmpty() && !m_recordingWatcher.isRunning()
             && (m_recordingReview.value("state") == "review" || m_recordingReview.value("state") == "fusionReview")
-            && (m_recordingDocumentId != m_documentId || m_recordingRevision != m_documentState.revision()))
+            && (m_recordingDocumentId != m_documentId || m_recordingSources != eventSourcesSignature()))
             cancelRunRecording();
     });
     connect(&m_recordingWatcher, &QFutureWatcher<RecordingWork>::finished, this, [this] {
         auto work = m_recordingWatcher.future().takeResult();
         const auto runId = m_recordingRunId;
         if (work.cancelled) { setRecordingReview({}); return; }
-        if (m_recordingDocumentId != m_documentId || m_recordingRevision != m_documentState.revision()) {
+        if (m_recordingDocumentId != m_documentId || m_recordingSources != eventSourcesSignature()) {
             setRecordingReview({{"state", "error"}, {"runId", runId},
                 {"message", tr("The project changed meanwhile. Try again.")}});
             return;
