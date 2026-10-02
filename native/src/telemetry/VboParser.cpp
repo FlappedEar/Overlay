@@ -9,6 +9,7 @@
 #include <QSet>
 #include <QStringConverter>
 #include <algorithm>
+#include <utility>
 #include <cmath>
 #include <limits>
 #include <numbers>
@@ -465,6 +466,10 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         text = text.sliced(1);
     }
     QHash<QString, QStringList> sections;
+    // Sections in first-appearance order: metadata is built in this order, so
+    // generated keys and repeated keys never depend on QHash's per-process
+    // seed (KAN-182).
+    QStringList sectionOrder{QString()};
     QString section;
     QStringList *current = &sections[section];
     qsizetype dataRows = 0;
@@ -508,6 +513,7 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
                 throw VboParseError("VBO contains more than one data or column-names section.");
             if (data) dataSectionName = section;
             if (columns) columnSectionName = section;
+            if (!sections.contains(section)) sectionOrder.append(section);
             current = &sections[section]; // a reference, refreshed whenever the hash may grow
         } else {
             if (section.startsWith("data") && ++dataRows > kMaximumDataRows) {
@@ -557,23 +563,22 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
     }
     qsizetype metadataEntries = 0;
     qsizetype metadataCharacters = 0;
-    for (auto iterator = sections.cbegin(); iterator != sections.cend(); ++iterator) {
+    for (const QString &name : std::as_const(sectionOrder)) {
         throwIfCancelled(cancelled);
-        if (iterator.key().contains("column") || iterator.key().contains("data")
-            || iterator.key() == QStringLiteral("laptiming")) {
+        if (name.contains("column") || name.contains("data") || name == QStringLiteral("laptiming")) {
             continue;
         }
-        for (const QString &entry : iterator.value()) {
+        for (const QString &entry : *sections.constFind(name)) {
             if ((metadataEntries & 0xff) == 0) throwIfCancelled(cancelled);
             // Bounded before a key or value is built (KAN-147).
-            metadataCharacters += entry.size() + iterator.key().size() + 16;
+            metadataCharacters += entry.size() + name.size() + 16;
             if (++metadataEntries > kMaximumMetadataEntries || metadataCharacters > kMaximumMetadataCharacters)
                 throw ResourceLimitError("VBO header metadata exceeds the supported size.");
             const qsizetype separator = entry.indexOf(QRegularExpression("[:=]"));
             if (separator >= 0) {
                 session.metadata.insert(normalizeName(entry.first(separator)), entry.sliced(separator + 1).trimmed());
             } else {
-                session.metadata.insert(QStringLiteral("%1.%2").arg(iterator.key()).arg(session.metadata.size()), entry);
+                session.metadata.insert(QStringLiteral("%1.%2").arg(name).arg(session.metadata.size()), entry);
             }
         }
     }
