@@ -20,14 +20,20 @@
 
 #include <QDir>
 #include <QElapsedTimer>
+#include <QRegularExpression>
 #include <QFile>
 #include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QtTest>
 #include <atomic>
+#include <cfloat>
 #include <cmath>
 #include <limits>
 #include <numbers>
+
+#if defined(Q_OS_UNIX)
+#include <sys/resource.h>
+#endif
 
 using namespace FlappedEar;
 
@@ -72,6 +78,8 @@ private slots:
     void cancelsVboParsingDeterministically();
     void cachesTelemetryChannelCadence();
     void enforcesVboResourceLimits();
+    void boundsVboHeaderAndDecodedValues();
+    void normalizesVboHeaderEdgeCases();
     void preservesVboScannerFormats();
     void boundsSeparatorHeavyVboRows();
     void enforcesVboScannerBoundaries();
@@ -610,6 +618,117 @@ void TelemetryCoreTests::enforcesVboResourceLimits()
         ResourceLimitError,
         (void) VboParser::parse(
             QStringLiteral("[column names]\ntime speed\n[data]\n0 %1").arg(longField)));
+}
+
+namespace {
+
+// Peak resident memory in MiB (macOS reports bytes, Linux kilobytes).
+double peakResidentMiB()
+{
+#if defined(Q_OS_UNIX)
+    rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+#if defined(Q_OS_MACOS)
+    return static_cast<double>(usage.ru_maxrss) / (1024.0 * 1024.0);
+#else
+    return static_cast<double>(usage.ru_maxrss) / 1024.0;
+#endif
+#else
+    return 0.0;
+#endif
+}
+
+QString writeVboFile(const QTemporaryDir &directory, const QString &name, const QByteArray &bytes)
+{
+    QFile file(directory.filePath(name));
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size()) return {};
+    return file.fileName();
+}
+
+} // namespace
+
+void TelemetryCoreTests::boundsVboHeaderAndDecodedValues()
+{
+    // KAN-147: untrusted VBO input is bounded before large allocation.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const double before = peakResidentMiB();
+
+    // 1. A long section name with many bare lines: each line became a
+    // metadata key copying the whole name (81 KB grew to about 1 GB).
+    QByteArray header = "[" + QByteArray(80'000, 'a') + "]\n";
+    for (int line = 0; line < 1500; ++line) header += "x\n";
+    header += "[column names]\ntime speed\n[data]\n0 1\n1 2\n";
+    const QString longSection = writeVboFile(directory, "long-section.vbo", header);
+    QVERIFY(!longSection.isEmpty());
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError, (void) VboParser::parseFile(longSection));
+
+    // Many short metadata lines are bounded too.
+    QByteArray manyEntries = "[header]\n";
+    for (int line = 0; line <= VboParser::kMaximumMetadataEntries; ++line) manyEntries += "x\n";
+    manyEntries += "[column names]\ntime speed\n[data]\n0 1\n";
+    const QString entries = writeVboFile(directory, "many-entries.vbo", manyEntries);
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError, (void) VboParser::parseFile(entries));
+
+    // 2. 512 columns and 400,000 one-value rows: rows x columns was not
+    // budgeted (802 KB grew to 978 MB).
+    QByteArray wide = "[column names]\n";
+    for (int column = 0; column < 512; ++column) wide += "c" + QByteArray::number(column) + ' ';
+    wide += "\n[data]\n";
+    wide.reserve(wide.size() + 400'000 * 2);
+    for (int row = 0; row < 400'000; ++row) wide += "1\n";
+    const QString wideFile = writeVboFile(directory, "wide.vbo", wide);
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError, (void) VboParser::parseFile(wideFile));
+
+    const double growth = peakResidentMiB() - before;
+    qInfo().noquote() << QString("peak resident growth %1 MiB").arg(growth, 0, 'f', 1);
+    QVERIFY2(growth < 300.0, qPrintable(QString("peak memory grew by %1 MiB").arg(growth)));
+}
+
+void TelemetryCoreTests::normalizesVboHeaderEdgeCases()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    // Generated duplicate names never overwrite a column, and an empty name
+    // becomes "column N" (so it cannot match a tyre corner or anything else).
+    const QString duplicates = writeVboFile(directory, "duplicates.vbo",
+        "[column names]\ntime,a,a,a (2),,b\n[data]\n0,1,2,3,4,5\n1,1,2,3,4,5\n");
+    const auto session = VboParser::parseFile(duplicates);
+    QStringList names = session.channelNames();
+    names.sort();
+    QCOMPARE(names.size(), 5);
+    QCOMPARE(session.channels.value("a").values.first(), 1.0F);
+    QCOMPARE(session.channels.value("a (2)").values.first(), 3.0F); // the header's own "a (2)"
+    QVERIFY(session.channels.contains("a (3)"));
+    QCOMPARE(session.channels.value("a (3)").values.first(), 2.0F);
+    QCOMPARE(session.channels.value("column 5").values.first(), 4.0F);
+    QCOMPARE(session.channels.value("b").values.first(), 5.0F);
+    for (const auto &name : names) QVERIFY2(!name.isEmpty(), "an empty column name");
+
+    // More than one data or column-names section is ambiguous: rejected.
+    const QString twoData = writeVboFile(directory, "two-data.vbo",
+        "[column names]\ntime speed\n[data]\n0 1\n[data2]\n0 9\n");
+    QVERIFY_THROWS_EXCEPTION(VboParseError, (void) VboParser::parseFile(twoData));
+    const QString twoColumns = writeVboFile(directory, "two-columns.vbo",
+        "[column names]\ntime speed\n[column names 2]\ntime rpm\n[data]\n0 1\n");
+    QVERIFY_THROWS_EXCEPTION(VboParseError, (void) VboParser::parseFile(twoColumns));
+
+    // A file is read exactly as parse() reads its text: CRLF and lone CR alike.
+    const QByteArray mixed = "[column names]\r\ntime speed\r\n[data]\r\n0 1\r\n1 2\r3 4\n2 5\n";
+    const QString mixedFile = writeVboFile(directory, "mixed.vbo", mixed);
+    const auto fromFile = VboParser::parseFile(mixedFile);
+    const auto fromText = VboParser::parse(QString::fromUtf8(mixed));
+    QCOMPARE(fromFile.channels.value("speed").values, fromText.channels.value("speed").values);
+    QCOMPARE(fromFile.channels.value("speed").timestamps, fromText.channels.value("speed").timestamps);
+
+    // A value beyond float range is no data, never infinity.
+    const QString huge = writeVboFile(directory, "huge.vbo",
+        "[column names]\ntime speed\n[data]\n0 1e39\n1 2\n2 -1e40\n");
+    const auto hugeSession = VboParser::parseFile(huge);
+    const auto &values = hugeSession.channels.value("speed").values;
+    QCOMPARE(values.size(), qsizetype(3));
+    QVERIFY(std::isnan(values[0]) && std::isnan(values[2]));
+    QCOMPARE(values[1], 2.0F);
 }
 
 void TelemetryCoreTests::preservesVboScannerFormats()

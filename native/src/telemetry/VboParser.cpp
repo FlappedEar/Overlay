@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QTimeZone>
 #include <QRegularExpression>
+#include <QSet>
 #include <QStringConverter>
 #include <algorithm>
 #include <cmath>
@@ -122,15 +123,28 @@ ScannedRow scanRow(const QStringList &lines, qsizetype retainedColumns,
     return row;
 }
 
+// Every column gets a unique, non-empty name (KAN-147): an empty header
+// cell becomes "column N", and a generated "name (n)" never takes a name
+// that the header itself uses, so no column overwrites another.
 QStringList uniqueNames(const QStringList &input)
 {
+    QSet<QString> used;
+    for (const QString &name : input) if (!name.isEmpty()) used.insert(name);
+    QSet<QString> taken;
     QHash<QString, int> counts;
     QStringList output;
     output.reserve(input.size());
-    for (const QString &name : input) {
-        const int count = counts.value(name) + 1;
-        counts.insert(name, count);
-        output.append(count == 1 ? name : QStringLiteral("%1 (%2)").arg(name).arg(count));
+    for (qsizetype index = 0; index < input.size(); ++index) {
+        const QString base = input[index].isEmpty() ? QStringLiteral("column %1").arg(index + 1) : input[index];
+        QString name = base;
+        if (taken.contains(name) || (input[index].isEmpty() && used.contains(name))) {
+            int count = std::max(1, counts.value(base));
+            do name = QStringLiteral("%1 (%2)").arg(base).arg(++count);
+            while (taken.contains(name) || used.contains(name));
+            counts.insert(base, count);
+        }
+        taken.insert(name);
+        output.append(name);
     }
     return output;
 }
@@ -416,7 +430,8 @@ TelemetrySession VboParser::parseFile(const QString &path, const CancellationChe
 {
     throwIfCancelled(cancelled);
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    // Not Text mode: parse() handles CRLF itself, so a file reads exactly as its text.
+    if (!file.open(QIODevice::ReadOnly)) {
         throw VboParseError(QStringLiteral("Could not open VBO: %1").arg(file.errorString()));
     }
     if (file.size() > kMaximumFileBytes) {
@@ -451,7 +466,9 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
     }
     QHash<QString, QStringList> sections;
     QString section;
+    QStringList *current = &sections[section];
     qsizetype dataRows = 0;
+    QString dataSectionName, columnSectionName;
     qsizetype lineIndex = 0;
     qsizetype start = 0;
     static const QRegularExpression sectionPattern("^\\[([^\\]]+)\\]$");
@@ -479,15 +496,24 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         }
         const auto match = sectionPattern.matchView(view);
         if (match.hasMatch()) {
+            if (match.capturedLength(1) > kMaximumSectionNameCharacters)
+                throw ResourceLimitError("VBO contains a section name longer than the supported 256 characters.");
             section = match.captured(1).trimmed().toLower();
-            if (!sections.contains(section)) {
-                sections.insert(section, QStringList{});
-            }
+            // One data and one column-names section. A repeated header of the
+            // same section continues it; two differently named ones would be
+            // chosen by hash order, so they are rejected (KAN-147).
+            const bool data = section.startsWith("data"), columns = section.contains("column");
+            if ((data && !dataSectionName.isNull() && dataSectionName != section)
+                || (columns && !columnSectionName.isNull() && columnSectionName != section))
+                throw VboParseError("VBO contains more than one data or column-names section.");
+            if (data) dataSectionName = section;
+            if (columns) columnSectionName = section;
+            current = &sections[section]; // a reference, refreshed whenever the hash may grow
         } else {
             if (section.startsWith("data") && ++dataRows > kMaximumDataRows) {
                 throw ResourceLimitError("VBO contains too many data rows.");
             }
-            sections[section].append(view.toString());
+            current->append(view.toString());
         }
     }
 
@@ -530,6 +556,7 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         session.timingGates.append(*parsed.gate);
     }
     qsizetype metadataEntries = 0;
+    qsizetype metadataCharacters = 0;
     for (auto iterator = sections.cbegin(); iterator != sections.cend(); ++iterator) {
         throwIfCancelled(cancelled);
         if (iterator.key().contains("column") || iterator.key().contains("data")
@@ -537,7 +564,11 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
             continue;
         }
         for (const QString &entry : iterator.value()) {
-            if ((metadataEntries++ & 0xff) == 0) throwIfCancelled(cancelled);
+            if ((metadataEntries & 0xff) == 0) throwIfCancelled(cancelled);
+            // Bounded before a key or value is built (KAN-147).
+            metadataCharacters += entry.size() + iterator.key().size() + 16;
+            if (++metadataEntries > kMaximumMetadataEntries || metadataCharacters > kMaximumMetadataCharacters)
+                throw ResourceLimitError("VBO header metadata exceeds the supported size.");
             const qsizetype separator = entry.indexOf(QRegularExpression("[:=]"));
             if (separator >= 0) {
                 session.metadata.insert(normalizeName(entry.first(separator)), entry.sliced(separator + 1).trimmed());
@@ -593,6 +624,10 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         }
     }
 
+    // Every load path decodes through here: budget rows x columns before any
+    // value vector grows (KAN-147).
+    if (static_cast<qint64>(dataSection.size()) * names.size() > kMaximumDecodedValues)
+        throw ResourceLimitError("VBO has more values (rows x columns) than the supported 40 million.");
     // The analysis cache reserves one shared allowance before decoding. Charge
     // every channel's timestamp/value capacity conservatively, even though VBO
     // timestamps share a buffer. Reject before the large sample vectors grow.
@@ -685,8 +720,12 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         for (qsizetype column = 0; column < names.size(); ++column) {
             bool valid = false;
             const double parsed = column < cells.size() ? cells[column].toDouble(&valid) : 0.0;
-            rawValues[column].append(valid && std::isfinite(parsed)
-                                         ? static_cast<float>(normalizeChannelValue(names[column], parsed, coordinates.unit))
+            // Beyond float range is no data, not infinity or undefined behaviour.
+            const double normalized = valid && std::isfinite(parsed)
+                ? normalizeChannelValue(names[column], parsed, coordinates.unit)
+                : std::numeric_limits<double>::quiet_NaN();
+            rawValues[column].append(std::isfinite(normalized) && std::abs(normalized) <= std::numeric_limits<float>::max()
+                                         ? static_cast<float>(normalized)
                                          : std::numeric_limits<float>::quiet_NaN());
         }
         previousAbsoluteTime = absoluteTime;

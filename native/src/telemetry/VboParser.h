@@ -22,6 +22,11 @@ public:
     static constexpr qsizetype kMaximumColumns = 512;
     static constexpr qsizetype kMaximumLineCharacters = 1'048'576;
     static constexpr qsizetype kMaximumFieldCharacters = 65'536;
+    // KAN-147: header metadata and decoded values are bounded before they grow.
+    static constexpr qsizetype kMaximumSectionNameCharacters = 256;
+    static constexpr qsizetype kMaximumMetadataEntries = 10'000;
+    static constexpr qsizetype kMaximumMetadataCharacters = 1'048'576;
+    static constexpr qint64 kMaximumDecodedValues = 40'000'000; // rows x columns
 
     [[nodiscard]] static TelemetrySession parse(
         QStringView text, const CancellationCheck &cancelled = {},
