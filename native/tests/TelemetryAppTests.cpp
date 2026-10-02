@@ -340,11 +340,8 @@ void TelemetryAppTests::importsAFolderOfRecordings()
     QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
     QCOMPARE(document.eventRuns().size(), 2);
     QVERIFY(document.analysisImportMessages().join(' ').contains("1 other file(s) were ignored"));
-    // Let the day settle first: deriving its laps records the verified track
-    // inference in the project, and an import started meanwhile is
-    // invalidated as stale (the project changed).
-    QTRY_VERIFY_WITH_TIMEOUT(!controller.analysis()->outingLapsLoading(), 20000);
-    QTest::qWait(200);
+    // Appended at once: the day's analysis bookkeeping while its laps derive
+    // does not make an append import stale (9a79e67).
 
     // Again with subfolders: the sessions already imported are skipped and
     // the afternoon one is appended to the same event.
