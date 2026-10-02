@@ -4,11 +4,14 @@ Proposed 26 September 2026 on the owner's request. **Status (2 October 2026):
 phases 1 and 2 are implemented** (KAN-123 and KAN-124, closed 27 September), and
 the tyre widget (KAN-132) is merged. **Owner decision (2 October 2026):** two
 applications, the desktop overlay editor for macOS and Windows and Flapped Ear
-Telemetry for macOS, Windows, iOS and Android. The other phase-0 decisions
-(KAN-122: store licence, identities, the desktop analysis window, devices) are
-open. **Owner direction (2 October 2026, later the same day): separate
-repositories.** Flapped Ear Overlays is finished first as a standalone app in
-this repository; Flapped Ear Telemetry is then built in a new repository. See
+Telemetry for macOS, Windows, iOS and Android. Decisions 3 (identities) and 4
+(the desktop analysis window) followed the same day; the store licence and
+devices (KAN-122) are open. **Owner direction (2 October 2026, later the same
+day): separate repositories.** Flapped Ear Overlays is finished first as a
+standalone app in this repository; Flapped Ear Telemetry is then built in a new
+repository. Overlays stays as it is, with nothing removed, until Telemetry is
+mature enough to replace its analysis ([KAN-166], deferred), and both apps keep
+one compatible `.fetproject` format ([KAN-170]). See
 [Stages (current plan)](#stages-current-plan). The Telemetry technology (Qt/QML
 or Flutter) and how the repositories share the core are undecided ([KAN-167]).
 The code survey below describes the code before phase 1.
@@ -132,6 +135,11 @@ Changes:
   referenced relatively. Content fingerprints are unchanged, so a document
   moved between devices still verifies its sources.
 
+Owner direction (2 October 2026, with separate repositories): the two apps keep
+one format, compatible between them, so that either app opens and re-saves the
+other's documents without losing anything. The compatibility rules and the
+round-trip tests in both directions are [KAN-170]; they are not written yet.
+
 ## Mobile specifics (Telemetry)
 
 - **Import:** the iOS share sheet / "Open in", and Android `ACTION_SEND` /
@@ -186,11 +194,14 @@ Changes:
    that never deletes or overwrites anything ([KAN-125];
    [application identity](application-identity.md)). Flapped Ear Telemetry
    takes `com.flappedear.telemetry`.
-4. **Does Overlays keep a day-analysis window?** Decided 2 October 2026: no.
-   The Lap Analysis window and all analysis workflows leave Overlays, which
-   becomes a pure overlay editor with data editing ([KAN-166]). Still open
-   with it: whether desktop Telemetry reuses today's desktop analysis
-   windows or the new touch-first QML.
+4. **Does Overlays keep a day-analysis window?** Decided 2 October 2026:
+   eventually no, but not yet. Overlays is meant to become a pure overlay
+   editor with data editing, and the Lap Analysis window and analysis
+   workflows leave it only once Flapped Ear Telemetry is mature enough to
+   replace them. Until then Overlays stays as it is and nothing is removed
+   ([KAN-166], deferred; blocked by [KAN-169]). Still open with it: whether
+   desktop Telemetry reuses today's desktop analysis windows or the new
+   touch-first QML.
 5. **Minimum OS versions and target devices** for all four platforms,
    starting with the owner's own phone and tablet.
 6. **Telemetry technology and core sharing** ([KAN-167]). Qt/QML, or Flutter
@@ -201,12 +212,15 @@ Changes:
 ## Stages (current plan)
 
 Owner direction, 2 October 2026: finish Flapped Ear Overlays first, then build
-Flapped Ear Telemetry in its own repository. Jira epic [KAN-165].
+Flapped Ear Telemetry in its own repository. Jira epic [KAN-165]. Overlays
+stays as it is until Telemetry can replace its analysis, and both apps keep one
+compatible `.fetproject` format ([KAN-170]).
 
 | Stage | Outcome | Jira |
 | --- | --- | --- |
-| 1. Flapped Ear Overlays standalone (this repository) | Decisions 3 and 4; "Flapped Ear Overlays.app" with the new identity and a one-time migration of settings, templates and recovery; the analysis scope chosen in decision 4; macOS CI builds, tests and packages it | [KAN-122], [KAN-125], [KAN-166] |
-| 2. Flapped Ear Telemetry in its own repository | Decision 6; the new repository and its CI; the app layer and desktop analysis UI; mobile targets, import, touch screens and memory budget; on-track acceptance | [KAN-167], [KAN-168], [KAN-169], [KAN-126]–[KAN-130] |
+| 1. Flapped Ear Overlays standalone (this repository) | Decision 3; "Flapped Ear Overlays.app" with the new identity and a one-time move of preferences, templates, recovery and logs; macOS CI builds, tests and packages it. Merged in PR #142 | [KAN-122], [KAN-125] |
+| 2. Flapped Ear Telemetry in its own repository | Decision 6; the new repository and its CI; the app layer and desktop analysis UI; one `.fetproject` format compatible with Overlays; mobile targets, import, touch screens and memory budget; on-track acceptance | [KAN-167], [KAN-168], [KAN-169], [KAN-170], [KAN-126]–[KAN-130] |
+| 3. Remove the analysis from Overlays (deferred) | Only once Telemetry is mature enough to replace it: the Lap Analysis window and analysis workflows leave Overlays, and day documents keep every analysis field | [KAN-166] |
 
 ## Phases (original one-repository plan)
 
@@ -248,6 +262,7 @@ behaviour and can proceed before decisions 1 and 5.
   RaceChrono version exports on iOS and Android, and that the share sheet
   hands the files over intact.
 - **Settings and recovery migration** when the desktop identity changes.
+  Addressed by [KAN-125]: a one-time move that never deletes or overwrites.
 - **Test harness:** the native tests assume `QT_QPA_PLATFORM=cocoa`, so
   mobile needs its own smoke runs (simulator/emulator).
 
@@ -268,3 +283,4 @@ behaviour and can proceed before decisions 1 and 5.
 [KAN-167]: https://kozucharkadiusz.atlassian.net/browse/KAN-167
 [KAN-168]: https://kozucharkadiusz.atlassian.net/browse/KAN-168
 [KAN-169]: https://kozucharkadiusz.atlassian.net/browse/KAN-169
+[KAN-170]: https://kozucharkadiusz.atlassian.net/browse/KAN-170

@@ -1,6 +1,7 @@
 # Event projects (development v3)
 
-The event project format is shared by the current desktop application and the planned applications (desktop overlay editor on macOS and Windows, Flapped Ear Telemetry on macOS, Windows, iOS and Android; see [product split plan](product-split-plan.md)).
+The event project format is shared by Flapped Ear Overlays (this repository; macOS and Windows) and Flapped Ear Telemetry (its own repository; macOS, Windows, iOS and Android; see [product split plan](product-split-plan.md)).
+Owner direction (2 October 2026): the two apps keep one format, compatible between them, so that either app opens and re-saves the other's documents without losing anything. The compatibility rules and the round-trip tests in both directions are tracked in KAN-170 and are not written yet.
 The project schema is developmental: the owner confirmed that no existing user
 data needs migration protection. v3 gives events a single authoritative source
 model; the small existing v2 read/write path remains for single-recording files.

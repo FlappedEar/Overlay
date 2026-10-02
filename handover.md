@@ -25,13 +25,19 @@ that check over this file.
 - **Owner decision, 2 October 2026:** two applications. The desktop overlay
   editor targets macOS and Windows; Flapped Ear Telemetry targets macOS,
   Windows, iOS and Android. `AGENTS.md` and `product-vision.md` record it. Windows builds and CI
-  stay paused until the owner resumes them. The other KAN-122 decisions (store
-  licence, identities, desktop analysis window, devices) are open.
+  stay paused until the owner resumes them. Of the other KAN-122 decisions,
+  identities (KAN-125) and the desktop analysis window (kept until Telemetry
+  is mature, KAN-166) were decided later that day; the store licence and
+  devices are open.
 - **Separation (owner direction, 2 October 2026):** Flapped Ear Overlays is
   finished first as a standalone app in this repository (epic KAN-165, stage 1:
-  KAN-122 decisions 3–4, KAN-125, KAN-166). Flapped Ear Telemetry is then built
-  in a new repository (stage 2: KAN-167–KAN-169, KAN-126–KAN-130). KAN-121 is
-  closed as superseded. Do not add Telemetry or mobile targets here.
+  the rename and data move, KAN-125, merged in PR #142). Flapped Ear Telemetry
+  is then built in a new repository (stage 2: KAN-167–KAN-170, KAN-126–KAN-130).
+  KAN-121 is closed as superseded. Do not add Telemetry or mobile targets here.
+- **Keep Overlays as it is (owner direction, later on 2 October 2026):** remove
+  nothing from Overlays until Telemetry is mature enough to replace it. Removing
+  the analysis window is deferred to stage 3 (KAN-166, blocked by KAN-169).
+  Both apps keep one `.fetproject` format, compatible between them (KAN-170).
 - `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
   `docs/product-delivery.md` and Jira are the only status records.
 
@@ -40,7 +46,7 @@ that check over this file.
 VBOOverlay / "Flapped Ear Overlays" (renamed from "Flapped Ear Telemetry" by
 KAN-125; bundle `com.flappedear.overlays`): a Qt 6 / C++20 / QML macOS desktop app
 combining a video overlay editor with track-day telemetry analysis (VBO/RCZ,
-GoPro). The analysis window and workflows are being removed (KAN-166). Repo `arekkozuch/VBOOverlay`. Jira project KAN, cloud ID
+GoPro). The analysis window and workflows stay until Flapped Ear Telemetry is mature (KAN-166, deferred). Repo `arekkozuch/VBOOverlay`. Jira project KAN, cloud ID
 `315ac5b8-6fd1-4518-8b5f-4433bcc33447`.
 
 ## Where M3/M4 stand (end of this session)
@@ -225,9 +231,9 @@ Read `docs/product-split-plan.md` (epic KAN-165; KAN-121 is closed) before
 any structural work. Phase 0 (KAN-122): the platforms were decided on
 2 October 2026 (desktop editor on macOS and Windows, Telemetry on macOS,
 Windows, iOS and Android) and the tyre data source is settled (KAN-132).
-Still open: the Qt store licence, bundle identities, whether the overlay
-editor keeps a day-analysis window, and target devices. Stage 1 (Overlays
-standalone) needs decisions 3 (identities) and 4 (analysis window).
+Decided since: identities (decision 3, KAN-125) and the analysis window
+(decision 4: Overlays keeps it until Telemetry is mature; KAN-166, deferred).
+Still open: the Qt store licence and target devices.
 
 Split rules already in force after KAN-123:
 - `src/telemetry` and `src/project` form `flappedear_telemetry_core`, which
