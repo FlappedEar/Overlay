@@ -18,6 +18,18 @@ Parser warnings are capped at 200 stored messages; additional warnings are summa
 
 VBO input is treated as untrusted. Parsing is cooperatively cancellable and rejects files above 128 MiB, more than 1,000,000 lines or 500,000 data rows, more than 512 columns, lines above 1 MiB, and fields above 64 KiB. Resource-limit failures and cancellation are distinct from invalid VBO syntax.
 
+Before any value vector grows, the parser also bounds the following (KAN-147):
+
+- **Header.** Section names are limited to 256 characters. Header metadata is limited to 10,000 entries and 1 Mi characters.
+- **Decoded values.** Rows × columns is limited to 40,000,000. The parser is the one place every load path decodes through: the editor, batch import planning and attaching a recording.
+
+The parser also normalises these header cases:
+
+- **Duplicate and empty names.** Every column gets a unique, non-empty name. An empty header cell becomes `column N`, and a generated `name (n)` never takes a name the header itself uses.
+- **Repeated sections.** A repeated header of the same data or column-names section continues it. Two differently named ones are rejected rather than chosen by hash order.
+- **Line endings.** A file is read exactly as its text is parsed, CRLF included.
+- **Out-of-range values.** A value beyond float range is no data.
+
 GoPro GPMF input is likewise bounded independently by packet count, aggregate metadata bytes, parsed KLV-header work, and container depth. The KLV counter includes structural/container and non-GPS sensor headers as well as GPS records; it is not a GPS sample count. Limit failures report the reached count, configured limit, packet, and parse context, while cancellation remains a distinct outcome.
 
 ## Missing values and lookup
