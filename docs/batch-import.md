@@ -108,7 +108,10 @@ stops it. The scan:
 - never follows a symbolic link, to a file or a folder, and says how many
   it skipped. A folder is visited once by its canonical path, so no link
   or mount can loop;
-- skips hidden entries;
+- skips hidden entries and every name starting with a dot, on every platform.
+  That includes the macOS `._name` metadata files that SD cards and exFAT
+  drives carry, which Windows does not treat as hidden (KAN-173). A dropped
+  `._name.vbo` file is reported as a macOS metadata file and not imported;
 - stops at 8 subfolder levels and 20,000 inspected files and folders, and
   says so;
 - refuses a folder holding more than 64 recordings, the batch limit, and

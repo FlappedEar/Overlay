@@ -1282,7 +1282,12 @@ void TelemetryCoreTests::scansFoldersForRecordingsWithinBounds()
     QTemporaryDir directory; QVERIFY(directory.isValid());
     const QDir root(directory.path());
     QVERIFY(root.mkpath("sub/deeper/deepest"));
-    for (const auto *name : {"a.VBO", "b.rcz", "notes.txt", ".hidden.vbo", "sub/c.vbo", "sub/deeper/d.rcz", "sub/deeper/deepest/e.vbo"})
+    QVERIFY(root.mkpath(".Trashes"));
+    // KAN-173: dot entries, including the macOS AppleDouble sidecars ("._name") that
+    // SD cards and exFAT drives carry, are skipped on every platform, not only where
+    // a leading dot makes a file hidden.
+    for (const auto *name : {"a.VBO", "b.rcz", "notes.txt", ".hidden.vbo", "._a.VBO", ".Trashes/f.vbo",
+                             "sub/c.vbo", "sub/._c.vbo", "sub/deeper/d.rcz", "sub/deeper/deepest/e.vbo"})
         QVERIFY(writeBytes(root.filePath(name), "x"));
 
     auto top = scanTelemetryFolder(root.path(), false);
@@ -1339,15 +1344,17 @@ void TelemetryCoreTests::combinesDroppedFilesAndFolders()
     const QDir root(directory.path());
     QVERIFY(root.mkpath("day/sub"));
     QVERIFY(root.mkpath("empty"));
-    for (const auto *name : {"loose.vbo", "photo.jpg", "day/a.vbo", "day/b.RCZ", "day/sub/c.vbo"})
+    for (const auto *name : {"loose.vbo", "._loose.vbo", "photo.jpg", "day/a.vbo", "day/._a.vbo", "day/b.RCZ", "day/sub/c.vbo"})
         QVERIFY(writeBytes(root.filePath(name), "x"));
 
-    const auto mixed = scanTelemetrySources({root.filePath("loose.vbo"), root.filePath("photo.jpg"),
+    const auto mixed = scanTelemetrySources({root.filePath("loose.vbo"), root.filePath("._loose.vbo"), root.filePath("photo.jpg"),
         root.filePath("missing.vbo"), root.filePath("day"), root.filePath("day/a.vbo"), root.filePath("empty")}, false);
     QVERIFY(mixed.error.isEmpty());
-    // day/a.vbo arrives twice (itself and through its folder) and counts once.
+    // day/a.vbo arrives twice (itself and through its folder) and counts once; the
+    // dropped and the in-folder AppleDouble sidecars are never recordings (KAN-173).
     QCOMPARE(mixed.files.size(), 3);
     const auto notes = mixed.notes.join('\n');
+    QVERIFY(notes.contains("._loose.vbo: a macOS metadata file, not a recording; not imported."));
     QVERIFY(notes.contains("photo.jpg: not a VBO or RCZ recording; not imported."));
     QVERIFY(notes.contains("missing.vbo: not found; not imported."));
     QVERIFY(notes.contains("empty: No VBO or RCZ recordings were found"));
