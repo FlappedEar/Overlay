@@ -31,7 +31,7 @@
 
 <h3 id="auto-requirements">Requirements and limits</h3>
 <ul>
-  <li>The video must contain GoPro GPMF GPS data, and the telemetry must have a speed channel. Both need at least 20 usable speed samples in the overlapping time.</li>
+  <li>The video must contain GoPro GPMF GPS data, and the telemetry must have a speed channel. Each source needs at least 20 GPS speed samples. With less than 20 seconds of overlap a result can be shown but is never applied automatically.</li>
   <li>ffprobe (part of FFmpeg) must be installed; see <a href="installation.html#ffmpeg">Installing FFmpeg</a>.</li>
   <li>Automatic synchronization sets only the offset. Time scale stays <code>1</code>.</li>
   <li>For a chaptered GoPro recording, only the first chapter's GPS is used.</li>

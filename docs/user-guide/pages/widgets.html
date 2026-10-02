@@ -97,7 +97,7 @@
   <li>Delta tiles draw a centre-zero bar. Green means better (less time, more speed), red means worse. <strong>Gauge range (seconds)</strong> (1–60, default 10) and <strong>Gauge range (km/h)</strong> (1–300, default 30) set the bar's full scale.</li>
   <li>Comparison speeds are always in km/h.</li>
   <li><strong>Lap time decimals</strong> (1, 2 or 3) sets the precision of the Best and Current lap time tiles.</li>
-  <li>Laps with incomplete GPS keep their measured time but are not used as the best-lap reference; deltas are then unavailable and show a dash.</li>
+  <li>Laps with incomplete GPS keep their measured time but are not used as the best-lap reference. Delta tiles show a dash until an eligible lap has been completed.</li>
 </ul>
 <h4 id="hotlap">Hotlap mode</h4>
 <p>On the <strong>Current lap time</strong> tile, <strong>Show one lap only (hotlap)</strong> makes the tile show <code>0:00</code> until the chosen lap starts, count during that lap, and then keep its final time. Choose the lap from the list (<em>Best lap of this recording</em> or a specific lap) or click <strong>Use the lap at the playhead</strong>. When you then open Export, it starts in <a href="export.html#range">Single lap · hotlap</a> mode with the same lap.</p>
@@ -156,4 +156,4 @@
   <li>Move the playhead to where the widget should appear and click <strong>Add cue at …</strong>. A 5-second cue with a fade is created.</li>
   <li>Adjust <strong>Start (s)</strong>, <strong>Duration (s)</strong>, <strong>Fade in (s)</strong>, <strong>Fade out (s)</strong> and <strong>Entrance</strong> (Fade, Pop or Slide up). <strong>Move start to playhead</strong> moves the cue to the current time.</li>
 </ol>
-<p>A widget with at least one cue is hidden outside its cues. Cues may overlap. <strong>Remove</strong> deletes one cue and <strong>Clear all cues</strong> deletes all of them. Cues are saved in projects and templates. Each widget can have up to 256 cues.</p>
+<p>A widget with at least one cue is hidden outside its cues. Cues may overlap. <strong>Remove</strong> deletes one cue and <strong>Clear all cues</strong> deletes all of them. Cues are saved in projects and templates. Each widget can have up to 256 cues, and a scene up to 4,096 cues in total.</p>

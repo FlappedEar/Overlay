@@ -1,22 +1,22 @@
 <!-- title: Projects, events and recovery | nav: Projects &amp; files -->
 <h1 id="projects">Projects, events and recovery</h1>
-<p class="lead">A project file stores your work: overlay layout, sources, timing, export settings and analysis decisions. Your video and telemetry files stay where they are; the project only refers to them.</p>
+<p class="lead">A project file stores your work: overlay layout, sources, timing and analysis decisions. Your video and telemetry files stay where they are; the project only refers to them.</p>
 
 <h2 id="project-file">The project file</h2>
 <ul>
   <li>Projects use the extension <code>.fetproject</code>. Open them with <strong>File › Open Project…</strong>. Double-clicking a project in Finder does not open it.</li>
   <li><strong>File › Save Project</strong> and <strong>Save Project As…</strong> write the file in one step, so an interrupted save never leaves a half-written project.</li>
-  <li>The last saved project is reopened automatically the next time you start the application. If it no longer exists, a new project starts.</li>
+  <li>The last project you opened or saved is reopened automatically the next time you start the application. If it no longer exists, a new project starts.</li>
   <li>A project file can be at most 4 MiB.</li>
 </ul>
 <p>Saved with a project:</p>
 <ul>
-  <li>the overlay scene (widgets, settings, cues, groups) and export settings;</li>
+  <li>the overlay scene (widgets, settings, cues, groups);</li>
   <li>references to the video and telemetry files;</li>
   <li>synchronization offset and time scale;</li>
   <li>for events: runs, run names and notes, lap exclusions, grouping corrections, approved track segments, the selected comparison and channel choices.</li>
 </ul>
-<p>Laps are not stored; they are derived from the recordings each time.</p>
+<p>Laps are not stored; they are derived from the recordings each time. Export choices (size, frame rate, quality, range, output file) are not saved either: the Export dialog starts from the source format each time it opens.</p>
 
 <h2 id="events">Events, runs and laps</h2>
 <p>A track day is organised as <strong>Event → Run → Lap</strong>:</p>
@@ -25,7 +25,7 @@
   <li>A <strong>run</strong> is one session on track. It has a name, notes, one primary telemetry recording, up to seven alternative recordings, an optional video and its own synchronization.</li>
   <li>A <strong>lap</strong> is a section of a run's recording between two crossings of the start/finish line. The parts before the first and after the last crossing are the OUT and IN sections.</li>
 </ul>
-<p>The overlay layout and export settings are shared by all runs of a project.</p>
+<p>The overlay layout is shared by all runs of a project.</p>
 
 <h2 id="media">Moved or missing media</h2>
 <p>A project opens even when its video or telemetry cannot be found. The layout and settings stay intact, and the header shows <strong>Video missing · Locate…</strong> or <strong>Telemetry missing · Locate…</strong>. Click the button and pick the file in its new location.</p>
@@ -49,7 +49,7 @@
 <p>If recovery data cannot be written (for example the disk is full), the status bar shows <em>Automatic recovery could not be saved. Save the project manually to protect your changes.</em> with a <strong>SAVE</strong> button. Writing is retried every few seconds.</p>
 
 <h2 id="single-instance">One editor at a time</h2>
-<p>Only one copy of the application can run per user. A second start shows <em>Flapped Ear Telemetry is already running</em>; switch to the existing window instead. This protects recovery data and templates. Exports already running are not affected.</p>
+<p>Only one copy of the application can run per user. A second start shows <em>Flapped Ear Telemetry is already running. Use the existing window, or close it before opening another.</em> This protects recovery data and templates. Exports already running are not affected.</p>
 
 <h2 id="files">Where files are stored</h2>
 <p>Paths below are for macOS and follow the standard Qt locations for this application. They are given for troubleshooting; you do not normally need to open them.</p>

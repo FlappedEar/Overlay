@@ -27,7 +27,7 @@
 <table>
   <tr><th>Option</th><th>Choices</th></tr>
   <tr><td>Resolution</td><td>The source size, marked <em>(Source)</em>, plus smaller sizes 3840, 2560, 1920 and 1280 pixels wide where they are below the source width. The aspect ratio is kept. Upscaling is not offered, and there is no 4K limit.</td></tr>
-  <tr><td>Frame rate</td><td>The exact source rate, marked <em>(Source)</em>, or exactly half of it when that is a whole fraction (for example 59.94 → 29.97).</td></tr>
+  <tr><td>Frame rate</td><td>The exact source rate, marked <em>(Source)</em>, or exactly half of it when the source rate divides evenly (for example 59.94 → 29.97 or 50 → 25; not offered for 25 fps).</td></tr>
   <tr><td>Quality</td><td><strong>Smaller file</strong>, <strong>Recommended</strong>, <strong>High quality</strong> or <strong>Custom</strong>.</td></tr>
   <tr><td>Video bitrate</td><td>In Mbps. Calculated from size, frame rate and bit depth for the first three quality choices. Editable with <strong>Custom</strong>, from 0.5 to 500.</td></tr>
   <tr><td>Audio</td><td><strong>Audio — AAC 192 kbps</strong> copies the source sound track (re-encoded). Disabled when the source has no audio.</td></tr>
@@ -65,7 +65,7 @@
 <h2 id="output-format">What the exported file contains</h2>
 <ul>
   <li>H.265/HEVC video in an MP4 container, at a constant frame rate equal to the chosen rate.</li>
-  <li>The number of frames is exactly the selected range: OUT − IN + 1 frames.</li>
+  <li>The number of frames is exactly the selected range: OUT − IN + 1 frames. An export that <em>completed with warning</em> may be up to 10 frames short at the end.</li>
   <li>AAC audio when enabled and present in the selected range.</li>
 </ul>
 
@@ -79,7 +79,8 @@
   <tr><td>HDR (HLG, PQ) or Log colour</td><td>… source detected. Color-managed HDR/Log preservation is not yet supported</td></tr>
   <tr><td>Rotation metadata (for example phone video recorded upright)</td><td>Export does not yet support videos with rotation metadata.</td></tr>
   <tr><td>Non-square pixels</td><td>Export does not yet support non-square pixel aspect ratio</td></tr>
-  <tr><td>Bit depth other than 8 or 10, or unknown</td><td>Source bit depth is unknown …</td></tr>
+  <tr><td>Unknown bit depth</td><td>Source bit depth is unknown …</td></tr>
+  <tr><td>Bit depth other than 8 or 10 (for example 12-bit)</td><td>…-bit source preservation is not supported by the current HEVC export policy.</td></tr>
   <tr><td>Video made of several chapters</td><td>Exporting a video made of several chapters is not available yet.</td></tr>
 </table>
 <p>To export such material, convert it first with another tool to a single SDR, 8- or 10-bit, unrotated MP4 or MOV file.</p>
