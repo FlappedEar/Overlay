@@ -1546,7 +1546,7 @@ bool AppController::startExport(
                                       .arg(outputRate.numerator)
                                       .arg(outputRate.denominator);
     const QString exportHeader = QStringLiteral(
-        "Flapped Ear Telemetry Export Log\n\n"
+        "Flapped Ear Overlays Export Log\n\n"
         "Started: %1\n"
         "Export ID: %2\n"
         "Application version: %3\n\n"

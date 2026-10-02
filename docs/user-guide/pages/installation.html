@@ -1,6 +1,6 @@
 <!-- title: Installation | nav: Installation -->
 <h1 id="installation">Installation</h1>
-<p class="lead">Flapped Ear Telemetry is a native macOS application. Video export and video metadata need FFmpeg, which is installed separately.</p>
+<p class="lead">Flapped Ear Overlays is a native macOS application. Video export and video metadata need FFmpeg, which is installed separately.</p>
 
 <h2 id="requirements">Requirements</h2>
 <ul>
@@ -11,10 +11,10 @@
 <p>Telemetry analysis without video does not need FFmpeg.</p>
 
 <h2 id="app">Installing the application</h2>
-<p>The application is currently distributed only as internal test builds; there is no public release. A test build is a <code>.tar.gz</code> archive that contains <code>Flapped Ear Telemetry.app</code>.</p>
+<p>The application is currently distributed only as internal test builds; there is no public release. A test build is a <code>.tar.gz</code> archive that contains <code>Flapped Ear Overlays.app</code>.</p>
 <ol class="steps">
   <li>Extract the archive.</li>
-  <li>Move <code>Flapped Ear Telemetry.app</code> to your Applications folder (or another folder of your choice).</li>
+  <li>Move <code>Flapped Ear Overlays.app</code> to your Applications folder (or another folder of your choice).</li>
   <li>Open it.</li>
 </ol>
 <div class="warning"><p>Test builds are not signed with a Developer ID or notarized by Apple, so macOS Gatekeeper may warn you or refuse to open the application. Do not disable system protection to work around this. Use only builds you received from the project owner.</p></div>
@@ -22,10 +22,10 @@
 <h3 id="upgrade">Upgrading</h3>
 <ol class="steps">
   <li>Quit the running application.</li>
-  <li>Replace the application bundle with the new one. Older builds were named <code>FlappedEar Telemetry.app</code>; remove that bundle after installing the new one.</li>
+  <li>Replace the application bundle with the new one. Older builds were named <code>Flapped Ear Telemetry.app</code> or <code>FlappedEar Telemetry.app</code>; remove the old bundle after installing the new one.</li>
   <li>Start the new version.</li>
 </ol>
-<p>Preferences, custom templates, recovery data and the last project are kept. Do not delete the application's data folders (see <a href="projects.html#files">Where files are stored</a>). There is no automatic updater.</p>
+<p>Preferences, custom templates, recovery data and the last project are kept. The app was renamed from Flapped Ear Telemetry to Flapped Ear Overlays: on its first start it brings these over from the old name, moving them without deleting or overwriting anything, and tells you if anything had to stay in its old place. Quit the old app before starting the new one. Do not delete the application's data folders (see <a href="projects.html#files">Where files are stored</a>). There is no automatic updater.</p>
 
 <h2 id="ffmpeg">Installing FFmpeg</h2>
 <p>The application does not include FFmpeg. The simplest way to install it is <a href="https://brew.sh">Homebrew</a>:</p>
@@ -48,5 +48,5 @@ cmake -S . -B build-native \
   -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt
 cmake --build build-native --parallel
 ctest --test-dir build-native --output-on-failure
-open "build-native/native/Flapped Ear Telemetry.app"</code></pre>
+open "build-native/native/Flapped Ear Overlays.app"</code></pre>
 <p>Developer documentation, including testing and packaging, is in the repository's <a href="https://github.com/arekkozuch/VBOOverlay/blob/main/README.md">README</a> and <a href="https://github.com/arekkozuch/VBOOverlay/tree/main/docs">docs folder</a>.</p>

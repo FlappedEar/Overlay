@@ -103,7 +103,7 @@ class TelemetryTests final : public QObject {
     static QStringList unreachableControls(QQuickWindow *window);
 private slots:
     void initTestCase();
-    void preservesIdentityAcrossProductRename();
+    void usesOverlaysIdentityWithItsOwnStorage();
     void preservesSignedSamplesWithBrakingUpPresentation();
     void persistsEditableLapChannels();
     void reopensPreferencesProjectAndRecoveryAfterDisplayRename();
@@ -713,7 +713,7 @@ void TelemetryTests::persistsEditableLapChannels()
     }
 }
 
-void TelemetryTests::preservesIdentityAcrossProductRename()
+void TelemetryTests::usesOverlaysIdentityWithItsOwnStorage()
 {
     const QString oldOrganization = QCoreApplication::organizationName();
     const QString oldDomain = QCoreApplication::organizationDomain();
@@ -726,21 +726,24 @@ void TelemetryTests::preservesIdentityAcrossProductRename()
         QGuiApplication::setApplicationDisplayName(oldDisplay);
     });
     // Compare production paths without reading or writing production preferences.
+    // KAN-125: Flapped Ear Overlays owns its own storage; the previous identity's
+    // tree is reached only by LegacyStorageMigration (StorageMigrationTests).
     QCoreApplication::setOrganizationName("FlappedEar");
     QCoreApplication::setOrganizationDomain("flappedear.com");
-    QCoreApplication::setApplicationName("FlappedEar Telemetry");
-    QGuiApplication::setApplicationDisplayName("FlappedEar Telemetry");
-    const QString settingsPath = QSettings().fileName();
-    const QString dataPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-    const QString recoveryPath = ProjectRecoveryStore().path();
+    QCoreApplication::setApplicationName(ApplicationIdentity::legacyStorageName);
+    QGuiApplication::setApplicationDisplayName("Flapped Ear Telemetry");
+    const QString legacySettingsPath = QSettings().fileName();
+    const QString legacyDataPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     ApplicationIdentity::initialize();
-    QCOMPARE(QGuiApplication::applicationDisplayName(), QString("Flapped Ear Telemetry"));
-    QCOMPARE(QCoreApplication::applicationName(), QString("FlappedEar Telemetry"));
+    QCOMPARE(QGuiApplication::applicationDisplayName(), QString("Flapped Ear Overlays"));
+    QCOMPARE(QCoreApplication::applicationName(), QString("FlappedEar Overlays"));
     QCOMPARE(QCoreApplication::organizationName(), QString("FlappedEar"));
     QCOMPARE(QCoreApplication::organizationDomain(), QString("flappedear.com"));
-    QCOMPARE(QSettings().fileName(), settingsPath);
-    QCOMPARE(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation), dataPath);
-    QCOMPARE(ProjectRecoveryStore().path(), recoveryPath);
+    QVERIFY(QSettings().fileName() != legacySettingsPath);
+    const QString dataPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    QVERIFY(dataPath != legacyDataPath);
+    QVERIFY(dataPath.endsWith(QStringLiteral("FlappedEar Overlays")));
+    QCOMPARE(QFileInfo(ProjectRecoveryStore().path()).absolutePath(), QFileInfo(dataPath + "/x").absolutePath());
 }
 
 void TelemetryTests::reopensPreferencesProjectAndRecoveryAfterDisplayRename()
@@ -13076,7 +13079,7 @@ void TelemetryTests::persistsExportDiagnosticsAndRetainsKnownLogs()
     QString error;
     auto log = PersistentExportLog::create(
         directory.path(), QStringLiteral("a83f91c2d4e5f678"),
-        QStringLiteral("FlappedEar Telemetry Export Log\nExport ID: a83f91c2d4e5f678"), &error, started);
+        QStringLiteral("Flapped Ear Overlays Export Log\nExport ID: a83f91c2d4e5f678"), &error, started);
     QVERIFY2(log, qPrintable(error));
     const QString activePath = log->path();
     QVERIFY(log->append(QStringLiteral("[lifecycle] Preparing")));

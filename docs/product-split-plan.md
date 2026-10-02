@@ -180,15 +180,15 @@ Changes:
    the desktop editor for macOS and Windows and Flapped Ear Telemetry for
    macOS, Windows, iOS and Android. `docs/product-vision.md` and `AGENTS.md`
    record it. Windows builds and CI stay paused until the owner resumes them.
-3. **Names and identities.** Today's desktop bundle is named "Flapped Ear
-   Telemetry" (`com.flappedear.telemetry`) but *is* the overlay editor. The
-   proposal:
-   - Overlays becomes `com.flappedear.overlays`, with a one-time migration
-     of settings, templates and recovery storage.
-   - Telemetry takes `com.flappedear.telemetry`.
-4. **Does Overlays keep a day-analysis window?** The recommendation is to
-   keep only what export needs (lap and range selection, sync) and move the
-   full analysis to Telemetry, which also runs on macOS and Windows. Open
+3. **Names and identities.** Decided 2 October 2026: the desktop editor is
+   Flapped Ear Overlays (`com.flappedear.overlays`), with a one-time move of
+   preferences, templates, recovery and logs from the old storage identity
+   that never deletes or overwrites anything ([KAN-125];
+   [application identity](application-identity.md)). Flapped Ear Telemetry
+   takes `com.flappedear.telemetry`.
+4. **Does Overlays keep a day-analysis window?** Decided 2 October 2026: no.
+   The Lap Analysis window and all analysis workflows leave Overlays, which
+   becomes a pure overlay editor with data editing ([KAN-166]). Still open
    with it: whether desktop Telemetry reuses today's desktop analysis
    windows or the new touch-first QML.
 5. **Minimum OS versions and target devices** for all four platforms,

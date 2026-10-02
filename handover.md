@@ -37,9 +37,10 @@ that check over this file.
 
 ## Project
 
-VBOOverlay / "Flapped Ear Telemetry": a Qt 6 / C++20 / QML macOS desktop app
+VBOOverlay / "Flapped Ear Overlays" (renamed from "Flapped Ear Telemetry" by
+KAN-125; bundle `com.flappedear.overlays`): a Qt 6 / C++20 / QML macOS desktop app
 combining a video overlay editor with track-day telemetry analysis (VBO/RCZ,
-GoPro). Repo `arekkozuch/VBOOverlay`. Jira project KAN, cloud ID
+GoPro). The analysis window and workflows are being removed (KAN-166). Repo `arekkozuch/VBOOverlay`. Jira project KAN, cloud ID
 `315ac5b8-6fd1-4518-8b5f-4433bcc33447`.
 
 ## Where M3/M4 stand (end of this session)

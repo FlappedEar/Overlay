@@ -93,7 +93,9 @@
   and Windows, and owns the shared core. Flapped Ear Telemetry (macOS, Windows, iOS and Android)
   will be developed in a separate repository once Overlays is standalone (Jira epic KAN-165); its
   technology and how it consumes the core are undecided (KAN-167). Do not add Telemetry or mobile
-  app targets to this repository. Keep `flappedear_telemetry_core` and `flappedear_telemetry_app`
+  app targets to this repository. The desktop app is Flapped Ear Overlays (`com.flappedear.overlays`,
+  KAN-125); its Lap Analysis window and analysis workflows are being removed (KAN-166), so do not
+  add analysis UI here. Keep `flappedear_telemetry_core` and `flappedear_telemetry_app`
   free of Gui, overlay, video and platform-specific code so that the Telemetry app can reuse them.
   macOS remains the active development platform. The 2026-09-13 pause still applies: do not
   start Windows builds, tests, packaging or installer validation until the owner explicitly
