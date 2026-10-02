@@ -25,6 +25,9 @@ ApplicationWindow {
     property bool fullScreenPreview: false
     property bool previewPrimeFramePending: false
     property int previewPrimeTargetPosition: 0
+    // KAN-172: the source the preview was last primed for. Qt's Windows backend reports
+    // LoadedMedia again after a paused seek; priming again then jumped back to the start.
+    property string previewPrimedSource: ""
     property bool closeApproved: false
     property int editorVisibility: Window.Windowed
     property bool fullScreenControlsVisible: false
@@ -677,6 +680,31 @@ ApplicationWindow {
     property bool chapterSeekRetried: false
     readonly property var currentChapter: appController.videoChaptered
         ? appController.videoChapterList[appController.videoChapterIndex] : null
+    // A loaded file (or chapter) primes the preview: decode silently and pause once a frame at
+    // the target shows. LoadedMedia can arrive more than once for one file: while a prime or a
+    // chapter switch is pending it is requested again, but once the source is primed a repeat
+    // (Windows reports one after a paused seek) is ignored, so the seek stands (KAN-172).
+    // Returns whether the preview was primed.
+    function previewMediaLoaded() {
+        const chapterSwitch = window.pendingChapterPosition >= 0;
+        const source = String(mediaPlayer.source);
+        if (!chapterSwitch && !window.previewPrimeFramePending && window.previewPrimedSource === source)
+            return false;
+        // AVFoundation does not submit a paused seek frame for this GoPro source.
+        // Prime decoding silently and pause only once VideoOutput has received a
+        // frame at timeline frame 1 (or later). After a chapter switch the target
+        // is the requested position in the new chapter, and playing continues.
+        const resume = chapterSwitch && window.resumeAfterChapter;
+        window.previewPrimedSource = source;
+        window.previewPrimeTargetPosition = chapterSwitch ? window.pendingChapterPosition
+                                                          : appController.previewInitialPositionMilliseconds();
+        window.previewPrimeFramePending = !resume;
+        mediaPlayer.position = window.previewPrimeTargetPosition;
+        mediaPlayer.play();
+        if (!resume)
+            previewPrimeTimeout.restart();
+        return true;
+    }
     function seekTimeline(milliseconds) {
         const bounded = appController.clampPreviewPositionMilliseconds(milliseconds);
         if (!appController.videoChaptered) {
@@ -1771,24 +1799,10 @@ ApplicationWindow {
         onPositionChanged: function(position) {
             appController.playbackTime = (appController.videoChapterStartMilliseconds + position) / 1000.0;
         }
+        onSourceChanged: window.previewPrimedSource = ""
         onMediaStatusChanged: {
-            if (mediaStatus === MediaPlayer.LoadedMedia) {
-                // AVFoundation does not submit a paused seek frame for this GoPro source.
-                // Prime decoding silently and pause only once VideoOutput has received a
-                // frame at timeline frame 1 (or later). After a chapter switch the target
-                // is the requested position in the new chapter, and playing continues.
-                // The request stays until a frame at it is shown, because the
-                // player can report LoadedMedia more than once for one file.
-                const chapterSwitch = window.pendingChapterPosition >= 0;
-                const resume = chapterSwitch && window.resumeAfterChapter;
-                window.previewPrimeTargetPosition = chapterSwitch ? window.pendingChapterPosition
-                                                                  : appController.previewInitialPositionMilliseconds();
-                window.previewPrimeFramePending = !resume;
-                position = window.previewPrimeTargetPosition;
-                play();
-                if (!resume)
-                    previewPrimeTimeout.restart();
-            }
+            if (mediaStatus === MediaPlayer.LoadedMedia)
+                window.previewMediaLoaded();
             if (mediaStatus === MediaPlayer.EndOfMedia) {
                 const next = appController.videoChapterIndex + 1;
                 if (appController.videoChaptered && next < appController.videoChapterList.length) {
@@ -1808,6 +1822,7 @@ ApplicationWindow {
         }
         onErrorOccurred: function(error, errorString) {
             window.previewPrimeFramePending = false;
+            window.previewPrimedSource = "";
             previewPrimeTimeout.stop();
             pause();
             appController.reportPlaybackError(errorString);

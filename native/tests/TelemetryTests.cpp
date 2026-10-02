@@ -219,6 +219,7 @@ private slots:
     void reviewsGoProChapterGroups();
     void keepsVideoChaptersAsOneTimeline();
     void playsVideoChaptersAcrossBoundaries();
+    void keepsAPausedSeekWhenLoadedMediaRepeats();
     void showsSideBySideLapVideo();
     void showsCoastingOnTheOpenLap();
     void showsTrailBrakingInTheCornerAnalyzer();
@@ -9876,6 +9877,45 @@ void TelemetryTests::playsVideoChaptersAcrossBoundaries()
             // The branding image is not bundled into the test binary.
             QVERIFY2(!error.toString().contains("Main.qml") || error.toString().contains("Cannot open: qrc:"),
                 qPrintable(error.toString()));
+}
+
+void TelemetryTests::keepsAPausedSeekWhenLoadedMediaRepeats()
+{
+    // KAN-172: Qt's Windows backend reports LoadedMedia again after a paused seek.
+    // Once the preview is primed for a source, a repeat must not prime it again,
+    // which jumped the preview back to the start.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the paused-seek test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    QVERIFY(encodeChapter(ffmpeg, directory.filePath("paused-seek.mp4"), 3));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.loadVideo(QUrl::fromLocalFile(directory.filePath("paused-seek.mp4")));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 30000);
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create());
+    QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    if (!QTest::qWaitFor([&] { return controller.playbackTime() > 0.0; }, 15000))
+        QSKIP("Media playback is unavailable here.");
+    QTRY_VERIFY_WITH_TIMEOUT(!window->property("previewPrimeFramePending").toBool(), 15000);
+    QCOMPARE(window->property("previewPrimedSource").toString(), controller.videoChapterSource().toString());
+
+    // A repeated LoadedMedia for the primed source is ignored: no new prime, no reset.
+    QVariant primed;
+    QVERIFY(QMetaObject::invokeMethod(window, "previewMediaLoaded", Q_RETURN_ARG(QVariant, primed)));
+    QCOMPARE(primed.toBool(), false);
+    QVERIFY(!window->property("previewPrimeFramePending").toBool());
+
+    // A source that has not been primed yet is primed as before.
+    window->setProperty("previewPrimedSource", QString());
+    QVERIFY(QMetaObject::invokeMethod(window, "previewMediaLoaded", Q_RETURN_ARG(QVariant, primed)));
+    QCOMPARE(primed.toBool(), true);
+    QTRY_VERIFY_WITH_TIMEOUT(!window->property("previewPrimeFramePending").toBool(), 15000);
 }
 
 void TelemetryTests::showsSideBySideLapVideo()
