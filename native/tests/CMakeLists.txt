@@ -117,6 +117,15 @@ target_include_directories(flappedear_storage_migration_tests PRIVATE ../src)
 target_link_libraries(flappedear_storage_migration_tests PRIVATE Qt6::Core Qt6::Test)
 flappedear_enable_warnings(flappedear_storage_migration_tests)
 add_test(NAME flappedear_storage_migration_tests COMMAND flappedear_storage_migration_tests)
+# KAN-180: content ids shared with FlappedEar Telemetry (KAN-170).
+qt_add_executable(flappedear_content_id_vector_tests ContentIdVectorTests.cpp)
+target_compile_features(flappedear_content_id_vector_tests PRIVATE cxx_std_20)
+target_link_libraries(flappedear_content_id_vector_tests PRIVATE flappedear_telemetry_core Qt6::Test)
+target_compile_definitions(flappedear_content_id_vector_tests PRIVATE
+    CONTENT_ID_VECTORS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/content-id-vectors.json"
+)
+flappedear_enable_warnings(flappedear_content_id_vector_tests)
+add_test(NAME flappedear_content_id_vector_tests COMMAND flappedear_content_id_vector_tests)
 qt_add_executable(flappedear_track_progress_tests TrackProgressTests.cpp EventProjectFixture.h)
 target_compile_features(flappedear_track_progress_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_track_progress_tests PRIVATE flappedear_telemetry_core Qt6::Test)

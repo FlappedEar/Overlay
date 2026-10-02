@@ -262,6 +262,11 @@ version, so identical configurations can group different recordings. Unknown or
 malformed fields never compare equal for this purpose: unresolved recordings
 remain separate, visible entries and cannot be chosen for comparison.
 
+The exact bytes behind `gates-v1`, `compatibility-v1`, `track-segments-v1` and the
+`lap-derivation-v1` key are pinned by shared test vectors
+(`native/tests/fixtures/content-id-vectors.json`, KAN-180); FlappedEar Telemetry
+checks its implementation against the same file.
+
 All recorded sections remain visible and inspectable. Ambiguity is explained once
 per run, rather than repeating layout/direction prompts beneath every lap. OUT/IN
 sections are ordinary untimed sections, not errors. Eligibility reasons remain independent:
