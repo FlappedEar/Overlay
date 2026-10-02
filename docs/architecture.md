@@ -1,6 +1,6 @@
 # Architecture
 
-Flapped Ear Telemetry is currently one native Qt 6 application for overlay editing/generation and telemetry analysis. By owner decision (2 October 2026) it is being split into a desktop overlay editor (macOS and Windows) and the Flapped Ear Telemetry app (macOS, Windows, iOS and Android); the library structure below is the first step. C++ owns telemetry, media, project, synchronization, and export behavior; QML presents the editor and the reusable telemetry scene.
+Flapped Ear Overlays (renamed from Flapped Ear Telemetry by KAN-125) is currently one native Qt 6 application for overlay editing/generation and telemetry analysis; its analysis window and workflows are being removed (KAN-166). By owner decision (2 October 2026) it is being split into a desktop overlay editor (macOS and Windows) and the Flapped Ear Telemetry app (macOS, Windows, iOS and Android), which will be developed in its own repository (Jira epic KAN-165); the library structure below is the first step. C++ owns telemetry, media, project, synchronization, and export behavior; QML presents the editor and the reusable telemetry scene.
 
 The [product vision](product-vision.md) defines the full intended analytical workflow;
 the [delivery plan](product-delivery.md) distinguishes implementation from remaining
@@ -21,7 +21,7 @@ flowchart TD
 ## Libraries (KAN-123)
 
 The code builds as three static libraries. This is the first step of the
-product split (`docs/product-split-plan.md`, epic KAN-121):
+product split (`docs/product-split-plan.md`, epic KAN-121, now KAN-165):
 
 - **`flappedear_telemetry_core`** holds `src/telemetry` and `src/project`:
   parsers, lap timing, compatibility, segments, sector timing, theoretical

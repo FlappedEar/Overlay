@@ -81,7 +81,7 @@ For the documented Apple Silicon/Homebrew setup, configuration and launch are:
 cmake -S . -B build-native \
   -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt
-open "build-native/native/Flapped Ear Telemetry.app"
+open "build-native/native/Flapped Ear Overlays.app"
 ```
 
 Run the build and tests between configuration and launch. If a different Qt

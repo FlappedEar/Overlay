@@ -8,10 +8,11 @@ implementation sessions. Implementation and execution status belong in
 
 ## Product promise
 
-Two applications from one repository share the telemetry core: a desktop video
-overlay editor/generator for macOS and Windows (working name **Flapped Ear
-Overlays**), and **Flapped Ear Telemetry**, a track-day performance analyzer for
-macOS, Windows, iOS and Android. The analysis answers:
+Two applications share the telemetry core: a desktop video overlay
+editor/generator for macOS and Windows (working name **Flapped Ear Overlays**),
+developed in this repository, and **Flapped Ear Telemetry**, a track-day
+performance analyzer for macOS, Windows, iOS and Android, to be developed in its
+own repository (KAN-165). The analysis answers:
 
 **Where did I lose time? What differed? What might explain it? What should I
 focus on next?**
@@ -26,9 +27,11 @@ and more charts are foundations, not completion of this promise.
   editor's working name is **Flapped Ear Overlays**. Bundle identities and the
   migration of existing settings are still to be decided (KAN-122). Existing internal
   identifiers may remain for compatibility; user-facing naming must be consistent.
-- Keep this repository and native Qt/C++/QML architecture. Both applications share
-  parsing, timing and analysis through the Qt-Core-only telemetry core. Whether the
-  overlay editor keeps a day-analysis window is still open (KAN-122).
+- Keep this repository and its native Qt/C++/QML architecture for Flapped Ear
+  Overlays and the shared core. Both applications share parsing, timing and analysis
+  through the telemetry core. The Telemetry app's technology and how its repository
+  consumes the core are undecided (KAN-167). Whether the overlay editor keeps a
+  day-analysis window is still open (KAN-122).
 - Event → Run → Lap. An event groups the day; a run owns recording sources,
   optional video, sync and setup/conditions notes. Lap identity includes its run.
 - Analyze across runs without concatenating paddock breaks. Recording time,

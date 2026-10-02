@@ -192,6 +192,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/app/ApplicationIdentity.h
     src/app/GuiSessionLock.cpp
     src/app/GuiSessionLock.h
+    src/app/LegacyStorageMigration.cpp
+    src/app/LegacyStorageMigration.h
     src/app/PreviewPlayback.cpp
     src/app/VideoChapterReview.cpp
     src/app/VideoChapterReview.h
@@ -377,9 +379,9 @@ qt_add_qml_module(flappedear_native
 )
 
 set_target_properties(flappedear_native PROPERTIES
-    OUTPUT_NAME "Flapped Ear Telemetry"
-    MACOSX_BUNDLE_BUNDLE_NAME "Flapped Ear Telemetry"
-    MACOSX_BUNDLE_GUI_IDENTIFIER "com.flappedear.telemetry"
+    OUTPUT_NAME "Flapped Ear Overlays"
+    MACOSX_BUNDLE_BUNDLE_NAME "Flapped Ear Overlays"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.flappedear.overlays"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.0"
     MACOSX_BUNDLE_BUNDLE_VERSION "1"
     MACOSX_BUNDLE_ICON_FILE "FlappedEar.icns"

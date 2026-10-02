@@ -2,6 +2,7 @@
 #include "app/AppController.h"
 #include "app/AppLog.h"
 #include "app/GuiSessionLock.h"
+#include "app/LegacyStorageMigration.h"
 #include "export/TelemetryFrameRenderer.h"
 #include "export/ExportEngine.h"
 #include "export/ExportFormat.h"
@@ -640,6 +641,7 @@ int main(int argc, char *argv[])
         && !exportTestMode && !exportWorkerMode
         && !benchmarkRenderMode && !startupSmokeMode;
     std::unique_ptr<FlappedEar::GuiSessionLock> guiSessionLock;
+    FlappedEar::LegacyStorageMigration::Result storageMigration;
     if (applicationMode) {
         guiSessionLock = std::make_unique<FlappedEar::GuiSessionLock>();
         QString startupError;
@@ -651,10 +653,24 @@ int main(int argc, char *argv[])
             if (!errorEngine.rootObjects().isEmpty()) app.exec();
             return EXIT_FAILURE;
         }
+        // KAN-125: bring the previous storage identity's preferences, templates,
+        // recovery snapshot and logs across before anything uses the new one.
+        storageMigration = FlappedEar::LegacyStorageMigration::migrateFrom(
+            QString::fromLatin1(FlappedEar::ApplicationIdentity::legacyStorageName));
         static_cast<void>(FlappedEar::AppLog::initialize());
         FlappedEar::AppLog::info(QStringLiteral("Application startup"));
         FlappedEar::AppLog::info(
             QStringLiteral("Log file: %1").arg(FlappedEar::AppLog::filePath()));
+        if (storageMigration.attempted) {
+            FlappedEar::AppLog::info(
+                QStringLiteral("Storage migration from \"%1\": preferences %2, %3 item(s) moved")
+                    .arg(QString::fromLatin1(FlappedEar::ApplicationIdentity::legacyStorageName),
+                         storageMigration.settingsCopied ? QStringLiteral("copied") : QStringLiteral("not copied"))
+                    .arg(storageMigration.moved.size()));
+            for (const QString &path : storageMigration.moved)
+                FlappedEar::AppLog::info(QStringLiteral("Moved: %1").arg(path));
+            for (const QString &warning : storageMigration.warnings) FlappedEar::AppLog::warn(warning);
+        }
     }
     if (!exportWorkerMode) {
         QStringList janitorDiagnostics;
@@ -703,6 +719,8 @@ int main(int argc, char *argv[])
     int result = EXIT_FAILURE;
     {
         FlappedEar::AppController controller;
+        if (!storageMigration.warnings.isEmpty())
+            controller.setStartupNotice(storageMigration.warnings.join(QStringLiteral("\n\n")));
         if (startupSmokeMode) {
             // Instantiate every newly added renderer under the normal QML application
             // path. The widgets intentionally have no telemetry here: this also checks

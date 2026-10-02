@@ -5,9 +5,15 @@ phases 1 and 2 are implemented** (KAN-123 and KAN-124, closed 27 September), and
 the tyre widget (KAN-132) is merged. **Owner decision (2 October 2026):** two
 applications, the desktop overlay editor for macOS and Windows and Flapped Ear
 Telemetry for macOS, Windows, iOS and Android. The other phase-0 decisions
-(KAN-122: store licence, identities, the desktop analysis window, devices) and
-phases 3–5 are open. The code survey below describes the code before phase 1.
-Jira: epic [KAN-121], tickets [KAN-122]–[KAN-132].
+(KAN-122: store licence, identities, the desktop analysis window, devices) are
+open. **Owner direction (2 October 2026, later the same day): separate
+repositories.** Flapped Ear Overlays is finished first as a standalone app in
+this repository; Flapped Ear Telemetry is then built in a new repository. See
+[Stages (current plan)](#stages-current-plan). The Telemetry technology (Qt/QML
+or Flutter) and how the repositories share the core are undecided ([KAN-167]).
+The code survey below describes the code before phase 1.
+Jira: epic [KAN-165] (current plan). It supersedes [KAN-121], which delivered
+phases 1–2 and [KAN-132].
 Decisions marked **Owner decision** must be made before the phase that depends
 on them.
 
@@ -18,7 +24,9 @@ day's analysis on a phone or tablet: where the best lap loses time, which
 sections improved, what to change on the next run. RaceChrono already
 records on that phone. Video-overlay work (GoPro, helmet camera, FFmpeg
 export) is desktop work done after the day. One desktop application serves
-neither case well, so the product becomes two, kept in **one repository**:
+neither case well, so the product becomes two. The original plan kept both in
+one repository; the owner later chose **separate repositories** (see
+[Stages](#stages-current-plan)):
 
 | | **Flapped Ear Telemetry** | **Flapped Ear Overlays** |
 | --- | --- | --- |
@@ -69,7 +77,11 @@ These findings come from a dependency survey of the codebase on
   `AppController`; the 20+ pure core test targets already link only the
   core.
 
-## Target architecture (one repo)
+## Target architecture (original one-repository design)
+
+With separate repositories, this repository keeps telemetry-core, app-shared,
+overlay-core and the Overlays app. The Telemetry app and its UI move to the new
+repository, which consumes the core as decided in [KAN-167].
 
 ```
 native/
@@ -168,23 +180,38 @@ Changes:
    the desktop editor for macOS and Windows and Flapped Ear Telemetry for
    macOS, Windows, iOS and Android. `docs/product-vision.md` and `AGENTS.md`
    record it. Windows builds and CI stay paused until the owner resumes them.
-3. **Names and identities.** Today's desktop bundle is named "Flapped Ear
-   Telemetry" (`com.flappedear.telemetry`) but *is* the overlay editor. The
-   proposal:
-   - Overlays becomes `com.flappedear.overlays`, with a one-time migration
-     of settings, templates and recovery storage.
-   - Telemetry takes `com.flappedear.telemetry`.
-4. **Does Overlays keep a day-analysis window?** The recommendation is to
-   keep only what export needs (lap and range selection, sync) and move the
-   full analysis to Telemetry, which also runs on macOS and Windows. Open
+3. **Names and identities.** Decided 2 October 2026: the desktop editor is
+   Flapped Ear Overlays (`com.flappedear.overlays`), with a one-time move of
+   preferences, templates, recovery and logs from the old storage identity
+   that never deletes or overwrites anything ([KAN-125];
+   [application identity](application-identity.md)). Flapped Ear Telemetry
+   takes `com.flappedear.telemetry`.
+4. **Does Overlays keep a day-analysis window?** Decided 2 October 2026: no.
+   The Lap Analysis window and all analysis workflows leave Overlays, which
+   becomes a pure overlay editor with data editing ([KAN-166]). Still open
    with it: whether desktop Telemetry reuses today's desktop analysis
    windows or the new touch-first QML.
 5. **Minimum OS versions and target devices** for all four platforms,
    starting with the owner's own phone and tablet.
+6. **Telemetry technology and core sharing** ([KAN-167]). Qt/QML, or Flutter
+   with a Qt-free core behind a C API; and whether the new repository consumes
+   this repository's core (submodule or package), a separate core repository,
+   or (not recommended) a copy.
 
-## Phases
+## Stages (current plan)
 
-Each phase ends with every existing test green. Phases 1–3 change no user
+Owner direction, 2 October 2026: finish Flapped Ear Overlays first, then build
+Flapped Ear Telemetry in its own repository. Jira epic [KAN-165].
+
+| Stage | Outcome | Jira |
+| --- | --- | --- |
+| 1. Flapped Ear Overlays standalone (this repository) | Decisions 3 and 4; "Flapped Ear Overlays.app" with the new identity and a one-time migration of settings, templates and recovery; the analysis scope chosen in decision 4; macOS CI builds, tests and packages it | [KAN-122], [KAN-125], [KAN-166] |
+| 2. Flapped Ear Telemetry in its own repository | Decision 6; the new repository and its CI; the app layer and desktop analysis UI; mobile targets, import, touch screens and memory budget; on-track acceptance | [KAN-167], [KAN-168], [KAN-169], [KAN-126]–[KAN-130] |
+
+## Phases (original one-repository plan)
+
+Phases 1 and 2 are done. Phases 3–5 are replaced by the stages above; the
+table is kept for the record. Each phase ends with every existing test green. Phases 1–3 change no user
 behaviour and can proceed before decisions 1 and 5.
 
 | Phase | Outcome | Size |
@@ -236,3 +263,8 @@ behaviour and can proceed before decisions 1 and 5.
 [KAN-130]: https://kozucharkadiusz.atlassian.net/browse/KAN-130
 [KAN-131]: https://kozucharkadiusz.atlassian.net/browse/KAN-131
 [KAN-132]: https://kozucharkadiusz.atlassian.net/browse/KAN-132
+[KAN-165]: https://kozucharkadiusz.atlassian.net/browse/KAN-165
+[KAN-166]: https://kozucharkadiusz.atlassian.net/browse/KAN-166
+[KAN-167]: https://kozucharkadiusz.atlassian.net/browse/KAN-167
+[KAN-168]: https://kozucharkadiusz.atlassian.net/browse/KAN-168
+[KAN-169]: https://kozucharkadiusz.atlassian.net/browse/KAN-169

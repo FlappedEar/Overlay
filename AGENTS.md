@@ -88,13 +88,18 @@
 - Preview widget geometry is derived from loaded media display geometry, never from transient
   `VideoOutput` decoded-frame state. User-accessible playback end is the last actual video frame,
   not the media-duration boundary after it.
-- Current owner direction (2026-10-02): the repository delivers two applications that share the
-  telemetry core: a desktop overlay editor (working name Flapped Ear Overlays) for macOS and
-  Windows, and Flapped Ear Telemetry for macOS, Windows, iOS and Android. Keep
-  `flappedear_telemetry_core` and `flappedear_telemetry_app` free of Gui, overlay, video and
-  platform-specific code so that they build for all four platforms. macOS remains the active development platform. The 2026-09-13
-  pause still applies: do not start Windows builds, tests, packaging or installer validation
-  until the owner explicitly resumes them. This supersedes older dual-platform gates in Jira and
+- Current owner direction (2026-10-02): two applications share the telemetry core. This
+  repository delivers the desktop overlay editor, Flapped Ear Overlays (working name), for macOS
+  and Windows, and owns the shared core. Flapped Ear Telemetry (macOS, Windows, iOS and Android)
+  will be developed in a separate repository once Overlays is standalone (Jira epic KAN-165); its
+  technology and how it consumes the core are undecided (KAN-167). Do not add Telemetry or mobile
+  app targets to this repository. The desktop app is Flapped Ear Overlays (`com.flappedear.overlays`,
+  KAN-125); its Lap Analysis window and analysis workflows are being removed (KAN-166), so do not
+  add analysis UI here. Keep `flappedear_telemetry_core` and `flappedear_telemetry_app`
+  free of Gui, overlay, video and platform-specific code so that the Telemetry app can reuse them.
+  macOS remains the active development platform. The 2026-09-13 pause still applies: do not
+  start Windows builds, tests, packaging or installer validation until the owner explicitly
+  resumes them. This supersedes older dual-platform gates in Jira and
   historical documentation. The owner
   resumed macOS Cloud CI after the quota pause. Run the applicable local macOS
   build/test gate and hosted Debug/Release validation for published changes. Report

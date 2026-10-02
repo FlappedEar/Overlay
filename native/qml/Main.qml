@@ -383,7 +383,7 @@ ApplicationWindow {
         title: qsTr("Recover unsaved changes?")
         contentItem: Label {
             width: 400
-            text: qsTr("Flapped Ear Telemetry found changes that were not saved to the project file. Recover them as an unsaved document, or discard them and open the saved project?")
+            text: qsTr("Flapped Ear Overlays found changes that were not saved to the project file. Recover them as an unsaved document, or discard them and open the saved project?")
             wrapMode: Text.WordWrap
             color: "#e8edf4"
         }
@@ -427,6 +427,27 @@ ApplicationWindow {
     Component.onCompleted: {
         if (appController.recoveryPending)
             recoveryDialog.open()
+        if (appController.startupNotice.length > 0)
+            startupNoticeDialog.open()
+    }
+
+    // KAN-125: items the move from Flapped Ear Telemetry left in their old place.
+    Dialog {
+        id: startupNoticeDialog
+        objectName: "startupNoticeDialog"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        width: 560
+        title: qsTr("Your data from Flapped Ear Telemetry")
+        standardButtons: Dialog.Ok
+        contentItem: Label {
+            width: 500
+            text: qsTr("Flapped Ear Overlays is the new name of this app. Nothing was deleted or overwritten, but not everything could be moved:") + "\n\n" + appController.startupNotice
+            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+            textFormat: Text.PlainText
+            color: "#e8edf4"
+        }
     }
 
     Dialog {
@@ -883,8 +904,8 @@ ApplicationWindow {
     }
     FileDialog {
         id: projectOpenDialog
-        title: qsTr("Open Flapped Ear Telemetry project")
-        nameFilters: [qsTr("Flapped Ear Telemetry projects (*.fetproject)")]
+        title: qsTr("Open Flapped Ear Overlays project")
+        nameFilters: [qsTr("Flapped Ear projects (*.fetproject)")]
         onAccepted: {
             window.clearWidgetSelection();
             appController.requestOpenProject(selectedFile);
@@ -892,10 +913,10 @@ ApplicationWindow {
     }
     FileDialog {
         id: projectSaveDialog
-        title: qsTr("Save Flapped Ear Telemetry project")
+        title: qsTr("Save Flapped Ear Overlays project")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "fetproject"
-        nameFilters: [qsTr("Flapped Ear Telemetry projects (*.fetproject)")]
+        nameFilters: [qsTr("Flapped Ear projects (*.fetproject)")]
         onAccepted: appController.saveProject(selectedFile)
         onRejected: {
             if (appController.pendingDestructiveAction.length > 0)
@@ -913,7 +934,7 @@ ApplicationWindow {
     FileDialog {
         id: templateImportDialog
         title: qsTr("Import layout template")
-        nameFilters: [qsTr("Flapped Ear Telemetry templates (*.fettemplate *.json)")]
+        nameFilters: [qsTr("Flapped Ear templates (*.fettemplate *.json)")]
         onAccepted: {
             const templateId = appController.widgetModel.importTemplate(selectedFile);
             if (templateId)
@@ -925,7 +946,7 @@ ApplicationWindow {
         title: qsTr("Export layout template")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "fettemplate"
-        nameFilters: [qsTr("Flapped Ear Telemetry templates (*.fettemplate)")]
+        nameFilters: [qsTr("Flapped Ear templates (*.fettemplate)")]
         onAccepted: {
             const item = window.selectedTemplate();
             if (item)

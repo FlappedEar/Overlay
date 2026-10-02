@@ -1659,7 +1659,7 @@ published change against its own CI run; historical task records do not validate
 new code. Keep the [local task workflow](development-workflow.md) for implementation
 and private-media acceptance.
 
-[Native CI](../.github/workflows/build.yml) runs on pull requests, pushes to `main`, and manual dispatch. Two macOS arm64 jobs configure Debug and Release Ninja builds with Qt 6.8.3 (the supported minimum minor), compile the application and tests with C++20, and run all 38 CTest registrations: 35 Qt Test executables (the GUI application suite, the telemetry-core and telemetry-app suites and the per-module suites), the production QML startup smoke, and the two library-boundary checks. Release jobs additionally deploy Qt and run installed startup with the build SDK hidden, then attach internal candidate archives. Windows builds, tests and installer validation are paused by owner direction on 13 September 2026; resume them only when explicitly requested. Earlier Windows results below are historical. See [Windows installer](windows-installer.md).
+[Native CI](../.github/workflows/build.yml) runs on pull requests, pushes to `main`, and manual dispatch. Two macOS arm64 jobs configure Debug and Release Ninja builds with Qt 6.8.3 (the supported minimum minor), compile the application and tests with C++20, and run all 39 CTest registrations: 36 Qt Test executables (the GUI application suite, the telemetry-core and telemetry-app suites, the per-module suites and the KAN-125 storage-migration suite), the production QML startup smoke, and the two library-boundary checks. Release jobs additionally deploy Qt and run installed startup with the build SDK hidden, then attach internal candidate archives. Windows builds, tests and installer validation are paused by owner direction on 13 September 2026; resume them only when explicitly requested. Earlier Windows results below are historical. See [Windows installer](windows-installer.md).
 
 | Job | Renderer | Toolchain |
 | --- | --- | --- |
@@ -1695,9 +1695,9 @@ A successful cloud run verifies this synthetic regression gate. It does not cert
 For broadcast-HUD visual changes, render the same production QML acceptance composition against both supplied synthetic backgrounds:
 
 ```bash
-"build-native/native/Flapped Ear Telemetry.app/Contents/MacOS/Flapped Ear Telemetry" \
+"build-native/native/Flapped Ear Overlays.app/Contents/MacOS/Flapped Ear Overlays" \
   --render-visual-smoke docs/assets/motorsport-broadcast-acceptance.png
-"build-native/native/Flapped Ear Telemetry.app/Contents/MacOS/Flapped Ear Telemetry" \
+"build-native/native/Flapped Ear Overlays.app/Contents/MacOS/Flapped Ear Overlays" \
   --render-visual-smoke-dark docs/assets/motorsport-broadcast-acceptance-dark.png
 ```
 

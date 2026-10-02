@@ -67,7 +67,7 @@ environment: its `--qt-root` directory is temporarily renamed during the startup
 1. Download a candidate from a successful workflow and verify its SHA-256 sidecar.
 2. Windows (execution paused since 13 September 2026): run the `*-setup.exe` candidate installer; see [Windows installer](windows-installer.md).
    Alternatively extract the portable archive and keep its complete tree, including
-   `stage/bin/Flapped Ear Telemetry.exe`. macOS: extract `stage/Flapped Ear Telemetry.app`.
+   `stage/bin/Flapped Ear Overlays.exe`. macOS: extract `stage/Flapped Ear Overlays.app`.
 3. Install compatible external FFmpeg and ffprobe. Both must resolve on PATH; macOS
    also searches `/opt/homebrew/bin` and `/usr/local/bin`. Record `ffmpeg -version` and
    `ffprobe -version`. Export checks a working HEVC encoder and the actual composition

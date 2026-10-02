@@ -69,6 +69,8 @@ class AppController final : public QObject, private VideoLink, private DocumentH
     Q_PROPERTY(QString videoName READ videoName NOTIFY videoSourceChanged)
     Q_PROPERTY(QString telemetryName READ telemetryName NOTIFY telemetryChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
+    // KAN-125: what the storage migration could not bring across, shown once at startup.
+    Q_PROPERTY(QString startupNotice READ startupNotice CONSTANT)
     Q_PROPERTY(QStringList channelNames READ channelNames NOTIFY telemetryChanged)
     Q_PROPERTY(qsizetype sampleCount READ sampleCount NOTIFY telemetryChanged)
     Q_PROPERTY(double telemetryDuration READ telemetryDuration NOTIFY telemetryChanged)
@@ -226,6 +228,9 @@ public:
     [[nodiscard]] QString videoName() const;
     [[nodiscard]] QString telemetryName() const;
     [[nodiscard]] QString statusText() const;
+    [[nodiscard]] QString startupNotice() const { return m_startupNotice; }
+    // Before QML loads; the property is constant afterwards.
+    void setStartupNotice(QString notice) { m_startupNotice = std::move(notice); }
     [[nodiscard]] QStringList channelNames() const;
     [[nodiscard]] qsizetype sampleCount() const;
     [[nodiscard]] double telemetryDuration() const;
@@ -749,6 +754,7 @@ private:
     ProjectSourceReference m_videoReference;
     ProjectSourceReference m_vboReference;
     QString m_statusText = QStringLiteral("Open a video and VBO to begin.");
+    QString m_startupNotice;
     std::unique_ptr<TelemetrySession> m_session;
     LapSession m_lapSession;
     WidgetModel m_widgetModel;

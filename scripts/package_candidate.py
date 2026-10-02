@@ -49,20 +49,20 @@ def main():
     system = platform.system()
     if system not in ("Darwin", "Windows"):
         raise RuntimeError("Candidate packaging supports macOS and Windows only")
-    executable = stage / ("Flapped Ear Telemetry.app/Contents/MacOS/Flapped Ear Telemetry"
-                          if system == "Darwin" else "bin/Flapped Ear Telemetry.exe")
+    executable = stage / ("Flapped Ear Overlays.app/Contents/MacOS/Flapped Ear Overlays"
+                          if system == "Darwin" else "bin/Flapped Ear Overlays.exe")
     if not executable.is_file():
         raise RuntimeError(f"Missing installed application: {executable}")
     for path in stage.rglob("*"):
         if path.is_symlink() and (not path.exists() or not path.resolve().is_relative_to(stage)):
             raise RuntimeError(f"Installed symlink escapes package or is broken: {path}")
     if system == "Darwin":
-        bundle = stage / "Flapped Ear Telemetry.app"
+        bundle = stage / "Flapped Ear Overlays.app"
         with (bundle / "Contents/Info.plist").open("rb") as handle:
             info = plistlib.load(handle)
-        expected = {"CFBundleName": "Flapped Ear Telemetry",
-                    "CFBundleExecutable": "Flapped Ear Telemetry",
-                    "CFBundleIdentifier": "com.flappedear.telemetry"}
+        expected = {"CFBundleName": "Flapped Ear Overlays",
+                    "CFBundleExecutable": "Flapped Ear Overlays",
+                    "CFBundleIdentifier": "com.flappedear.overlays"}
         if any(info.get(key) != value for key, value in expected.items()):
             raise RuntimeError("Candidate bundle name or compatibility identity changed")
         # The baseline has no Finder document association or file-open handler.
@@ -88,13 +88,13 @@ def main():
             with path.open("rb") as handle:
                 digest = hashlib.file_digest(handle, "sha256").hexdigest()
             files.append({"path": relative, "bytes": path.stat().st_size, "sha256": digest})
-    manifest = {"productName": "Flapped Ear Telemetry", "commit": sha, "platform": system, "architecture": platform.machine(),
+    manifest = {"productName": "Flapped Ear Overlays", "commit": sha, "platform": system, "architecture": platform.machine(),
                 "buildType": "Release", "qt": "6.8.3", "betaApproved": False,
                 "startupWithoutBuildSdk": "passed", "files": files}
     (stage / "candidate-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     artifacts = repo / "native-dist/artifacts"
     artifacts.mkdir(parents=True, exist_ok=True)
-    name = f"Flapped-Ear-Telemetry-{system}-{platform.machine()}-{sha[:12]}"
+    name = f"Flapped-Ear-Overlays-{system}-{platform.machine()}-{sha[:12]}"
     archive = Path(shutil.make_archive(str(artifacts / name), "gztar" if system == "Darwin" else "zip",
                                        root_dir=stage.parent, base_dir=stage.name))
     with archive.open("rb") as handle:

@@ -96,7 +96,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     QQuickStyle.setStyle("Basic")
     app = QGuiApplication(sys.argv)
-    app.setApplicationDisplayName("Flapped Ear Telemetry")
+    app.setApplicationDisplayName("Flapped Ear Overlays")
     work = Path(tempfile.mkdtemp(prefix="fet-analysis-"))
     harness.stage_module(work)
     harness.register_branding(work)

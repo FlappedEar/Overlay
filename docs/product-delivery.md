@@ -21,12 +21,12 @@ This section supersedes the dated baseline below where they differ. The root
 | M4 losses and report ([KAN-9]) | 16 of 16 | Done; epic closed 2 October 2026 |
 | M5 core acceptance ([KAN-10]) | 6 of 12 | Open: KAN-80 and KAN-81 (matching video), KAN-83 (clean machine), KAN-84 (Windows, paused), KAN-85 (notices), KAN-86 (closure) |
 | M6 full vision ([KAN-11]) | 14 of 24 | Open: KAN-89, KAN-94–KAN-96, KAN-98, KAN-99, KAN-106, KAN-108–KAN-110 |
-| Product split (KAN-121) | Phases 1–2 and KAN-132 done | Platforms decided 2 October 2026 (desktop editor: macOS and Windows; Telemetry: macOS, Windows, iOS and Android); other phase-0 decisions (KAN-122) and phases 3–5 open |
+| Product split (KAN-121, superseded by KAN-165) | Phases 1–2 and KAN-132 done; KAN-121 closed | Separate repositories (2 October 2026). Stage 1: Flapped Ear Overlays standalone in this repository (KAN-125, KAN-166; decisions 3–4 in KAN-122). Stage 2: Flapped Ear Telemetry in a new repository (KAN-167–KAN-169, KAN-126–KAN-130). Platforms: Overlays macOS and Windows; Telemetry macOS, Windows, iOS and Android |
 | Stabilisation (KAN-144) | 0 of 17 | From the independent audit of 2 October 2026; it gates M5 |
 
-- **CI:** Native CI builds macOS arm64 Debug and Release with Qt 6.8.3 and runs 38
-  CTest registrations (35 Qt Test executables, the startup smoke and two library
-  boundary checks). `main` at `ca66169` failed in Debug on a post-import test race
+- **CI:** Native CI builds macOS arm64 Debug and Release with Qt 6.8.3 and runs 39
+  CTest registrations (36 Qt Test executables, the startup smoke and two library
+  boundary checks; the storage-migration suite was added by KAN-125). `main` at `ca66169` failed in Debug on a post-import test race
   (KAN-143, KAN-150); Release passed. Windows execution remains paused.
 - **Evidence:** synthetic CI plus one private real day without video (KAN-77,
   KAN-79). The owner's real-video acceptance (M5) has not been executed.

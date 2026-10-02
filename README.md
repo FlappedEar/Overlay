@@ -1,6 +1,6 @@
-# Flapped Ear Telemetry
+# Flapped Ear Overlays
 
-Flapped Ear Telemetry is one native desktop application for video telemetry overlay editing/generation and motorsport telemetry analysis. By owner decision (2 October 2026) it is being split into two applications that share one telemetry core: a desktop overlay editor for macOS and Windows (working name Flapped Ear Overlays) and the Flapped Ear Telemetry analysis app for macOS, Windows, iOS and Android. See the [product split plan](docs/product-split-plan.md).
+Flapped Ear Overlays (formerly Flapped Ear Telemetry, bundle identifier `com.flappedear.overlays`) is a native desktop application for video telemetry overlay editing and generation. By owner decision (2 October 2026) the product is split into two applications that share one telemetry core: this desktop overlay editor for macOS and Windows, and the Flapped Ear Telemetry analysis app for macOS, Windows, iOS and Android (`com.flappedear.telemetry`), which will be developed in its own repository. The Lap Analysis window and analysis workflows are being removed from this app (KAN-166). The first start after the rename moves the previous preferences, templates, recovery data and logs across without deleting or overwriting anything ([application identity](docs/application-identity.md)). See the [product split plan](docs/product-split-plan.md).
 
 ## Status
 
@@ -79,7 +79,7 @@ cmake -S . -B build-native \
   -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt
 cmake --build build-native --parallel
 ctest --test-dir build-native --output-on-failure
-open "build-native/native/Flapped Ear Telemetry.app"
+open "build-native/native/Flapped Ear Overlays.app"
 ```
 
 ## Continuous integration
@@ -143,6 +143,6 @@ The end-user list of limitations is in the [user guide](https://arekkozuch.githu
 
 ### Editor instance and recovery
 
-Run one Flapped Ear Telemetry editor per user data directory. A second launch asks you to use
+Run one Flapped Ear Overlays editor per user data directory. A second launch asks you to use
 or close the existing window, protecting unsaved recovery and custom templates.
 Export workers are unaffected. Close older builds before opening this version.
