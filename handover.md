@@ -27,6 +27,11 @@ that check over this file.
   Windows, iOS and Android. `AGENTS.md` and `product-vision.md` record it. Windows builds and CI
   stay paused until the owner resumes them. The other KAN-122 decisions (store
   licence, identities, desktop analysis window, devices) are open.
+- **Separation (owner direction, 2 October 2026):** Flapped Ear Overlays is
+  finished first as a standalone app in this repository (epic KAN-165, stage 1:
+  KAN-122 decisions 3–4, KAN-125, KAN-166). Flapped Ear Telemetry is then built
+  in a new repository (stage 2: KAN-167–KAN-169, KAN-126–KAN-130). KAN-121 is
+  closed as superseded. Do not add Telemetry or mobile targets here.
 - `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
   `docs/product-delivery.md` and Jira are the only status records.
 
@@ -205,7 +210,8 @@ report takes about 7 s in Release, with a peak of 150 MiB. See
 
 ## The product split (owner direction, 26 September 2026)
 
-The owner wants **two products in one repository**:
+The owner wants **two products**. Since 2 October 2026 they live in
+**separate repositories**: Overlays here, Telemetry in a new one (KAN-165):
 
 - **Flapped Ear Telemetry:** a quick iPhone, iPad and Android app to view
   the day's telemetry at the track (nobody carries a laptop to the track),
@@ -214,13 +220,13 @@ The owner wants **two products in one repository**:
   additions are tyre pressure and temperature, and a helmet camera without
   GPS, which needs manual sync of multiple video sources.
 
-Read `docs/product-split-plan.md` (epic KAN-121, tickets KAN-122–132) before
+Read `docs/product-split-plan.md` (epic KAN-165; KAN-121 is closed) before
 any structural work. Phase 0 (KAN-122): the platforms were decided on
 2 October 2026 (desktop editor on macOS and Windows, Telemetry on macOS,
 Windows, iOS and Android) and the tyre data source is settled (KAN-132).
 Still open: the Qt store licence, bundle identities, whether the overlay
-editor keeps a day-analysis window, and target devices. Phases 1–3 need none of them except identities
-(phase 3).
+editor keeps a day-analysis window, and target devices. Stage 1 (Overlays
+standalone) needs decisions 3 (identities) and 4 (analysis window).
 
 Split rules already in force after KAN-123:
 - `src/telemetry` and `src/project` form `flappedear_telemetry_core`, which
@@ -239,7 +245,8 @@ Split rules already in force after KAN-123:
   Lead with the best lap and where time is, on the track map. Say "Session 3 ·
   LAP 2", not filenames. Times of a minute or more are `m:ss.mmm`
   (`AppController::formatElapsedTime`).
-- **Two apps:** decided. See "The product split" above (epic KAN-121).
+- **Two apps:** decided, in separate repositories. See "The product split"
+  above (epic KAN-165).
 - One focused PR per ticket; the owner creates or asks for Jira tickets for
   feedback-driven work (KAN-116–120 were created this way).
 

@@ -1,6 +1,6 @@
 # Flapped Ear Telemetry
 
-Flapped Ear Telemetry is one native desktop application for video telemetry overlay editing/generation and motorsport telemetry analysis. By owner decision (2 October 2026) it is being split into two applications that share one telemetry core: a desktop overlay editor for macOS and Windows (working name Flapped Ear Overlays) and the Flapped Ear Telemetry analysis app for macOS, Windows, iOS and Android. See the [product split plan](docs/product-split-plan.md).
+Flapped Ear Telemetry is one native desktop application for video telemetry overlay editing/generation and motorsport telemetry analysis. By owner decision (2 October 2026) it is being split into two applications that share one telemetry core: a desktop overlay editor for macOS and Windows (working name Flapped Ear Overlays) and the Flapped Ear Telemetry analysis app for macOS, Windows, iOS and Android. This repository becomes Flapped Ear Overlays; Flapped Ear Telemetry will be developed in its own repository. See the [product split plan](docs/product-split-plan.md).
 
 ## Status
 
