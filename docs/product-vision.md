@@ -29,9 +29,10 @@ and more charts are foundations, not completion of this promise.
   existing preferences and data across without deleting anything (KAN-125). Existing internal
   identifiers may remain for compatibility; user-facing naming must be consistent.
 - Keep this repository and its native Qt/C++/QML architecture for Flapped Ear
-  Overlays and the shared core. Both applications share parsing, timing and analysis
-  through the telemetry core. The Telemetry app's technology and how its repository
-  consumes the core are undecided (KAN-167). The overlay editor stays as it is,
+  Overlays. Flapped Ear Telemetry is a new Flutter app, started from a blank page in
+  its own repository and Jira project; it shares no code with this repository and
+  cross-references its behaviour, tests and documents (KAN-167;
+  [architect handover](telemetry-handover.md)). The overlay editor stays as it is,
   with its day-analysis window, until Flapped Ear Telemetry is mature enough to
   replace it (KAN-166, deferred). Both apps read and write one compatible
   `.fetproject` format (KAN-170).

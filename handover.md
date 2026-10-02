@@ -34,6 +34,11 @@ that check over this file.
   the rename and data move, KAN-125, merged in PR #142). Flapped Ear Telemetry
   is then built in a new repository (stage 2: KAN-167–KAN-170, KAN-126–KAN-130).
   KAN-121 is closed as superseded. Do not add Telemetry or mobile targets here.
+- **Telemetry is a new Flutter app (owner decision, 2 October 2026, KAN-167):**
+  a blank page in `FlappedEar/Telemetry` with its own Jira project, no shared
+  code, this repository cross-referenced only. A new architect takes over from
+  [`docs/telemetry-handover.md`](docs/telemetry-handover.md) (KAN-168). KAN-169 is the maturity gate that
+  KAN-166 waits for.
 - **Keep Overlays as it is (owner direction, later on 2 October 2026):** remove
   nothing from Overlays until Telemetry is mature enough to replace it. Removing
   the analysis window is deferred to stage 3 (KAN-166, blocked by KAN-169).
