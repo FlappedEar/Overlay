@@ -85,6 +85,10 @@ RecoveryValidity recoveryValidity(const ProjectRecoverySnapshot &snapshot,
         return snapshot.revision <= metadata->revision
             ? RecoveryValidity::Stale : RecoveryValidity::Valid;
     }
+    // An untitled document's snapshot (no original path) is governed only by a
+    // saved copy of the same document, such as a later Save As. Another
+    // remembered project does not make it invalid (KAN-145).
+    if (snapshot.originalProjectPath.isEmpty()) return RecoveryValidity::Valid;
     return foundAuthority ? RecoveryValidity::Invalid : RecoveryValidity::Valid;
 }
 
@@ -485,6 +489,10 @@ bool DocumentController::commitProjectLoad(const ProjectLoadResult &result)
     m_host.applyEditorProject(result);
     if (!result.projectPath.isEmpty()) {
         m_settings.setValue("project/path", result.projectPath);
+    } else {
+        // An untitled document (a new event created by import, or a recovered
+        // untitled one) is not governed by the previously remembered project.
+        m_settings.remove("project/path");
     }
     if (result.runSelection) {
         // Selecting a run changes the same document, never its saved identity or clean revision.
@@ -558,6 +566,11 @@ bool DocumentController::saveProject(const QUrl &url)
         path.append(".fetproject");
     }
     AppLog::info(QStringLiteral("Project save requested: %1").arg(path));
+    if (m_recoveryPending) {
+        // Saving now would make a document the driver has not chosen authoritative.
+        m_host.showStatus(QStringLiteral("Choose Recover or Discard for the unsaved changes first."));
+        return false;
+    }
     const QJsonObject project = currentProjectObject(path, m_documentState.revision());
     QString validationError;
     if (!ProjectLimits::validateProject(project, &validationError)) {
@@ -782,6 +795,18 @@ void DocumentController::restoreStartupState()
 void DocumentController::beginDestructiveAction(
     const ProjectDocumentState::DestructiveAction action, const QUrl &openUrl)
 {
+    // KAN-145: while "Recover unsaved changes?" is open the driver has chosen
+    // neither Recover nor Discard. Quitting keeps the snapshot, so it is
+    // offered again at the next start; New and Open wait for the choice.
+    if (m_recoveryPending) {
+        if (action == ProjectDocumentState::DestructiveAction::Quit) {
+            AppLog::info(QStringLiteral("Quit approved; the pending recovery is kept"));
+            emit quitApproved();
+        } else {
+            m_host.showStatus(QStringLiteral("Choose Recover or Discard for the unsaved changes first."));
+        }
+        return;
+    }
     if (action == ProjectDocumentState::DestructiveAction::OpenProject) {
         if (!openUrl.isLocalFile() || openUrl.toLocalFile().isEmpty()) {
             m_host.showStatus("Project error: choose a local .fetproject file.");

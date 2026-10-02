@@ -210,6 +210,8 @@ private slots:
     void keepsAnalysisControlsReachableAtMinimumSize_data();
     void keepsAnalysisControlsReachableAtMinimumSize();
     void keepsACompleteDayThroughMoveRelinkAndRecovery();
+    void keepsRecoveryWhenQuittingAtTheRecoveryPrompt();
+    void offersRecoveryOfAnEventCreatedByImport();
     void importsDroppedFilesAndFolders();
     void switchesTheActiveRunPrimaryWithoutStaleEditorState();
     void reviewsSourceFusionInRunDetails();
@@ -8810,6 +8812,93 @@ void TelemetryTests::keepsACompleteDayThroughMoveRelinkAndRecovery()
         QCOMPARE(controller.runMetadata(runB).value("notes").toString(), saved.notes);
         QVERIFY(!controller.dirty());
         QVERIFY(!controller.recoveryPending());
+    }
+}
+
+void TelemetryTests::keepsRecoveryWhenQuittingAtTheRecoveryPrompt()
+{
+    // KAN-145: while "Recover unsaved changes?" is open, quitting must not
+    // discard the snapshot (the driver chose neither Recover nor Discard),
+    // and New, Open and Save are refused until they choose.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const QString recovery = directory.filePath("recovery.json");
+    {
+        AppController controller(nullptr, recovery);
+        controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
+        QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+        controller.setSyncOffset(1.25);
+        QVERIFY(controller.dirty());
+        controller.m_document.writeRecoverySnapshot();
+        QVERIFY(QFileInfo::exists(recovery));
+        // The controller ends without saving, as after a crash.
+    }
+    {
+        AppController controller(nullptr, recovery);
+        QVERIFY(controller.recoveryPending());
+        QSignalSpy quit(&controller, &AppController::quitApproved);
+        controller.requestNewProject();
+        QVERIFY(controller.recoveryPending());
+        QVERIFY(controller.pendingDestructiveAction().isEmpty());
+        controller.requestOpenProject(QUrl::fromLocalFile(directory.filePath("other.fetproject")));
+        QVERIFY(controller.recoveryPending());
+        QVERIFY(!controller.saveProject(QUrl::fromLocalFile(directory.filePath("saved.fetproject"))));
+        QVERIFY(!QFileInfo::exists(directory.filePath("saved.fetproject")));
+        controller.requestQuit();
+        QCOMPARE(quit.size(), 1);
+        QVERIFY2(QFileInfo::exists(recovery), "quitting at the recovery prompt deleted the snapshot");
+    }
+    {
+        AppController controller(nullptr, recovery);
+        QVERIFY(controller.recoveryPending()); // offered again at the next start
+        controller.resolveStartupRecovery("recover");
+        QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+        QCOMPARE(controller.syncOffset(), 1.25);
+    }
+}
+
+void TelemetryTests::offersRecoveryOfAnEventCreatedByImport()
+{
+    // KAN-145: a new event created by import is an untitled document. The
+    // previously remembered project is not its authority, so after a crash
+    // its recovery is offered rather than rejected as another document's.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const QString recovery = directory.filePath("recovery.json");
+    const QString projectA = directory.filePath("a.fetproject");
+    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
+    QVERIFY(writeBytes(first, EventProjectFixture::routeVbo()));
+    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(130, -2, 2)));
+    {
+        AppController controller(nullptr, recovery);
+        controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
+        QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectA)));
+        QCOMPARE(QSettings().value("project/path").toString(), projectA);
+        QSignalSpy committed(&controller, &AppController::batchImportCommitted);
+        QVERIFY(controller.importAnalysisRuns("Imported day", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+        QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 30000);
+        // The untitled event no longer points at project A.
+        QVERIFY(QSettings().value("project/path").toString().isEmpty());
+        const auto runId = controller.eventRuns().first().toMap().value("id").toString();
+        const auto metadata = controller.runMetadata(runId);
+        QVERIFY(controller.updateRunMetadata(runId, metadata.value("editToken").toString(), metadata.value("name").toString(),
+            "Unsaved note", "", ""));
+        QVERIFY(controller.dirty());
+        controller.m_document.writeRecoverySnapshot();
+        // The controller ends without saving, as after a crash.
+    }
+    // Even with project A still remembered (written by an older version).
+    QSettings().setValue("project/path", projectA);
+    {
+        AppController controller(nullptr, recovery);
+        QVERIFY2(controller.recoveryPending(), "the imported event's recovery was not offered");
+        controller.resolveStartupRecovery("recover");
+        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+        QCOMPARE(controller.eventName(), QStringLiteral("Imported day"));
+        QCOMPARE(controller.runMetadata(controller.eventRuns().first().toMap().value("id").toString()).value("notes").toString(),
+                 QStringLiteral("Unsaved note"));
     }
 }
 
