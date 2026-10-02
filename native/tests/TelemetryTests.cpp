@@ -11643,9 +11643,13 @@ void TelemetryTests::noticesWhenTheParentProcessExits()
         ::_exit(0);
     }
     // Qt's own child handling may already have reaped the child (ECHILD):
-    // either way it has exited, and the grandchild's report decides.
+    // either way it has exited, and the grandchild's report decides. Its
+    // SIGCHLD can interrupt the wait (EINTR), so retry.
     int status = 0;
-    const pid_t reaped = ::waitpid(child, &status, 0);
+    pid_t reaped = -1;
+    do {
+        reaped = ::waitpid(child, &status, 0);
+    } while (reaped == -1 && errno == EINTR);
     QVERIFY2(reaped == child || (reaped == -1 && errno == ECHILD), qPrintable(QString("waitpid: %1").arg(errno)));
     QTRY_VERIFY_WITH_TIMEOUT(QFileInfo(QString::fromLocal8Bit(report)).size() > 0, 10'000);
     QCOMPARE(readBytes(QString::fromLocal8Bit(report)), QByteArray("0 1"));
