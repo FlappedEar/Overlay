@@ -1887,16 +1887,18 @@ void AppController::handleExportOutput()
     }
     m_exportStdout.append(m_exportProcess->readAllStandardOutput());
     m_exportStderr.append(m_exportProcess->readAllStandardError());
-    if (m_exportStdout.size() > ProcessOutputLimits::workerMessageBytes) {
+    // The limit is per message (line), not for what one read delivered: several
+    // normal messages can arrive together (KAN-148).
+    const auto rejectOversizedMessage = [this] {
         m_exportStdout.clear();
         m_exportError = QStringLiteral("Export worker emitted a message longer than %1 bytes.")
                             .arg(ProcessOutputLimits::workerMessageBytes);
         AppLog::error(m_exportError);
         if (m_exportSupervisor) static_cast<void>(m_exportSupervisor->stopAndWait());
-        return;
-    }
+    };
     qsizetype newline = -1;
     while ((newline = m_exportStdout.indexOf('\n')) >= 0) {
+        if (newline > ProcessOutputLimits::workerMessageBytes) { rejectOversizedMessage(); return; }
         const QByteArray line = m_exportStdout.left(newline);
         m_exportStdout.remove(0, newline + 1);
         const QJsonObject event = QJsonDocument::fromJson(line).object();
@@ -2016,6 +2018,8 @@ void AppController::handleExportOutput()
         }
         emit exportChanged();
     }
+    // A partial message already beyond the limit can never become valid.
+    if (m_exportStdout.size() > ProcessOutputLimits::workerMessageBytes) rejectOversizedMessage();
 }
 
 void AppController::finishExport(const int exitCode, const QProcess::ExitStatus exitStatus)

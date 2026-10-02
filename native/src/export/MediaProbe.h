@@ -39,6 +39,8 @@ struct MediaInfo {
     MediaRational averageFrameRate;
     MediaRational timeBase;
     qint64 videoStartTicks = 0;
+    // Whether ffprobe reported the stream's start_pts; it may be negative (KAN-148).
+    bool videoStartKnown = false;
     qint64 videoDurationTicks = 0;
     QString videoCodec;
     QString videoCodecProfile;

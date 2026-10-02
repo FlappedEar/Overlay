@@ -330,6 +330,11 @@ int exportWorker(const QString &configPath)
         event.insert("elapsedMilliseconds", stageTimer.totalElapsedMilliseconds(elapsed.elapsed()));
         event.insert("timestampMilliseconds", stageTimer.totalElapsedMilliseconds(elapsed.elapsed()));
         event.insert("stageDurations", stageDurationsJson());
+        // Every event stays one bounded line: an embedded FFmpeg tail can be
+        // as large as the GUI's whole message limit (KAN-148).
+        for (const QString &key : {QStringLiteral("diagnostics"), QStringLiteral("error"), QStringLiteral("message")})
+            if (event.value(key).isString())
+                event.insert(key, FlappedEar::utf8Tail(event.value(key).toString(), FlappedEar::ProcessOutputLimits::workerMessageFieldBytes));
         writeExportEvent(event);
     };
     const auto emitProbeEvent = [&](const FlappedEar::MediaProbeEvent &probe) {
