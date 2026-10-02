@@ -3,8 +3,8 @@
 <p class="lead">Widgets are the gauges, bars, maps and tiles drawn over the video. The preview and the exported video use the same scene, so what you arrange in the editor is what you export.</p>
 
 <figure>
-  <img src="assets/overlay-sample.png" alt="Rendered overlay with an analog tachometer, speed tile, throttle and brake bars, oil, ATF and coolant temperatures, heart rate, a G-force radar and a G-force bar" width="1920" height="1080">
-  <figcaption>Widgets from the <em>Motorsport Broadcast HUD</em> template, rendered by the application over a synthetic test background with sample values.</figcaption>
+  <img src="assets/screens/template-circuit-pro.png" alt="Circuit Pro template: arc gauge, dial gauge, pedals, G-force, track map and data strip over the video" width="1280" height="720">
+  <figcaption>The <em>Circuit Pro</em> template. Every widget picture on this page shows the same moment of the Jastrząb session of 29 August 2026 (RaceChrono Pro VBO): 27 s into the best lap, at 66.7 km/h while braking (18 %) into a corner. The video picture is a placeholder.</figcaption>
 </figure>
 
 <h2 id="adding">Adding and arranging widgets</h2>
@@ -30,15 +30,31 @@
 <p>The names below are the tiles in <strong>Add widget</strong>.</p>
 
 <h3 id="w-speed">Speed</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-speed.png" alt="Speed widget showing 67 km/h" width="344" height="228" loading="lazy">
+  <figcaption>Speed: 66.7 km/h.</figcaption>
+</figure>
 <p>Label, large value and unit on a panel. Automatic source: speed. The value is converted from km/h to mph only when <strong>Unit</strong> is exactly <code>mph</code> (lower case); any other unit text only changes the label. The <em>Show speed gauge</em> option currently has no visible effect.</p>
 
 <h3 id="w-rpm">RPM</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-rpm.png" alt="RPM widget showing 3205 with a bar" width="478" height="153" loading="lazy">
+  <figcaption>RPM from <code>rpm-obd</code>.</figcaption>
+</figure>
 <p>Label, value, unit and an optional horizontal bar scaled to <strong>Maximum</strong>. At or above <strong>Warning RPM</strong> (default 6500) the value and bar turn red. Options: <strong>Show RPM bar</strong>, <strong>Warning RPM</strong>.</p>
 
 <h3 id="w-heart-rate">Heart rate</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-heart-rate.png" alt="Heart rate widget showing 127 bpm" width="286" height="196" loading="lazy">
+  <figcaption>Heart rate from <code>heart_rate-hrm</code>.</figcaption>
+</figure>
 <p>Heart icon, label, value and unit (default <code>bpm</code>). Heart rate comes from the imported VBO or RCZ recording; there is no separate heart-rate source. Option: <strong>Show heart icon</strong>.</p>
 
 <h3 id="w-pedals">Pedals</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-pedals.png" alt="Pedals widget: throttle 0 %, brake 18 %" width="536" height="196" loading="lazy">
+  <figcaption>Throttle (accelerator pedal) 0 %, brake 18 %.</figcaption>
+</figure>
 <p>Two rows, throttle and brake, each with a percentage and a fill bar.</p>
 <table>
   <tr><th>Setting</th><th>Meaning</th></tr>
@@ -51,6 +67,20 @@
 <p>If the recording has no brake channel, the brake row shows <code>—</code> and an empty bar. Brake data is never estimated from other channels.</p>
 
 <h3 id="w-gforce">G-Force, F1 G-Force Radar and G-Force Bar</h3>
+<div class="gallery">
+  <figure>
+    <img src="assets/screens/widget-gforce.png" alt="G-Force widget" width="324" height="261" loading="lazy">
+    <figcaption>G-Force</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-f1-radar.png" alt="F1 G-Force Radar widget" width="344" height="272" loading="lazy">
+    <figcaption>F1 G-Force Radar</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-gforce-bar.png" alt="G-Force Bar widget showing 0.65" width="516" height="164" loading="lazy">
+    <figcaption>G-Force Bar: combined 0.65 g</figcaption>
+  </figure>
+</div>
 <p>All three use a lateral and a longitudinal channel. Each axis has its own channel selector and an <strong>Invert … axis</strong> option, which flips only the display, not the data. Both axes must have a value; otherwise the dot is hidden and the value shows <code>—</code>.</p>
 <ul>
   <li><strong>G-Force</strong>: a circle with crosshair and a moving dot, plus the combined G (for example <code>0.82 g</code>). Settings: <strong>G range</strong> (default 2), <strong>Dot size</strong>, <strong>Decimals</strong>, <strong>Grid color</strong>, <strong>Show combined G</strong>.</li>
@@ -60,19 +90,45 @@
 <p>Combined G is √(lateral² + longitudinal²). For RaceChrono data, the calculated G channels from a VBO export give the best result; see <a href="telemetry-data.html#racechrono-g">RaceChrono G channels</a>.</p>
 
 <h3 id="w-track">Track</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-track.png" alt="Track widget with the Jastrząb outline and a position marker" width="440" height="380" loading="lazy">
+  <figcaption>The whole recorded outline of Jastrząb, with the current position.</figcaption>
+</figure>
 <p>The GPS outline of the whole recording with a marker at the current position. It needs GPS in the telemetry. The outline is drawn once; only the marker moves during playback. The map stretches with the widget box, so keep the box roughly square for a true shape. Settings: <strong>Track line</strong> and <strong>Current-position marker</strong> colours, <strong>Line width</strong>, <strong>Marker size</strong>, <strong>Track padding</strong>, <strong>Mirror X</strong>, <strong>Mirror Y</strong>. The marker is hidden outside the telemetry range.</p>
 
 <h3 id="w-custom">Custom</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-custom.png" alt="Custom widget showing OIL 107 °C" width="440" height="196" loading="lazy">
+  <figcaption>Custom widget bound to <code>engine_oil_temp-obd</code>, label OIL, unit °C.</figcaption>
+</figure>
 <p>Shows any channel with your own label, unit and number format. It has no automatic channel: choose a <strong>Source channel</strong> first. If <strong>Label</strong> is empty, the channel name is shown.</p>
 
 <h3 id="w-tyres">Tyres</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-tyres.png" alt="Tyres widget with dashes for every corner" width="382" height="272" loading="lazy">
+  <figcaption>This recording has no tyre channels, so every value shows a dash.</figcaption>
+</figure>
 <p>A top-down car with four corners (FL, FR, RL, RR) showing tyre temperature and pressure. Channels are detected from their names (see <a href="telemetry-data.html#tyres">Tyre channels</a>); there is no channel selector. Temperature is shown in °C. Pressure is shown in the chosen <strong>Pressure unit</strong>, bar or psi, converted from the recorded unit. A dash means that corner has no data at that moment.</p>
 <p>Settings: <strong>Label</strong>, <strong>Temperature</strong> and <strong>Pressure</strong> check boxes, label text (default <em>TYRES</em>), <strong>Pressure unit</strong>, <strong>Cold below (°C)</strong> (blue) and <strong>Hot above (°C)</strong> (red). Leave the thresholds empty to turn colouring off.</p>
 
 <h3 id="w-retro-custom">Retro Custom</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-retro-custom.png" alt="Retro Custom widget showing COOLANT 91 °C" width="440" height="120" loading="lazy">
+  <figcaption>Retro Custom bound to <code>coolant_temp-obd</code>, label COOLANT.</figcaption>
+</figure>
 <p>A single-row panel: icon, label, value and unit. Labels <code>OIL</code>, <code>ATF</code> and <code>COOLANT</code> get a matching icon automatically. Like Custom, it needs a chosen channel. Extra settings: <strong>Panel color</strong>, <strong>Value color</strong>, <strong>Label color</strong> and <strong>Text when channel is unavailable</strong>.</p>
 
 <h3 id="w-gauges">Arc gauge and Dial gauge</h3>
+<div class="gallery">
+  <figure>
+    <img src="assets/screens/widget-arc-gauge.png" alt="Arc gauge showing speed 67" width="440" height="315" loading="lazy">
+    <figcaption>Arc gauge (speed)</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-dial-gauge.png" alt="Dial gauge showing 3205 RPM" width="440" height="315" loading="lazy">
+    <figcaption>Dial gauge (RPM)</figcaption>
+  </figure>
+</div>
 <ul>
   <li><strong>Arc gauge</strong>: an arc filled from <strong>Minimum</strong> to <strong>Maximum</strong>, with value, label and optional min/max numbers. Automatic source: speed. Settings: <strong>Start angle</strong>, <strong>End angle</strong>, <strong>Arc width</strong>, <strong>Inactive track</strong> colour, <strong>Show value</strong>, <strong>Min / max</strong>.</li>
   <li><strong>Dial gauge</strong>: a dial with tick marks and a needle. Automatic source: RPM. Settings: <strong>Start angle</strong>, <strong>End angle</strong>, <strong>Major ticks</strong> (2–30), <strong>Minor ticks</strong> (0–10), <strong>Needle color</strong>, <strong>Tick color</strong>, <strong>Show value</strong>, <strong>Ticks</strong>.</li>
@@ -80,9 +136,39 @@
 <p>Angles are in degrees, measured clockwise from the 3 o'clock position.</p>
 
 <h3 id="w-data-strip">Data strip</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-data-strip.png" alt="Data strip with speed, RPM, throttle and brake" width="862" height="185" loading="lazy">
+  <figcaption>Data strip with its default four channels.</figcaption>
+</figure>
 <p>Four value slots in one panel (default speed, RPM, throttle, brake). Under <strong>Overlay channels</strong>: <strong>Columns</strong> (1–4; fewer columns wrap the slots into rows), <strong>Separators</strong>, <strong>Separator color</strong>, and for each <strong>CHANNEL 1–4</strong> a channel, <strong>Label</strong>, <strong>Unit</strong> and <strong>Decimals</strong>.</p>
 
 <h3 id="w-comparison">Lap and speed comparison tiles</h3>
+<div class="gallery">
+  <figure>
+    <img src="assets/screens/widget-lap-best.png" alt="Best lap time tile: lap 3, 2:22.52" width="382" height="207" loading="lazy">
+    <figcaption>Best lap time: lap 3 is the best completed so far</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-lap-current.png" alt="Current lap time tile: lap 4, 0:27.00" width="382" height="207" loading="lazy">
+    <figcaption>Current lap time</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-lap-delta.png" alt="Lap delta tile: −2.97" width="382" height="207" loading="lazy">
+    <figcaption>Lap delta: 2.97 s ahead of lap 3</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-speed-best.png" alt="Best-lap speed tile: 46" width="382" height="207" loading="lazy">
+    <figcaption>Best-lap speed at this point</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-speed-current.png" alt="Current speed tile: 67" width="382" height="207" loading="lazy">
+    <figcaption>Current speed</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-speed-delta.png" alt="Speed delta tile: +20.9" width="382" height="207" loading="lazy">
+    <figcaption>Speed delta</figcaption>
+  </figure>
+</div>
 <p>Six independent tiles, each with its own position and style. They need lap timing, which requires a start/finish gate in the telemetry and usable GPS (see <a href="analysis.html#lap-timing">Lap timing</a>).</p>
 <table>
   <tr><th>Tile</th><th>Shows</th></tr>
@@ -103,6 +189,28 @@
 <p>On the <strong>Current lap time</strong> tile, <strong>Show one lap only (hotlap)</strong> makes the tile show <code>0:00</code> until the chosen lap starts, count during that lap, and then keep its final time. Choose the lap from the list (<em>Best lap of this recording</em> or a specific lap) or click <strong>Use the lap at the playhead</strong>. When you then open Export, it starts in <a href="export.html#range">Single lap · hotlap</a> mode with the same lap.</p>
 
 <h3 id="w-retro">Retro widgets</h3>
+<div class="gallery">
+  <figure>
+    <img src="assets/screens/widget-retro-rpm.png" alt="Retro RPM tachometer at 3205" width="536" height="444" loading="lazy">
+    <figcaption>Retro RPM</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-retro-gear.png" alt="Retro gear showing a dash" width="363" height="120" loading="lazy">
+    <figcaption>Retro gear: no gear channel selected</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-retro-pedal.png" alt="Retro pedal showing throttle 0 %" width="363" height="120" loading="lazy">
+    <figcaption>Retro pedal</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-retro-speed.png" alt="Retro speed arc showing 64 km/h" width="593" height="347" loading="lazy">
+    <figcaption>Retro speed (see the note below)</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/screens/widget-nameplate.png" alt="Nameplate with DRIVER and 39.4" width="516" height="164" loading="lazy">
+    <figcaption>Nameplate with its fallback texts</figcaption>
+  </figure>
+</div>
 <p>A family of period-style widgets, used by the <em>2000s Grand Prix</em> template.</p>
 <ul>
   <li><strong>Retro RPM</strong>: a round analog tachometer with numerals in thousands, a red warning zone, needle and digital value. Settings: <strong>Dial color</strong>, <strong>Needle color</strong>, <strong>Dial background</strong>, <strong>Background opacity</strong>.</li>
@@ -112,8 +220,13 @@
   <li><strong>Nameplate</strong>: a two-band plate. Each field shows a channel value, or its <strong>Fallback text</strong> (for example a driver name) when there is no value.</li>
 </ul>
 <div class="warning"><p>New Retro RPM, Retro pedal and Retro speed widgets are bound to RaceChrono RCZ OBD channel names (<code>rpm-obd</code>, <code>accelerator_pos-obd</code>, <code>velocity-obd</code>). If your file uses other names, the widget shows no data. Select the correct channel, or <strong>Automatic</strong>, in <strong>Source channel</strong>. The selector may already display <em>Automatic</em> while the stored name is not in your file; select it again to apply it.</p></div>
+<div class="note"><p>At its default size the Retro speed arc cuts off its lowest segments, as in the picture above. This is a known defect (KAN-140).</p></div>
 
 <h3 id="w-logo">Logo</h3>
+<figure class="inline-widget">
+  <img src="assets/screens/widget-logo.png" alt="Logo widget" width="286" height="228" loading="lazy">
+  <figcaption>Logo</figcaption>
+</figure>
 <p>Shows the Flapped Ear Telemetry logo. Custom images are not supported. Settings: <strong>Logo opacity</strong> and <strong>Logo scale</strong>.</p>
 
 <h2 id="common-settings">Widget settings (WIDGET tab)</h2>

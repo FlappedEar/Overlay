@@ -17,6 +17,10 @@
   <li>Enter an <strong>Outing name</strong> (required).</li>
   <li>Click <strong>Add RCZ / VBO files…</strong>, or <strong>Add a folder…</strong> (optionally with <strong>Include subfolders</strong>), or drop files or a folder on the window.</li>
 </ol>
+<figure>
+  <img src="assets/screens/analysis-start.png" alt="Start an outing panel with outing name, Add RCZ / VBO files and Add a folder" width="1440" height="900" loading="lazy">
+  <figcaption>The Analysis window before anything is imported.</figcaption>
+</figure>
 <p>Each recording becomes a run. Matching VBO/RCZ exports of the same session share one run. More about importing, pairing and limits: <a href="importing.html#runs">Importing a track day</a>.</p>
 <p>While importing, the window shows the progress and a <strong>Cancel</strong> button. Problems are listed under <strong>Import notes</strong>.</p>
 
@@ -32,6 +36,11 @@
 
 <h2 id="day-results">Day results</h2>
 <p>After import, the window shows <strong>Day results</strong>: every recorded section of every run in one list, with buttons for the day's results above it.</p>
+
+<figure>
+  <img src="assets/screens/analysis-day-results.png" alt="Day results with the Best day button, comparison group and a chronological list of OUT, LAP 1 to 4 and IN sections" width="1440" height="900" loading="lazy">
+  <figcaption>Day results for the Jastrząb session of 29 August 2026 (RaceChrono Pro VBO): one run, the out-lap, four timed laps and the in-lap. The application detected the route as clockwise; LAP 4 (2:18.643) is the best lap in the group.</figcaption>
+</figure>
 
 <h3 id="groups">Comparison groups</h3>
 <p>Laps are only ranked and compared against laps driven on the same layout, in the same direction, with the same timing gate. The application builds these <strong>comparison groups</strong> automatically from repeated GPS laps and the recorded gates, and labels them like <em>Group 1 · Detected route · Clockwise</em>.</p>
@@ -107,6 +116,11 @@
 
 <h2 id="lap-detail">Inspecting a lap</h2>
 <p>Click a row to open the lap. <strong>← All laps</strong> or <kbd>Esc</kbd> returns to the list. The header shows the section, its time and the run.</p>
+
+<figure>
+  <img src="assets/screens/analysis-lap-detail.png" alt="Lap detail for LAP 4 with track position map and speed, lateral G and longitudinal G charts" width="1440" height="900" loading="lazy">
+  <figcaption>LAP 4 of the Jastrząb session: the GPS trace with the cursor 27 s into the lap, and the recorded <code>velocity</code>, <code>latacc-calc</code> and <code>longacc-calc</code> channels. Braking shows as upward peaks in the longitudinal G chart. No video was loaded.</figcaption>
+</figure>
 
 <h3 id="lap-map">Track map and video</h3>
 <ul>

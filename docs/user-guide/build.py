@@ -8,7 +8,8 @@ fragment whose first line is a metadata comment:
 
 Pages are emitted in the order listed in ``NAV``. The build fails when a page
 is missing from ``NAV``, or when an internal link points to a missing page or
-anchor, so the published site cannot silently contain broken navigation.
+anchor, or when an image file is missing, so the published site cannot silently
+contain broken navigation.
 
 Usage: python3 build.py [output-directory]   (default: _site)
 """
@@ -44,6 +45,7 @@ class _LinkCollector(HTMLParser):
         super().__init__()
         self.ids: set[str] = set()
         self.hrefs: list[str] = []
+        self.images: list[str] = []
         self.headings: list[tuple[int, str, str]] = []
         self._heading: tuple[int, str] | None = None
         self._text: list[str] = []
@@ -54,6 +56,8 @@ class _LinkCollector(HTMLParser):
             self.ids.add(attributes["id"])
         if tag == "a" and attributes.get("href"):
             self.hrefs.append(attributes["href"])
+        if tag == "img" and attributes.get("src"):
+            self.images.append(attributes["src"])
         if tag in ("h2", "h3") and attributes.get("id"):
             self._heading = (int(tag[1]), attributes["id"])
             self._text = []
@@ -84,6 +88,7 @@ def load_pages() -> dict[str, dict]:
             "body": body,
             "ids": collector.ids,
             "hrefs": collector.hrefs,
+            "images": collector.images,
             "headings": collector.headings,
         }
     return pages
@@ -111,6 +116,9 @@ def validate(pages: dict[str, dict]) -> None:
                 errors.append(f"{stem}: link '{href}' points to a missing page")
             elif anchor and anchor not in pages[target_stem]["ids"]:
                 errors.append(f"{stem}: link '{href}' points to a missing anchor")
+        for src in page["images"]:
+            if not (ROOT / src).is_file():
+                errors.append(f"{stem}: image '{src}' does not exist")
     if errors:
         raise SystemExit("User guide validation failed:\n  " + "\n  ".join(errors))
 
