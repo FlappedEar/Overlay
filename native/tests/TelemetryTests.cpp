@@ -176,6 +176,7 @@ private slots:
     void formatsElapsedTimes();
     void analyzesPrivateTrackDayCorners();
     void createsSegmentsAutomaticallyFromTheBestLap();
+    void keepsAutomaticSegmentsWhenTheRunChangesDuringCreation();
     void reviewsSegmentProposalsForTheOpenLap();
     void editsApprovedSegmentsWithUndo();
     void persistsSegmentationAcrossSaveRecoveryAndReopen();
@@ -5799,6 +5800,49 @@ void TelemetryTests::formatsElapsedTimes()
     QCOMPARE(AppController::formatElapsedTime(-2.5), QString("-2.500 s"));
     QCOMPARE(AppController::formatElapsedTime(3661.0), QString("61:01.000"));
     QCOMPARE(AppController::formatElapsedTime(std::numeric_limits<double>::quiet_NaN()), QString("—"));
+}
+
+void TelemetryTests::keepsAutomaticSegmentsWhenTheRunChangesDuringCreation()
+{
+    // KAN-142: automatic segments are created in the background after an
+    // import. A driver who switches the active run, or opens its video, at
+    // once must still get them, rather than lose them for good.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the automatic segments test.");
+    for (const QString &action : {QStringLiteral("switch run"), QStringLiteral("open video")}) {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        QSettings settings; settings.clear(); settings.sync();
+        const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
+        QVERIFY(writeBytes(fullA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
+        QVERIFY(writeBytes(fullB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
+        const QString videoPath = directory.filePath(QStringLiteral("run.mp4"));
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                               "color=c=black:s=32x32:r=30:d=5", "-c:v", "mpeg4", "-q:v", "3", videoPath});
+        QVERIFY(encoder.waitForFinished(30'000) && encoder.exitCode() == 0);
+        AppController controller(nullptr, directory.filePath("recovery.json"));
+        controller.setAutomaticSegments(true);
+        QSignalSpy committed(&controller, &AppController::batchImportCommitted);
+        QVERIFY(controller.importAnalysisRuns("At once", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
+        QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 60000);
+        QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QStringLiteral("ready"), 60000);
+        if (action == "switch run") {
+            const auto runs = controller.eventRuns();
+            const auto other = runs[controller.activeRunId() == runs[0].toMap().value("id").toString() ? 1 : 0].toMap().value("id").toString();
+            QVERIFY(controller.selectEventRun(other));
+            QTRY_COMPARE_WITH_TIMEOUT(controller.activeRunId(), other, 60000);
+        } else {
+            controller.loadVideo(QUrl::fromLocalFile(videoPath));
+            QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QStringLiteral("ready"), 60000);
+        }
+        QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 60000);
+        const auto bestRun = [&] { return controller.outingRanking().value("bestOfDay").toMap().value("runId").toString(); };
+        QTRY_VERIFY_WITH_TIMEOUT(!bestRun().isEmpty(), 60000);
+        const bool created = QTest::qWaitFor([&] {
+            return !controller.m_analysis.storedRunTrackSegments(bestRun()).toArray().isEmpty(); }, 20000);
+        qInfo().noquote() << action << (created ? "kept" : "LOST") << "·" << controller.statusText();
+        QVERIFY2(created, qPrintable(action));
+    }
 }
 
 void TelemetryTests::createsSegmentsAutomaticallyFromTheBestLap()

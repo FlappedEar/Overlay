@@ -30,6 +30,9 @@ void AnalysisController::initializeAutomaticSegments()
     });
     connect(&m_automaticSegmentsWatcher, &QFutureWatcher<AutomaticSegmentsResult>::finished, this, [this] {
         const auto result = m_automaticSegmentsWatcher.future().takeResult();
+        // KAN-142: cancelled (new sources, such as the run's video, or a run
+        // switch) is not a failure: the attempt is made again.
+        if (result.cancelled) { retryAutomaticSegments(result.key); return; }
         // Stale: another document, another best lap, or segments approved meanwhile.
         if (result.key != automaticSegmentsKey() || groupHasApprovedSegments(result.groupId) || !result.error.isEmpty()
             || result.review.proposals.proposals.isEmpty() || !result.review.unavailable.isEmpty()) {
@@ -50,9 +53,19 @@ void AnalysisController::initializeAutomaticSegments()
             stored = *next;
             ++approved;
         }
-        if (approved == 0 || !replaceRunTrackSegments(result.runId, stored.toArray(), false)) return;
+        if (approved == 0) return;
+        // The document can be briefly not editable (an export, a pending
+        // action): try again rather than lose the segments.
+        if (!replaceRunTrackSegments(result.runId, stored.toArray(), false)) { retryAutomaticSegments(result.key); return; }
         emit automaticSegmentsFinished(result.lapLabel, approved);
     });
+}
+
+void AnalysisController::retryAutomaticSegments(const QByteArray &key)
+{
+    if (m_automaticSegmentsAttempted == key) m_automaticSegmentsAttempted.clear();
+    // Waits for the laps when they are loading: outingLapsChanged calls it again.
+    if (m_automaticSegments) QMetaObject::invokeMethod(this, &AnalysisController::createAutomaticSegments, Qt::QueuedConnection);
 }
 
 QByteArray AnalysisController::automaticSegmentsKey() const
@@ -102,10 +115,14 @@ void AnalysisController::createAutomaticSegments()
         result.runId = row.value("runId").toString();
         result.lapLabel = lapLabel;
         const auto detail = FlappedEar::loadOutingLapDetail(source, projectPath, row, 0, cancellation, cache);
-        if (!detail.session) { result.error = detail.error; return result; }
-        result.review = computeSegmentReview(detail.session, row.value("startTime").toDouble(), row.value("endTime").toDouble(),
-            row.value("lapNumber").toInt(), 0, cancellation);
-        result.error = result.review.error;
+        if (!detail.session) {
+            result.error = detail.error;
+        } else {
+            result.review = computeSegmentReview(detail.session, row.value("startTime").toDouble(), row.value("endTime").toDouble(),
+                row.value("lapNumber").toInt(), 0, cancellation);
+            result.error = result.review.error;
+        }
+        result.cancelled = cancellation->load();
         return result;
     }));
 }

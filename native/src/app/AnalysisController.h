@@ -535,7 +535,9 @@ private:
         QString lapLabel;
         SegmentReviewResult review;
         QString error;
+        bool cancelled = false; // stopped by new sources or a run switch (KAN-142)
     };
+    void retryAutomaticSegments(const QByteArray &key);
     void initializeAutomaticSegments();
     void createAutomaticSegments();
     [[nodiscard]] QByteArray automaticSegmentsKey() const;

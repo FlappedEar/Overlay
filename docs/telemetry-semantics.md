@@ -626,6 +626,11 @@ once per document, layout and best lap, so revoked segments do not come back
 by themselves. The Overlays app turns this on; the analysis controller's
 default is off, so a headless caller chooses.
 
+Opening the run's video, or switching the active run, while the segments are
+being created cancels that work; it is started again afterwards, so the
+segments are not lost (KAN-142). The "could not be created" message is only
+for a real failure.
+
 A lap whose layout, direction or timing gate is not identified cannot store
 segments. Its segment review says so and points to Correct grouping, instead
 of offering proposals that cannot be approved.
