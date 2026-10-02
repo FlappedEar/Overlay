@@ -137,10 +137,8 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QVERIFY(QMetaObject::invokeMethod(batch, "submit"));
     QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 120000);
     QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 180000);
-    // Automatic segments (KAN-136) are created in the background. The video is
-    // opened only after them: opening it earlier currently loses them.
-    QTRY_VERIFY_WITH_TIMEOUT(controller.statusText().contains("created automatically"), 180000);
-    qInfo().noquote() << controller.statusText();
+    // Automatic segments (KAN-136) are created in the background; the video is
+    // opened at once, as a driver does (KAN-142 keeps the segments).
     // The run of the onboard video becomes the active one; its video is
     // opened and synchronized as in the editor.
     const int runIndex = std::max(0, int(options.day.indexOf(options.recording)));

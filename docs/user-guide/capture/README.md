@@ -40,8 +40,8 @@ python3 docs/user-guide/build.py
 
 Capture notes:
 
-- The day is imported first, and the video is opened only after the
-  automatic segments exist. Opening it earlier currently loses them.
+- The day is imported first and the video is opened at once, as a driver
+  does; the automatic segments are still created (KAN-142).
 - A paused player on macOS shows no frame after a seek, so the lap view
   plays the moment for two seconds before its picture.
 - The test executable hands `--export-worker` to the application's own
