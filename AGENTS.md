@@ -90,9 +90,9 @@
   not the media-duration boundary after it.
 - Current owner direction (2026-10-02): the repository delivers two applications that share the
   telemetry core: a desktop overlay editor (working name Flapped Ear Overlays) for macOS and
-  Windows, and Flapped Ear Telemetry for iOS and Android. Keep `flappedear_telemetry_core` and
-  `flappedear_telemetry_app` free of Gui, overlay, video and platform-specific code so that they
-  build for all four platforms. macOS remains the active development platform. The 2026-09-13
+  Windows, and Flapped Ear Telemetry for macOS, Windows, iOS and Android. Keep
+  `flappedear_telemetry_core` and `flappedear_telemetry_app` free of Gui, overlay, video and
+  platform-specific code so that they build for all four platforms. macOS remains the active development platform. The 2026-09-13
   pause still applies: do not start Windows builds, tests, packaging or installer validation
   until the owner explicitly resumes them. This supersedes older dual-platform gates in Jira and
   historical documentation. The owner

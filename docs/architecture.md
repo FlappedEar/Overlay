@@ -1,6 +1,6 @@
 # Architecture
 
-Flapped Ear Telemetry is currently one native Qt 6 application for overlay editing/generation and telemetry analysis. By owner decision (2 October 2026) it is being split into a desktop overlay editor (macOS and Windows) and the Flapped Ear Telemetry app (iOS and Android); the library structure below is the first step. C++ owns telemetry, media, project, synchronization, and export behavior; QML presents the editor and the reusable telemetry scene.
+Flapped Ear Telemetry is currently one native Qt 6 application for overlay editing/generation and telemetry analysis. By owner decision (2 October 2026) it is being split into a desktop overlay editor (macOS and Windows) and the Flapped Ear Telemetry app (macOS, Windows, iOS and Android); the library structure below is the first step. C++ owns telemetry, media, project, synchronization, and export behavior; QML presents the editor and the reusable telemetry scene.
 
 The [product vision](product-vision.md) defines the full intended analytical workflow;
 the [delivery plan](product-delivery.md) distinguishes implementation from remaining
@@ -28,7 +28,7 @@ product split (`docs/product-split-plan.md`, epic KAN-121):
   best, time loss, consistency, variability, G-G pairs, channel summaries
   and cooling, the computed day report (`DayReport`, KAN-71), the event
   document and recovery. It links **Qt Core and zlib only**, so it can be built for
-  iOS and Android. The `flappedear_telemetry_core_boundary` test fails if a
+  all four target platforms, including iOS and Android. The `flappedear_telemetry_core_boundary` test fails if a
   file there includes overlay, video, export, app or Gui headers. Video
   fingerprints are built on the overlay side (`export/VideoFingerprint`)
   from the document layer's video-free helpers. An event (v3) document may

@@ -16,7 +16,7 @@ The old single-session-only product scope is superseded by
 The current candidate is one Mac application for whole-day event analysis and
 video overlay editing/export. By owner decision (2 October 2026) the product is
 being split into a desktop overlay editor (macOS and Windows) and Flapped Ear
-Telemetry (iOS and Android); see [product split plan](product-split-plan.md). An event contains multiple runs with optional
+Telemetry (macOS, Windows, iOS and Android); see [product split plan](product-split-plan.md). An event contains multiple runs with optional
 run-local video/sync. A run's video can be a GoPro chapter group played as one
 timeline (KAN-105); exporting a chaptered video is refused until KAN-106. First core and full-vision acceptance are distinct.
 

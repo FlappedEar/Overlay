@@ -23,8 +23,8 @@ that check over this file.
   (`TelemetryTests.cpp:8831`): KAN-143 fixes the tests, KAN-150 the product side.
 - The M2–M4 epics (KAN-7, KAN-8, KAN-9) are closed.
 - **Owner decision, 2 October 2026:** two applications. The desktop overlay
-  editor targets macOS and Windows; Flapped Ear Telemetry targets iOS and
-  Android. `AGENTS.md` and `product-vision.md` record it. Windows builds and CI
+  editor targets macOS and Windows; Flapped Ear Telemetry targets macOS,
+  Windows, iOS and Android. `AGENTS.md` and `product-vision.md` record it. Windows builds and CI
   stay paused until the owner resumes them. The other KAN-122 decisions (store
   licence, identities, desktop analysis window, devices) are open.
 - `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
@@ -208,17 +208,18 @@ report takes about 7 s in Release, with a peak of 150 MiB. See
 The owner wants **two products in one repository**:
 
 - **Flapped Ear Telemetry:** a quick iPhone, iPad and Android app to view
-  the day's telemetry at the track. Nobody carries a laptop to the track.
+  the day's telemetry at the track (nobody carries a laptop to the track),
+  also built for macOS and Windows (owner decision, 2 October 2026).
 - **Flapped Ear Overlays:** the desktop video-overlay editor. Planned
   additions are tyre pressure and temperature, and a helmet camera without
   GPS, which needs manual sync of multiple video sources.
 
 Read `docs/product-split-plan.md` (epic KAN-121, tickets KAN-122–132) before
 any structural work. Phase 0 (KAN-122): the platforms were decided on
-2 October 2026 (desktop editor on macOS and Windows, Telemetry on iOS and
-Android) and the tyre data source is settled (KAN-132). Still open: the Qt
-store licence, bundle identities, whether the desktop app keeps a day-analysis
-window, and target devices. Phases 1–3 need none of them except identities
+2 October 2026 (desktop editor on macOS and Windows, Telemetry on macOS,
+Windows, iOS and Android) and the tyre data source is settled (KAN-132).
+Still open: the Qt store licence, bundle identities, whether the overlay
+editor keeps a day-analysis window, and target devices. Phases 1–3 need none of them except identities
 (phase 3).
 
 Split rules already in force after KAN-123:

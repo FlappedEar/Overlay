@@ -11,7 +11,7 @@ implementation sessions. Implementation and execution status belong in
 Two applications from one repository share the telemetry core: a desktop video
 overlay editor/generator for macOS and Windows (working name **Flapped Ear
 Overlays**), and **Flapped Ear Telemetry**, a track-day performance analyzer for
-iOS and Android. The analysis answers:
+macOS, Windows, iOS and Android. The analysis answers:
 
 **Where did I lose time? What differed? What might explain it? What should I
 focus on next?**
@@ -22,13 +22,13 @@ and more charts are foundations, not completion of this promise.
 
 ## Durable decisions
 
-- Product names: **Flapped Ear Telemetry** is the mobile analysis app; the desktop
+- Product names: **Flapped Ear Telemetry** is the analysis app; the desktop
   editor's working name is **Flapped Ear Overlays**. Bundle identities and the
   migration of existing settings are still to be decided (KAN-122). Existing internal
   identifiers may remain for compatibility; user-facing naming must be consistent.
 - Keep this repository and native Qt/C++/QML architecture. Both applications share
   parsing, timing and analysis through the Qt-Core-only telemetry core. Whether the
-  desktop app keeps a day-analysis window is still open (KAN-122).
+  overlay editor keeps a day-analysis window is still open (KAN-122).
 - Event → Run → Lap. An event groups the day; a run owns recording sources,
   optional video, sync and setup/conditions notes. Lap identity includes its run.
 - Analyze across runs without concatenating paddock breaks. Recording time,
@@ -38,8 +38,8 @@ and more charts are foundations, not completion of this promise.
 - Prefer VBO when the user needs RaceChrono's exported calculated G channels.
   RCZ preserves native sensor clocks. Keep provenance and explain this choice.
 - Platforms: the desktop editor targets macOS and Windows; Flapped Ear Telemetry
-  targets iOS and Android. macOS remains the active development platform, and Windows
-  builds and CI stay paused until the owner resumes them. No unsolicited framework
+  targets macOS, Windows, iOS and Android. macOS remains the active development
+  platform, and Windows builds and CI stay paused until the owner resumes them. No unsolicited framework
   replacement or silent scope reduction.
 
 ## Complete feature ledger
