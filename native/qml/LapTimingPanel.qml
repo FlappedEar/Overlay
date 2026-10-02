@@ -26,10 +26,7 @@ Rectangle {
     clip: true
 
     function lapTime(seconds) {
-        const safeSeconds = Math.max(0, Number(seconds));
-        const minutes = Math.floor(safeSeconds / 60);
-        const remaining = safeSeconds - minutes * 60;
-        return minutes + ":" + remaining.toFixed(3).padStart(6, "0");
+        return appController.formatLapTime(Math.max(0, Number(seconds)), 3);
     }
 
     function delta(seconds) {

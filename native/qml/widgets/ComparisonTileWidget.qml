@@ -51,10 +51,8 @@ Item {
         const value = Number(seconds);
         if (!Number.isFinite(value) || value < 0)
             return "—:—." + "—".repeat(Math.max(1, decimals));
-        const minutes = Math.floor(value / 60);
-        const remainder = value - minutes * 60;
-        const width = decimals > 0 ? 3 + decimals : 2;
-        return minutes + ":" + remainder.toFixed(decimals).padStart(width, "0");
+        // Rounded before minutes are split, in C++ (KAN-149).
+        return frame.renderContext.formatLapTime(value, decimals);
     }
 
     function formatNumber(value) {

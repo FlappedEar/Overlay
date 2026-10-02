@@ -94,6 +94,12 @@ struct LapSession {
 [[nodiscard]] QVector<qsizetype> eligibleLapIndices(const LapSession &session);
 void recomputeLapRanking(LapSession &session);
 
+// A lap time as "M:SS" with 0-3 decimals ("1:40.23"). The time is rounded to
+// the display precision before minutes are split, so 59.96 s at one decimal
+// is "1:00.0", never "0:60.0" (KAN-149). Empty for a negative or non-finite
+// time: callers show their own placeholder.
+[[nodiscard]] QString formatLapTime(double seconds, int decimals);
+
 // Content revision of the ordered source gates in east-positive coordinates.
 // Empty means unresolved (missing/ambiguous start gate or invalid coordinates).
 // Gate crossing sign is not a clockwise/counterclockwise layout direction.

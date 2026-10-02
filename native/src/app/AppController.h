@@ -404,6 +404,8 @@ public:
     // "1:49.898" for anything a minute or longer, "28.662 s" below that; "—"
     // when not finite. One formatter for every lap and segment time.
     Q_INVOKABLE static QString formatElapsedTime(double seconds);
+    // KAN-149: "M:SS.ddd" lap times for the analysis views (see formatLapTime).
+    Q_INVOKABLE static QString formatLapTime(double seconds, int decimals) { return FlappedEar::formatLapTime(seconds, decimals); }
     // KAN-59: one loss window per approved segment for the current pair.
     Q_INVOKABLE QVariantMap comparisonTimeLossObservations() const;
     // KAN-66: both laps' G-G samples over [start, end] metres of the shared

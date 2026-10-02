@@ -147,7 +147,7 @@ Rectangle {
     }
 
     function duration(seconds) {
-        return Math.floor(seconds / 60) + ":" + (seconds % 60).toFixed(3).padStart(6, "0");
+        return appController.formatLapTime(seconds, 3);
     }
     function lapLabel(index) {
         const lap = root.slots[index] ? root.slots[index].lap : ({});

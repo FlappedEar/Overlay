@@ -33,7 +33,7 @@ Rectangle {
     onShowingCoastingChanged: if (showingCoasting) reviewingSegments = false
     onLapChanged: if (!root.lap.reference) root.reviewingSegments = false
     function duration(seconds) {
-        return Math.floor(seconds / 60) + ":" + (seconds % 60).toFixed(3).padStart(6, "0");
+        return appController.formatLapTime(seconds, 3);
     }
     // KAN-78: Escape closes this view, except while typing in a text field
     // or area here (a lap-exclusion reason, a segment name), which keeps
