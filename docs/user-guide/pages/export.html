@@ -1,0 +1,87 @@
+<!-- title: Exporting video | nav: Export -->
+<h1 id="export">Exporting video</h1>
+<p class="lead">Export renders the overlay onto your video and writes an H.265 (HEVC) MP4 file. The overlay is drawn by the same scene you see in the preview.</p>
+
+<h2 id="before">Before you export</h2>
+<ul>
+  <li>A video and a telemetry recording must both be loaded. <strong>Export</strong> is disabled otherwise.</li>
+  <li>FFmpeg and ffprobe must be installed; see <a href="installation.html#ffmpeg">Installing FFmpeg</a>.</li>
+  <li>Check the <a href="synchronization.html">synchronization</a> at a few points in the video.</li>
+  <li>Hidden layers are not exported. Widgets with <a href="widgets.html#cues">cues</a> appear only during their cues.</li>
+</ul>
+
+<h2 id="dialog">The Export dialog</h2>
+<p>Open it with the <strong>Export</strong> button, <strong>File › Export…</strong> or <kbd>⌘E</kbd>. The dialog is titled <em>Export H.265 / HEVC</em>.</p>
+
+<h3 id="source">Source</h3>
+<p>The top of the dialog summarises the source: size, exact frame rate, codec and profile, bit depth, colour (for example <em>Rec.709 SDR</em>), audio and duration. Two notices may appear:</p>
+<ul>
+  <li><em>Variable frame rate source detected.</em> The export is written at a constant frame rate. Telemetry still follows real time.</li>
+  <li><em>HDR/Log preservation is not yet supported.</em> The export will be refused rather than silently converted to SDR.</li>
+</ul>
+
+<h3 id="output">Output file</h3>
+<p>Click <strong>Choose output…</strong> and pick a name ending in <code>.mp4</code>. If the file already exists you are asked <em>Replace existing file?</em>. The existing file is replaced only after the new video has been encoded and has passed validation; until then it is left untouched. The output cannot be the source video or any other file used by the project.</p>
+
+<h3 id="format">Format options</h3>
+<table>
+  <tr><th>Option</th><th>Choices</th></tr>
+  <tr><td>Resolution</td><td>The source size, marked <em>(Source)</em>, plus smaller sizes 3840, 2560, 1920 and 1280 pixels wide where they are below the source width. The aspect ratio is kept. Upscaling is not offered, and there is no 4K limit.</td></tr>
+  <tr><td>Frame rate</td><td>The exact source rate, marked <em>(Source)</em>, or exactly half of it when the source rate divides evenly (for example 59.94 → 29.97 or 50 → 25; not offered for 25 fps).</td></tr>
+  <tr><td>Quality</td><td><strong>Smaller file</strong>, <strong>Recommended</strong>, <strong>High quality</strong> or <strong>Custom</strong>.</td></tr>
+  <tr><td>Video bitrate</td><td>In Mbps. Calculated from size, frame rate and bit depth for the first three quality choices. Editable with <strong>Custom</strong>, from 0.5 to 500.</td></tr>
+  <tr><td>Audio</td><td><strong>Audio — AAC 192 kbps</strong> copies the source sound track (re-encoded). Disabled when the source has no audio.</td></tr>
+</table>
+<p>The dialog shows an <strong>Estimated size</strong> for the chosen settings.</p>
+<p>Not selectable: the HEVC encoder is chosen automatically (Apple VideoToolbox when available, otherwise another hardware encoder or the software encoder x265), and the bit depth follows the source: 8-bit sources export as HEVC Main, 10-bit sources as HEVC Main10. Colour tags are copied from the source.</p>
+
+<h3 id="range">Range</h3>
+<table>
+  <tr><th>Mode</th><th>What is exported</th></tr>
+  <tr><td><strong>Entire video</strong></td><td>Every frame of the video.</td></tr>
+  <tr><td><strong>Custom timecode</strong></td><td>From <strong>IN</strong> to <strong>OUT</strong>, both frames included. Enter timecodes as <code>HH:MM:SS:FF</code> with colons (non-drop-frame). The fields start with the full range.</td></tr>
+  <tr><td><strong>Single lap · hotlap</strong></td><td>One completed lap plus a <strong>Handle</strong> of 5, 6, 7 or 8 seconds before and after (default 6). The dialog shows the resulting IN → OUT and duration.</td></tr>
+</table>
+<p>In single-lap mode, pick the lap from the <strong>Lap</strong> list. The dialog also names the day's best lap: if it is in this recording, <strong>Select the day's best lap</strong> picks it; if it is in another run, an <strong>Open …</strong> button switches to that run so you can export it with its own video. The lap must overlap the synchronized video.</p>
+<p>If a <strong>Current lap time</strong> widget is in <a href="widgets.html#hotlap">hotlap mode</a>, the dialog opens in single-lap mode with the same lap.</p>
+
+<h3 id="start">Starting the export</h3>
+<p>Click <strong>Export</strong> or press <kbd>Return</kbd>. Problems found before encoding starts are shown in red in the dialog.</p>
+
+<h2 id="progress">Progress, cancelling and details</h2>
+<p>The progress window shows the current stage, a progress bar, the encoded time and frame, elapsed time and processing speed. Export runs in two stages:</p>
+<ol>
+  <li><strong>Rendering overlay</strong>: the overlay is drawn frame by frame into a temporary file and validated.</li>
+  <li><strong>Encoding video</strong>: the overlay is combined with the source video and encoded to HEVC. The result is validated (codec, size, frame rate, frame count and colour) before it is moved to the chosen file.</li>
+</ol>
+<ul>
+  <li><strong>Cancel</strong> stops the export and removes its temporary files. The chosen output file is not written.</li>
+  <li><strong>Details</strong> shows a technical report (stages, timings, frame counts, free space, encoder). It opens automatically when an export fails or ends with a warning.</li>
+  <li><strong>Very verbose</strong> shows the live FFmpeg log. Scrolling up stops it from following new lines; <strong>Jump to latest</strong> resumes following. <strong>Copy all</strong> copies the whole log.</li>
+</ul>
+<p>The progress window ends with one of: <em>Export complete</em>, <em>Export completed with warning</em>, <em>Export failed</em> or <em>Export cancelled</em>. <em>Completed with warning</em> means the file was written but a few frames are missing at the very end; check the result before using it.</p>
+<p>Every export writes a log file, kept even when the export fails or is cancelled. The ten most recent logs are kept; see <a href="projects.html#files">Where files are stored</a>.</p>
+
+<h2 id="output-format">What the exported file contains</h2>
+<ul>
+  <li>H.265/HEVC video in an MP4 container, at a constant frame rate equal to the chosen rate.</li>
+  <li>The number of frames is exactly the selected range: OUT − IN + 1 frames. An export that <em>completed with warning</em> may be up to 10 frames short at the end.</li>
+  <li>AAC audio when enabled and present in the selected range.</li>
+</ul>
+
+<h2 id="disk-space">Disk space</h2>
+<p>Before starting, the application estimates the space needed for the temporary overlay file and for the final video, and keeps an extra 2 GiB free. If there is not enough space, the export does not start and the message states the estimate and the available space. Free space is checked during the export, and the export stops before the disk fills up. Temporary files are written to the system's temporary folder; the final file is first written next to the chosen output.</p>
+
+<h2 id="source-limits">Sources that cannot be exported</h2>
+<p>These sources can be opened and edited, but export is refused with an explanation:</p>
+<table>
+  <tr><th>Source</th><th>Message begins with</th></tr>
+  <tr><td>HDR (HLG, PQ) or Log colour</td><td>… source detected. Color-managed HDR/Log preservation is not yet supported</td></tr>
+  <tr><td>Rotation metadata (for example phone video recorded upright)</td><td>Export does not yet support videos with rotation metadata.</td></tr>
+  <tr><td>Non-square pixels</td><td>Export does not yet support non-square pixel aspect ratio</td></tr>
+  <tr><td>Unknown bit depth</td><td>Source bit depth is unknown …</td></tr>
+  <tr><td>Bit depth other than 8 or 10 (for example 12-bit)</td><td>…-bit source preservation is not supported by the current HEVC export policy.</td></tr>
+  <tr><td>Video made of several chapters</td><td>Exporting a video made of several chapters is not available yet.</td></tr>
+</table>
+<p>To export such material, convert it first with another tool to a single SDR, 8- or 10-bit, unrotated MP4 or MOV file.</p>
+<p>Other export errors are listed in <a href="troubleshooting.html#export">Troubleshooting</a>.</p>

@@ -1,0 +1,89 @@
+<!-- title: Importing video and telemetry | nav: Importing -->
+<h1 id="importing">Importing video and telemetry</h1>
+<p class="lead">An overlay project needs one video and one telemetry recording. A track-day event can hold many recordings, each as its own run.</p>
+
+<h2 id="video">Video</h2>
+<p>Use <strong>Open video</strong> in the header, <strong>File › Open Video…</strong> (<kbd>⇧⌘V</kbd>) or <strong>Choose video</strong>. The file picker accepts <code>.mp4</code> and <code>.mov</code> files.</p>
+<ul>
+  <li>One ordinary file opens directly.</li>
+  <li>Selecting several files, or a single file with a GoPro chapter name, opens the <a href="#chapters">Video chapters</a> review first.</li>
+</ul>
+<p>The application reads the video's properties (size, frame rate, codec, bit depth, colour, audio) with <code>ffprobe</code>, so FFmpeg must be installed even before you export; see <a href="installation.html#ffmpeg">Installing FFmpeg</a>. Video without GoPro metadata imports normally; only <a href="synchronization.html#auto">automatic synchronization</a> needs it.</p>
+<p>Videos with a variable frame rate, HDR or Log colour, rotation metadata or non-square pixels can be opened, played and edited. Some of them cannot be exported yet; see <a href="export.html#source-limits">Sources that cannot be exported</a>.</p>
+
+<h3 id="chapters">GoPro chapters</h3>
+<p>GoPro cameras split long recordings into chapter files. The application recognises GoPro chapter names (for example <code>GX010123.MP4</code>, <code>GX020123.MP4</code> on HERO6 and later, and <code>GOPR0123.MP4</code>, <code>GP010123.MP4</code> on older models) and offers them as one recording.</p>
+<ol class="steps">
+  <li>Open all chapter files of a recording together (1 to 64 files).</li>
+  <li>The <strong>Video chapters</strong> dialog lists each recording group with its chapters, durations, size, codec, frame rate and creation time.</li>
+  <li>Check the warnings, reorder chapters with ↑ and ↓ if needed, and click <strong>Use this recording</strong>.</li>
+</ol>
+<p>The dialog warns about:</p>
+<ul>
+  <li>a missing chapter (<em>the video would jump over it</em>);</li>
+  <li>a chapter chosen more than once (the copies are left out);</li>
+  <li>an unreadable chapter (the group cannot be used);</li>
+  <li>chapters that differ in codec, size or frame rate;</li>
+  <li>chapters whose creation times overlap or leave a gap of more than a few seconds;</li>
+  <li>files without usable creation times (the order then comes from the names only).</li>
+</ul>
+<p>The chapters play as one continuous timeline. A missing or changed chapter plays as a gap, and telemetry time continues across it.</p>
+<div class="warning"><p>Exporting a video made of several chapters is not available yet. Automatic synchronization uses only the first chapter's GPS. To export, open a single video file.</p></div>
+
+<h2 id="telemetry">Telemetry</h2>
+<p>Use <strong>Open telemetry</strong> in the header, <strong>File › Open telemetry…</strong> (<kbd>⇧⌘T</kbd>) or <strong>Choose telemetry</strong>. Two formats are supported:</p>
+<table>
+  <tr><th>Format</th><th>Typical source</th><th>Notes</th></tr>
+  <tr><td><code>.vbo</code></td><td>RaceChrono Pro VBO export</td><td>Includes RaceChrono's calculated lateral and longitudinal G when they are enabled in the export. Verified with RaceChrono Pro 10.2.4.</td></tr>
+  <tr><td><code>.rcz</code></td><td>RaceChrono session archive</td><td>Keeps each sensor's original recording rate. One uninterrupted session per file. Contains no calculated G.</td></tr>
+</table>
+<p>On success the status bar shows <em>Telemetry opened: N samples, M numeric channels.</em>, followed by up to three parser warnings. Details of supported content, recognised channels and limits are in <a href="telemetry-data.html">Telemetry data</a>.</p>
+<p>In an event, <strong>Open telemetry…</strong> replaces the active run's primary recording; it does not add a run.</p>
+
+<h2 id="runs">Importing a track day</h2>
+<p>A day at the track usually produces several recordings. Import them together into an <strong>event</strong>, where each recording becomes a <strong>run</strong>. There are two ways.</p>
+
+<h3 id="outing">From the Analysis window (recommended)</h3>
+<ol class="steps">
+  <li>Open the Analysis window (<strong>Lap Analysis →</strong> on the Welcome screen, or <kbd>⇧⌘A</kbd>).</li>
+  <li>Under <strong>Start an outing</strong>, enter an <strong>Outing name</strong>, for example the track and the day.</li>
+  <li>Click <strong>Add RCZ / VBO files…</strong> and select your files, or click <strong>Add a folder…</strong> (tick <strong>Include subfolders</strong> to search below it). You can also drag files or a folder onto the window.</li>
+</ol>
+<p>The files are imported directly and the <a href="analysis.html#day-results">Day results</a> list opens. To add more recordings later, use <strong>Add files…</strong> or <strong>Add folder…</strong> in the Analysis header, or drop files on the window. Recordings already in the event are skipped.</p>
+
+<h3 id="review">With a review step</h3>
+<p><strong>File › Import telemetry runs…</strong> lets you check each file before anything changes.</p>
+<ol class="steps">
+  <li>Select 1 to 64 VBO/RCZ files.</li>
+  <li>In the <strong>Import runs</strong> dialog choose <strong>Create a new event</strong> (enter an event name) or <strong>Add runs to current event</strong>.</li>
+  <li>For each file choose <strong>Import as a run</strong>, <strong>Skip this file</strong> or <strong>Same run as: …</strong>. Each row shows the duration and number of complete laps, and a status: ready, duplicate or error. Tick <strong>Show file details and import warnings</strong> for paths, parser warnings and possible matches.</li>
+  <li>Click <strong>Create event</strong> or <strong>Add reviewed runs</strong>.</li>
+</ol>
+<p>Files are checked again just before they are committed. If you have unsaved changes, save them before creating a new event.</p>
+
+<h3 id="pairing">VBO and RCZ of the same session</h3>
+<p>If you exported the same session both as VBO and as RCZ, they belong to one run:</p>
+<ul>
+  <li>In the outing import, a VBO and an RCZ are grouped automatically only when their start times agree within 1 second, their durations within 2 seconds, their GPS traces agree, and the match is one-to-one. The VBO becomes the primary recording and the RCZ is kept as an alternative.</li>
+  <li>In the review dialog, choose <strong>Same run as: …</strong>. Analysis uses the file you link to; the other file is kept with that run.</li>
+  <li>Unknown clocks, different dates and ambiguous matches stay as separate runs.</li>
+</ul>
+<p>Channels of the two files are never combined automatically. See <a href="analysis.html#run-details">Run details</a> for alternatives, clock checks and reviewed channel fusion.</p>
+
+<h3 id="duplicates">Duplicates and naming</h3>
+<ul>
+  <li>Two files with identical content are reported as duplicates and imported once.</li>
+  <li>Runs are named <em>Session 1</em>, <em>Session 2</em>, … in recording-time order. Recordings without a clock follow in import order. Names can be changed in <a href="analysis.html#run-details">Run details</a>.</li>
+  <li>The recording date and time come from the file's content. File names and file dates are never used.</li>
+</ul>
+
+<h3 id="import-limits">Limits</h3>
+<table>
+  <tr><th>Item</th><th>Limit</th></tr>
+  <tr><td>Files per import</td><td>64 (a folder with more is refused)</td></tr>
+  <tr><td>Size of one telemetry file</td><td>128 MiB</td></tr>
+  <tr><td>Total size of one import</td><td>256 MiB</td></tr>
+  <tr><td>Runs per event</td><td>64</td></tr>
+  <tr><td>Recordings per run</td><td>8</td></tr>
+  <tr><td>Folder search depth</td><td>8 subfolder levels; symbolic links and hidden entries are skipped</td></tr>
+</table>

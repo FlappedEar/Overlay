@@ -1,0 +1,80 @@
+<!-- title: Troubleshooting | nav: Troubleshooting -->
+<h1 id="troubleshooting">Troubleshooting</h1>
+<p class="lead">Common problems, the messages you will see, and what to do.</p>
+
+<h2 id="start">The application does not start</h2>
+<table>
+  <tr><th>Message or symptom</th><th>What to do</th></tr>
+  <tr><td>macOS says the application cannot be opened or is from an unidentified developer</td><td>Test builds are not notarized. Use only builds from the project owner and report the message to them. Do not disable system protection.</td></tr>
+  <tr><td><em>Flapped Ear Telemetry is already running.</em></td><td>Switch to the open window. Only one editor can run at a time.</td></tr>
+  <tr><td><em>… cannot open its application data directory</em> or <em>… could not protect its recovery data</em></td><td>Check free disk space and the permissions of <code>~/Library/Application Support/FlappedEar/</code>.</td></tr>
+</table>
+
+<h2 id="video">Video problems</h2>
+<table>
+  <tr><th>Message or symptom</th><th>What to do</th></tr>
+  <tr><td><em>Could not open video</em> mentioning ffprobe, or <em>ffprobe did not find a usable video stream</em></td><td>Install FFmpeg (<a href="installation.html#ffmpeg">Installing FFmpeg</a>). Check that the file plays in QuickTime Player.</td></tr>
+  <tr><td><em>Video playback failed</em></td><td>The video cannot be decoded on this Mac. Convert it to H.264 or HEVC in MP4.</td></tr>
+  <tr><td>Chapter files open as separate videos or in the wrong order</td><td>Select all chapters of the recording together and check the order in the <a href="importing.html#chapters">Video chapters</a> dialog.</td></tr>
+  <tr><td>Overlay is in the wrong place on the picture</td><td>Widget positions are relative to the frame; check them in the WIDGET tab Geometry section.</td></tr>
+</table>
+
+<h2 id="telemetry">Telemetry problems</h2>
+<table>
+  <tr><th>Message or symptom</th><th>What to do</th></tr>
+  <tr><td><em>Choose an existing VBO or RaceChrono RCZ telemetry file.</em></td><td>Only <code>.vbo</code> and <code>.rcz</code> files are supported.</td></tr>
+  <tr><td><em>VBO has no [column names] section.</em> / <em>VBO has no [data] rows.</em></td><td>The file is not a complete VBO export. Export it again.</td></tr>
+  <tr><td><em>GPS coordinates and timing gates unavailable</em></td><td>The coordinate unit of this VBO is not known. See <a href="telemetry-data.html#vbo">VBO files</a> for the header line to add.</td></tr>
+  <tr><td><em>Timing gates ignored: this RaceChrono exporter version has not been validated.</em></td><td>Telemetry is usable, but no laps are derived from this file. Timing gates are read from RaceChrono Pro 10.2.4 VBO exports, the version that has been verified, and from other VBO files that declare <code>coordinate units</code> in the header. Other RaceChrono versions lose their gates.</td></tr>
+  <tr><td><em>Resumed sessions are not supported yet.</em> / <em>Multi-session or resumed archives are not supported</em></td><td>Share one uninterrupted session from RaceChrono, or use its VBO export.</td></tr>
+  <tr><td>A widget shows <code>—</code></td><td>The channel has no value at this moment, or the widget is bound to a channel your file does not have. Check <strong>Source channel</strong>, the <strong>Live channels</strong> list in the DATA tab and the <a href="synchronization.html">synchronization</a>.</td></tr>
+  <tr><td>G-force dot never moves or is missing</td><td>Both lateral and longitudinal channels are needed. RCZ files have no calculated G; use a VBO export with calculated G, or select channels manually.</td></tr>
+  <tr><td>Track map is mirrored</td><td>Use <strong>Mirror X</strong> or <strong>Mirror Y</strong> on the Track widget.</td></tr>
+</table>
+
+<h2 id="laps">No laps found</h2>
+<p>Lap timing comes from the timing gate stored in the telemetry file. The status shows the reason:</p>
+<table>
+  <tr><th>Status</th><th>Meaning and fix</th></tr>
+  <tr><td>No Start gate in telemetry</td><td>The recording contains no start/finish line. In RaceChrono, record with a track that has a start/finish line, then export again.</td></tr>
+  <tr><td>Multiple Start gates in telemetry</td><td>Exactly one start gate is required.</td></tr>
+  <tr><td>Start gate geometry is invalid</td><td>The stored line could not be used.</td></tr>
+  <tr><td>No usable GPS for lap timing</td><td>GPS is missing or its unit is unknown (see above).</td></tr>
+  <tr><td>No Start-line passages detected / One Start-line passage detected; no complete lap</td><td>The car did not cross the line twice in the same direction during the recording.</td></tr>
+</table>
+<p>In the Analysis window, a recording without crossings appears as one <em>UNKNOWN</em> section, and a run whose layout or gate is unresolved cannot join a comparison group. Use <a href="analysis.html#correct-grouping">Correct grouping</a> for layout and direction problems.</p>
+
+<h2 id="sync">Synchronization problems</h2>
+<p>See the message table in <a href="synchronization.html#auto-requirements">Automatic synchronization</a>. If automatic synchronization finds a wrong match (for example because several laps look alike), click <strong>Ignore</strong> and set the offset manually.</p>
+
+<h2 id="export">Export problems</h2>
+<table>
+  <tr><th>Message</th><th>What to do</th></tr>
+  <tr><td><em>FFmpeg with an HEVC encoder is required…</em> / <em>FFprobe is required…</em></td><td>Install FFmpeg with Homebrew; see <a href="installation.html#ffmpeg">Installing FFmpeg</a>.</td></tr>
+  <tr><td><em>No requested HEVC encoder is available in this FFmpeg build.</em> / <em>Encoder … cannot encode …</em></td><td>Install an FFmpeg build with VideoToolbox or libx265, or choose a smaller resolution.</td></tr>
+  <tr><td>Export stops early with a filter or composition error</td><td>The FFmpeg version lacks a required filter. Update FFmpeg.</td></tr>
+  <tr><td><em>Open a video and telemetry, then choose an output file.</em></td><td>Load both sources and pick an output file.</td></tr>
+  <tr><td><em>Export range must use valid inclusive SMPTE IN and OUT timecodes…</em></td><td>Use <code>HH:MM:SS:FF</code> with colons, with IN before OUT and both inside the video.</td></tr>
+  <tr><td><em>Export format is invalid…</em></td><td>Choose one of the offered sizes and rates, and a bitrate from 0.5 to 500 Mbps.</td></tr>
+  <tr><td><em>Not enough free space for export…</em></td><td>Free space on the destination and on the system disk (temporary files), or choose a lower bitrate or shorter range.</td></tr>
+  <tr><td><em>Export output cannot be the input video.</em> / <em>…collides with a source or temporary file.</em></td><td>Choose a new file name.</td></tr>
+  <tr><td><em>Export target must be a regular file, not a symbolic link…</em> / <em>Export destination directory does not exist.</em></td><td>Choose a normal file in an existing folder.</td></tr>
+  <tr><td><em>Export finished, but the destination file changed while the export was running.</em></td><td>Another program changed the target. Your newer file was protected; export again to a new name.</td></tr>
+  <tr><td><em>FFmpeg encoder appears stalled (no progress for five minutes).</em></td><td>Close other heavy applications, try again, and send the export log if it repeats.</td></tr>
+  <tr><td><em>…failed validation</em></td><td>The result did not pass the final checks and was not saved. Send the export log.</td></tr>
+  <tr><td>HDR/Log, rotation, non-square pixel or chapter messages</td><td>See <a href="export.html#source-limits">Sources that cannot be exported</a>.</td></tr>
+</table>
+
+<h2 id="templates">Template problems</h2>
+<p>If a red error appears under <strong>Layout template</strong>, the custom template store could not be read. Quit the application, move <code>~/Library/Preferences/FlappedEar/FlappedEar Telemetry/layout-templates.json</code> to another folder, and start again. Built-in templates are always available. You can then import templates you exported earlier.</p>
+
+<h2 id="report">Reporting a problem</h2>
+<p>Include:</p>
+<ul>
+  <li>what you did and what you expected;</li>
+  <li>the exact message text;</li>
+  <li>for export problems, the export log from <code>~/Library/Application Support/FlappedEar/FlappedEar Telemetry/exports/</code>, or the text from <strong>Details</strong> → <strong>Very verbose</strong> → <strong>Copy all</strong>;</li>
+  <li>the output of <code>ffmpeg -version</code> and your macOS version;</li>
+  <li>the application log <code>flappedear.log</code> from <code>~/Library/Application Support/FlappedEar/FlappedEar Telemetry/</code>.</li>
+</ul>
+<p>Do not attach private recordings publicly. Report issues at <a href="https://github.com/arekkozuch/VBOOverlay/issues">GitHub Issues</a>.</p>

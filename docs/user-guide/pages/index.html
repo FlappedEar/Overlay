@@ -1,0 +1,52 @@
+<!-- title: Flapped Ear Telemetry User Guide | nav: Overview -->
+<h1 id="overview">Flapped Ear Telemetry User Guide</h1>
+<p class="lead">Flapped Ear Telemetry is a macOS application for motorsport video and data. It puts live telemetry overlays on your onboard video, and it analyses a whole track day of recordings lap by lap.</p>
+
+<figure>
+  <img src="assets/overlay-sample.png" alt="Telemetry overlay with tachometer, speed, pedals, temperatures, heart rate and G-force widgets" width="1920" height="1080">
+  <figcaption>An overlay rendered by the application (synthetic background and sample values).</figcaption>
+</figure>
+
+<h2 id="what">What it does</h2>
+<h3 id="overlay">Overlay editor</h3>
+<ul>
+  <li>Load an MP4 or MOV video and a RaceChrono VBO or RCZ recording.</li>
+  <li>Synchronize them automatically from GoPro GPS, or by hand.</li>
+  <li>Arrange speed, RPM, pedals, G-force, track map, heart rate, tyre, lap time and delta widgets, or start from a template.</li>
+  <li>Export an H.265/HEVC MP4 of the whole video, a timecode range, or a single hot lap.</li>
+</ul>
+<h3 id="analysis-intro">Track-day analysis</h3>
+<ul>
+  <li>Import a day's recordings into one event and see every lap in time order.</li>
+  <li>Inspect any lap's map and channels; compare two laps on a shared track position axis.</li>
+  <li>Review corners and straights, then see the theoretical best, the largest time losses, session progression and a day report.</li>
+  <li>No video is needed for analysis.</li>
+</ul>
+
+<h2 id="start">Where to start</h2>
+<div class="cards">
+  <a href="installation.html"><strong>Installation</strong>Requirements, FFmpeg and upgrading.</a>
+  <a href="quick-start.html"><strong>Quick start</strong>Your first overlay video and your first track-day analysis.</a>
+  <a href="editor.html"><strong>Editor window</strong>A tour of menus, preview, layers and Inspector.</a>
+  <a href="widgets.html"><strong>Widgets</strong>Every overlay widget and its settings.</a>
+  <a href="export.html"><strong>Export</strong>Formats, ranges, hot laps and progress.</a>
+  <a href="analysis.html"><strong>Lap analysis</strong>Events, laps, eligibility and lap detail.</a>
+  <a href="comparison.html"><strong>Lap comparison</strong>A/B charts, delta, map layers, G-G and video.</a>
+  <a href="troubleshooting.html"><strong>Troubleshooting</strong>Messages and what to do about them.</a>
+</div>
+
+<h2 id="terms">Terms used in this guide</h2>
+<table>
+  <tr><th>Term</th><th>Meaning</th></tr>
+  <tr><td>Telemetry</td><td>Data recorded by a lap timer or data logger: GPS, speed, RPM, pedals, G, temperatures, heart rate.</td></tr>
+  <tr><td>Channel</td><td>One recorded quantity in a telemetry file, for example <code>velocity</code> or <code>rpm-obd</code>.</td></tr>
+  <tr><td>Widget</td><td>One overlay element drawn over the video.</td></tr>
+  <tr><td>Template</td><td>A saved arrangement of widgets.</td></tr>
+  <tr><td>Event, run, lap</td><td>A track day, one session on track, and one timed lap of a session.</td></tr>
+  <tr><td>Timing gate</td><td>The start/finish line stored in the telemetry file, used to cut laps.</td></tr>
+  <tr><td>Eligible lap</td><td>A complete lap with good GPS on the selected layout, used for rankings and comparisons.</td></tr>
+  <tr><td>Segment</td><td>A corner, straight or sector of the track, used for corner and sector results.</td></tr>
+</table>
+
+<h2 id="about">About this guide</h2>
+<p>This guide describes Flapped Ear Telemetry 0.2.0 as built from the <a href="https://github.com/arekkozuch/VBOOverlay">source repository</a>. The application is in development; features and screens may change. Known gaps are listed under <a href="limitations.html">Limitations</a>.</p>

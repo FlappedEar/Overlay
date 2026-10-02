@@ -6,6 +6,11 @@ Flapped Ear Telemetry is one native desktop application for video telemetry over
 
 The Qt 6/C++20/QML application combines a working overlay editor/export pipeline with macOS-first track-day analysis under development. Event import, a chronological outing lap list and interactive individual-lap details are implemented; cross-run A/B comparison, corner analysis and automatic time-loss reports remain unfinished. The [product vision](docs/product-vision.md) preserves the complete intended scope, and the [delivery plan](docs/product-delivery.md) tracks remaining work and acceptance. Distribution still requires the exact candidate's [acceptance evidence](docs/beta-acceptance.md). See [current state](currentstate.md) for implementation and validation boundaries.
 
+## User guide
+
+End-user documentation is published at <https://arekkozuch.github.io/VBOOverlay/>.
+Its sources live in [docs/user-guide](docs/user-guide/README.md).
+
 ## Current capabilities
 
 Saved events use **Event → Run → Lap**, with independent source references and

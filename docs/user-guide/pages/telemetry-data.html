@@ -1,0 +1,77 @@
+<!-- title: Telemetry data reference | nav: Telemetry data -->
+<h1 id="telemetry-data">Telemetry data reference</h1>
+<p class="lead">What the application reads from VBO and RCZ files, how channels are recognised, and how missing data is treated.</p>
+
+<h2 id="principles">Principles</h2>
+<ul>
+  <li><strong>Missing is not zero.</strong> When a channel has no value at a moment, widgets show a dash and charts leave a gap. Gaps in a recording are never bridged in analysis.</li>
+  <li><strong>Nothing is invented.</strong> A missing brake channel is never estimated from G or speed in the overlay, and one channel is never silently replaced by another. Where analysis does infer something (for example braking from deceleration), it says <em>inferred</em>.</li>
+  <li><strong>Recorded values are not changed.</strong> The overlay smooths what it displays slightly; analysis uses raw samples.</li>
+  <li>Heart rate comes from the imported VBO or RCZ recording. There is no separate heart-rate import.</li>
+</ul>
+
+<h2 id="vbo">VBO files</h2>
+<p>A VBO file is a text file with a <code>[column names]</code> section and a <code>[data]</code> section. The application has been verified with VBO exports from <strong>RaceChrono Pro 10.2.4</strong>. Other VBO files are read in the same general way, with these differences:</p>
+<ul>
+  <li><strong>GPS position</strong> is used only when the coordinate unit is known. RaceChrono Pro 10.2.4 files are recognised automatically. For other files, add a line <code>coordinate units = degrees</code> (or <code>arc-minutes</code>) to the <code>[header]</code> section. Without it, GPS position, the track map, lap timing and pairing are unavailable; all other channels still import, with the warning <em>GPS coordinates and timing gates unavailable</em>.</li>
+  <li><strong>Timing gates</strong> (start/finish line) from other RaceChrono versions are ignored with the warning <em>Timing gates ignored: this RaceChrono exporter version has not been validated.</em> Telemetry remains available, but laps cannot be derived.</li>
+  <li>The recording's date and time are read only from a recognised RaceChrono export. Without them, the recording has no clock and is ordered by import order.</li>
+</ul>
+<p>Rows with invalid, duplicate or backwards timestamps are skipped with a warning. Timestamps crossing midnight are handled. Columns without any number are dropped.</p>
+
+<h3 id="racechrono-g">RaceChrono G channels</h3>
+<p>For lateral and longitudinal G, export <strong>VBO</strong> from RaceChrono with the calculated acceleration channels (<code>latacc-calc</code>, <code>longacc-calc</code>) enabled. These are preferred automatically. RCZ archives contain only the phone's raw accelerometer axes, which are not aligned with the car, and no calculated G.</p>
+
+<h2 id="rcz">RCZ files</h2>
+<p>An RCZ file is a RaceChrono session archive. Supported: a single, uninterrupted session shared from RaceChrono Pro (developed against version 10.2.4). Each channel keeps its own sample rate; nothing is resampled. A pause longer than three times a channel's normal sample spacing is a gap.</p>
+<p>Refused with a message: resumed sessions, archives with several sessions, encrypted, split or ZIP64 archives, sessions longer than 24 hours, and archives whose GPS is missing. Unknown channel types are left out with a warning. Video and synchronization data stored inside the archive are not imported.</p>
+<p>Channels read from RCZ:</p>
+<table>
+  <tr><th>Channel name</th><th>Content</th><th>Unit</th></tr>
+  <tr><td><code>velocity</code></td><td>GPS speed (used as speed)</td><td>km/h</td></tr>
+  <tr><td><code>lat</code>, <code>long</code></td><td>GPS position</td><td>degrees</td></tr>
+  <tr><td><code>height</code>, <code>heading</code>, <code>accuracy</code>, <code>sats</code>, <code>fix_type</code></td><td>GPS altitude, heading, accuracy, satellites, fix</td><td>m, deg, m</td></tr>
+  <tr><td><code>rpm-obd</code></td><td>Engine speed (used as RPM)</td><td>rpm</td></tr>
+  <tr><td><code>throttle_pos-obd</code>, <code>accelerator_pos-obd</code></td><td>Throttle and accelerator pedal</td><td>%</td></tr>
+  <tr><td><code>brake_pos-obd</code></td><td>Brake pedal (used as brake)</td><td>%</td></tr>
+  <tr><td><code>velocity-obd</code></td><td>OBD vehicle speed</td><td>km/h</td></tr>
+  <tr><td><code>coolant_temp-obd</code>, <code>intake_temp-obd</code>, <code>engine_oil_temp-obd</code>, <code>gearbox_temp-obd</code></td><td>Temperatures</td><td>°C</td></tr>
+  <tr><td><code>heart_rate-hrm</code></td><td>Heart rate</td><td>bpm</td></tr>
+  <tr><td><code>x/y/z_acc-acc</code>, <code>…-gyro</code>, <code>…-magn</code></td><td>Phone accelerometer, gyroscope, magnetometer axes</td><td>g, deg/s, µT</td></tr>
+  <tr><td><code>device_battery_level</code></td><td>Phone battery</td><td>%</td></tr>
+</table>
+
+<h2 id="channels">How channels are recognised</h2>
+<p>Widgets and analysis use a channel's purpose (speed, RPM and so on). The application finds the channel by name, ignoring upper and lower case. For VBO files:</p>
+<table>
+  <tr><th>Purpose</th><th>Matching column names</th></tr>
+  <tr><td>Speed</td><td><code>velocity</code>, <code>speed</code>, names starting with <code>gps speed</code> or <code>obd speed</code></td></tr>
+  <tr><td>RPM</td><td><code>rpm</code>, <code>rpm-…</code>, names containing <code>engine speed</code></td></tr>
+  <tr><td>Throttle</td><td>names containing <code>throttle</code> or <code>accelerator pedal</code>; an accelerator-position channel with data takes priority</td></tr>
+  <tr><td>Brake</td><td><code>brake</code>, <code>brake-…</code>, names containing <code>brake pressure</code> or <code>brake pedal</code></td></tr>
+  <tr><td>Heart rate</td><td>names containing <code>heart rate</code>, or exactly <code>hr</code> or <code>bpm</code></td></tr>
+  <tr><td>Latitude / longitude</td><td><code>lat</code>, <code>latitude</code> / <code>lon</code>, <code>long</code>, <code>longitude</code></td></tr>
+  <tr><td>Lateral G</td><td><code>latacc-calc</code> first, then <code>latacc</code>, <code>lateral accel…</code>, <code>lateral g</code>, <code>gx</code></td></tr>
+  <tr><td>Longitudinal G</td><td><code>longacc-calc</code> first, then <code>longacc</code>, <code>longitudinal accel…</code>, <code>longitudinal g</code>, <code>gy</code></td></tr>
+  <tr><td>Gear</td><td>not recognised automatically; select it in the widget</td></tr>
+</table>
+<p>Any channel can still be chosen by name in a widget's <strong>Source channel</strong>.</p>
+
+<h3 id="tyres">Tyre channels</h3>
+<p>The Tyres widget finds channels whose name contains <code>tyre</code> or <code>tire</code>, either <code>temp</code>/<code>temperature</code> or <code>pressure</code>/<code>press</code>, and one corner: <code>fl</code>, <code>fr</code>, <code>rl</code> or <code>rr</code> (also <code>lf</code>, <code>rf</code>, <code>lr</code>). Example: <code>tyre_temp_fl</code>.</p>
+<ul>
+  <li>Temperature is shown in °C; a channel declared in °F is converted.</li>
+  <li>Pressure in bar, psi or kPa is converted to the chosen display unit. If the file does not declare the unit, it is judged from typical values.</li>
+  <li>An exact 0 is treated as "no reading yet", because tyre-pressure sensors report 0 before their first reading.</li>
+</ul>
+
+<h2 id="display">Display smoothing</h2>
+<p>To keep the overlay readable, displayed values are averaged over a short time window (about 0.1 to 0.25 seconds, depending on the channel; gear is not smoothed) and the last value is held for up to 0.75 seconds (2 seconds for heart rate) across a missing sample. Analysis charts and results always use the raw samples.</p>
+
+<h2 id="data-limits">File limits</h2>
+<table>
+  <tr><th>Format</th><th>Limits</th></tr>
+  <tr><td>VBO</td><td>128 MiB, 1,000,000 lines, 500,000 data rows, 512 columns</td></tr>
+  <tr><td>RCZ</td><td>128 MiB archive, 256 channels, 24-hour session</td></tr>
+</table>
+<p>Files over a limit are refused with a message rather than read partially.</p>

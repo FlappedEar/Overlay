@@ -1,0 +1,40 @@
+<!-- title: Quick start | nav: Quick start -->
+<h1 id="quick-start">Quick start</h1>
+<p class="lead">Two short walkthroughs: making an overlay video, and analysing a track day.</p>
+
+<h2 id="overlay">Make a telemetry overlay video</h2>
+<p>You need an MP4 or MOV video and a VBO or RCZ telemetry file from the same session.</p>
+<ol class="steps">
+  <li>Start Flapped Ear Telemetry. On the Welcome screen click <strong>Choose video</strong> and pick your video, then <strong>Choose telemetry</strong> and pick your VBO or RCZ file. Click <strong>Enter Studio →</strong>.</li>
+  <li>The preview shows the video with the default <em>Track Day</em> overlay. To try another look, pick a template under <strong>Layout template</strong> and click <strong>Apply template</strong>.</li>
+  <li><strong>Synchronize.</strong> In the Inspector open the <strong>DATA</strong> tab.
+    <ul>
+      <li>GoPro with GPS: click <strong>Auto Sync GoPro GPS</strong>. A result of 75 % confidence or more is applied automatically; otherwise review it and click <strong>Apply</strong>.</li>
+      <li>Other cameras: enter the <strong>Telemetry offset (seconds)</strong> so that a clear event (pulling away, braking) lines up. See <a href="synchronization.html#manual">Manual timing</a>.</li>
+    </ul>
+  </li>
+  <li>Press <kbd>Space</kbd> to play and check the overlay at a few points.</li>
+  <li><strong>Adjust widgets.</strong> Drag them in the preview, resize with the green corner handle, and change details in the <strong>WIDGET</strong> tab. Add more from <strong>Add widget</strong>.</li>
+  <li><strong>Save</strong> the project with <kbd>⌘S</kbd>.</li>
+  <li><strong>Export.</strong> Click <strong>Export</strong>, choose an output file, keep <strong>Recommended</strong> quality, choose <strong>Entire video</strong>, <strong>Custom timecode</strong> or <strong>Single lap · hotlap</strong>, and click <strong>Export</strong>.</li>
+</ol>
+<p>Export needs FFmpeg; see <a href="installation.html#ffmpeg">Installing FFmpeg</a>.</p>
+
+<h2 id="hotlap">Export a single hot lap</h2>
+<ol class="steps">
+  <li>Add the <strong>Current lap time</strong> widget and, in the WIDGET tab, tick <strong>Show one lap only (hotlap)</strong>. Keep <em>Best lap of this recording</em> or choose a lap.</li>
+  <li>Optionally add <strong>Best lap time</strong> and <strong>Lap delta</strong>.</li>
+  <li>Open Export. It starts in <strong>Single lap · hotlap</strong> mode with the same lap. Choose a <strong>Handle</strong> of 5–8 seconds and export.</li>
+</ol>
+<p>Lap timing needs a start/finish gate in the telemetry; see <a href="analysis.html#lap-timing">How laps are found</a>.</p>
+
+<h2 id="track-day">Analyse a track day</h2>
+<ol class="steps">
+  <li>On the Welcome screen click <strong>Lap Analysis →</strong>.</li>
+  <li>Enter an <strong>Outing name</strong> and click <strong>Add RCZ / VBO files…</strong>, or drop the day's recordings on the window. For RaceChrono, VBO exports with calculated G give the best G data.</li>
+  <li>The <strong>Day results</strong> list shows every OUT, LAP and IN section in time order. The <strong>Best day</strong> button opens the best lap.</li>
+  <li>Click any lap to see its map and channels. Drag on a chart to zoom.</li>
+  <li>Click <strong>Compare laps…</strong>, choose two laps and click <strong>Compare A / B</strong> to see where time was gained or lost.</li>
+  <li>Open <strong>Day report…</strong> for the best lap, theoretical best, largest losses and session progression.</li>
+  <li>Save the event with <kbd>⌘S</kbd> in the editor window. Exclusions, corrections and approved segments are saved with it.</li>
+</ol>

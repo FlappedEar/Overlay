@@ -1,0 +1,45 @@
+<!-- title: Layout templates | nav: Layout templates -->
+<h1 id="templates">Layout templates</h1>
+<p class="lead">A template is a complete overlay arrangement: widgets, positions, channel bindings, styles, cues and groups. Use templates to start quickly and to reuse a layout across projects.</p>
+
+<h2 id="built-in">Built-in templates</h2>
+<p>A new project starts with <em>Track Day</em>. The built-in templates cannot be changed or deleted, but you can apply one and save the result as your own.</p>
+<table>
+  <tr><th>Template</th><th>Description</th><th>Widgets</th></tr>
+  <tr><td>Track Day</td><td>Balanced driving data for review and export</td><td>Speed, RPM, Pedals, G-Force, Track</td></tr>
+  <tr><td>Minimal</td><td>Clean speed and RPM treatment with transparent panels</td><td>Speed, RPM</td></tr>
+  <tr><td>Broadcast</td><td>High-contrast lower-third telemetry presentation</td><td>Speed, RPM, G-Force</td></tr>
+  <tr><td>Motorsport Broadcast HUD</td><td>Full modern motorsport broadcast HUD composition for visual review</td><td>Retro RPM, Speed, Pedals, three Retro Custom tiles (OIL, ATF, COOLANT), Heart rate, F1 G-Force Radar, G-Force Bar</td></tr>
+  <tr><td>Performance</td><td>Arc speed, analog RPM and a compact four-channel data strip</td><td>Arc gauge, Dial gauge, Data strip</td></tr>
+  <tr><td>Circuit Pro</td><td>Dense circuit analysis with gauges, pedals, G-force and track position</td><td>Arc gauge, Dial gauge, Pedals, G-Force, Track, Data strip</td></tr>
+  <tr><td>Endurance</td><td>Long-session essentials with heart rate, track and compact vehicle data</td><td>Speed, Heart rate, Track, Data strip</td></tr>
+  <tr><td>Drag Strip</td><td>Large RPM dial, acceleration speed arc and pedal trace for straight-line runs</td><td>Dial gauge, Arc gauge, Pedals</td></tr>
+  <tr><td>Clean HUD</td><td>Minimal transparent heads-up display for footage that should stay dominant</td><td>Arc gauge, Data strip, Track</td></tr>
+  <tr><td>2000s Grand Prix</td><td>Period-inspired onboard graphic with circular RPM dial, pedal states, speed arc and driver timing bar</td><td>Retro RPM, Retro gear, two Retro pedals, Retro speed, Nameplate</td></tr>
+</table>
+<div class="note"><p>Some template widgets are bound to channel names that your recording may not have. For example, the temperature tiles in <em>Motorsport Broadcast HUD</em> and the retro widgets in <em>2000s Grand Prix</em> show <code>—</code> until you select your own channel in <strong>Source channel</strong>. Check every widget after applying a template.</p></div>
+
+<h2 id="apply">Applying a template</h2>
+<ol class="steps">
+  <li>In the left sidebar under <strong>Layout template</strong>, choose a template from the list. Its description appears below the list. Choosing does not change the scene yet.</li>
+  <li>Click <strong>Apply template</strong>.</li>
+</ol>
+<div class="warning"><p><strong>Apply template</strong> replaces every widget in the current scene. It does not merge, and there is no undo. Save your own layout first if you want to keep it.</p></div>
+
+<h2 id="save">Saving your own templates</h2>
+<ul>
+  <li><strong>Save as new</strong> stores the complete current scene as a new custom template. Enter a <strong>Name</strong> (required) and an optional <strong>Description</strong>, then click <strong>Save template</strong>. The scene needs at least one widget.</li>
+  <li><strong>Save current</strong> overwrites the custom template you applied (or just created) with the current scene, keeping its name and description. If the active template is built-in, or you have only selected a template without applying it, <strong>Save current</strong> opens <strong>Save as new</strong> instead.</li>
+  <li><strong>Delete</strong> removes the selected custom template immediately, without confirmation. Built-in templates cannot be deleted.</li>
+</ul>
+<p>Up to 128 custom templates can be stored. They are kept separately from projects, in the application's settings folder (see <a href="projects.html#files">Where files are stored</a>), and are available in every project.</p>
+
+<h2 id="share">Sharing templates</h2>
+<ul>
+  <li><strong>Export…</strong> writes the selected template, built-in or custom, to a <code>.fettemplate</code> file.</li>
+  <li><strong>Import…</strong> reads a <code>.fettemplate</code> (or <code>.json</code>) file and adds it to your custom templates. Files larger than 2 MiB, or containing unknown widget types, are rejected.</li>
+</ul>
+<p>If an import or export fails, no message is currently shown. If the template does not appear in the list after <strong>Import…</strong>, the file was not accepted.</p>
+
+<h2 id="store-errors">If custom templates cannot be loaded</h2>
+<p>If the template store is damaged or too large, a red message appears under <strong>Layout template</strong> (for example <em>Custom templates could not be loaded from …</em>). The file is left untouched and saving templates is disabled, so nothing is overwritten. Built-in templates remain usable. Quit the application, move the damaged <code>layout-templates.json</code> aside, and start again; see <a href="troubleshooting.html#templates">Troubleshooting</a>.</p>

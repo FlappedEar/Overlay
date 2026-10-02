@@ -1,0 +1,63 @@
+<!-- title: Synchronizing video and telemetry | nav: Synchronization -->
+<h1 id="synchronization">Synchronizing video and telemetry</h1>
+<p class="lead">The camera and the data logger start recording at different moments. Synchronization tells the application which telemetry moment belongs to each video frame.</p>
+
+<h2 id="how">How timing works</h2>
+<p>All timing is based on time, never on frame numbers. For every video time the telemetry time is:</p>
+<pre><code>telemetry time = video time × Time scale + Telemetry offset</code></pre>
+<ul>
+  <li><strong>Telemetry offset</strong> in seconds. A positive offset means the telemetry recording started earlier than the video: at video time 0 the overlay shows telemetry from <em>offset</em> seconds into the recording.</li>
+  <li><strong>Time scale</strong> corrects clock drift between camera and logger. Leave it at <code>1</code> unless you have measured drift.</li>
+</ul>
+<p>When the result falls outside the recording, widgets show no data. In an event, every run keeps its own synchronization.</p>
+
+<h2 id="auto">Automatic synchronization (GoPro GPS)</h2>
+<p>If your video comes from a GoPro with GPS enabled, the application can find the offset by matching the camera's GPS speed against the speed channel of your telemetry.</p>
+<ol class="steps">
+  <li>Load the GoPro video and the telemetry file.</li>
+  <li>In the Inspector, open the <strong>DATA</strong> tab.</li>
+  <li>Under <strong>Automatic synchronization</strong>, click <strong>Auto Sync GoPro GPS</strong>. The button reads <em>Matching GPS speed…</em> while it works in the background.</li>
+  <li>Read the result card.</li>
+</ol>
+<p>The result card shows the <strong>Offset</strong>, the <strong>Correlation</strong> of the two speed traces and a <strong>Confidence</strong> percentage:</p>
+<table>
+  <tr><th>Confidence</th><th>Card heading</th><th>What happens</th></tr>
+  <tr><td>75 % or more</td><td>SYNC APPLIED</td><td>The offset is applied automatically.</td></tr>
+  <tr><td>45 % to 75 %</td><td>POSSIBLE SYNCHRONIZATION FOUND</td><td><em>Review this candidate before changing timing.</em> Nothing changes until you click <strong>Apply</strong>.</td></tr>
+  <tr><td>Below 45 %</td><td>POSSIBLE SYNCHRONIZATION FOUND</td><td><em>Low confidence: current timing was not changed.</em> You can still <strong>Apply</strong> or <strong>Ignore</strong> it.</td></tr>
+</table>
+<p>Confidence considers how well the speed traces match, whether the best match is clearly better than any other, and how long the overlap is. With less than 20 seconds of overlap, a result is never applied automatically.</p>
+<p>Before applying a medium or low result, scrub to a recognisable moment (a stop, a hard braking point, the start line) and check that the overlay agrees with the picture.</p>
+
+<h3 id="auto-requirements">Requirements and limits</h3>
+<ul>
+  <li>The video must contain GoPro GPMF GPS data, and the telemetry must have a speed channel. Each source needs at least 20 GPS speed samples. With less than 20 seconds of overlap a result can be shown but is never applied automatically.</li>
+  <li>ffprobe (part of FFmpeg) must be installed; see <a href="installation.html#ffmpeg">Installing FFmpeg</a>.</li>
+  <li>Automatic synchronization sets only the offset. Time scale stays <code>1</code>.</li>
+  <li>For a chaptered GoPro recording, only the first chapter's GPS is used.</li>
+  <li>The GoPro GPS is used only for synchronization. It is not available as a telemetry channel for widgets.</li>
+  <li>If the source changes, or you edit the timing manually while the search runs, its result is discarded. A failed or cancelled search never changes the existing timing.</li>
+</ul>
+<p>Typical messages:</p>
+<table>
+  <tr><th>Message</th><th>Meaning</th></tr>
+  <tr><td>Open both a GoPro video and telemetry before auto sync.</td><td>One of the two sources is missing.</td></tr>
+  <tr><td>No GoPro GPMF telemetry track was found.</td><td>The video has no GoPro metadata (another camera, GPS off, or re-encoded footage). Use manual timing.</td></tr>
+  <tr><td>The GPMF track contains no usable GPS speed samples.</td><td>The camera had no GPS fix during the recording.</td></tr>
+  <tr><td>GPS speed is not available in both telemetry sources.</td><td>The telemetry file has no recognised speed channel.</td></tr>
+  <tr><td>ffprobe was not found. Install FFmpeg to read GoPro telemetry.</td><td>See <a href="installation.html#ffmpeg">Installing FFmpeg</a>.</td></tr>
+</table>
+
+<h2 id="manual">Manual timing</h2>
+<p>Under <strong>Manual timing</strong> in the DATA tab:</p>
+<ul>
+  <li><strong>Telemetry offset (seconds)</strong>: type a value with up to millisecond precision and press <kbd>Return</kbd>.</li>
+  <li><strong>Time scale</strong>: must be a positive number. Invalid input is ignored.</li>
+</ul>
+<p>A practical method:</p>
+<ol class="steps">
+  <li>Find a clear event in the video, such as the moment the car starts moving or brakes hard, and note the video time.</li>
+  <li>Watch the <strong>Live channels</strong> list in the DATA tab (each channel's value at the playhead) or the overlay while adjusting the offset until the speed or G reaction lines up with the picture.</li>
+  <li>Check a second event later in the video. If the second event is off by a growing amount, adjust <strong>Time scale</strong>.</li>
+</ol>
+<p>Editing manual timing cancels a running automatic search. The header shows the current offset as <code>SYNC x.xxx s</code> when it is not zero.</p>

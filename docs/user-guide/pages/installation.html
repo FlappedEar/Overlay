@@ -1,0 +1,52 @@
+<!-- title: Installation | nav: Installation -->
+<h1 id="installation">Installation</h1>
+<p class="lead">Flapped Ear Telemetry is a native macOS application. Video export and video metadata need FFmpeg, which is installed separately.</p>
+
+<h2 id="requirements">Requirements</h2>
+<ul>
+  <li><strong>macOS</strong>. Development and automated testing use macOS 15 on Apple Silicon. Other macOS versions and Intel Macs have not been tested. Windows builds are paused.</li>
+  <li><strong>FFmpeg and ffprobe</strong>, with an HEVC encoder. Needed to read video properties, for GoPro automatic synchronization and for export.</li>
+  <li>Enough free disk space for exports: the final video, a temporary overlay file and a 2 GiB reserve.</li>
+</ul>
+<p>Telemetry analysis without video does not need FFmpeg.</p>
+
+<h2 id="app">Installing the application</h2>
+<p>The application is currently distributed only as internal test builds; there is no public release. A test build is a <code>.tar.gz</code> archive that contains <code>Flapped Ear Telemetry.app</code>.</p>
+<ol class="steps">
+  <li>Extract the archive.</li>
+  <li>Move <code>Flapped Ear Telemetry.app</code> to your Applications folder (or another folder of your choice).</li>
+  <li>Open it.</li>
+</ol>
+<div class="warning"><p>Test builds are not signed with a Developer ID or notarized by Apple, so macOS Gatekeeper may warn you or refuse to open the application. Do not disable system protection to work around this. Use only builds you received from the project owner.</p></div>
+
+<h3 id="upgrade">Upgrading</h3>
+<ol class="steps">
+  <li>Quit the running application.</li>
+  <li>Replace the application bundle with the new one. Older builds were named <code>FlappedEar Telemetry.app</code>; remove that bundle after installing the new one.</li>
+  <li>Start the new version.</li>
+</ol>
+<p>Preferences, custom templates, recovery data and the last project are kept. Do not delete the application's data folders (see <a href="projects.html#files">Where files are stored</a>). There is no automatic updater.</p>
+
+<h2 id="ffmpeg">Installing FFmpeg</h2>
+<p>The application does not include FFmpeg. The simplest way to install it is <a href="https://brew.sh">Homebrew</a>:</p>
+<pre><code>brew install ffmpeg</code></pre>
+<p>The application looks for <code>ffmpeg</code> and <code>ffprobe</code> on the program search path and, on macOS, also in <code>/opt/homebrew/bin</code> (Apple Silicon Homebrew) and <code>/usr/local/bin</code> (Intel Homebrew). There is no setting for another location.</p>
+<p>Check the installation in Terminal:</p>
+<pre><code>ffmpeg -version
+ffprobe -version
+ffmpeg -hide_banner -encoders | grep hevc</code></pre>
+<p>The last command should list at least one HEVC encoder, such as <code>hevc_videotoolbox</code> (Apple hardware) or <code>libx265</code> (software).</p>
+<div class="note"><p>Not every FFmpeg version works. Export uses filters that older builds lack; FFmpeg 6.1.1, for example, fails. Before rendering, the application runs a short test of the exact processing it needs and stops with a clear error if FFmpeg is not suitable. A current Homebrew FFmpeg is recommended.</p></div>
+
+<h2 id="build">Building from source</h2>
+<p>For developers. You need CMake 3.24 or newer, a C++20 compiler (Xcode command-line tools), and Qt 6.8 or newer with Concurrent, Core, Gui (with GuiPrivate headers), Qml, Quick, Quick Controls 2, Multimedia, Test, SVG and Shader Tools. The build downloads zlib, so it needs internet access.</p>
+<p>With Homebrew Qt on Apple Silicon:</p>
+<pre><code>git clone https://github.com/arekkozuch/VBOOverlay.git
+cd VBOOverlay
+cmake -S . -B build-native \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt
+cmake --build build-native --parallel
+ctest --test-dir build-native --output-on-failure
+open "build-native/native/Flapped Ear Telemetry.app"</code></pre>
+<p>Developer documentation, including testing and packaging, is in the repository's <a href="https://github.com/arekkozuch/VBOOverlay/blob/main/README.md">README</a> and <a href="https://github.com/arekkozuch/VBOOverlay/tree/main/docs">docs folder</a>.</p>
