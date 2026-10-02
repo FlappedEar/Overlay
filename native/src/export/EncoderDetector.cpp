@@ -49,12 +49,18 @@ bool waitForFinished(QProcess &process, ExportProcessSupervisor &supervisor,
     return process.state() == QProcess::NotRunning && (!stdoutOutput || !stdoutOutput->exceeded());
 }
 
+// KAN-174: NVENC rejects frames below its minimum size (64x64 and 128x128 fail,
+// 160x160 works), so a smaller probe made a working NVIDIA encoder look absent and
+// exports silently fell back to another encoder.
+constexpr int encoderAvailabilityProbeEdge = 256;
+static_assert(encoderAvailabilityProbeEdge >= 160, "The probe frame must satisfy NVENC's minimum size.");
+
 bool canEncodeHevc(const QString &executable, const QString &encoder,
                    const std::function<bool()> &cancelled)
 {
     // `ffmpeg -encoders` reports compiled-in encoders. Hardware entries can
     // still be unusable because a driver, device, or operating-system service
-    // is unavailable, so verify the selected binary with a tiny in-memory job.
+    // is unavailable, so verify the selected binary with a small in-memory job.
     QProcess process;
     BoundedProcessOutput stdoutOutput(BoundedProcessOutput::Mode::ByteCountOnly, 0);
     BoundedProcessOutput stderrOutput(BoundedProcessOutput::Mode::DiagnosticTail,
@@ -63,7 +69,8 @@ bool canEncodeHevc(const QString &executable, const QString &encoder,
     supervisor.start(
         executable,
         {"-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
-         "color=c=black:s=64x64:r=30", "-frames:v", "1", "-c:v", encoder, "-f", "null", "-"});
+         QStringLiteral("color=c=black:s=%1x%1:r=30").arg(encoderAvailabilityProbeEdge),
+         "-frames:v", "1", "-c:v", encoder, "-f", "null", "-"});
     return supervisor.waitForStarted(5'000) && waitForFinished(
         process, supervisor, cancelled, 15'000, &stdoutOutput, &stderrOutput)
         && process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
