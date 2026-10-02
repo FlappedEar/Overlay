@@ -198,7 +198,9 @@ not apply to the Flutter app.
 2. **Product direction documents.** Decided 2 October 2026: two applications,
    the desktop editor for macOS and Windows and FlappedEar Telemetry for
    macOS, Windows, iOS and Android. `docs/product-vision.md` and `AGENTS.md`
-   record it. Windows builds and CI stay paused until the owner resumes them.
+   record it. Windows code changes are resumed for defects the owner finds
+   on Windows (2 October 2026); Windows CI and packaging stay paused until the
+   owner resumes them.
 3. **Names and identities.** Decided 2 October 2026: the desktop editor is
    FlappedEar Overlays (`com.flappedear.overlays`), with a one-time move of
    preferences, templates, recovery and logs from the old storage identity

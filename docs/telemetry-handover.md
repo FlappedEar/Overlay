@@ -30,9 +30,11 @@ The owner's decisions of 2 October 2026:
 - **The app is free for users** and is not sold.
 - **Identity:** `com.flappedear.telemetry` (see
   [Identity and storage](#identity-and-storage)).
-- **Platforms:** macOS is the active development platform. Since 13 September 2026,
-  Windows builds, tests and packaging have been paused until the owner resumes them.
-  Confirm with the owner whether that pause also covers the new app.
+- **Platforms:** macOS is the active development platform. In this repository,
+  Windows work was paused on 13 September 2026; on 2 October 2026 the owner resumed
+  Windows code changes and validated Windows locally
+  ([record](windows-validation-2026-10-02.md)), while Windows CI and packaging stay
+  paused. Confirm with the owner how this applies to the new app.
 - **Minimum OS versions** (owner, 2 October 2026): iOS 15 and Android 8.0 (API
   level 26) as the starting point. Desktop minimums are not decided; Flutter 3.47
   supports macOS 12 and later and Windows 10 and later
@@ -635,7 +637,7 @@ FLAPPEDEAR_REAL_DAY=/path/to/day ./build-native/native/tests/flappedear_telemetr
 | [KAN-166] | Deferred removal of the Overlays analysis window; waits for [KAN-169] |
 | [KAN-126]–[KAN-130] | Mobile targets, import, touch screens, memory budget and on-track acceptance; re-create in the new project |
 | [KAN-122] | Decision 5: iOS 15 and Android 8.0 to start with; desktop open. Decision 1 (store licence) was about Qt and does not apply to a Flutter app without Qt |
-| [KAN-162] | Windows, paused |
+| [KAN-162] | Windows: code changes resumed, CI and packaging paused |
 
 ## Open decisions
 

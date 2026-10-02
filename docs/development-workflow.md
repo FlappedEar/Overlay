@@ -7,7 +7,10 @@ requests, pushes to `main`, and manual dispatch, with macOS Debug and Release
 builds/tests and Release deployment/startup validation. Verify successful runs
 for the exact published PR head and resulting main revision; earlier task CI
 results are not evidence for new code.
-Windows builds, tests and packaging remain paused. Development targets macOS.
+Since 2 October 2026, Windows code changes are resumed for defects found by the
+owner's local Windows validation ([record](windows-validation-2026-10-02.md)).
+Windows CI, packaging and installer validation remain paused. Development
+targets macOS.
 
 ## One implementation task at a time
 

@@ -46,7 +46,8 @@ and more charts are foundations, not completion of this promise.
   RCZ preserves native sensor clocks. Keep provenance and explain this choice.
 - Platforms: the desktop editor targets macOS and Windows; FlappedEar Telemetry
   targets macOS, Windows, iOS and Android. macOS remains the active development
-  platform, and Windows builds and CI stay paused until the owner resumes them. No unsolicited framework
+  platform. Windows code changes are resumed for defects the owner finds on Windows (2 October 2026);
+  Windows CI and packaging stay paused until the owner resumes them. No unsolicited framework
   replacement or silent scope reduction.
 
 ## Complete feature ledger

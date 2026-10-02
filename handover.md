@@ -24,8 +24,10 @@ that check over this file.
 - The M2–M4 epics (KAN-7, KAN-8, KAN-9) are closed.
 - **Owner decision, 2 October 2026:** two applications. The desktop overlay
   editor targets macOS and Windows; FlappedEar Telemetry targets macOS,
-  Windows, iOS and Android. `AGENTS.md` and `product-vision.md` record it. Windows builds and CI
-  stay paused until the owner resumes them. Of the other KAN-122 decisions,
+  Windows, iOS and Android. `AGENTS.md` and `product-vision.md` record it. Windows code changes
+  are resumed for defects the owner finds on Windows (2 October 2026,
+  docs/windows-validation-2026-10-02.md); Windows CI and packaging stay paused until the owner
+  resumes them. Of the other KAN-122 decisions,
   identities (KAN-125) and the desktop analysis window (kept until Telemetry
   is mature, KAN-166) were decided later that day, and mobile minimums are
   iOS 15 and Android 8.0. The store licence is open.
@@ -149,7 +151,8 @@ and no video.
 **Waiting for the owner (M5):**
 - KAN-80 and KAN-81 need the matching private video.
 - KAN-83 needs a clean account or machine.
-- KAN-84 and KAN-85 depend on Windows work, which is paused.
+- KAN-84 (the Windows installer) depends on Windows packaging, which is still
+  paused; KAN-85 assembles the release notices.
 - KAN-86 closes M5 once those are resolved.
 - KAN-79 has questions for the owner in its record: lap times against
   RaceChrono, two laps flagged off-route, and an RCZ to close the blocked
