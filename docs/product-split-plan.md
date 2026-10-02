@@ -12,8 +12,11 @@ standalone app in this repository; Flapped Ear Telemetry is then built in a new
 repository. Overlays stays as it is, with nothing removed, until Telemetry is
 mature enough to replace its analysis ([KAN-166], deferred), and both apps keep
 one compatible `.fetproject` format ([KAN-170]). See
-[Stages (current plan)](#stages-current-plan). The Telemetry technology (Qt/QML
-or Flutter) and how the repositories share the core are undecided ([KAN-167]).
+[Stages (current plan)](#stages-current-plan). **Owner decision (2 October
+2026): Flapped Ear Telemetry is a new Flutter app**, started from a blank page in
+its own repository and Jira project and sharing no code with this repository
+(decision 6, [KAN-167]). Its architect starts from the
+[handover](telemetry-handover.md) ([KAN-168]).
 The code survey below describes the code before phase 1.
 Jira: epic [KAN-165] (current plan). It supersedes [KAN-121], which delivered
 phases 1–2 and [KAN-132].
@@ -83,8 +86,9 @@ These findings come from a dependency survey of the codebase on
 ## Target architecture (original one-repository design)
 
 With separate repositories, this repository keeps telemetry-core, app-shared,
-overlay-core and the Overlays app. The Telemetry app and its UI move to the new
-repository, which consumes the core as decided in [KAN-167].
+overlay-core and the Overlays app. After decision 6 ([KAN-167]) the Telemetry app
+is a new Flutter app that consumes none of them; the `apps/telemetry/` line below
+is historical.
 
 ```
 native/
@@ -139,8 +143,15 @@ Owner direction (2 October 2026, with separate repositories): the two apps keep
 one format, compatible between them, so that either app opens and re-saves the
 other's documents without losing anything. The compatibility rules and the
 round-trip tests in both directions are [KAN-170]; they are not written yet.
+The [architect handover](telemetry-handover.md#the-shared-contract-fetproject)
+summarises what the current code keeps, rejects and rewrites.
 
 ## Mobile specifics (Telemetry)
+
+Written for the Qt plan. After decision 6 the requirements below (import,
+screens, performance, storage) still describe the product; the Qt
+implementation notes (C++ controllers, QML, `QSettings`, `GuiSessionLock`) do
+not apply to the Flutter app.
 
 - **Import:** the iOS share sheet / "Open in", and Android `ACTION_SEND` /
   `ACTION_VIEW` intents for `.vbo` and `.rcz` exported from RaceChrono on
@@ -204,10 +215,11 @@ round-trip tests in both directions are [KAN-170]; they are not written yet.
    touch-first QML.
 5. **Minimum OS versions and target devices** for all four platforms,
    starting with the owner's own phone and tablet.
-6. **Telemetry technology and core sharing** ([KAN-167]). Qt/QML, or Flutter
-   with a Qt-free core behind a C API; and whether the new repository consumes
-   this repository's core (submodule or package), a separate core repository,
-   or (not recommended) a copy.
+6. **Telemetry technology and core sharing** ([KAN-167]). Decided 2 October
+   2026: Flutter, from a blank page in a new repository with its own Jira
+   project. No code is shared; this repository is cross-referenced only. Parsers
+   and metrics therefore exist twice, and the `.fetproject` format ([KAN-170])
+   and matching figures on shared fixtures keep the two apps consistent.
 
 ## Stages (current plan)
 
@@ -219,8 +231,8 @@ compatible `.fetproject` format ([KAN-170]).
 | Stage | Outcome | Jira |
 | --- | --- | --- |
 | 1. Flapped Ear Overlays standalone (this repository) | Decision 3; "Flapped Ear Overlays.app" with the new identity and a one-time move of preferences, templates, recovery and logs; macOS CI builds, tests and packages it. Merged in PR #142 | [KAN-122], [KAN-125] |
-| 2. Flapped Ear Telemetry in its own repository | Decision 6; the new repository and its CI; the app layer and desktop analysis UI; one `.fetproject` format compatible with Overlays; mobile targets, import, touch screens and memory budget; on-track acceptance | [KAN-167], [KAN-168], [KAN-169], [KAN-170], [KAN-126]–[KAN-130] |
-| 3. Remove the analysis from Overlays (deferred) | Only once Telemetry is mature enough to replace it: the Lap Analysis window and analysis workflows leave Overlays, and day documents keep every analysis field | [KAN-166] |
+| 2. Flapped Ear Telemetry, a new Flutter app in its own repository | Decision 6 (Flutter, blank page, own Jira project); the architect handover; then, tracked in the new Jira project: the repository and its CI, the analysis app for desktop and mobile, import, touch screens, memory budget and on-track acceptance; one `.fetproject` format compatible with Overlays | [KAN-167], [KAN-168], [KAN-170], [KAN-126]–[KAN-130] (moving to the new project) |
+| 3. Remove the analysis from Overlays (deferred) | Only once Telemetry is mature enough to replace it ([KAN-169], the owner confirms): the Lap Analysis window and analysis workflows leave Overlays, and day documents keep every analysis field | [KAN-169], [KAN-166] |
 
 ## Phases (original one-repository plan)
 

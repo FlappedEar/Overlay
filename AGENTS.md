@@ -88,17 +88,19 @@
 - Preview widget geometry is derived from loaded media display geometry, never from transient
   `VideoOutput` decoded-frame state. User-accessible playback end is the last actual video frame,
   not the media-duration boundary after it.
-- Current owner direction (2026-10-02): two applications share the telemetry core. This
-  repository delivers the desktop overlay editor, Flapped Ear Overlays (working name), for macOS
-  and Windows, and owns the shared core. Flapped Ear Telemetry (macOS, Windows, iOS and Android)
-  will be developed in a separate repository once Overlays is standalone (Jira epic KAN-165); its
-  technology and how it consumes the core are undecided (KAN-167). Do not add Telemetry or mobile
-  app targets to this repository. The desktop app is Flapped Ear Overlays (`com.flappedear.overlays`,
+- Current owner direction (2026-10-02): two applications. This repository delivers the desktop
+  overlay editor, Flapped Ear Overlays, for macOS and Windows. Flapped Ear Telemetry (macOS,
+  Windows, iOS and Android) is a new Flutter app, started from a blank page in its own repository
+  (`FlappedEar/Telemetry`) and its own Jira project (epic KAN-165, decision KAN-167). It shares no
+  code with this repository and only cross-references it; the architect handover is
+  [docs/telemetry-handover.md](docs/telemetry-handover.md). Do not add Telemetry or mobile app
+  targets to this repository, and do not create code dependencies between the two repositories. The desktop app is Flapped Ear Overlays (`com.flappedear.overlays`,
   KAN-125). Keep it as it is: do not remove its Lap Analysis window, analysis workflows or other
   features until Flapped Ear Telemetry is mature enough to replace them (KAN-166, deferred). Both
   apps read and write one `.fetproject` format, which must stay compatible between them (KAN-170).
-  Keep `flappedear_telemetry_core` and `flappedear_telemetry_app`
-  free of Gui, overlay, video and platform-specific code so that the Telemetry app can reuse them.
+  Keep `flappedear_telemetry_core` and `flappedear_telemetry_app` free of Gui, overlay, video and
+  platform-specific code (the boundary checks enforce it); they are the behavioural reference
+  that the Telemetry app cross-references.
   macOS remains the active development platform. The 2026-09-13 pause still applies: do not
   start Windows builds, tests, packaging or installer validation until the owner explicitly
   resumes them. This supersedes older dual-platform gates in Jira and

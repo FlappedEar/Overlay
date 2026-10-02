@@ -2,8 +2,8 @@
 
 The desktop app is **Flapped Ear Overlays** (KAN-125, owner decision of 2 October 2026).
 Until then it was called **Flapped Ear Telemetry**. That name, and the bundle identifier
-`com.flappedear.telemetry`, now belong to the separate analysis app, which will be
-developed in its own repository (KAN-165).
+`com.flappedear.telemetry`, now belong to the separate analysis app, a new Flutter app
+in its own repository (KAN-165, KAN-167).
 
 | Purpose | Value |
 | --- | --- |
@@ -54,8 +54,10 @@ overwriting, keeping preferences that already exist, waiting while the previous 
 runs, missing legacy storage, and the platform's real settings and QStandardPaths
 locations.
 
-The separate Flapped Ear Telemetry app must use its own storage name. The
-`FlappedEar Telemetry` store remains only as the read-only source of this migration.
+The separate Flapped Ear Telemetry app must use its own storage locations. It must not
+read, write or delete the `FlappedEar Telemetry` locations above, which remain only as
+the read-only source of this migration
+([architect handover](telemetry-handover.md#identity-and-storage)).
 
 ## Replacing a macOS candidate
 
