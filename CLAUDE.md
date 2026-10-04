@@ -5,6 +5,8 @@ required build/test gate. Then read [handover.md](handover.md) for current state
 and check `origin/main` and Jira project KAN before starting; other sessions may have moved on.
 
 - Status records: [docs/product-delivery.md](docs/product-delivery.md) and Jira KAN.
+- Editor look: FlappedEar Telemetry's design language. Editor QML takes colours, fonts and
+  corners from `native/qml/Theme.js` and the `Fe*` controls ([docs/ui-theme.md](docs/ui-theme.md)).
 - Private sample recordings: `FlappedEar/refdata` (read-only for agents: never push, branch or
   open PRs there). It holds the owner's Jastrząb day of 29 August 2026, six RaceChrono sessions
   each as `.vbo` and `.rcz`; expected results are in

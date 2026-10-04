@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Theme.js" as Theme
 
 Window {
     id: window
@@ -9,7 +10,7 @@ Window {
     width: 520
     height: Math.max(200, content.implicitHeight + 48)
     visible: true
-    color: "#171d26"
+    color: Theme.surface
 
     ColumnLayout {
         id: content
@@ -18,13 +19,12 @@ Window {
         anchors.top: parent.top
         anchors.margins: 24
         spacing: 20
-        Label {
+        FeLabel {
             Layout.fillWidth: true
             text: window.message
-            color: "#f1f5fa"
             wrapMode: Text.Wrap
         }
-        Button {
+        FeButton {
             Layout.alignment: Qt.AlignRight
             text: qsTr("Close")
             onClicked: window.close()

@@ -1,6 +1,7 @@
 #include "gopro/GoProTelemetrySource.h"
 #include "app/AppController.h"
 #include "app/ApplicationIdentity.h"
+#include "app/BundledFonts.h"
 #include "app/GuiSessionLock.h"
 #include "app/PreviewPlayback.h"
 #include "export/EncoderDetector.h"
@@ -68,6 +69,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QQuickItem>
+#include <QFontDatabase>
 #include <QSettings>
 #include <QScopeGuard>
 #include <QSemaphore>
@@ -207,6 +209,7 @@ private slots:
     void showsOneHotlapAndExportsItByDefault();
     void showsTyreTemperatureAndPressurePerCorner();
     void capturesUserGuideScreens();
+    void appliesTelemetryDesignLanguage();
     void protectsEveryDaySourceFromExport();
     void keepsOutputSafeWhenTheDestinationFills_data();
     void keepsOutputSafeWhenTheDestinationFills();
@@ -8346,7 +8349,51 @@ void TelemetryTests::capturesUserGuideScreens()
     if (!chapters.isEmpty()) options.chapters = chapters.split(',', Qt::SkipEmptyParts);
     QTemporaryDir scratch; QVERIFY(scratch.isValid());
     options.scratchDirectory = scratch.path();
+    QVERIFY(FlappedEar::registerBundledFonts());
     captureUserGuide(options);
+}
+
+void TelemetryTests::appliesTelemetryDesignLanguage()
+{
+    // KAN-187: the editor's shared controls follow FlappedEar Telemetry's
+    // theme (qml/Theme.js) and its bundled fonts, also when loaded by path.
+    QVERIFY(FlappedEar::registerBundledFonts());
+    const QStringList families = QFontDatabase::families();
+    QVERIFY(families.contains(QStringLiteral("Sora")));
+    QVERIFY(families.contains(QStringLiteral("JetBrains Mono")));
+
+    QQmlEngine engine;
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine);
+    component.setData(
+        "import QtQuick\nimport \"Theme.js\" as Theme\n"
+        "Item { property color amber: Theme.primary; property string sans: Theme.sans\n"
+        "  FeButton { objectName: 'accent'; accent: true; text: 'Export' }\n"
+        "  FeButton { objectName: 'plain'; text: 'Open' }\n"
+        "  FeTextField { objectName: 'field'; text: '1:23.456' } }",
+        QUrl::fromLocalFile(qmlSourcePath(QStringLiteral("ThemeProbe.qml"))));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> root(component.create());
+    QVERIFY2(root, qPrintable(component.errorString()));
+    QCOMPARE(root->property("amber").value<QColor>(), QColor(QStringLiteral("#fcb203")));
+    QCOMPARE(root->property("sans").toString(), QStringLiteral("Sora"));
+
+    const auto background = [&](const char *name) {
+        auto *control = root->findChild<QObject *>(QString::fromLatin1(name));
+        return control ? control->property("background").value<QObject *>() : nullptr;
+    };
+    QObject *accent = background("accent");
+    QObject *plain = background("plain");
+    QVERIFY(accent); QVERIFY(plain);
+    QCOMPARE(accent->property("color").value<QColor>(), QColor(QStringLiteral("#fcb203")));
+    QCOMPARE(plain->property("color").value<QColor>(), QColor(QStringLiteral("#24262a")));
+    QCOMPARE(accent->property("radius").toReal(), 3.0);
+    auto *field = root->findChild<QObject *>(QStringLiteral("field"));
+    QVERIFY(field);
+    QCOMPARE(field->property("font").value<QFont>().family(), QStringLiteral("Sora"));
+    for (const auto &arguments : warnings)
+        for (const auto &error : arguments.first().value<QList<QQmlError>>())
+            QFAIL(qPrintable(error.toString()));
 }
 
 void TelemetryTests::derivesNavigableLapFragmentsAndHotlapExportRange()

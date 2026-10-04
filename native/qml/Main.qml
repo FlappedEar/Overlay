@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtMultimedia
+import "Theme.js" as Theme
 
 ApplicationWindow {
     id: window
@@ -12,15 +13,30 @@ ApplicationWindow {
     minimumHeight: 720
     visible: true
     title: Application.displayName
-    color: "#070a0f"
+    color: Theme.surface
     x: appController.windowX >= 0 ? appController.windowX : Screen.width / 2 - width / 2
     y: appController.windowY >= 0 ? appController.windowY : Screen.height / 2 - height / 2
-    palette.window: "#0b1017"
-    palette.windowText: "#e8edf4"
-    palette.text: "#e8edf4"
-    palette.buttonText: "#e8edf4"
-    palette.highlight: "#55e6a5"
-    palette.highlightedText: "#07140f"
+    // Basic-style dialogs, menus and standard buttons take their colours from
+    // the palette (docs/ui-theme.md).
+    palette.window: Theme.surfaceContainer
+    palette.windowText: Theme.onSurface
+    palette.base: Theme.surfaceContainerHigh
+    palette.alternateBase: Theme.surfaceContainerLow
+    palette.text: Theme.onSurface
+    palette.button: Theme.surfaceContainerHigh
+    palette.buttonText: Theme.onSurface
+    palette.brightText: Theme.onSurface
+    palette.light: Theme.surfaceContainerHigh
+    palette.midlight: Theme.surfaceContainerHighest
+    palette.mid: Theme.surfaceContainerHighest
+    palette.dark: Theme.outlineVariant
+    palette.shadow: "#000000"
+    palette.highlight: Theme.primary
+    palette.highlightedText: Theme.onPrimary
+    palette.placeholderText: Theme.outline
+    palette.toolTipBase: Theme.surfaceContainerHighest
+    palette.toolTipText: Theme.onSurface
+    palette.link: Theme.secondary
 
     property bool fullScreenPreview: false
     property bool previewPrimeFramePending: false
@@ -184,6 +200,7 @@ ApplicationWindow {
     }
 
     Dialog {
+        font.family: Theme.sans
         id: exportQuitDialog
         parent: Overlay.overlay
         anchors.centerIn: parent
@@ -191,16 +208,17 @@ ApplicationWindow {
         width: 390
         title: qsTr("Export is still running")
         standardButtons: Dialog.Yes | Dialog.No
-        contentItem: Label {
+        contentItem: FeLabel {
             width: 330
             text: qsTr("Cancel export and quit?")
             wrapMode: Text.WordWrap
-            color: "#e8edf4"
+            color: Theme.onSurface
         }
         onAccepted: appController.cancelExportAndQuit()
     }
 
     Dialog {
+        font.family: Theme.sans
         id: dirtyProjectDialog
         parent: Overlay.overlay
         anchors.centerIn: parent
@@ -223,10 +241,10 @@ ApplicationWindow {
         }
 
         background: Rectangle {
-            radius: 14
-            color: "#0d151e"
+            radius: Theme.dialogRadius
+            color: Theme.surfaceContainer
             border.width: 1
-            border.color: "#3a5367"
+            border.color: Theme.outlineVariant
         }
 
         contentItem: ColumnLayout {
@@ -239,10 +257,10 @@ ApplicationWindow {
                 Rectangle {
                     width: 34
                     height: 34
-                    radius: 10
-                    color: "#123326"
+                    radius: Theme.radius
+                    color: Theme.primaryContainer
                     border.width: 1
-                    border.color: "#28704e"
+                    border.color: "transparent"
                     anchors.left: parent.left
                     anchors.leftMargin: 28
                     anchors.verticalCenter: parent.verticalCenter
@@ -250,7 +268,7 @@ ApplicationWindow {
                     Text {
                         anchors.centerIn: parent
                         text: "●"
-                        color: "#55e6a5"
+                        color: Theme.primary
                         font.pixelSize: 18
                     }
                 }
@@ -265,15 +283,15 @@ ApplicationWindow {
 
                     Text {
                         text: dirtyProjectDialog.actionTitle()
-                        color: "#f2f6fa"
-                        font.family: "Helvetica Neue"
+                        color: Theme.onSurface
+                        font.family: Theme.sans
                         font.pixelSize: 17
                         font.weight: Font.DemiBold
                     }
                     Text {
                         text: qsTr("Your project has unsaved changes.")
-                        color: "#9eafc0"
-                        font.family: "Helvetica Neue"
+                        color: Theme.onSurfaceVariant
+                        font.family: Theme.sans
                         font.pixelSize: 12
                     }
                 }
@@ -282,7 +300,7 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
-                color: "#263747"
+                color: Theme.outlineVariant
             }
 
             Text {
@@ -292,8 +310,8 @@ ApplicationWindow {
                 Layout.topMargin: 22
                 Layout.bottomMargin: 22
                 text: qsTr("Save your changes before continuing? You can also discard them and continue without saving.")
-                color: "#c9d4df"
-                font.family: "Helvetica Neue"
+                color: Theme.onSurface
+                font.family: Theme.sans
                 font.pixelSize: 13
                 lineHeight: 1.35
                 wrapMode: Text.WordWrap
@@ -302,7 +320,7 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
-                color: "#263747"
+                color: Theme.outlineVariant
             }
 
             RowLayout {
@@ -342,18 +360,19 @@ ApplicationWindow {
     }
 
     Dialog {
+        font.family: Theme.sans
         id: sourceMismatchDialog
         parent: Overlay.overlay
         anchors.centerIn: parent
         modal: true
         width: 470
         title: qsTr("Source does not match project")
-        contentItem: Label {
+        contentItem: FeLabel {
             width: 410
             text: qsTr("The selected file “%1” does not match the source originally stored with this project. Use it as an intentional replacement?")
                 .arg(appController.sourceMismatchCandidateName)
             wrapMode: Text.WordWrap
-            color: "#e8edf4"
+            color: Theme.onSurface
         }
         footer: DialogButtonBox {
             standardButtons: DialogButtonBox.Yes | DialogButtonBox.Cancel
@@ -377,6 +396,7 @@ ApplicationWindow {
     }
 
     Dialog {
+        font.family: Theme.sans
         id: recoveryDialog
         parent: Overlay.overlay
         anchors.centerIn: parent
@@ -384,11 +404,11 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 460
         title: qsTr("Recover unsaved changes?")
-        contentItem: Label {
+        contentItem: FeLabel {
             width: 400
             text: qsTr("FlappedEar Overlays found changes that were not saved to the project file. Recover them as an unsaved document, or discard them and open the saved project?")
             wrapMode: Text.WordWrap
-            color: "#e8edf4"
+            color: Theme.onSurface
         }
         footer: DialogButtonBox {
             Button {
@@ -436,6 +456,7 @@ ApplicationWindow {
 
     // KAN-125: items the move from FlappedEar Telemetry left in their old place.
     Dialog {
+        font.family: Theme.sans
         id: startupNoticeDialog
         objectName: "startupNoticeDialog"
         parent: Overlay.overlay
@@ -444,16 +465,17 @@ ApplicationWindow {
         width: 560
         title: qsTr("Your data from FlappedEar Telemetry")
         standardButtons: Dialog.Ok
-        contentItem: Label {
+        contentItem: FeLabel {
             width: 500
             text: qsTr("FlappedEar Overlays is the new name of this app. Nothing was deleted or overwritten, but not everything could be moved:") + "\n\n" + appController.startupNotice
             wrapMode: Text.WrapAtWordBoundaryOrAnywhere
             textFormat: Text.PlainText
-            color: "#e8edf4"
+            color: Theme.onSurface
         }
     }
 
     Dialog {
+        font.family: Theme.sans
         id: exportOverwriteDialog
         parent: Overlay.overlay
         anchors.centerIn: parent
@@ -461,17 +483,19 @@ ApplicationWindow {
         width: 440
         title: qsTr("Replace existing file?")
         standardButtons: Dialog.Yes | Dialog.No
-        contentItem: Label {
+        contentItem: FeLabel {
             width: 380
             text: qsTr("The selected export target already exists. Replace it only after the new video has encoded and passed validation?")
             wrapMode: Text.WordWrap
-            color: "#e8edf4"
+            color: Theme.onSurface
         }
         onAccepted: exportDialog.startExport(true)
     }
 
     menuBar: MenuBar {
+        font.family: Theme.sans
         Menu {
+            font.family: Theme.sans
             title: qsTr("File")
             Action {
                 text: qsTr("New Project")
@@ -532,6 +556,7 @@ ApplicationWindow {
             }
         }
         Menu {
+            font.family: Theme.sans
             title: qsTr("View")
             Action {
                 text: window.fullScreenPreview ? qsTr("Exit Full Screen") : qsTr("Enter Full Screen")
@@ -553,6 +578,7 @@ ApplicationWindow {
             }
         }
         Menu {
+            font.family: Theme.sans
             title: qsTr("Help")
             Action {
                 text: qsTr("About %1").arg(Application.displayName)
@@ -562,6 +588,7 @@ ApplicationWindow {
     }
 
     Dialog {
+        font.family: Theme.sans
         id: productAboutDialog
         objectName: "productAboutDialog"
         parent: Overlay.overlay
@@ -570,13 +597,14 @@ ApplicationWindow {
         width: Math.min(440, window.width - 40)
         title: qsTr("About %1").arg(Application.displayName)
         standardButtons: Dialog.Close
-        contentItem: Label {
+        contentItem: FeLabel {
             text: qsTr("Version %1").arg(Application.version) + "\n" + qsTr("Video telemetry overlays and motorsport analysis.")
             wrapMode: Text.WordWrap
         }
     }
 
     Dialog {
+        font.family: Theme.sans
         id: shortcutHelpDialog
         parent: Overlay.overlay
         anchors.centerIn: parent
@@ -584,10 +612,10 @@ ApplicationWindow {
         width: 450
         title: qsTr("Keyboard Shortcuts")
         standardButtons: Dialog.Close
-        contentItem: Label {
+        contentItem: FeLabel {
             width: 390
             text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+Shift+A  Lap Analysis\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
-            color: "#d8e0e9"
+            color: Theme.onSurface
             wrapMode: Text.WordWrap
             font.pixelSize: 12
         }
@@ -983,6 +1011,7 @@ ApplicationWindow {
     }
 
     Dialog {
+        font.family: Theme.sans
         id: exportDialog
         objectName: "exportDialog"
         title: qsTr("Export H.265 / HEVC")
@@ -1097,20 +1126,20 @@ ApplicationWindow {
             selectSourceFormat();
         }
         background: Rectangle {
-            radius: 14
-            color: "#0d141d"
-            border.color: "#334253"
+            radius: Theme.dialogRadius
+            color: Theme.surfaceContainer
+            border.color: Theme.outlineVariant
         }
         contentItem: ColumnLayout {
             spacing: 12
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 text: qsTr("SOURCE")
-                color: "#8b98a8"
+                color: Theme.onSurfaceVariant
                 wrapMode: Text.WordWrap
                 font.pixelSize: 11
             }
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 visible: text.length > 0
                 text: {
@@ -1152,33 +1181,33 @@ ApplicationWindow {
                     }
                     return lines.join("\n");
                 }
-                color: "#b5c0cd"
+                color: Theme.onSurfaceVariant
                 wrapMode: Text.WordWrap
                 font.pixelSize: 11
             }
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 visible: appController.exportSourceInfo.unsupportedColorManagedSource === true
                 text: qsTr("HDR/Log preservation is not yet supported. Export will be rejected rather than silently converted to SDR.")
-                color: "#ffc66d"
+                color: Theme.warning
                 wrapMode: Text.WordWrap
                 font.pixelSize: 11
             }
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 visible: appController.exportSourceInfo.likelyVariableFrameRate === true
                 text: qsTr("Variable frame rate source detected. Export will use %1 constant-frame-rate output. Telemetry remains timestamp-driven, but output cadence will be converted to CFR.")
                     .arg(appController.exportSourceInfo.frameRateText)
-                color: "#ffc66d"
+                color: Theme.warning
                 wrapMode: Text.WordWrap
                 font.pixelSize: 11
             }
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 text: exportDialog.outputFile.toString().length > 0
                     ? exportDialog.outputFile.toString().replace("file://", "")
                     : qsTr("Choose output file…")
-                color: exportDialog.outputFile.toString().length > 0 ? "#e8edf4" : "#718092"
+                color: exportDialog.outputFile.toString().length > 0 ? Theme.onSurface : Theme.onSurfaceVariant
                 elide: Text.ElideMiddle
             }
             FeButton {
@@ -1186,7 +1215,7 @@ ApplicationWindow {
                 text: qsTr("Choose output…")
                 onClicked: exportOutputDialog.open()
             }
-            Label { text: qsTr("Resolution"); color: "#8b98a8"; font.pixelSize: 11 }
+            FeLabel { text: qsTr("Resolution"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
             FeComboBox {
                 id: exportResolution; Layout.fillWidth: true
                 model: exportDialog.formatOptions.sizes || []
@@ -1194,15 +1223,15 @@ ApplicationWindow {
                 delegate: ItemDelegate { width: exportResolution.width; text: modelData.label }
                 onCurrentIndexChanged: exportDialog.updateBitrate()
             }
-            Label { text: qsTr("Frame rate"); color: "#8b98a8"; font.pixelSize: 11 }
+            FeLabel { text: qsTr("Frame rate"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
             FeComboBox {
                 id: exportFrameRate; Layout.fillWidth: true; model: exportDialog.formatOptions.rates || []
                 textRole: "label"; onCurrentIndexChanged: exportDialog.updateBitrate()
                 delegate: ItemDelegate { width: exportFrameRate.width; text: modelData.label }
             }
-            Label {
+            FeLabel {
                 text: qsTr("Quality")
-                color: "#8b98a8"
+                color: Theme.onSurfaceVariant
                 font.pixelSize: 11
             }
             FeComboBox {
@@ -1212,7 +1241,7 @@ ApplicationWindow {
                 currentIndex: 1
                 onCurrentIndexChanged: exportDialog.updateBitrate()
             }
-            Label { text: qsTr("Video bitrate (Mbps)"); color: "#8b98a8"; font.pixelSize: 11 }
+            FeLabel { text: qsTr("Video bitrate (Mbps)"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
             FeTextField {
                 id: exportCustomBitrate; Layout.fillWidth: true
                 inputMethodHints: Qt.ImhFormattedNumbersOnly
@@ -1221,11 +1250,11 @@ ApplicationWindow {
                 opacity: readOnly ? 0.72 : 1.0
                 onTextChanged: if (exportQuality.currentIndex === 3) exportDialog.selectedBitrate = Math.round(Number(text) * 1000000)
             }
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 visible: exportCustomBitrate.readOnly
                 text: qsTr("Automatically selected for %1 @ %2").arg(exportDialog.selectedSize().label || "").arg(exportDialog.selectedRate().label || "")
-                color: "#718092"
+                color: Theme.onSurfaceVariant
                 font.pixelSize: 11
                 elide: Text.ElideRight
             }
@@ -1235,13 +1264,13 @@ ApplicationWindow {
                 enabled: exportDialog.sourceHasAudio()
                 checked: enabled
             }
-            Label {
-                Layout.fillWidth: true; color: "#b5c0cd"; font.pixelSize: 11
+            FeLabel {
+                Layout.fillWidth: true; color: Theme.onSurfaceVariant; font.pixelSize: 11
                 text: qsTr("Estimated size: %1").arg(appController.formatEstimatedExportSize(appController.estimateExportSize(exportDialog.selectedBitrate, exportAudio.checked, exportDialog.selectedDuration)))
             }
-            Label {
+            FeLabel {
                 text: qsTr("Range")
-                color: "#8b98a8"
+                color: Theme.onSurfaceVariant
                 font.pixelSize: 11
             }
             FeComboBox {
@@ -1256,9 +1285,9 @@ ApplicationWindow {
                 columnSpacing: 8
                 rowSpacing: 6
                 visible: exportRangeMode.currentIndex === 1
-                Label {
+                FeLabel {
                     text: qsTr("IN")
-                    color: "#8b98a8"
+                    color: Theme.onSurfaceVariant
                     font.pixelSize: 11
                 }
                 FeTextField {
@@ -1266,9 +1295,9 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     inputMethodHints: Qt.ImhNoPredictiveText
                 }
-                Label {
+                FeLabel {
                     text: qsTr("OUT")
-                    color: "#8b98a8"
+                    color: Theme.onSurfaceVariant
                     font.pixelSize: 11
                 }
                 FeTextField {
@@ -1283,9 +1312,9 @@ ApplicationWindow {
                 columnSpacing: 8
                 rowSpacing: 6
                 visible: exportRangeMode.currentIndex === 2
-                Label {
+                FeLabel {
                     text: qsTr("Lap")
-                    color: "#8b98a8"
+                    color: Theme.onSurfaceVariant
                     font.pixelSize: 11
                 }
                 FeComboBox {
@@ -1306,9 +1335,9 @@ ApplicationWindow {
                             .arg(modelData.isBest ? qsTr(" · best") : "")
                     }
                 }
-                Label {
+                FeLabel {
                     text: qsTr("Handle")
-                    color: "#8b98a8"
+                    color: Theme.onSurfaceVariant
                     font.pixelSize: 11
                 }
                 FeComboBox {
@@ -1322,7 +1351,7 @@ ApplicationWindow {
                         text: qsTr("%1 seconds before and after").arg(modelData)
                     }
                 }
-                Label {
+                FeLabel {
                     Layout.columnSpan: 2
                     Layout.fillWidth: true
                     visible: exportDialog.singleLapRange.valid === true
@@ -1330,16 +1359,16 @@ ApplicationWindow {
                         .arg(exportDialog.singleLapRange.inTimecode)
                         .arg(exportDialog.singleLapRange.outTimecode)
                         .arg(appController.formatElapsedTime(Number(exportDialog.singleLapRange.durationSeconds)))
-                    color: "#55e6a5"
-                    font.family: "Menlo"
+                    color: Theme.primary
+                    font.family: Theme.mono
                     font.pixelSize: 10
                 }
-                Label {
+                FeLabel {
                     Layout.columnSpan: 2
                     Layout.fillWidth: true
                     visible: exportDialog.singleLapRange.valid !== true
                     text: qsTr("Choose a completed lap whose synchronized range overlaps the video.")
-                    color: "#ffb84d"
+                    color: Theme.warning
                     wrapMode: Text.WordWrap
                     font.pixelSize: 10
                 }
@@ -1354,7 +1383,7 @@ ApplicationWindow {
                     font.pixelSize: 10
                 }
                 // Where the day's best lap is: this recording, or another run.
-                Label {
+                FeLabel {
                     objectName: "exportDayBestLap"
                     Layout.columnSpan: 2
                     Layout.fillWidth: true
@@ -1366,7 +1395,7 @@ ApplicationWindow {
                             : qsTr("The day's best lap is %1 · LAP %2 (%3), in another recording. Open that run to export it with its own video.")
                                 .arg(exportDialog.dayBestLap.runName).arg(exportDialog.dayBestLap.lapNumber)
                                 .arg(appController.formatElapsedTime(Number(exportDialog.dayBestLap.durationSeconds)))
-                    color: "#91a0b2"
+                    color: Theme.onSurfaceVariant
                     wrapMode: Text.WordWrap
                     font.pixelSize: 10
                 }
@@ -1394,11 +1423,11 @@ ApplicationWindow {
                     }
                 }
             }
-            Label {
+            FeLabel {
                 visible: appController.exportState === "failed" && appController.exportError.length > 0
                 Layout.fillWidth: true
                 text: appController.exportError
-                color: "#ff8a92"
+                color: Theme.error
                 wrapMode: Text.WordWrap
                 font.pixelSize: 11
             }
@@ -1420,6 +1449,7 @@ ApplicationWindow {
     }
 
     Popup {
+        font.family: Theme.sans
         id: exportProgressPopup
         visible: appController.exportProgressVisible
         modal: true
@@ -1430,15 +1460,15 @@ ApplicationWindow {
         height: Math.min(window.height - 40, exportDetails.checked || appController.exportState === "failed"
             || appController.exportState === "validationWarning" ? 700 : 460)
         background: Rectangle {
-            radius: 14
-            color: "#0d141d"
-            border.color: "#334253"
+            radius: Theme.dialogRadius
+            color: Theme.surfaceContainer
+            border.color: Theme.outlineVariant
         }
         contentItem: ColumnLayout {
             anchors.fill: parent
             anchors.margins: 18
             spacing: 9
-            Label {
+            FeLabel {
                 text: {
                     const stage = appController.exportProgressInfo.stage || appController.exportState;
                     if (stage === "complete") return qsTr("Export complete");
@@ -1447,18 +1477,18 @@ ApplicationWindow {
                     if (stage === "cancelled") return qsTr("Export cancelled");
                     return qsTr("Exporting video");
                 }
-                color: "#f2f6fb"
+                color: Theme.onSurface
                 font.pixelSize: 17
                 font.weight: Font.DemiBold
             }
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 text: appController.exportProgressInfo.outputName || ""
-                color: "#aeb9c7"
+                color: Theme.onSurfaceVariant
                 elide: Text.ElideMiddle
                 font.pixelSize: 12
             }
-            Label {
+            FeLabel {
                 text: {
                     const names = { "preparing": qsTr("Preparing"), "renderingOverlay": qsTr("Rendering overlay"),
                         "validatingOverlay": qsTr("Validating temporary overlay"),
@@ -1469,7 +1499,7 @@ ApplicationWindow {
                         "validationWarning": qsTr("Completed with warning"), "failed": qsTr("Failed") };
                     return names[appController.exportProgressInfo.stage] || qsTr("Preparing");
                 }
-                color: "#55e6a5"
+                color: Theme.primary
                 font.pixelSize: 14
             }
             ProgressBar {
@@ -1478,32 +1508,32 @@ ApplicationWindow {
                 to: 100
                 value: Number(appController.exportProgressInfo.progressPercent || appController.exportProgress)
             }
-            Label {
+            FeLabel {
                 text: qsTr("%1%").arg(Number(appController.exportProgressInfo.progressPercent || appController.exportProgress).toFixed(1))
-                color: "#8b98a8"
+                color: Theme.onSurfaceVariant
                 font.pixelSize: 12
             }
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 text: window.formatTime(Number(appController.exportProgressInfo.encodedSeconds || appController.exportProgressInfo.exportRelativeTime || 0) * 1000)
                     + " / " + window.formatTime(Number(appController.exportProgressInfo.exportDuration || 0) * 1000)
                     + "    ·    " + qsTr("Encoded frame %1").arg(appController.exportProgressInfo.encodedFrames || 0)
-                color: "#d8e0e9"
+                color: Theme.onSurface
                 font.pixelSize: 12
             }
             GridLayout {
                 Layout.fillWidth: true
                 columns: 3
-                Label { text: qsTr("Elapsed\n%1").arg(window.formatTime(Number(appController.exportProgressInfo.elapsedMilliseconds || 0))); color: "#aeb9c7" }
-                Label { text: qsTr("Overlay feed\n%1 fps").arg(Number(appController.exportProgressInfo.rendererFps || 0).toFixed(1)); color: "#aeb9c7" }
-                Label { text: (appController.exportProgressInfo.stage === "renderingOverlay" ? qsTr("Overlay encode") : qsTr("Final encoder")) + "\n%1 fps · %2x".arg(Number(appController.exportProgressInfo.encoderFps || 0).toFixed(1)).arg(Number(appController.exportProgressInfo.encoderRealtimeFactor || 0).toFixed(2)); color: "#aeb9c7" }
+                FeLabel { text: qsTr("Elapsed\n%1").arg(window.formatTime(Number(appController.exportProgressInfo.elapsedMilliseconds || 0))); color: Theme.onSurfaceVariant }
+                FeLabel { text: qsTr("Overlay feed\n%1 fps").arg(Number(appController.exportProgressInfo.rendererFps || 0).toFixed(1)); color: Theme.onSurfaceVariant }
+                FeLabel { text: (appController.exportProgressInfo.stage === "renderingOverlay" ? qsTr("Overlay encode") : qsTr("Final encoder")) + "\n%1 fps · %2x".arg(Number(appController.exportProgressInfo.encoderFps || 0).toFixed(1)).arg(Number(appController.exportProgressInfo.encoderRealtimeFactor || 0).toFixed(2)); color: Theme.onSurfaceVariant }
             }
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 text: (appController.exportProgressInfo.stage === "renderingOverlay" ? qsTr("Temporary overlay · FFV1") : "HEVC · " + (appController.exportProgressInfo.encoderName || qsTr("Detecting encoder…")))
                     + " · " + (appController.exportProgressInfo.width || "") + "×" + (appController.exportProgressInfo.height || "")
                     + " · " + Number(appController.exportProgressInfo.frameRate || 0).toFixed(3) + " fps\n" + (appController.exportProgressInfo.audioLabel || "")
-                color: "#8b98a8"; font.pixelSize: 11
+                color: Theme.onSurfaceVariant; font.pixelSize: 11
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -1545,7 +1575,7 @@ ApplicationWindow {
                     selectByMouse: true
                     persistentSelection: true
                     wrapMode: TextEdit.WrapAnywhere
-                    color: "#9eabba"
+                    color: Theme.onSurfaceVariant
                     font.pixelSize: 11
                     Keys.onPressed: function(event) {
                         if (event.matches(StandardKey.SelectAll)) {
@@ -1642,9 +1672,9 @@ ApplicationWindow {
                     selectByMouse: true
                     persistentSelection: true
                     wrapMode: TextEdit.WrapAnywhere
-                    color: "#aeb9c7"
+                    color: Theme.onSurfaceVariant
                     font.pixelSize: 11
-                    font.family: appController.fixedFontFamily
+                    font.family: Theme.mono
                     function jumpToLatest() {
                         followTail = true;
                         programmaticScroll = true;
@@ -1695,9 +1725,9 @@ ApplicationWindow {
                     }
                 }
             }
-            Label { visible: appController.exportState === "cancelling"; text: qsTr("Finishing current operation and cleaning up."); color: "#ffc66d"; font.pixelSize: 11 }
-            Label { visible: appController.exportState === "failed"; text: appController.exportError; color: "#ff8a92"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-            Label { visible: appController.exportState === "validationWarning"; text: appController.exportError; color: "#ffc66d"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            FeLabel { visible: appController.exportState === "cancelling"; text: qsTr("Finishing current operation and cleaning up."); color: Theme.warning; font.pixelSize: 11 }
+            FeLabel { visible: appController.exportState === "failed"; text: appController.exportError; color: Theme.error; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            FeLabel { visible: appController.exportState === "validationWarning"; text: appController.exportError; color: Theme.warning; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             Item { Layout.fillHeight: true }
             FeButton {
                 Layout.alignment: Qt.AlignRight
@@ -1709,6 +1739,7 @@ ApplicationWindow {
     }
 
     Popup {
+        font.family: Theme.sans
         id: templateSavePopup
         x: (window.width - width) / 2
         y: (window.height - height) / 2
@@ -1722,28 +1753,28 @@ ApplicationWindow {
             templateName.forceActiveFocus();
         }
         background: Rectangle {
-            radius: 14
-            color: "#0d141d"
-            border.color: "#334253"
+            radius: Theme.dialogRadius
+            color: Theme.surfaceContainer
+            border.color: Theme.outlineVariant
         }
         contentItem: ColumnLayout {
             spacing: 10
-            Label {
+            FeLabel {
                 text: qsTr("Save as new custom template")
-                color: "#f1f5fa"
+                color: Theme.onSurface
                 font.pixelSize: 17
                 font.weight: Font.DemiBold
             }
-            Label {
+            FeLabel {
                 Layout.fillWidth: true
                 text: qsTr("Create a named custom template from the complete current scene, including widget positions, bindings and styles.")
-                color: "#778596"
+                color: Theme.onSurfaceVariant
                 font.pixelSize: 11
                 wrapMode: Text.WordWrap
             }
-            Label {
+            FeLabel {
                 text: qsTr("Name")
-                color: "#9ba7b5"
+                color: Theme.onSurfaceVariant
                 font.pixelSize: 11
             }
             FeTextField {
@@ -1751,16 +1782,16 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 placeholderText: qsTr("My circuit layout")
             }
-            Label {
+            FeLabel {
                 text: qsTr("Description")
-                color: "#9ba7b5"
+                color: Theme.onSurfaceVariant
                 font.pixelSize: 11
             }
-                    Label {
+                    FeLabel {
                         Layout.fillWidth: true
                         visible: appController.widgetModel.lastError.length > 0
                         text: appController.widgetModel.lastError
-                        color: "#ff8a92"
+                        color: Theme.error
                         font.pixelSize: 11
                         wrapMode: Text.Wrap
                     }
@@ -1879,8 +1910,8 @@ ApplicationWindow {
             visible: !window.fullScreenPreview
             Layout.fillWidth: true
             Layout.preferredHeight: 64
-            color: "#0c1118"
-            border.color: "#202a36"
+            color: Theme.surfaceContainerLow
+            border.color: Theme.outlineVariant
 
             RowLayout {
                 anchors.fill: parent
@@ -1901,17 +1932,17 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     spacing: -1
-                    Label {
+                    FeLabel {
                         text: "FlappedEar"
-                        color: "#f1f5fa"
-                        font.family: "Helvetica Neue"
+                        color: Theme.onSurface
+                        font.family: Theme.sans
                         font.pixelSize: 15
                         font.weight: Font.DemiBold
                     }
-                    Label {
+                    FeLabel {
                         text: "OVERLAYS"
-                        color: "#647386"
-                        font.family: "Helvetica Neue"
+                        color: Theme.outline
+                        font.family: Theme.sans
                         font.pixelSize: 9
                         font.letterSpacing: 1.5
                     }
@@ -1919,23 +1950,23 @@ ApplicationWindow {
                 Rectangle {
                     width: 1
                     height: 30
-                    color: "#26313e"
+                    color: Theme.outlineVariant
                     Layout.leftMargin: 8
                     Layout.rightMargin: 8
                 }
                 ColumnLayout {
                     Layout.maximumWidth: 300
                     spacing: 0
-                    Label {
+                    FeLabel {
                         text: appController.videoName || qsTr("No video selected")
-                        color: appController.videoName ? "#ccd5df" : "#667486"
+                        color: appController.videoName ? Theme.onSurface : Theme.outline
                         font.pixelSize: 11
                         elide: Text.ElideMiddle
                         Layout.fillWidth: true
                     }
-                    Label {
+                    FeLabel {
                         text: appController.telemetryName || qsTr("No telemetry selected")
-                        color: appController.telemetryName ? "#7f8e9f" : "#566373"
+                        color: appController.telemetryName ? Theme.onSurfaceVariant : Theme.outline
                         font.pixelSize: 10
                         elide: Text.ElideMiddle
                         Layout.fillWidth: true
@@ -1948,14 +1979,14 @@ ApplicationWindow {
                     visible: appController.syncOffset !== 0
                     implicitWidth: syncLabel.implicitWidth + 18
                     height: 28
-                    radius: 14
-                    color: "#10251d"
-                    border.color: "#24543f"
-                    Label {
+                    radius: Theme.radius
+                    color: Theme.primaryContainer
+                    border.color: "transparent"
+                    FeLabel {
                         id: syncLabel
                         anchors.centerIn: parent
                         text: qsTr("SYNC  %1 s").arg(appController.syncOffset.toFixed(3))
-                        color: "#55e6a5"
+                        color: Theme.onPrimaryContainer
                         font.pixelSize: 9
                         font.weight: Font.DemiBold
                         font.letterSpacing: 0.7
@@ -2009,8 +2040,8 @@ ApplicationWindow {
                 visible: !window.fullScreenPreview
                 Layout.preferredWidth: 238
                 Layout.fillHeight: true
-                color: "#0a0f15"
-                border.color: "#202a36"
+                color: Theme.surfaceContainerLow
+                border.color: Theme.outlineVariant
 
                 ScrollView {
                     id: leftSidebarScroll
@@ -2030,11 +2061,11 @@ ApplicationWindow {
                     SectionTitle {
                         text: qsTr("Layout template")
                     }
-                    Label {
+                    FeLabel {
                         Layout.fillWidth: true
                         visible: appController.widgetModel.lastError.length > 0
                         text: appController.widgetModel.lastError
-                        color: "#ff8a92"
+                        color: Theme.error
                         font.pixelSize: 11
                         wrapMode: Text.Wrap
                     }
@@ -2049,10 +2080,10 @@ ApplicationWindow {
                                 appController.selectTemplate(templates[currentIndex].id);
                         }
                     }
-                    Label {
+                    FeLabel {
                         Layout.fillWidth: true
                         text: window.selectedTemplate() ? window.selectedTemplate().description : ""
-                        color: "#657386"
+                        color: Theme.outline
                         font.pixelSize: 10
                         wrapMode: Text.WordWrap
                     }
@@ -2130,9 +2161,9 @@ ApplicationWindow {
                                 required property var modelData
                                 Layout.fillWidth: true
                                 implicitHeight: 50
-                                radius: 9
-                                color: addMouse.containsMouse ? "#17212c" : "#111821"
-                                border.color: addMouse.containsMouse ? "#3a4b5e" : "#24303d"
+                                radius: Theme.radius
+                                color: addMouse.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+                                border.color: addMouse.containsMouse ? Theme.outline : Theme.outlineVariant
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 8
@@ -2141,20 +2172,20 @@ ApplicationWindow {
                                     Rectangle {
                                         width: 26
                                         height: 26
-                                        radius: 7
-                                        color: "#172a23"
-                                        Label {
+                                        radius: Theme.radius
+                                        color: Theme.primaryContainer
+                                        FeLabel {
                                             anchors.centerIn: parent
                                             text: modelData.icon
-                                            color: "#55e6a5"
+                                            color: Theme.primary
                                             font.pixelSize: modelData.icon.length > 2 ? 7 : 11
                                             font.weight: Font.Bold
                                         }
                                     }
-                                    Label {
+                                    FeLabel {
                                         Layout.fillWidth: true
                                         text: modelData.label
-                                        color: "#b9c4d0"
+                                        color: Theme.onSurface
                                         font.pixelSize: 10
                                         wrapMode: Text.WordWrap
                                     }
@@ -2191,11 +2222,11 @@ ApplicationWindow {
                             onClicked: window.ungroupSelectedWidgets()
                         }
                     }
-                    Label {
+                    FeLabel {
                         visible: window.selectedWidgetIndices.length > 1
                         Layout.fillWidth: true
                         text: qsTr("%1 layers selected").arg(window.selectedWidgetIndices.length)
-                        color: "#55e6a5"
+                        color: Theme.primary
                         font.pixelSize: 9
                     }
                     ColumnLayout {
@@ -2211,22 +2242,22 @@ ApplicationWindow {
                                     required property string widgetGroupId
                                     Layout.fillWidth: true
                                     height: 38
-                                    radius: 8
-                                    color: window.isWidgetSelected(index) ? "#16261f" : layerMouse.containsMouse ? "#131c26" : "transparent"
-                                    border.color: window.isWidgetSelected(index) ? "#2d6a50" : "transparent"
+                                    radius: Theme.radius
+                                    color: window.isWidgetSelected(index) ? Theme.primaryContainer : layerMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+                                    border.color: window.isWidgetSelected(index) ? "transparent" : "transparent"
                                     RowLayout {
                                         anchors.fill: parent
                                         anchors.leftMargin: 9
                                         anchors.rightMargin: 5
-                                        Label {
+                                        FeLabel {
                                             text: window.isWidgetSelected(index) ? "●" : (widgetGroupId ? "◆" : "○")
-                                            color: window.isWidgetSelected(index) ? "#55e6a5" : "#536172"
+                                            color: window.isWidgetSelected(index) ? Theme.primary : Theme.outline
                                             font.pixelSize: 9
                                         }
-                                        Label {
+                                        FeLabel {
                                             Layout.fillWidth: true
                                             text: widgetSettings.name || widgetType
-                                            color: widgetVisible ? "#c7d0db" : "#596575"
+                                            color: widgetVisible ? Theme.onSurface : Theme.outline
                                             font.pixelSize: 11
                                             elide: Text.ElideRight
                                         }
@@ -2256,7 +2287,7 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: "#06090d"
+                color: Theme.surfaceContainerLowest
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: 0
@@ -2267,9 +2298,9 @@ ApplicationWindow {
                             id: stageFrame
                             anchors.fill: parent
                             anchors.margins: window.fullScreenPreview ? 0 : 18
-                            radius: window.fullScreenPreview ? 0 : 12
-                            color: "#020304"
-                            border.color: window.fullScreenPreview ? "transparent" : "#26313d"
+                            radius: window.fullScreenPreview ? 0 : Theme.dialogRadius
+                            color: Theme.surfaceContainerLowest
+                            border.color: window.fullScreenPreview ? "transparent" : Theme.outlineVariant
                             clip: true
                             Canvas {
                                 anchors.fill: parent
@@ -2278,7 +2309,7 @@ ApplicationWindow {
                                 onPaint: {
                                     const ctx = getContext("2d");
                                     ctx.reset();
-                                    ctx.strokeStyle = "#26313d";
+                                    ctx.strokeStyle = Theme.outlineVariant;
                                     ctx.lineWidth = 1;
                                     for (let x = 0; x < width; x += 32) {
                                         ctx.beginPath();
@@ -2310,14 +2341,14 @@ ApplicationWindow {
                                     fillMode: VideoOutput.PreserveAspectFit
                                 }
                                 // KAN-105: a missing chapter is an explicit gap, never skipped.
-                                Label {
+                                FeLabel {
                                     objectName: "videoChapterGap"
                                     anchors.centerIn: parent
                                     width: Math.min(parent.width - 40, 420)
                                     visible: !!window.currentChapter && !window.currentChapter.available
                                     horizontalAlignment: Text.AlignHCenter
                                     wrapMode: Text.WordWrap
-                                    color: "#d6a457"
+                                    color: Theme.warning
                                     text: window.currentChapter
                                         ? qsTr("Chapter %1 (%2) is missing or changed. The timeline keeps its time; choose the recording's chapters again to fill it.")
                                             .arg(window.currentChapter.index + 1).arg(window.currentChapter.name)
@@ -2362,27 +2393,27 @@ ApplicationWindow {
                                     Layout.alignment: Qt.AlignHCenter
                                     width: 56
                                     height: 56
-                                    radius: 18
-                                    color: "#111923"
-                                    border.color: "#263442"
-                                    Label {
+                                    radius: Theme.radius
+                                    color: Theme.surfaceContainerHigh
+                                    border.color: Theme.outlineVariant
+                                    FeLabel {
                                         anchors.centerIn: parent
                                         text: "▶"
-                                        color: "#55e6a5"
+                                        color: Theme.primary
                                         font.pixelSize: 20
                                     }
                                 }
-                                Label {
+                                FeLabel {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: qsTr("See your lap from the driver’s seat")
-                                    color: "#c2ccd7"
+                                    color: Theme.onSurface
                                     font.pixelSize: 14
                                     font.weight: Font.DemiBold
                                 }
-                                Label {
+                                FeLabel {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: qsTr("Open an MP4 or MOV to start building the overlay")
-                                    color: "#657386"
+                                    color: Theme.outline
                                     font.pixelSize: 11
                                 }
                                 FeButton {
@@ -2411,9 +2442,9 @@ ApplicationWindow {
                                 y: videoViewport.y + (videoViewport.height - height) / 2
                                 width: Math.max(0, Math.min(480, videoViewport.width - 32))
                                 height: playbackErrorContent.implicitHeight + 24
-                                radius: 10
-                                color: "#e6111720"
-                                border.color: "#ef4f5f"
+                                radius: Theme.radius
+                                color: Theme.errorScrim
+                                border.color: Theme.error
 
                                 Column {
                                     id: playbackErrorContent
@@ -2422,17 +2453,17 @@ ApplicationWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.margins: 12
                                     spacing: 6
-                                    Label {
+                                    FeLabel {
                                         width: parent.width
                                         text: qsTr("Video playback failed")
-                                        color: "#ffffff"
+                                        color: Theme.onErrorContainer
                                         font.pixelSize: 14
                                         font.weight: Font.DemiBold
                                     }
-                                    Label {
+                                    FeLabel {
                                         width: parent.width
                                         text: mediaPlayer.errorString || qsTr("The selected video could not be decoded.")
-                                        color: "#ffb9bf"
+                                        color: Theme.onErrorContainer
                                         font.pixelSize: 11
                                         wrapMode: Text.Wrap
                                     }
@@ -2447,9 +2478,9 @@ ApplicationWindow {
                                 anchors.bottom: parent.bottom
                                 anchors.margins: 22
                                 height: 58
-                                radius: 10
-                                color: "#c40b1017"
-                                border.color: "#4d334253"
+                                radius: Theme.radius
+                                color: Theme.scrim
+                                border.color: Theme.scrimBorder
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 12
@@ -2463,10 +2494,10 @@ ApplicationWindow {
                                         text: mediaPlayer.playbackState === MediaPlayer.PlayingState ? "Ⅱ" : "▶"
                                         onClicked: window.togglePlayback()
                                     }
-                                    Label {
+                                    FeLabel {
                                         text: appController.previewTimecodeForPositionMilliseconds(window.timelinePosition)
-                                        color: "#dbe4ed"
-                                        font.family: "Menlo"
+                                        color: Theme.onSurface
+                                        font.family: Theme.mono
                                         font.pixelSize: 10
                                     }
                                     FeSlider {
@@ -2489,10 +2520,10 @@ ApplicationWindow {
                                             window.showFullScreenControls();
                                         }
                                     }
-                                    Label {
+                                    FeLabel {
                                         text: appController.previewEndTimecode
-                                        color: "#9aa8b8"
-                                        font.family: "Menlo"
+                                        color: Theme.onSurfaceVariant
+                                        font.family: Theme.mono
                                         font.pixelSize: 10
                                     }
                                 }
@@ -2503,8 +2534,8 @@ ApplicationWindow {
                         visible: !window.fullScreenPreview
                         Layout.fillWidth: true
                         Layout.preferredHeight: 76
-                        color: "#0b1017"
-                        border.color: "#202a36"
+                        color: Theme.surface
+                        border.color: Theme.outlineVariant
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 16
@@ -2519,10 +2550,10 @@ ApplicationWindow {
                                 text: mediaPlayer.playbackState === MediaPlayer.PlayingState ? "Ⅱ" : "▶"
                                 onClicked: window.togglePlayback()
                             }
-                            Label {
+                            FeLabel {
                                 text: appController.previewTimecodeForPositionMilliseconds(window.timelinePosition)
-                                color: "#d2dae4"
-                                font.family: "Menlo"
+                                color: Theme.onSurface
+                                font.family: Theme.mono
                                 font.pixelSize: 10
                             }
                             Item {
@@ -2546,15 +2577,15 @@ ApplicationWindow {
                                         width: Math.max(3, Math.min(parent.width - x, Number(modelData.duration || 0) * 1000 / Math.max(1, appController.previewEndPositionMilliseconds) * parent.width))
                                         height: 4
                                         radius: 2
-                                        color: "#55e6a5"
+                                        color: Theme.primary
                                         opacity: 0.8
                                     }
                                 }
                             }
-                            Label {
+                            FeLabel {
                                 text: appController.previewEndTimecode
-                                color: "#6f7e90"
-                                font.family: "Menlo"
+                                color: Theme.outline
+                                font.family: Theme.mono
                                 font.pixelSize: 10
                             }
                             FeButton {
@@ -2590,18 +2621,18 @@ ApplicationWindow {
             visible: !window.fullScreenPreview
             Layout.fillWidth: true
             Layout.preferredHeight: 28
-            color: "#0a0f15"
-            border.color: "#202a36"
+            color: Theme.surfaceContainerLow
+            border.color: Theme.outlineVariant
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 14
                 anchors.rightMargin: 14
-                Label {
+                FeLabel {
                     Layout.fillWidth: true
                     text: appController.recoveryDegraded
                           ? qsTr("Automatic recovery could not be saved. Save the project manually to protect your changes.")
                           : appController.statusText
-                    color: appController.recoveryDegraded ? "#ffbf5b" : "#718092"
+                    color: appController.recoveryDegraded ? Theme.warning : Theme.onSurfaceVariant
                     font.pixelSize: 10
                     elide: Text.ElideRight
                 }
@@ -2611,9 +2642,9 @@ ApplicationWindow {
                     text: qsTr("SAVE")
                     onClicked: appController.saveCurrentProject()
                 }
-                Label {
+                FeLabel {
                     text: qsTr("%1 widgets").arg(appController.widgetModel.count)
-                    color: "#536172"
+                    color: Theme.outline
                     font.pixelSize: 9
                 }
                 Rectangle {
@@ -2621,7 +2652,7 @@ ApplicationWindow {
                     height: 4
                     radius: 2
                     color: appController.videoLoadState === "ready"
-                           && appController.vboLoadState === "ready" ? "#55e6a5" : "#485565"
+                           && appController.vboLoadState === "ready" ? Theme.tertiary : Theme.outline
                 }
             }
         }
@@ -2632,7 +2663,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: window.welcomeVisible
         z: 100
-        color: "#070b10"
+        color: Theme.surface
 
         Rectangle {
             anchors.fill: parent
@@ -2640,15 +2671,15 @@ ApplicationWindow {
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: "#173527"
+                    color: Theme.surfaceContainerHigh
                 }
                 GradientStop {
                     position: 0.48
-                    color: "#091018"
+                    color: Theme.surface
                 }
                 GradientStop {
                     position: 1
-                    color: "#10243b"
+                    color: Theme.surfaceContainerLowest
                 }
             }
         }
@@ -2674,16 +2705,16 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     spacing: -2
-                    Label {
+                    FeLabel {
                         text: "FlappedEar"
-                        color: "#f2f6fb"
-                        font.family: "Helvetica Neue"
+                        color: Theme.onSurface
+                        font.family: Theme.sans
                         font.pixelSize: 21
                         font.weight: Font.DemiBold
                     }
-                    Label {
+                    FeLabel {
                         text: "OVERLAYS"
-                        color: "#718092"
+                        color: Theme.onSurfaceVariant
                         font.pixelSize: 9
                         font.letterSpacing: 2
                     }
@@ -2693,18 +2724,18 @@ ApplicationWindow {
             ColumnLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 5
-                Label {
+                FeLabel {
                     Layout.alignment: Qt.AlignHCenter
                     text: qsTr("Your track day, in detail")
-                    color: "#f2f6fb"
-                    font.family: "Helvetica Neue"
+                    color: Theme.onSurface
+                    font.family: Theme.sans
                     font.pixelSize: 25
                     font.weight: Font.DemiBold
                 }
-                Label {
+                FeLabel {
                     Layout.alignment: Qt.AlignHCenter
                     text: qsTr("Analyse your laps or create a telemetry overlay.")
-                    color: "#8290a1"
+                    color: Theme.onSurfaceVariant
                     font.pixelSize: 12
                 }
             }
@@ -2727,9 +2758,9 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 188
-                    radius: 14
-                    color: "#0d141d"
-                    border.color: appController.videoName ? "#2c6b50" : "#263442"
+                    radius: Theme.radius
+                    color: Theme.surfaceContainer
+                    border.color: "transparent"
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 16
@@ -2737,25 +2768,25 @@ ApplicationWindow {
                         Rectangle {
                             width: 38
                             height: 38
-                            radius: 11
-                            color: appController.videoName ? "#173528" : "#151e29"
-                            Label {
+                            radius: Theme.radius
+                            color: appController.videoName ? Theme.primaryContainer : Theme.surfaceContainerHigh
+                            FeLabel {
                                 anchors.centerIn: parent
                                 text: "▶"
-                                color: appController.videoName ? "#55e6a5" : "#718092"
+                                color: appController.videoName ? Theme.primary : Theme.onSurfaceVariant
                                 font.pixelSize: 14
                             }
                         }
-                        Label {
+                        FeLabel {
                             text: qsTr("1 · Video clip")
-                            color: "#e8edf4"
+                            color: Theme.onSurface
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
                         }
-                        Label {
+                        FeLabel {
                             Layout.fillWidth: true
                             text: appController.videoName || qsTr("MP4 or MOV from the camera")
-                            color: appController.videoName ? "#55e6a5" : "#718092"
+                            color: appController.videoName ? Theme.onSurface : Theme.onSurfaceVariant
                             elide: Text.ElideMiddle
                             font.pixelSize: 10
                         }
@@ -2774,9 +2805,9 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 188
-                    radius: 14
-                    color: "#0d141d"
-                    border.color: appController.telemetryName ? "#2c6b50" : "#263442"
+                    radius: Theme.radius
+                    color: Theme.surfaceContainer
+                    border.color: "transparent"
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 16
@@ -2784,25 +2815,25 @@ ApplicationWindow {
                         Rectangle {
                             width: 38
                             height: 38
-                            radius: 11
-                            color: appController.telemetryName ? "#173528" : "#151e29"
-                            Label {
+                            radius: Theme.radius
+                            color: appController.telemetryName ? Theme.primaryContainer : Theme.surfaceContainerHigh
+                            FeLabel {
                                 anchors.centerIn: parent
                                 text: "⌁"
-                                color: appController.telemetryName ? "#55e6a5" : "#718092"
+                                color: appController.telemetryName ? Theme.primary : Theme.onSurfaceVariant
                                 font.pixelSize: 17
                             }
                         }
-                        Label {
+                        FeLabel {
                             text: qsTr("2 · Telemetry")
-                            color: "#e8edf4"
+                            color: Theme.onSurface
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
                         }
-                        Label {
+                        FeLabel {
                             Layout.fillWidth: true
                             text: appController.telemetryName || qsTr("Optional telemetry session")
-                            color: appController.telemetryName ? "#55e6a5" : "#718092"
+                            color: appController.telemetryName ? Theme.onSurface : Theme.onSurfaceVariant
                             elide: Text.ElideMiddle
                             font.pixelSize: 10
                         }
@@ -2820,9 +2851,9 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 188
-                    radius: 14
-                    color: "#0d141d"
-                    border.color: "#263442"
+                    radius: Theme.radius
+                    color: Theme.surfaceContainer
+                    border.color: "transparent"
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 16
@@ -2830,25 +2861,25 @@ ApplicationWindow {
                         Rectangle {
                             width: 38
                             height: 38
-                            radius: 11
-                            color: "#151e29"
-                            Label {
+                            radius: Theme.radius
+                            color: Theme.surfaceContainerHigh
+                            FeLabel {
                                 anchors.centerIn: parent
                                 text: "◇"
-                                color: "#42a5ff"
+                                color: Theme.secondary
                                 font.pixelSize: 18
                             }
                         }
-                        Label {
+                        FeLabel {
                             text: qsTr("Saved project")
-                            color: "#e8edf4"
+                            color: Theme.onSurface
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
                         }
-                        Label {
+                        FeLabel {
                             Layout.fillWidth: true
                             text: qsTr("Resume a saved outing or overlay")
-                            color: "#718092"
+                            color: Theme.onSurfaceVariant
                             wrapMode: Text.WordWrap
                             font.pixelSize: 10
                         }
@@ -2866,10 +2897,10 @@ ApplicationWindow {
 
             RowLayout {
                 Layout.fillWidth: true
-                Label {
+                FeLabel {
                     Layout.fillWidth: true
                     text: appController.videoName ? qsTr("Ready to build the overlay") : qsTr("Choose a video to continue")
-                    color: appController.videoName ? "#55e6a5" : "#657386"
+                    color: appController.videoName ? Theme.tertiary : Theme.outline
                     font.pixelSize: 11
                 }
                 FeButton {

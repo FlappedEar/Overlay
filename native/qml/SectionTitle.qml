@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Theme.js" as Theme
 
 Item {
     id: root
@@ -13,16 +14,16 @@ Item {
         spacing: 8
         Label {
             text: root.text.toUpperCase()
-            color: "#778596"
-            font.family: "Helvetica Neue"
-            font.pixelSize: 10
+            color: Theme.onSurfaceVariant
+            font.family: Theme.sans
+            font.pixelSize: Theme.labelSmall
             font.weight: Font.DemiBold
             font.letterSpacing: 1.2
         }
         Rectangle {
             Layout.fillWidth: true
             height: 1
-            color: "#202a36"
+            color: Theme.outlineVariant
         }
     }
 }

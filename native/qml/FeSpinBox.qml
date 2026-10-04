@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "Theme.js" as Theme
 
 SpinBox {
     id: control
@@ -8,13 +9,14 @@ SpinBox {
     contentItem: TextInput {
         z: 2
         text: control.textFromValue(control.value, control.locale)
-        color: "#e8edf4"
-        selectionColor: "#55e6a5"
-        selectedTextColor: "#07140f"
+        color: control.enabled ? Theme.onSurface : Theme.outline
+        selectionColor: Theme.primary
+        selectedTextColor: Theme.onPrimary
         horizontalAlignment: Qt.AlignHCenter
         verticalAlignment: Qt.AlignVCenter
-        font.family: "Helvetica Neue"
-        font.pixelSize: 12
+        font.family: Theme.sans
+        font.features: Theme.numbers
+        font.pixelSize: Theme.body
         readOnly: !control.editable
         validator: control.validator
         inputMethodHints: Qt.ImhFormattedNumbersOnly
@@ -23,11 +25,12 @@ SpinBox {
         x: parent.width - width
         height: parent.height
         width: 30
-        color: control.up.pressed ? "#22303d" : "transparent"
+        radius: Theme.radius
+        color: control.up.pressed ? Theme.surfaceContainerHighest : "transparent"
         Text {
             anchors.centerIn: parent
             text: "+"
-            color: "#8d9aaa"
+            color: Theme.onSurfaceVariant
             font.pixelSize: 14
         }
     }
@@ -35,18 +38,19 @@ SpinBox {
         x: 0
         height: parent.height
         width: 30
-        color: control.down.pressed ? "#22303d" : "transparent"
+        radius: Theme.radius
+        color: control.down.pressed ? Theme.surfaceContainerHighest : "transparent"
         Text {
             anchors.centerIn: parent
             text: "−"
-            color: "#8d9aaa"
+            color: Theme.onSurfaceVariant
             font.pixelSize: 14
         }
     }
     background: Rectangle {
-        radius: 7
-        color: "#0d131b"
-        border.color: control.activeFocus ? "#55e6a5" : "#273342"
-        border.width: control.activeFocus ? 2 : 1
+        radius: Theme.radius
+        color: control.enabled ? Theme.surfaceContainerHigh : Theme.surfaceContainerLow
+        border.color: Theme.primary
+        border.width: control.activeFocus ? 2 : 0
     }
 }

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Theme.js" as Theme
 
 // KAN-104: the chosen video files as GoPro chapter groups, ordered by their
 // names and checked against their metadata. Missing, duplicate, unreadable
@@ -10,6 +11,7 @@ import QtQuick.Layouts
 Dialog {
     id: root
     objectName: "videoChaptersDialog"
+    font.family: Theme.sans
     title: qsTr("Video chapters")
     modal: true
     anchors.centerIn: parent
@@ -57,13 +59,13 @@ Dialog {
         RowLayout {
             visible: root.review.state === "probing"
             BusyIndicator { running: parent.visible; Layout.preferredWidth: 24; Layout.preferredHeight: 24 }
-            Label { text: root.review.message; color: "#91a0b2" }
+            Label { text: root.review.message; color: Theme.onSurfaceVariant }
         }
         Label {
             Layout.fillWidth: true
             visible: root.review.state === "error"
             text: root.review.message
-            color: "#ff9585"
+            color: Theme.error
             wrapMode: Text.WordWrap
         }
         ScrollView {
@@ -94,7 +96,7 @@ Dialog {
                                     .arg(groupBlock.modelData.chapters.length)
                                 : qsTr("%1 · ordinary video · %2").arg(groupBlock.modelData.key).arg(root.durationText(groupBlock.modelData.totalDuration))
                             font.weight: Font.DemiBold
-                            color: "#f2f6fb"
+                            color: Theme.onSurface
                         }
                         Label {
                             objectName: "videoChapterIssues-" + groupBlock.index
@@ -104,7 +106,7 @@ Dialog {
                                 + (groupBlock.modelData.manualOrder ? (groupBlock.modelData.issues.length ? "\n" : "") + qsTr("Order changed by you.") : "")
                             wrapMode: Text.WordWrap
                             font.pixelSize: 11
-                            color: groupBlock.modelData.needsReview ? "#d6a457" : "#91a0b2"
+                            color: groupBlock.modelData.needsReview ? Theme.warning : Theme.onSurfaceVariant
                         }
                         Repeater {
                             model: groupBlock.modelData.chapters
@@ -118,7 +120,7 @@ Dialog {
                                     text: (chapterRow.index + 1) + ". " + root.chapterText(chapterRow.modelData)
                                     elide: Text.ElideRight
                                     font.pixelSize: 12
-                                    color: chapterRow.modelData.probed ? "#dce4ee" : "#ff9585"
+                                    color: chapterRow.modelData.probed ? Theme.onSurface : Theme.error
                                 }
                                 FeButton {
                                     objectName: "videoChapterUp-" + groupBlock.index + "-" + chapterRow.index
@@ -146,7 +148,7 @@ Dialog {
                             text: qsTr("Left out: %1").arg(groupBlock.modelData.duplicates.map(entry => entry.path).join(", "))
                             wrapMode: Text.WrapAnywhere
                             font.pixelSize: 11
-                            color: "#91a0b2"
+                            color: Theme.onSurfaceVariant
                         }
                         FeButton {
                             objectName: "useVideoChapterGroup-" + groupBlock.index
@@ -163,7 +165,7 @@ Dialog {
                     text: qsTr("A recording's chapters play as one continuous video, in the order shown. Exporting it is not available yet.")
                     wrapMode: Text.WordWrap
                     font.pixelSize: 11
-                    color: "#657386"
+                    color: Theme.outline
                 }
             }
         }

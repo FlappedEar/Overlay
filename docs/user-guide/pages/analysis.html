@@ -112,7 +112,7 @@
       <li><strong>Attach a recording…</strong> adds another file of the same session as an alternative after showing the GPS evidence. You can attach straight after an import: the day's analysis finishing in the background does not interrupt the review. A change to the day's recordings while the review is open does; choose the file again.</li>
       <li><strong>Make primary</strong> makes an alternative the recording used for laps and analysis. Laps are derived again; check the video synchronization afterwards.</li>
       <li><strong>Check clock</strong> measures how the alternative's clock lines up with the primary (offset, drift, uncertainty). It only reports; both recordings stay usable on their own.</li>
-      <li><strong>Fuse…</strong> adds channels from an alternative to the primary, after a successful clock check. Each channel that conflicts needs a rule (keep the primary, fill the primary's gaps, or prefer the alternative) before <strong>Approve fusion</strong> is enabled. Channels with different units are not fused. <strong>Remove fusion</strong> undoes it.</li>
+      <li><strong>Fuse…</strong> adds channels from an alternative to the primary, after a successful clock check. Each channel that conflicts needs a rule (keep the primary, fill the primary's gaps, or prefer the alternative) before <strong>Approve fusion</strong> is enabled. Channels with different units are not fused. VBO files declare no units, so a VBO channel is matched to the other recording's unit only when their values agree; otherwise it is listed as not fused. <strong>Remove fusion</strong> undoes it.</li>
     </ul>
   </li>
 </ul>
