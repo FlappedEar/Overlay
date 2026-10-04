@@ -95,7 +95,8 @@ double fusionConflictTolerance(const QString &unit, const double overlapRange)
     if (u == QLatin1String("km/h") || u == QLatin1String("kmh") || u == QLatin1String("kph")) return 2.0;
     if (u == QLatin1String("%")) return 3.0;
     if (u == QLatin1String("g")) return 0.05;
-    if (u == QLatin1String("c") || u == QLatin1String("°c") || u == QLatin1String("degc")) return 2.0;
+    // u"°c": a QLatin1String of this UTF-8 source never matched "°C" (KAN-184).
+    if (u == QLatin1String("c") || u == QStringView(u"\u00b0c") || u == QLatin1String("degc")) return 2.0;
     if (u == QLatin1String("rpm")) return 100.0;
     return std::max(1e-9, 0.05 * std::abs(overlapRange));
 }
@@ -167,7 +168,9 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
             if (existing == byKey.cend()) continue; // added earlier by another alternative under a different key
             auto &fused = result.channels[*existing];
             if (fused.rule != QLatin1String("primary")) continue; // already decided by an earlier alternative
-            if (fused.unit.trimmed().compare(channel.unit.trimmed(), Qt::CaseInsensitive) != 0) {
+            const auto primaryUnit = fused.unit.trimmed(), alternativeUnit = channel.unit.trimmed();
+            const bool oneUndeclared = primaryUnit.isEmpty() != alternativeUnit.isEmpty();
+            if (!oneUndeclared && primaryUnit.compare(alternativeUnit, Qt::CaseInsensitive) != 0) {
                 result.unitMismatches.append(key + QStringLiteral(": ") + source.sourceId);
                 continue;
             }
@@ -183,14 +186,27 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
                 low = std::min(low, *reference);
                 high = std::max(high, *reference);
             }
-            fused.comparedSourceId = source.sourceId;
-            fused.comparedSamples = differences.size();
+            double medianDifference = 0.0;
+            bool conflicting = false;
             if (!differences.isEmpty()) {
                 std::nth_element(differences.begin(), differences.begin() + differences.size() / 2, differences.end());
-                fused.medianDifference = differences[differences.size() / 2];
-                fused.conflicting = differences.size() >= 10
-                    && fused.medianDifference > fusionConflictTolerance(fused.unit, high - low);
+                medianDifference = differences[differences.size() / 2];
+                // An undeclared unit takes the declared side's tolerance.
+                conflicting = differences.size() >= 10
+                    && medianDifference > fusionConflictTolerance(primaryUnit.isEmpty() ? alternativeUnit : primaryUnit,
+                        high - low);
             }
+            // A unit only one side declares (VBO declares none, KAN-184) counts
+            // as the same unit only when at least 10 samples agree; otherwise
+            // it is a mismatch, so values in another scale are never fused.
+            if (oneUndeclared && (differences.size() < 10 || conflicting)) {
+                result.unitMismatches.append(key + QStringLiteral(": ") + source.sourceId);
+                continue;
+            }
+            fused.comparedSourceId = source.sourceId;
+            fused.comparedSamples = differences.size();
+            fused.medianDifference = medianDifference;
+            fused.conflicting = conflicting;
 
             const auto chosen = policy.rules.constFind(key);
             const bool ruled = chosen != policy.rules.cend() && chosen->first == source.sourceId;

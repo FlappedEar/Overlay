@@ -593,6 +593,11 @@ Times move onto the primary clock as **primary time = source time + offset
 - **Units** must match exactly. A mismatch (for example m/s against km/h)
   is listed, and that channel is neither compared nor fused. Nothing is
   rescaled.
+- **A unit only one side declares** (VBO channels declare none, RCZ
+  channels do; KAN-184) counts as the declared unit only when at least 10
+  samples compare and agree within that unit's tolerance. Otherwise the
+  channel is listed as a unit mismatch, so values in another scale are
+  never fused. The output keeps the primary's unit.
 
 **No resampling.** Every output sample is a real sample of one source with
 its timestamp transformed; nothing is interpolated. Gaps that neither
@@ -612,7 +617,8 @@ The review shows:
 - every resulting channel: the ones added, with how much of the run they
   cover and their own sample spacing, and each channel both recordings
   have, with its median difference over the compared samples;
-- the channels left out because their units differ.
+- the channels left out because their units differ, or because one
+  recording declares no unit and the values do not agree.
 
 **Approving.**
 - For a channel both recordings have, you can choose to keep the primary,
