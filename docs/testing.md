@@ -9,6 +9,8 @@ ctest --test-dir build-native --output-on-failure
 
 Run the local gate appropriate to the change before claiming a behavior works. Cloud CI is enabled for macOS Debug and Release by owner direction; Windows CI remains paused, and the owner validates Windows locally ([2 October 2026](windows-validation-2026-10-02.md)). Follow the current [local task workflow](development-workflow.md).
 
+Claude Code cloud sessions (Linux) get Qt 6.8.3 from conda-forge through the SessionStart hook in `.claude/hooks/session-start.sh`, which sets `CMAKE_PREFIX_PATH` and `QT_QPA_PLATFORM=offscreen`. Linux is not a CI platform: report Linux results separately from macOS CI. Export tests need FFmpeg 8.1 or newer on `PATH`; the Ubuntu package (6.1.1) fails the composition-filter preflight.
+
 The native suite assigns a unique test application identity and checks a default `QSettings` round trip before controller tests run. It retains the platform's native settings backend, including the Windows registry, and clears that test namespace afterward. Recovery cleanup failures use the existing injected deletion operation so stale-snapshot and Save As assertions run on every platform; these checks do not replace native Windows ACL-denial coverage. File-content checks close their read handles before attempting atomic replacement.
 
 ## M1 acceptance (KAN-28)
