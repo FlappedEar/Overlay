@@ -2747,7 +2747,7 @@ ApplicationWindow {
                     Layout.preferredHeight: 188
                     radius: Theme.radius
                     color: Theme.surfaceContainer
-                    border.color: appController.videoName ? "transparent" : Theme.outlineVariant
+                    border.color: "transparent"
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 16
@@ -2794,7 +2794,7 @@ ApplicationWindow {
                     Layout.preferredHeight: 188
                     radius: Theme.radius
                     color: Theme.surfaceContainer
-                    border.color: appController.telemetryName ? "transparent" : Theme.outlineVariant
+                    border.color: "transparent"
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 16
@@ -2840,7 +2840,7 @@ ApplicationWindow {
                     Layout.preferredHeight: 188
                     radius: Theme.radius
                     color: Theme.surfaceContainer
-                    border.color: Theme.outlineVariant
+                    border.color: "transparent"
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 16

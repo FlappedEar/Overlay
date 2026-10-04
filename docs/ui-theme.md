@@ -59,13 +59,20 @@ Type: `sans` (Sora) with `numbers` (`tnum`, tabular digits) for interface text,
 desktop density (12 px body text, 32 and 38 px control heights); Telemetry's
 44 to 48 px touch targets are a mobile rule.
 
-## Scope and order
+## Scope
 
-1. Theme, fonts and shared controls (this step).
-2. Editor window: `Main.qml` bars, preview surround, timeline, status bar,
-   welcome screen, recovery banner, `WidgetOverlay` selection handle,
-   `VideoChaptersDialog`, `StartupError`.
-3. `InspectorPanel.qml`.
+Restyled (KAN-187): the shared controls and `FeLabel`; `Main.qml` (bars,
+preview surround, timeline and cue marks, status bar, welcome screen, export
+dialog, recovery and other dialogs, menus); the `WidgetOverlay` selection
+outline and resize handle; `InspectorPanel.qml`; `VideoChaptersDialog`;
+`StartupError`. `Main.qml` sets the full Basic-style palette from the theme, so
+standard dialogs, menus and dialog buttons follow it. Editor text uses
+`FeLabel` (or sets `font.family: Theme.sans`); the window's own `font` is left
+alone, because it would also reach the overlay widgets' labels in the preview
+but not in export.
+
+Widget colour defaults shown in the inspector (`colorValue: ... || "#..."` and
+the tyre `fallback` colours) are overlay content and stay as they are.
 
 Not restyled: the Lap Analysis window and its panels and dialogs, and
 `BatchImportDialog`, which leave this app under KAN-166; they only pick up the
