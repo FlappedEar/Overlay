@@ -12937,6 +12937,70 @@ void TelemetryTests::preservesRecoveryAcrossFailedSave()
     QVERIFY(!QFileInfo(recoveryPath).exists());
 }
 
+void TelemetryTests::offersRecoveryWhenAnotherAppSavedTheSameRevision()
+{
+    // KAN-183: FlappedEar Telemetry saves the same document with its own
+    // revision count. A save of ours at the same revision makes the snapshot
+    // stale; theirs must not, or our unsaved edits would be dropped.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QSettings settings;
+    settings.clear();
+    settings.sync();
+    const QString projectPath = directory.filePath(QStringLiteral("saved.fetproject"));
+    const QString recoveryPath = directory.filePath(QStringLiteral("recovery.json"));
+    QVERIFY(writeBytes(projectPath, QJsonDocument(testProject(1.0)).toJson()));
+
+    quint64 snapshotRevision = 0;
+    {
+        AppController controller(nullptr, recoveryPath);
+        controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
+        QTRY_VERIFY(!controller.projectLoading());
+        controller.setSyncOffset(3.0);
+        QVERIFY(controller.saveCurrentProject());
+        const auto saved = QJsonDocument::fromJson(readBytes(projectPath)).object();
+        QVERIFY(!saved.value("documentState").toObject().value("saveId").toString().isEmpty());
+        controller.setSyncOffset(8.0); // unsaved edit, kept only in recovery
+        QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
+        snapshotRevision = QJsonDocument::fromJson(readBytes(recoveryPath)).object().value("revision").toVariant().toULongLong();
+        QVERIFY(snapshotRevision > 0);
+    }
+
+    // Another application saves different content at the snapshot's revision.
+    auto foreign = QJsonDocument::fromJson(readBytes(projectPath)).object();
+    auto state = foreign.value("documentState").toObject();
+    state.insert("savedRevision", QString::number(snapshotRevision));
+    state.insert("saveId", QStringLiteral("telemetry-save"));
+    foreign.insert("documentState", state);
+    QVERIFY(writeBytes(projectPath, QJsonDocument(foreign).toJson()));
+    {
+        AppController restarted(nullptr, recoveryPath);
+        QVERIFY(restarted.recoveryPending());
+        QVERIFY(QFileInfo(recoveryPath).isFile());
+    }
+
+    // A stale classification deletes the snapshot, so each check below starts
+    // from this copy.
+    const QByteArray snapshot = readBytes(recoveryPath);
+
+    // A legacy copy without a saveId keeps the old rule: the snapshot is stale.
+    state.remove("saveId");
+    foreign.insert("documentState", state);
+    QVERIFY(writeBytes(projectPath, QJsonDocument(foreign).toJson()));
+    {
+        AppController legacy(nullptr, recoveryPath);
+        QVERIFY(!legacy.recoveryPending());
+    }
+
+    // The same copy carrying our own saveId is our save: the snapshot is stale.
+    QVERIFY(writeBytes(recoveryPath, snapshot));
+    state.insert("saveId", settings.value("project/ownSaveId").toString());
+    foreign.insert("documentState", state);
+    QVERIFY(writeBytes(projectPath, QJsonDocument(foreign).toJson()));
+    AppController ours(nullptr, recoveryPath);
+    QVERIFY(!ours.recoveryPending());
+}
+
 void TelemetryTests::doesNotOfferStaleRecoveryAfterSuccessfulSaveCleanupFailure()
 {
     QTemporaryDir directory;
@@ -15565,53 +15629,3 @@ int main(int argc, char *argv[])
     return telemetryTestsMain(argc, argv);
 }
 #include "TelemetryTests.moc"
-
-void TelemetryTests::offersRecoveryWhenAnotherAppSavedTheSameRevision()
-{
-    // KAN-183: FlappedEar Telemetry saves the same document with its own
-    // revision count. A save of ours at the same revision makes the snapshot
-    // stale; theirs must not, or our unsaved edits would be dropped.
-    QTemporaryDir directory;
-    QVERIFY(directory.isValid());
-    QSettings settings;
-    settings.clear();
-    settings.sync();
-    const QString projectPath = directory.filePath(QStringLiteral("saved.fetproject"));
-    const QString recoveryPath = directory.filePath(QStringLiteral("recovery.json"));
-    QVERIFY(writeBytes(projectPath, QJsonDocument(testProject(1.0)).toJson()));
-
-    quint64 snapshotRevision = 0;
-    {
-        AppController controller(nullptr, recoveryPath);
-        controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
-        QTRY_VERIFY(!controller.projectLoading());
-        controller.setSyncOffset(3.0);
-        QVERIFY(controller.saveCurrentProject());
-        const auto saved = QJsonDocument::fromJson(readBytes(projectPath)).object();
-        QVERIFY(!saved.value("documentState").toObject().value("saveId").toString().isEmpty());
-        controller.setSyncOffset(8.0); // unsaved edit, kept only in recovery
-        QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
-        snapshotRevision = QJsonDocument::fromJson(readBytes(recoveryPath)).object().value("revision").toVariant().toULongLong();
-        QVERIFY(snapshotRevision > 0);
-    }
-
-    // Another application saves different content at the snapshot's revision.
-    auto foreign = QJsonDocument::fromJson(readBytes(projectPath)).object();
-    auto state = foreign.value("documentState").toObject();
-    state.insert("savedRevision", QString::number(snapshotRevision));
-    state.insert("saveId", QStringLiteral("telemetry-save"));
-    foreign.insert("documentState", state);
-    QVERIFY(writeBytes(projectPath, QJsonDocument(foreign).toJson()));
-    {
-        AppController restarted(nullptr, recoveryPath);
-        QVERIFY(restarted.recoveryPending());
-        QVERIFY(QFileInfo(recoveryPath).isFile());
-    }
-
-    // The same copy carrying our own saveId is our save: the snapshot is stale.
-    state.insert("saveId", settings.value("project/ownSaveId").toString());
-    foreign.insert("documentState", state);
-    QVERIFY(writeBytes(projectPath, QJsonDocument(foreign).toJson()));
-    AppController ours(nullptr, recoveryPath);
-    QVERIFY(!ours.recoveryPending());
-}

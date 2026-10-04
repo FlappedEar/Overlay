@@ -615,10 +615,18 @@ bool DocumentController::saveProject(const QUrl &url)
     }
     // Remember the saveId before writing: a crash after the write must not make
     // this save look like another application's.
+    const QVariant previousSaveId = m_settings.value(OwnSaveIdKey);
     m_settings.setValue(OwnSaveIdKey, saveId);
     m_settings.sync();
     const ProjectWriter::Result writeResult = m_projectWriter.write(path, payload);
     if (!writeResult.success) {
+        // The file on disk still carries the previous saveId.
+        if (previousSaveId.isValid()) {
+            m_settings.setValue(OwnSaveIdKey, previousSaveId);
+        } else {
+            m_settings.remove(OwnSaveIdKey);
+        }
+        m_settings.sync();
         AppLog::error(QStringLiteral("Project save failed: %1: %2").arg(path, writeResult.error));
         m_host.showStatus(QStringLiteral("Project save error: %1").arg(writeResult.error));
         if (m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) {
