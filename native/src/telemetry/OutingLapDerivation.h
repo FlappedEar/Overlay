@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QVector>
 #include <atomic>
@@ -53,5 +54,18 @@ struct OutingLapDerivation {
 // rows are empty).
 [[nodiscard]] OutingLapDerivation deriveOutingLaps(const QJsonArray &sources, const QString &projectPath,
     const QHash<QString, OutingRunDerivation> &cache, const std::shared_ptr<std::atomic_bool> &cancellation);
+
+// Each run's track configuration for ranking: the inferred one when the
+// route was grouped, otherwise the configuration saved with the run.
+[[nodiscard]] QHash<QString, QJsonObject> outingRunConfigurations(const QJsonArray &sources,
+    const InferredTrackGroups &groups);
+
+// The compatibility group laps are ranked in (KAN-185). A saved choice wins
+// while it is still a resolved group of `rows`, and is otherwise empty (no
+// ranking until it is chosen again). Without a saved choice: the first
+// resolved group, by id, that has a run outside `staleRunIds`.
+[[nodiscard]] QString outingComparisonGroup(const QVector<OutingLapRow> &rows,
+    const QHash<QString, QJsonObject> &configurations, const QString &savedGroupId,
+    const QSet<QString> &staleRunIds = {});
 
 } // namespace FlappedEar

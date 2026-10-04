@@ -174,12 +174,7 @@ void AnalysisController::refreshOutingCompatibility()
     if (m_outingLapRequestedKey != outingLapKey() || m_outingLapGeneration != sourceGeneration()) return;
     m_outingComparisonGroupId = m_document.analysisProject().value("event").toObject()
         .value("analysisDecisions").toObject().value("comparisonGroupId").toString();
-    QHash<QString, QJsonObject> configurations;
-    for (const auto &value : outingLapSources()) {
-        const auto source = value.toObject();
-        const auto runId = source.value("runId").toString();
-        configurations.insert(runId, m_outingInferredGroups.configurations.value(runId, source.value("trackConfiguration").toObject()));
-    }
+    const auto configurations = outingRunConfigurations(outingLapSources(), m_outingInferredGroups);
     m_outingRunConfigurations = configurations;
     QMap<QString, QVariantMap> groups;
     QHash<QString, QVariantList> membersByGroup, eligibleByGroup;
@@ -199,12 +194,9 @@ void AnalysisController::refreshOutingCompatibility()
             eligibleByGroup[id].append(row.value("reference"));
         }
     }
-    if (m_outingComparisonGroupId.isEmpty()) {
-        for (auto it = groups.cbegin(); it != groups.cend(); ++it)
-            if (it.value().value("resolved").toBool() && it.value().value("available").toBool()) { m_outingComparisonGroupId = it.key(); break; }
-    }
-    if (!groups.contains(m_outingComparisonGroupId)
-        || !groups.value(m_outingComparisonGroupId).value("resolved").toBool()) m_outingComparisonGroupId.clear();
+    // KAN-185: the same choice the editor's automatic best lap makes.
+    m_outingComparisonGroupId = outingComparisonGroup(m_outingRawLapRows, configurations,
+        m_outingComparisonGroupId, m_outingStaleRunIds);
     const auto referenceConfig = groups.value(m_outingComparisonGroupId).value("available").toBool()
         ? QJsonObject::fromVariantMap(groups.value(m_outingComparisonGroupId).value("configuration").toMap()) : QJsonObject{};
     m_outingCompatibilityGroups.clear();
@@ -432,42 +424,14 @@ bool AnalysisController::setRunTrackConfigurations(
 
 QJsonArray AnalysisController::outingLapSources() const
 {
-    QJsonArray sources;
-    const auto project = m_document.analysisProject();
-    for (const auto &value : project.value("event").toObject().value("runs").toArray()) {
-        const auto run = value.toObject();
-        const auto telemetry = run.value("sources").toObject().value("telemetry").toArray();
-        for (const auto &item : telemetry) {
-            const auto source = item.toObject();
-            if (source.value("id") != run.value("primaryTelemetrySourceId")) continue;
-            QJsonObject descriptor{{"eventId", project.value("event").toObject().value("id")}, {"runId", run.value("id")}, {"name", run.value("name")},
-                {"sourceId", source.value("id")}, {"reference", source.value("reference")},
-                {"expectedRevision", QString::fromLatin1(EventProjectCodec::sourceContentRevision(source))},
-                {"documentGeneration", QString::number(m_outingDocumentGeneration)},
-                {"runGeneration", QString::number(m_outingRunGenerations.value(run.value("id").toString()))},
-                {"inference", run.value("trackInference")}, {"inferenceVersion", trackInferenceVersion},
-                {"trackConfiguration", EventProjectCodec::trackConfiguration(run)},
-                {"derivationKey", QString::fromLatin1(EventProjectCodec::lapDerivationKey(run))}};
-            // KAN-103: an approved fusion applies only while both recordings
-            // are the content it was reviewed against.
-            if (run.contains("fusion")) {
-                auto fusion = run.value("fusion").toObject();
-                QJsonObject alternative;
-                for (const auto &other : telemetry)
-                    if (other.toObject().value("id") == fusion.value("alternativeSourceId")) alternative = other.toObject();
-                const auto primaryRevision = EventProjectCodec::sourceContentRevision(source);
-                const auto alternativeRevision = EventProjectCodec::sourceContentRevision(alternative);
-                if (!primaryRevision.isEmpty() && primaryRevision == fusion.value("primarySourceRevision").toString().toLatin1()
-                    && !alternativeRevision.isEmpty()
-                    && alternativeRevision == fusion.value("alternativeSourceRevision").toString().toLatin1()) {
-                    fusion.insert("alternativeReference", alternative.value("reference"));
-                    descriptor.insert("fusion", fusion);
-                } else {
-                    descriptor.insert("fusionNeedsRevalidation", true);
-                }
-            }
-            sources.append(descriptor);
-        }
+    // The document's sources plus this controller's generations, which force a
+    // fresh derivation after sources are replaced or a run is relinked.
+    auto sources = EventProjectCodec::outingLapSources(m_document.analysisProject());
+    for (qsizetype i = 0; i < sources.size(); ++i) {
+        auto source = sources[i].toObject();
+        source.insert("documentGeneration", QString::number(m_outingDocumentGeneration));
+        source.insert("runGeneration", QString::number(m_outingRunGenerations.value(source.value("runId").toString())));
+        sources[i] = source;
     }
     return sources;
 }

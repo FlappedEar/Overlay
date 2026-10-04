@@ -4,7 +4,7 @@
 # Run as: cmake -DSOURCE_DIR=<native/src> -P CheckTelemetryAppBoundary.cmake
 file(GLOB files
     "${SOURCE_DIR}/app/Analysis*" "${SOURCE_DIR}/app/Document*" "${SOURCE_DIR}/app/Telemetry*"
-    "${SOURCE_DIR}/app/VideoLink.h" "${SOURCE_DIR}/app/AppLog.*")
+    "${SOURCE_DIR}/app/VideoLink.h" "${SOURCE_DIR}/app/AppLog.*" "${SOURCE_DIR}/app/BestLapFinder.*")
 set(violations "")
 foreach(file IN LISTS files)
     file(STRINGS "${file}" lines REGEX "^[ \t]*#[ \t]*include")

@@ -25,6 +25,11 @@ void AppController::initializeDocument()
     connect(&m_document, &DocumentController::saveAsRequested, this, &AppController::saveAsRequested);
     connect(&m_document, &DocumentController::quitApproved, this, &AppController::quitApproved);
     connect(&m_document, &DocumentController::runRecordingsChanged, this, &AppController::runRecordingsChanged);
+    // KAN-185: keep a requested best lap current through edits and reloads.
+    connect(&m_document, &DocumentController::documentStateChanged, &m_bestLapFinder, &BestLapFinder::documentChanged);
+    connect(&m_document, &DocumentController::projectLoadChanged, &m_bestLapFinder, &BestLapFinder::documentChanged);
+    connect(&m_document, &DocumentController::sourceLoadStateChanged, &m_bestLapFinder, &BestLapFinder::documentChanged);
+    connect(&m_bestLapFinder, &BestLapFinder::resultChanged, this, &AppController::dayBestLapChanged);
 }
 
 bool AppController::acceptsEditorProject(const QJsonObject &project, const QString &projectPath)

@@ -3,6 +3,7 @@
 #include "project/ProjectSourceReference.h"
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QStringList>
 
@@ -45,6 +46,12 @@ public:
     // recording. The editor's lap navigation binds to it without analysis
     // state (KAN-166).
     [[nodiscard]] static QJsonObject primaryTelemetryBinding(const QJsonObject &project, const QString &runId);
+    // One lap-derivation source per run with a primary recording, in run
+    // order: the binding above plus the run name, saved track inference and
+    // configuration, and an approved fusion while both recordings are still
+    // the content it was reviewed against (KAN-103). deriveOutingLaps reads
+    // these; the editor's automatic best lap needs no analysis state (KAN-185).
+    [[nodiscard]] static QJsonArray outingLapSources(const QJsonObject &project);
     // All referenced path candidates, including inactive sources, for export protection.
     [[nodiscard]] static QStringList referencedPaths(const QJsonObject &project, const QString &projectPath);
 };
