@@ -414,6 +414,7 @@ void EventProjectTests::rejectsInvalidTrackConfigurations_data()
     QTest::newRow("unsupported-direction") << QString("direction") << QJsonValue("forward");
     QTest::newRow("empty-revision") << QString("gateRevision") << QJsonValue("");
     QTest::newRow("bad-revision") << QString("gateRevision") << QJsonValue("gates-v1:abc");
+    QTest::newRow("revision-trailing-newline") << QString("gateRevision") << QJsonValue("gates-v1:" + QString(64, 'a') + "\n"); // KAN-181
 }
 
 void EventProjectTests::rejectsInvalidTrackConfigurations()

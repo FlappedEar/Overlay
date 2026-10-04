@@ -65,7 +65,7 @@ bool validConfiguration(const QJsonObject &run)
     const auto layout = config.value("layoutId");
     const auto direction = config.value("direction");
     const auto revision = config.value("gateRevision");
-    static const QRegularExpression revisionPattern("^gates-v1:[0-9a-f]{64}$");
+    static const QRegularExpression revisionPattern("^gates-v1:[0-9a-f]{64}\\z"); // \z rejects a trailing newline (KAN-181)
     return (layout.isNull() || validText(layout, ProjectLimits::maximumIdCharacters))
         && direction.isString() && QStringList{"unknown", "clockwise", "counterclockwise"}.contains(direction.toString())
         && (revision.isNull() || (revision.isString() && revisionPattern.match(revision.toString()).hasMatch()))
