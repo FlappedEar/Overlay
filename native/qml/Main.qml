@@ -1378,7 +1378,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     visible: appController.dayBestLap.state === "loading"
                     text: qsTr("Finding the day's best lap…")
-                    color: "#91a0b2"
+                    color: Theme.onSurfaceVariant
                     wrapMode: Text.WordWrap
                     font.pixelSize: 10
                 }
