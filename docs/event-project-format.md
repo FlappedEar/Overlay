@@ -62,7 +62,8 @@ automatic evidence supplies the effective grouping configuration.
 
 `layoutId` is null or a nonblank ID up to 128 characters. Direction is `unknown`,
 `clockwise` or `counterclockwise`. `gateRevision` is null or `gates-v1:` followed by
-64 lowercase SHA-256 hex characters. Import derives a revision from the ordered
+64 lowercase SHA-256 hex characters, with nothing after them (a trailing newline
+makes the document invalid, KAN-181). Import derives a revision from the ordered
 source gate types and endpoints, normalizing explicit west-positive longitude to
 east-positive for identity only. Names/descriptions do not change the revision;
 endpoint, gate type/order or gate count changes do. Missing/ambiguous start gates,

@@ -69,7 +69,7 @@ bool knownDirection(const QJsonObject &config)
 }
 bool knownGates(const QJsonObject &config)
 {
-    static const QRegularExpression pattern("^gates-v1:[0-9a-f]{64}$");
+    static const QRegularExpression pattern("^gates-v1:[0-9a-f]{64}\\z"); // \z rejects a trailing newline (KAN-181)
     return pattern.match(config.value("gateRevision").toString()).hasMatch();
 }
 }
