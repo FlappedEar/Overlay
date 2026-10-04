@@ -8296,7 +8296,7 @@ void TelemetryTests::appliesTelemetryDesignLanguage()
         "  FeButton { objectName: 'accent'; accent: true; text: 'Export' }\n"
         "  FeButton { objectName: 'plain'; text: 'Open' }\n"
         "  FeTextField { objectName: 'field'; text: '1:23.456' } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath(QStringLiteral("ThemeProbe.qml"))));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> root(component.create());
     QVERIFY2(root, qPrintable(component.errorString()));
