@@ -1,6 +1,7 @@
 #include "app/ApplicationIdentity.h"
 #include "app/AppController.h"
 #include "app/AppLog.h"
+#include "app/BundledFonts.h"
 #include "app/GuiSessionLock.h"
 #include "app/LegacyStorageMigration.h"
 #include "export/TelemetryFrameRenderer.h"
@@ -583,6 +584,9 @@ int main(int argc, char *argv[])
     FlappedEar::AppLog::installQtMessageHandler();
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QGuiApplication app(argc, argv);
+    // Registered in every mode, so a widget font typed in the editor previews
+    // and exports alike.
+    FlappedEar::registerBundledFonts();
     FlappedEar::ApplicationIdentity::initialize();
     const bool applicationMode = !renderStillMode && !renderVisualSmokeMode && !renderVisualSmokeDarkMode
         && !exportWorkerMode

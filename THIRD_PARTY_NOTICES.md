@@ -7,6 +7,8 @@ license review, particularly if future builds bundle FFmpeg/HEVC components or m
 | --- | --- | --- | --- |
 | zlib 1.3.2 | Bounded native RCZ ZIP decompression; pinned upstream source, statically linked | zlib | https://zlib.net/zlib_license.html |
 | NSIS 3.12 | Windows installer compiler and installer stub; zlib compression selected | zlib/libpng for core and selected compression module | https://nsis.sourceforge.io/License |
+| Sora (Sora Project Authors) | Editor interface font, bundled in `native/resources/fonts` | SIL Open Font License 1.1 (`OFL-Sora.txt`) | https://github.com/sora-xor/sora-font |
+| JetBrains Mono (JetBrains Mono Project Authors) | Editor monospaced font for times, bundled in `native/resources/fonts` | SIL Open Font License 1.1 (`OFL-JetBrainsMono.txt`) | https://github.com/JetBrains/JetBrainsMono |
 | Qt 6 | Native UI, multimedia, application, and test framework | LGPL-3.0/GPL/commercial, depending on distribution terms | https://www.qt.io/licensing |
 
 The source tree does not vendor Electron, React, Node packages, MapLibre, external FFmpeg command-line binaries, or an HEVC encoder. Export discovers a user-installed FFmpeg at runtime and may use its `libx265` encoder when a

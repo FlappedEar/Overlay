@@ -61,6 +61,10 @@ def register_branding(work: Path) -> None:
     rcc = Path(sys.executable).with_name("pyside6-rcc")
     subprocess.run([str(rcc), "--binary", str(qrc), "-o", str(rcc_binary)], check=True)
     QResource.registerResource(str(rcc_binary))
+    # The editor's bundled fonts (docs/ui-theme.md), as the application registers them.
+    from PySide6.QtGui import QFontDatabase
+    for font in sorted((NATIVE / "resources" / "fonts").glob("*.ttf")):
+        QFontDatabase.addApplicationFont(str(font))
 
 
 def default_settings(widget_type: str) -> dict:

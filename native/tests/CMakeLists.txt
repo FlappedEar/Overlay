@@ -27,6 +27,8 @@ qt_add_executable(flappedear_native_tests
     ../src/app/AppControllerAnalysis.cpp
     ../src/app/AppController.cpp
     ../src/app/AppController.h
+    ../src/app/BundledFonts.cpp
+    ../src/app/BundledFonts.h
 )
 target_compile_features(flappedear_native_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_native_tests PRIVATE flappedear_core Qt6::Concurrent Qt6::Gui Qt6::GuiPrivate Qt6::Multimedia Qt6::QuickControls2 Qt6::Test ZLIB::ZLIBSTATIC)
@@ -46,13 +48,20 @@ qt_add_resources(flappedear_native_tests "flappedear_test_qml"
         ../qml/widgets/TelemetryPanel.qml
         ../qml/widgets/TyresWidget.qml
 )
-# The application's logo, so production QML loaded by tests (and the user-guide
+# The application's logo and fonts, so production QML loaded by tests (and the user-guide
 # capture) shows it as the application does.
 qt_add_resources(flappedear_native_tests "flappedear_test_branding"
     PREFIX "/flappedear"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/.."
     FILES
         ../resources/branding/app-logo.png
+        ../resources/fonts/Sora-400.ttf
+        ../resources/fonts/Sora-500.ttf
+        ../resources/fonts/Sora-600.ttf
+        ../resources/fonts/Sora-700.ttf
+        ../resources/fonts/JetBrainsMono-500.ttf
+        ../resources/fonts/JetBrainsMono-600.ttf
+        ../resources/fonts/JetBrainsMono-700.ttf
 )
 target_compile_definitions(flappedear_native_tests PRIVATE
     GUI_SESSION_LOCK_HELPER_PATH="$<TARGET_FILE:flappedear_gui_session_lock_helper>"

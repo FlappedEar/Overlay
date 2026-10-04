@@ -292,6 +292,8 @@ qt_add_executable(flappedear_native MACOSX_BUNDLE
     src/app/AppControllerAnalysis.cpp
     src/app/AppController.cpp
     src/app/AppController.h
+    src/app/BundledFonts.cpp
+    src/app/BundledFonts.h
     src/main.cpp
     ${FLAPPEDEAR_PLATFORM_ICON}
 )
@@ -313,10 +315,27 @@ qt_add_resources(flappedear_native "flappedear_branding"
         resources/branding/app-logo.png
 )
 
+# Sora and JetBrains Mono, SIL Open Font License 1.1 (resources/fonts/OFL-*.txt),
+# the fonts of FlappedEar Telemetry's design language; registered in main.cpp.
+qt_add_resources(flappedear_native "flappedear_fonts"
+    PREFIX "/flappedear"
+    FILES
+        resources/fonts/Sora-400.ttf
+        resources/fonts/Sora-500.ttf
+        resources/fonts/Sora-600.ttf
+        resources/fonts/Sora-700.ttf
+        resources/fonts/JetBrainsMono-500.ttf
+        resources/fonts/JetBrainsMono-600.ttf
+        resources/fonts/JetBrainsMono-700.ttf
+        resources/fonts/OFL-Sora.txt
+        resources/fonts/OFL-JetBrainsMono.txt
+)
+
 qt_add_qml_module(flappedear_native
     URI FlappedEar
     VERSION 1.0
     QML_FILES
+        qml/Theme.js
         qml/ColorField.qml
         qml/AnalysisPanel.qml
         qml/BatchImportDialog.qml

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import "Theme.js" as Theme
 
 RowLayout {
     id: root
@@ -12,9 +13,9 @@ RowLayout {
     Rectangle {
         width: 32
         height: 32
-        radius: 7
+        radius: Theme.radius
         color: root.colorValue
-        border.color: "#526071"
+        border.color: Theme.outline
         MouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor

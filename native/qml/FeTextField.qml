@@ -1,21 +1,23 @@
 import QtQuick
 import QtQuick.Controls
+import "Theme.js" as Theme
 
 TextField {
     id: control
     implicitHeight: 36
-    color: control.readOnly ? "#b5c0cd" : "#e8edf4"
-    placeholderTextColor: "#596575"
-    selectionColor: "#55e6a5"
-    selectedTextColor: "#07140f"
+    color: control.readOnly ? Theme.onSurfaceVariant : Theme.onSurface
+    placeholderTextColor: Theme.outline
+    selectionColor: Theme.primary
+    selectedTextColor: Theme.onPrimary
     leftPadding: 11
     rightPadding: 11
-    font.family: "Helvetica Neue"
-    font.pixelSize: 12
+    font.family: Theme.sans
+    font.features: Theme.numbers
+    font.pixelSize: Theme.body
     background: Rectangle {
-        radius: 7
-        color: control.readOnly ? "#101923" : control.enabled ? "#0d131b" : "#10151c"
-        border.width: control.activeFocus ? 2 : 1
-        border.color: control.activeFocus ? "#55e6a5" : control.readOnly ? "#22303d" : "#273342"
+        radius: Theme.radius
+        color: control.readOnly || !control.enabled ? Theme.surfaceContainerLow : Theme.surfaceContainerHigh
+        border.width: control.activeFocus ? 2 : 0
+        border.color: Theme.primary
     }
 }

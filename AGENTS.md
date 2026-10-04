@@ -14,6 +14,9 @@
   at a clip boundary.
 - Do not rewrite working architecture without a concrete reason.
 - Keep telemetry parsing independent from QML and widget rendering.
+- Editor QML takes colours, fonts and corners from `native/qml/Theme.js` and the shared `Fe*`
+  controls, never its own hex values ([editor look](docs/ui-theme.md)). Overlay widgets keep their
+  own colours.
 - Keep video and media code independent from widget UI.
 - Keep synchronization in one central telemetry module.
 - Heart Rate comes from the imported VBO/RCZ session; do not add a separate HR source.
