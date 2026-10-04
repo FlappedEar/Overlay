@@ -46,26 +46,6 @@ void AppController::initializeAnalysis()
     m_analysis.setVideoLink(this);
 }
 
-QJsonObject AppController::activeLapBinding() const
-{
-    for (auto value : m_analysis.outingLapSources()) {
-        auto source = value.toObject();
-        if (source.value("runId").toString() != activeRunId()) continue;
-        source.insert("sourceRevision", QString::fromLatin1(m_loadedSourceRevision));
-        source.remove("reference"); source.remove("name"); source.remove("trackConfiguration");
-        return source;
-    }
-    return {};
-}
-
-void AppController::applyActiveLapExclusions()
-{
-    const auto exclusions = currentProjectObject().value("event").toObject().value("lapExclusions").toArray();
-    applyLapExclusions(m_lapSession, activeLapBinding(), exclusions);
-    m_previewRenderContext.setLapSession(m_lapSession);
-    emit lapNavigationChanged();
-    emit liveValuesChanged();
-}
 
 // AppController's VideoLink (the overlay side). The lap's run must be
 // the active, loaded one; a lap from another run has no video rather than
@@ -503,7 +483,7 @@ QStringList AppController::comparisonPreferredChannels() const
 
 QString AppController::formatElapsedTime(double seconds)
 {
-    return AnalysisController::formatElapsedTime(seconds);
+    return FlappedEar::formatElapsedTime(seconds);
 }
 
 QVariantMap AppController::comparisonTimeLossObservations() const

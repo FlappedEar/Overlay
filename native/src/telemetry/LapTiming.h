@@ -116,4 +116,8 @@ void recomputeLapRanking(LapSession &session);
     const LapDetectionOptions &options = {},
     const CancellationCheck &cancelled = {});
 
+// Lap and split durations as the editor and analysis show them: "s.mmm s"
+// under a minute, otherwise "m:ss.mmm"; an em dash when not finite.
+[[nodiscard]] QString formatElapsedTime(double seconds);
+
 } // namespace FlappedEar

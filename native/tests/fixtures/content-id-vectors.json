@@ -26,7 +26,7 @@
             "trackConfiguration": "{\"layoutId\":\"x\",\"direction\":\"clockwise\",\"gateRevision\":null,\"sourceId\":\"s\",\"sourceFingerprint\":{}}"
         },
         {
-            "id": "compatibility-v1:bfcf61396f55ed76212ec1e0f716ddcca74322526929e0171b11989b41f339f1",
+            "id": null,
             "name": "gate-revision-trailing-newline",
             "trackConfiguration": "{\"layoutId\":\"x\",\"direction\":\"clockwise\",\"gateRevision\":\"gates-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n\",\"sourceId\":\"s\",\"sourceFingerprint\":{}}"
         },

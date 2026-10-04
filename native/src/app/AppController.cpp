@@ -14,6 +14,7 @@
 #include "project/BoundedJsonLoader.h"
 #include "project/ProjectLimits.h"
 #include "project/EventProjectCodec.h"
+#include "telemetry/ChannelSeries.h"
 #include "telemetry/TelemetrySyncEngine.h"
 #include "telemetry/VboParser.h"
 #include "telemetry/TelemetrySource.h"
@@ -834,6 +835,26 @@ void AppController::startVideoProbe(
     }));
 }
 
+// The editor's lap navigation and export bind saved lap exclusions to the
+// active run's primary recording, read from the document (KAN-166).
+QJsonObject AppController::activeLapBinding() const
+{
+    auto binding = EventProjectCodec::primaryTelemetryBinding(currentProjectObject(), activeRunId());
+    if (binding.isEmpty()) return {};
+    binding.remove("reference");
+    binding.insert("sourceRevision", QString::fromLatin1(m_loadedSourceRevision));
+    return binding;
+}
+
+void AppController::applyActiveLapExclusions()
+{
+    const auto exclusions = currentProjectObject().value("event").toObject().value("lapExclusions").toArray();
+    applyLapExclusions(m_lapSession, activeLapBinding(), exclusions);
+    m_previewRenderContext.setLapSession(m_lapSession);
+    emit lapNavigationChanged();
+    emit liveValuesChanged();
+}
+
 void AppController::startVboLoad(
     const QString &path, const quint64 generation, const bool markDocumentDirty,
     QJsonObject expectedFingerprint, const bool relink)
@@ -848,12 +869,9 @@ void AppController::startVboLoad(
     emit sourceLoadStateChanged();
     QByteArray expectedRevision;
     if (!expectedFingerprint.isEmpty()) {
-        for (const auto &value : m_analysis.outingLapSources()) {
-            const auto source = value.toObject();
-            if (source.value("runId").toString() == activeRunId()
-                && source.value("reference").toObject().value("fingerprint").toObject() == expectedFingerprint)
-                expectedRevision = source.value("expectedRevision").toString().toLatin1();
-        }
+        const auto binding = EventProjectCodec::primaryTelemetryBinding(currentProjectObject(), activeRunId());
+        if (binding.value("reference").toObject().value("fingerprint").toObject() == expectedFingerprint)
+            expectedRevision = binding.value("expectedRevision").toString().toLatin1();
     }
     m_vboLoadWatcher.setFuture(QtConcurrent::run(
         [path, generation, cancellation, expectedRevision, expectedFingerprint = std::move(expectedFingerprint), relink] {
@@ -1191,7 +1209,7 @@ QVariantMap AppController::telemetrySeries(
     const auto telemetryStart = videoToTelemetryTime(videoStart, m_sync);
     const auto telemetryEnd = videoToTelemetryTime(videoEnd, m_sync);
     if (!telemetryStart || !telemetryEnd) return {};
-    return AnalysisController::sessionSeries(*m_session, channelName, *telemetryStart, *telemetryEnd, maximumPoints);
+    return channelSeries(*m_session, channelName, *telemetryStart, *telemetryEnd, maximumPoints);
 }
 
 int AppController::lapNumberAtPlayback() const

@@ -36,6 +36,7 @@ private slots:
     void rejectsInvalidTrackConfigurations_data();
     void rejectsInvalidTrackConfigurations();
     void invalidatesDerivationOnConfigurationAndSourceChanges();
+    void bindsPrimaryTelemetryFromTheDocument();
     void clearsConfigurationOnSourceReplacementOnly();
     void revisionsReflectPhysicalGatesWithoutInferringDirection();
     void preservesFiniteExtremeSyncForGuardedConsumers();
@@ -414,6 +415,7 @@ void EventProjectTests::rejectsInvalidTrackConfigurations_data()
     QTest::newRow("unsupported-direction") << QString("direction") << QJsonValue("forward");
     QTest::newRow("empty-revision") << QString("gateRevision") << QJsonValue("");
     QTest::newRow("bad-revision") << QString("gateRevision") << QJsonValue("gates-v1:abc");
+    QTest::newRow("revision-trailing-newline") << QString("gateRevision") << QJsonValue("gates-v1:" + QString(64, 'a') + "\n"); // KAN-181
 }
 
 void EventProjectTests::rejectsInvalidTrackConfigurations()
@@ -450,6 +452,29 @@ void EventProjectTests::invalidatesDerivationOnConfigurationAndSourceChanges()
     reference.insert("fingerprint", QJsonObject{{"digest", "new"}}); source.insert("reference", reference); telemetry[0] = source;
     sources.insert("telemetry", telemetry); run.insert("sources", sources);
     QVERIFY(EventProjectCodec::lapDerivationKey(run) != key);
+}
+
+void EventProjectTests::bindsPrimaryTelemetryFromTheDocument()
+{
+    auto project = Fixture::project();
+    const auto run = Fixture::runs(project)[0].toObject();
+    QJsonObject primary;
+    for (const auto &value : run.value("sources").toObject().value("telemetry").toArray())
+        if (value.toObject().value("id") == run.value("primaryTelemetrySourceId")) primary = value.toObject();
+    QVERIFY(!primary.isEmpty());
+    const auto binding = EventProjectCodec::primaryTelemetryBinding(project, "run-a");
+    QCOMPARE(binding.value("eventId").toString(), QString("event-identity"));
+    QCOMPARE(binding.value("runId").toString(), QString("run-a"));
+    QCOMPARE(binding.value("sourceId"), run.value("primaryTelemetrySourceId"));
+    QCOMPARE(binding.value("reference"), primary.value("reference"));
+    QCOMPARE(binding.value("expectedRevision").toString(), QString::fromLatin1(EventProjectCodec::sourceContentRevision(primary)));
+    QCOMPARE(binding.value("derivationKey").toString(), QString::fromLatin1(EventProjectCodec::lapDerivationKey(run)));
+    QCOMPARE(EventProjectCodec::primaryTelemetryBinding(project, "run-b").value("runId").toString(), QString("run-b"));
+    QVERIFY(EventProjectCodec::primaryTelemetryBinding(project, "missing-run").isEmpty());
+    auto runs = Fixture::runs(project); auto orphan = runs[0].toObject();
+    orphan.insert("primaryTelemetrySourceId", "no-such-source"); runs[0] = orphan; Fixture::setRuns(project, runs);
+    QVERIFY(EventProjectCodec::primaryTelemetryBinding(project, "run-a").isEmpty());
+    QVERIFY(EventProjectCodec::primaryTelemetryBinding(QJsonObject{{"version", 2}}, "run-a").isEmpty());
 }
 
 void EventProjectTests::clearsConfigurationOnSourceReplacementOnly()
