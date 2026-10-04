@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent
 PAGES = ROOT / "pages"
 ASSETS = ROOT / "assets"
 SITE_NAME = "FlappedEar Overlays"
-REPOSITORY = "https://github.com/arekkozuch/VBOOverlay"
+REPOSITORY = "https://github.com/FlappedEar/Overlay"
 
 # Navigation groups and page order. Each entry is the page file stem.
 NAV: list[tuple[str, list[str]]] = [

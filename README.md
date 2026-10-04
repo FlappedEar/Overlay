@@ -10,7 +10,7 @@ The [product vision](docs/product-vision.md) defines the complete intended scope
 
 ## User guide
 
-End-user documentation is published at <https://arekkozuch.github.io/VBOOverlay/>.
+End-user documentation is published at <https://flappedear.github.io/Overlay/>.
 Its sources live in [docs/user-guide](docs/user-guide/README.md).
 
 ## Current capabilities
@@ -22,7 +22,7 @@ recording timestamps are available. Opening a lap shows its map and telemetry
 with a shared cursor, without requiring video. From there it compares two laps
 from compatible runs, reviews automatic straight and corner segments, and links
 ranked time losses to the Corner Analyzer and the day report. The
-[user guide](https://arekkozuch.github.io/VBOOverlay/) describes every screen.
+[user guide](https://flappedear.github.io/Overlay/) describes every screen.
 
 - MP4/MOV playback with timeline controls and preview overlays.
 - RaceChrono and VBOX VBO telemetry import, plus native single-session RaceChrono RCZ import ([supported format](docs/rcz-format.md)).
@@ -139,7 +139,7 @@ A private RaceChrono fixture has been validated with 32,718 samples, 49 channels
 - Interactive map tiles are pending; the local GPS track view works without map tiles.
 - Lap timing requires exactly one valid RaceChrono Start gate and usable synchronized GPS; a manual Start/Finish override is not implemented.
 
-The end-user list of limitations is in the [user guide](https://arekkozuch.github.io/VBOOverlay/limitations.html). For remaining work, see the [delivery ledger](docs/product-delivery.md). Developer contribution rules are in [AGENTS.md](AGENTS.md), and local test guidance is in [docs/testing.md](docs/testing.md).
+The end-user list of limitations is in the [user guide](https://flappedear.github.io/Overlay/limitations.html). For remaining work, see the [delivery ledger](docs/product-delivery.md). Developer contribution rules are in [AGENTS.md](AGENTS.md), and local test guidance is in [docs/testing.md](docs/testing.md).
 
 ### Editor instance and recovery
 
