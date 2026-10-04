@@ -71,8 +71,8 @@ environment: its `--qt-root` directory is temporarily renamed during the startup
 3. Install compatible external FFmpeg and ffprobe. Both must resolve on PATH; macOS
    also searches `/opt/homebrew/bin` and `/usr/local/bin`. Record `ffmpeg -version` and
    `ffprobe -version`. Export checks a working HEVC encoder and the actual composition
-   filters, including explicit `setparams` alpha mode. FFmpeg 6.1.1 fails that filter
-   check. A successful `ffmpeg -version` alone does not establish compatibility.
+   filters, including explicit `setparams` alpha mode, which needs FFmpeg 8.1 or newer;
+   8.0.1, 7.1.1 and 6.1.1 fail that filter check. A successful `ffmpeg -version` alone does not establish compatibility.
 4. Launch from Finder/Explorer, then run the tests below on a machine without the
    development Qt SDK. Record any Gatekeeper/SmartScreen prompt exactly; do not disable
    operating-system protection as an installation procedure.

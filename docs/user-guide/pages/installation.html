@@ -36,7 +36,7 @@
 ffprobe -version
 ffmpeg -hide_banner -encoders | grep hevc</code></pre>
 <p>The last command should list at least one HEVC encoder, such as <code>hevc_videotoolbox</code> (Apple hardware) or <code>libx265</code> (software).</p>
-<div class="note"><p>Not every FFmpeg version works. Export uses filters that older builds lack; FFmpeg 6.1.1, for example, fails. Before rendering, the application runs a short test of the exact processing it needs and stops with a clear error if FFmpeg is not suitable. A current Homebrew FFmpeg is recommended.</p></div>
+<div class="note"><p>Export needs FFmpeg 8.1 or newer. It uses filters that older builds lack; FFmpeg 8.0.1, 7.1.1 and 6.1.1, for example, fail. Before rendering, the application runs a short test of the exact processing it needs and stops with a clear error if FFmpeg is not suitable. A current Homebrew FFmpeg is recommended.</p></div>
 
 <h2 id="build">Building from source</h2>
 <p>For developers. You need CMake 3.24 or newer, a C++20 compiler (Xcode command-line tools), and Qt 6.8 or newer with Concurrent, Core, Gui (with GuiPrivate headers), Qml, Quick, Quick Controls 2, Multimedia, Test, SVG and Shader Tools. The build downloads zlib, so it needs internet access.</p>
