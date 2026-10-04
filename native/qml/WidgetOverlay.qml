@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Theme.js" as Theme
 
 Item {
     id: root
@@ -45,7 +46,7 @@ Item {
                 radius: Number(interactionItem.widgetSettings.cornerRadius ?? 14) + 2
                 color: "transparent"
                 border.width: 2
-                border.color: "#55e6a5"
+                border.color: Theme.primary
                 opacity: 0.95
             }
             MouseArea {
@@ -67,9 +68,9 @@ Item {
                 anchors.bottom: parent.bottom
                 anchors.margins: -6
                 visible: root.selectedIndex === interactionItem.index
-                color: "#55e6a5"
+                color: Theme.primary
                 radius: 7
-                border.color: "#07140f"
+                border.color: Theme.onPrimary
                 z: 3
                 MouseArea {
                     anchors.fill: parent

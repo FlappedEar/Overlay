@@ -38,6 +38,9 @@ var error = "#ff6b5c";
 var onError = "#2b0500";
 var errorContainer = "#4d1610";
 var onErrorContainer = "#ffdad5";
+// Warnings use the error red (owner decision, 4 October 2026): amber is the
+// accent, so an amber warning would look like a selection.
+var warning = error;
 
 var surface = "#111214";
 var onSurface = "#f2f2f2";
@@ -49,6 +52,10 @@ var surfaceContainerHigh = "#24262a";
 var surfaceContainerHighest = "#2a2c31";
 var outline = "#5d6068";
 var outlineVariant = "#2e3035";
+// Translucent panels over the video preview.
+var scrim = "#c40b0c0e";
+var scrimBorder = "#4d5d6068";
+var errorScrim = "#e64d1610";
 
 // Lap and timing colours (FetColors).
 var you = amber;

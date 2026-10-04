@@ -43,7 +43,8 @@ for text with tabular digits, JetBrains Mono for times.
 | Secondary text | `onSurfaceVariant` | `#a3a6ad` | `#8b98a8`, `#91a0b2`, `#778596` |
 | Accent: selection, focus, primary action | `primary` (amber) | `#fcb203` | green `#55e6a5` |
 | Text on the accent | `onPrimary` | `#1a1200` | `#07140f` |
-| Warning, soft highlight | `primaryContainer`, `onPrimaryContainer` | `#3a2c00`, `#ffe08a` | `#ffb84d` |
+| Warning | `warning` (= `error`) | `#ff6b5c` | `#ffb84d`, `#ffc66d`, `#d6a457` (owner decision, 4 October 2026: amber is the accent, so warnings are red) |
+| Soft highlight (selected row, badge) | `primaryContainer`, `onPrimaryContainer` | `#3a2c00`, `#ffe08a` | green tints `#16261f`, `#10251d` |
 | Reference lap, links | `secondary` | `#3d8bff` | `#4da3ff` |
 | Ready, success, time gained | `tertiary` / `gain` | `#53bc94` | green status marks |
 | Error, danger, time lost | `error` / `loss`, `errorContainer` | `#ff6b5c`, `#4d1610` | `#ff8090`, `#21171d` |
