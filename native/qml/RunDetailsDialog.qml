@@ -340,7 +340,7 @@ Dialog {
                             wrapMode: Text.WordWrap
                             font.pixelSize: 11
                             color: "#d6a457"
-                            text: qsTr("Not fused, units differ: %1.").arg((root.fusionPreview.unitMismatches || []).join(", "))
+                            text: qsTr("Not fused, units differ or could not be confirmed: %1.").arg((root.fusionPreview.unitMismatches || []).join(", "))
                         }
                     }
                     RowLayout {

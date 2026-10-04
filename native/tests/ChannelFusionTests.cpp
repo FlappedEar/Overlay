@@ -81,6 +81,7 @@ private slots:
     void prefersTheAlternativeOnlyWhenChosen();
     void appliesClockDrift();
     void refusesUnalignedSourcesAndUnitMismatches();
+    void comparesAChannelWithAnUndeclaredUnit();
 };
 
 void ChannelFusionTests::addsAlternativeOnlyChannelsOnThePrimaryClock()
@@ -235,6 +236,42 @@ void ChannelFusionTests::refusesUnalignedSourcesAndUnitMismatches()
     QCOMPARE(fusionConflictTolerance("km/h", 50.0), 2.0);
     QCOMPARE(fusionConflictTolerance("g", 2.0), 0.05);
     QCOMPARE(fusionConflictTolerance("bar", 2.0), 0.1);
+    QCOMPARE(fusionConflictTolerance(QString::fromUtf8("\xc2\xb0" "C"), 50.0), 2.0); // KAN-184
+    QCOMPARE(fusionConflictTolerance(" degC ", 50.0), 2.0);
+}
+
+void ChannelFusionTests::comparesAChannelWithAnUndeclaredUnit()
+{
+    // KAN-184: VBO channels declare no unit, RCZ channels do.
+    auto primary = primarySession();
+    primary.channels["velocity"].unit.clear();
+    // Agreeing values: the same unit, compared with km/h's tolerance and fusable.
+    const auto agreeing = alternativeSession(1.5);
+    auto result = fuseChannels(primary, "vbo", {{"rcz", &agreeing, {5.0, 0.0}, "aligned"}});
+    QVERIFY(result.unitMismatches.isEmpty());
+    QCOMPARE(find(result, "speed")->comparedSourceId, QString("rcz"));
+    QVERIFY(!find(result, "speed")->conflicting);
+    FusionPolicy policy;
+    policy.rules.insert("speed", {"rcz", FusionRule::FillGaps});
+    result = fuseChannels(primary, "vbo", {{"rcz", &agreeing, {5.0, 0.0}, "aligned"}}, policy);
+    QCOMPARE(find(result, "speed")->rule, QString("fillGaps"));
+    QCOMPARE(find(result, "speed")->unit, QString()); // the primary's unit is kept
+    // Disagreeing values may be another scale: a mismatch, never fused, even with a rule.
+    const auto disagreeing = alternativeSession(8.0);
+    result = fuseChannels(primary, "vbo", {{"rcz", &disagreeing, {5.0, 0.0}, "aligned"}}, policy);
+    QCOMPARE(result.unitMismatches, QStringList{"speed: rcz"});
+    QCOMPARE(find(result, "speed")->rule, QString("primary"));
+    QCOMPARE(find(result, "speed")->comparedSourceId, QString());
+    QCOMPARE(find(result, "speed")->channel.timestamps, primary.channels["velocity"].timestamps);
+    // Fewer than 10 overlapping samples cannot show the units agree.
+    const auto brief = fuseChannels(primary, "vbo", {{"rcz", &agreeing, {98.5, 0.0}, "aligned"}}, policy);
+    QCOMPARE(brief.unitMismatches, QStringList{"speed: rcz"});
+    // The undeclared side may be the alternative.
+    auto unitless = alternativeSession(1.5);
+    unitless.channels["velocity"].unit.clear();
+    result = fuseChannels(primarySession(), "vbo", {{"rcz", &unitless, {5.0, 0.0}, "aligned"}});
+    QVERIFY(result.unitMismatches.isEmpty());
+    QCOMPARE(find(result, "speed")->comparedSourceId, QString("rcz"));
 }
 
 QTEST_GUILESS_MAIN(ChannelFusionTests)
