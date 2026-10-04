@@ -5,8 +5,19 @@ required build/test gate. Then read [handover.md](handover.md) for current state
 and check `origin/main` and Jira project KAN before starting; other sessions may have moved on.
 
 - Status records: [docs/product-delivery.md](docs/product-delivery.md) and Jira KAN.
-- Private sample recordings: `FlappedEar/refdata`. Point `FLAPPEDEAR_REAL_DAY` at a checkout
-  to run the opt-in real-day tests ([docs/testing.md](docs/testing.md)).
+- Private sample recordings: `FlappedEar/refdata` (read-only for agents: never push, branch or
+  open PRs there). It holds the owner's Jastrząb day of 29 August 2026, six RaceChrono sessions
+  each as `.vbo` and `.rcz`; expected results are in
+  [docs/kan79-full-day-acceptance.md](docs/kan79-full-day-acceptance.md) (25 timed laps, best
+  1:49.898). Point `FLAPPEDEAR_REAL_DAY` at a checkout to run the opt-in real-day tests, and
+  pair one session for the RCZ check ([docs/testing.md](docs/testing.md) lists every variable):
+
+  ```bash
+  unzip -p session_X.rcz session.json > /tmp/session.json
+  FLAPPEDEAR_REAL_RCZ=$PWD/session_X.rcz FLAPPEDEAR_RCZ_REFERENCE_VBO=$PWD/session_X.vbo \
+  FLAPPEDEAR_RCZ_REFERENCE_SESSION_JSON=/tmp/session.json \
+    ./build-native/native/tests/flappedear_rcz_tests optionalPrivatePair
+  ```
 
 ## Building in a cloud container
 
