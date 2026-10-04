@@ -1,7 +1,7 @@
 # Event projects (development v3)
 
 The event project format is shared by FlappedEar Overlays (this repository; macOS and Windows) and FlappedEar Telemetry (a separate Flutter app in its own repository; macOS, Windows, iOS and Android; see [product split plan](product-split-plan.md)). The two apps share no code, so this document is the specification the second app implements. The [architect handover](telemetry-handover.md#the-shared-contract-fetproject) summarises what the current code keeps, rejects and rewrites, and the gaps that KAN-170 must close.
-Owner direction (2 October 2026): the two apps keep one format, compatible between them, so that either app opens and re-saves the other's documents without losing anything. The compatibility rules and the round-trip tests in both directions are tracked in KAN-170 and are not written yet.
+Owner direction (2 October 2026): the two apps keep one format, compatible between them, so that either app opens and re-saves the other's documents without losing anything. The compatibility rules are tracked in KAN-170. The round-trip tests live in FlappedEar Telemetry: `tool/cpp_project_roundtrip`, `packages/fetproject/test/fixtures/roundtrip` and `test/day/overlays_roundtrip_test.dart`.
 The project schema is developmental: the owner confirmed that no existing user
 data needs migration protection. v3 gives events a single authoritative source
 model; the small existing v2 read/write path remains for single-recording files.
