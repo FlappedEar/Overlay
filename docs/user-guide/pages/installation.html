@@ -41,7 +41,7 @@ ffmpeg -hide_banner -encoders | grep hevc</code></pre>
 <h2 id="build">Building from source</h2>
 <p>For developers. You need CMake 3.24 or newer, a C++20 compiler (Xcode command-line tools), and Qt 6.8 or newer with Concurrent, Core, Gui (with GuiPrivate headers), Qml, Quick, Quick Controls 2, Multimedia, Test, SVG and Shader Tools. The build downloads zlib, so it needs internet access.</p>
 <p>With Homebrew Qt on Apple Silicon:</p>
-<pre><code>git clone https://github.com/arekkozuch/VBOOverlay.git
+<pre><code>git clone https://github.com/FlappedEar/Overlay.git
 cd VBOOverlay
 cmake -S . -B build-native \
   -DCMAKE_BUILD_TYPE=Debug \
@@ -49,4 +49,4 @@ cmake -S . -B build-native \
 cmake --build build-native --parallel
 ctest --test-dir build-native --output-on-failure
 open "build-native/native/FlappedEar Overlays.app"</code></pre>
-<p>Developer documentation, including testing and packaging, is in the repository's <a href="https://github.com/arekkozuch/VBOOverlay/blob/main/README.md">README</a> and <a href="https://github.com/arekkozuch/VBOOverlay/tree/main/docs">docs folder</a>.</p>
+<p>Developer documentation, including testing and packaging, is in the repository's <a href="https://github.com/FlappedEar/Overlay/blob/main/README.md">README</a> and <a href="https://github.com/FlappedEar/Overlay/tree/main/docs">docs folder</a>.</p>

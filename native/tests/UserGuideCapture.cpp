@@ -209,7 +209,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QVERIFY(gap && gap->parentItem() && gap->parentItem()->parentItem());
     QQuickItem *viewport = gap->parentItem(), *stage = viewport->parentItem();
     const QRectF viewportArea = viewport->mapRectToItem(stage, viewport->boundingRect());
-    for (const QString &id : {"track-day", "minimal", "broadcast", "motorsport-broadcast-smoke", "performance",
+    for (const QString id : {"track-day", "minimal", "broadcast", "motorsport-broadcast-smoke", "performance",
                               "circuit-pro", "endurance", "drag-strip", "clean-hud", "2000s-grand-prix"}) {
         QVERIFY2(controller.widgetModel()->applyTemplate(id), qPrintable(id));
         QVERIFY(shoot.item(stage, viewportArea, {1280, 720}, "template-" + id, 1200));

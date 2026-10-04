@@ -53,7 +53,7 @@ that check over this file.
 VBOOverlay / "FlappedEar Overlays" (renamed from "FlappedEar Telemetry" by
 KAN-125; bundle `com.flappedear.overlays`): a Qt 6 / C++20 / QML macOS desktop app
 combining a video overlay editor with track-day telemetry analysis (VBO/RCZ,
-GoPro). The analysis window and workflows stay until FlappedEar Telemetry is mature (KAN-166, deferred). Repo `arekkozuch/VBOOverlay`. Jira project KAN, cloud ID
+GoPro). The analysis window and workflows stay until FlappedEar Telemetry is mature (KAN-166, deferred). Repo `FlappedEar/Overlay` (formerly `arekkozuch/VBOOverlay`). Jira project KAN, cloud ID
 `315ac5b8-6fd1-4518-8b5f-4433bcc33447`.
 
 ## Where M3/M4 stand (end of this session)
@@ -380,6 +380,6 @@ rev-match blips on downshifts with the pedal at 0). Speed is `velocity`
 
 ## Credentials/access
 
-- Jira via the `plugin:atlassian:atlassian` MCP connector; expect to
+- Jira via an Atlassian MCP connector; expect to
   re-authorize with `/mcp` in a new session.
-- GitHub: `gh` is authenticated for `arekkozuch/VBOOverlay`.
+- GitHub: the repository is `FlappedEar/Overlay`; private sample recordings are in `FlappedEar/refdata` (point `FLAPPEDEAR_REAL_DAY` at a checkout).
