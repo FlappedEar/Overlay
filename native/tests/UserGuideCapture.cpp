@@ -93,7 +93,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QSettings settings; settings.clear(); settings.sync();
     Shooter shoot(options.outputDirectory);
     AppController controller(nullptr, QDir(options.scratchDirectory).filePath("recovery.json"));
-    controller.setAutomaticSegments(true); // as the application does (KAN-136)
+    controller.setAutomaticSegments(true); // the screens show a day with segments, as Telemetry saves it
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
         QDir(QStringLiteral(QML_SOURCE_DIR)).filePath("Main.qml")));

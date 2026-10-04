@@ -2212,6 +2212,14 @@ void AppController::setTimeScale(const double scale)
 
 void AppController::setAnalysisChannels(const QStringList &channels)
 {
+    // A channel choice made in the analysis is the only edit that rewrites
+    // analysis.channels on save (KAN-166 step 2).
+    m_analysisChannelsEdited = true;
+    applyAnalysisChannels(channels);
+}
+
+void AppController::applyAnalysisChannels(const QStringList &channels)
+{
     QStringList normalized;
     for (const QString &channel : channels) {
         if (!channel.isEmpty() && !normalized.contains(channel)
@@ -2289,7 +2297,7 @@ void AppController::reconcileAnalysisChannels()
             channels.append(channel);
         }
     }
-    setAnalysisChannels(channels);
+    applyAnalysisChannels(channels);
 }
 
 QString AppController::syncCandidateLevelName(const double confidence)

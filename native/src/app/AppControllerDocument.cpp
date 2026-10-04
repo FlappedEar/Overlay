@@ -90,7 +90,8 @@ void AppController::applyEditorProject(const ProjectLoadResult &result)
     // but never let a newly opened scene overwrite a visible custom template in place.
     if (!result.runSelection) clearActiveTemplate();
     m_analysisChannels.clear();
-    setAnalysisChannels(result.analysisChannels);
+    m_analysisChannelsEdited = false;
+    applyAnalysisChannels(result.analysisChannels);
     if (!result.runSelection) setAnalysisVisible(false);
     reconcileAnalysisChannels();
 }
@@ -135,7 +136,8 @@ void AppController::clearEditor()
     m_previewRenderContext.setTrackGeometry(nullptr);
     m_previewRenderContext.setLapSession({});
     m_trackPoints.clear();
-    setAnalysisChannels({});
+    m_analysisChannelsEdited = false;
+    applyAnalysisChannels({});
     setAnalysisVisible(false);
     m_playbackTime = 0.0;
     m_sync = {};
@@ -199,10 +201,14 @@ QJsonObject AppController::withEditorState(QJsonObject project, const QString &d
     QJsonObject scene = project.value("scene").toObject();
     scene.insert("widgets", m_widgetModel.toJson());
     project.insert("scene", scene);
-    QJsonObject analysis = project.value("analysis").toObject();
-    analysis.insert("channels", QJsonArray::fromStringList(m_analysisChannels));
-    analysis.remove(QStringLiteral("visible"));
-    project.insert("analysis", analysis);
+    // analysis.channels belongs to the analysis: an overlay edit saves the
+    // loaded value untouched; only a channel choice in the analysis rewrites it.
+    if (m_analysisChannelsEdited || project.contains(QStringLiteral("analysis"))) {
+        QJsonObject analysis = project.value("analysis").toObject();
+        if (m_analysisChannelsEdited) analysis.insert("channels", QJsonArray::fromStringList(m_analysisChannels));
+        analysis.remove(QStringLiteral("visible"));
+        project.insert("analysis", analysis);
+    }
     return project;
 }
 

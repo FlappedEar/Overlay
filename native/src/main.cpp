@@ -678,8 +678,9 @@ int main(int argc, char *argv[])
             widgets->setSetting(automaticGear, QStringLiteral("fontSize"), 0);
             widgets->setSetting(explicitGear, QStringLiteral("fontSize"), 42);
         }
-        // KAN-136: segments are created automatically for a layout that has none.
-        controller.setAutomaticSegments(true);
+        // KAN-166 step 2: Overlays no longer creates track segments on its own
+        // (KAN-136 moved to FlappedEar Telemetry); segments saved by Telemetry
+        // or reviewed in the analysis window are kept and used as before.
         QQmlApplicationEngine engine;
         engine.rootContext()->setContextProperty("appController", &controller);
         QObject::connect(

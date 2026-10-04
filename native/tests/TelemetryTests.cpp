@@ -2666,8 +2666,8 @@ void TelemetryTests::lapExclusionsSurviveSaveRecoveryAndInvalidateSafely()
 
 void TelemetryTests::keepsAnalysisStateThroughOverlayEdits()
 {
-    // KAN-166 step 1: the editor reads lap exclusions from the document, and
-    // an overlay edit saves every analysis field it did not touch unchanged.
+    // KAN-166 steps 1 and 2: the editor reads lap exclusions from the document,
+    // and an overlay edit saves every analysis field it did not touch unchanged.
     QTemporaryDir directory; QVERIFY(directory.isValid());
     QSettings settings; settings.clear(); settings.sync();
     const auto path = directory.filePath("run.vbo"); QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
@@ -2699,6 +2699,8 @@ void TelemetryTests::keepsAnalysisStateThroughOverlayEdits()
     auto runs = event.value("runs").toArray(); auto run = runs[0].toObject();
     run.insert("futureRunAnalysis", 3); runs[0] = run; event.insert("runs", runs);
     analysed.insert("event", event);
+    // Step 2: chart channels the editor cannot resolve are saved as loaded.
+    analysed.insert("analysis", QJsonObject{{"channels", QJsonArray{"notInThisRecording", "speed"}}, {"futureSetting", 1}});
     QVERIFY(writeBytes(analysedPath, QJsonDocument(analysed).toJson()));
     {
         AppController controller(nullptr, directory.filePath("edit-recovery.json"));
@@ -2713,6 +2715,19 @@ void TelemetryTests::keepsAnalysisStateThroughOverlayEdits()
         > analysed.value("scene").toObject().value("widgets").toArray().size());
     for (const auto *key : {"scene", "documentState"}) { edited.remove(key); analysed.remove(key); }
     QCOMPARE(edited, analysed);
+    // A channel choice made in the analysis is still saved.
+    QString chosen;
+    {
+        AppController controller(nullptr, directory.filePath("channel-recovery.json"));
+        QVERIFY(controller.m_document.beginProjectLoad(editedPath, QJsonDocument::fromJson(readBytes(editedPath)).object()));
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+        QVERIFY(!controller.analysisChannels().isEmpty());
+        chosen = controller.analysisChannels().first();
+        controller.setAnalysisChannels({chosen});
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(editedPath)));
+    }
+    QCOMPARE(QJsonDocument::fromJson(readBytes(editedPath)).object().value("analysis").toObject(),
+        (QJsonObject{{"channels", QJsonArray{chosen}}, {"futureSetting", 1}}));
 }
 
 void TelemetryTests::lapReferencesSurviveReopenAndReordering()
