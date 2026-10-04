@@ -4,7 +4,7 @@ FlappedEar Overlays (formerly FlappedEar Telemetry, bundle identifier `com.flapp
 
 ## Status
 
-Version 0.2.0, in development; no release is approved. The overlay editor and export pipeline work, and the track-day analysis implements milestones M0–M4: whole-day import, compatible rankings, independent A/B lap comparison, reviewed segments and the Corner Analyzer, sector theoretical best, ranked time losses, consistency, G-G, temperature and heart-rate summaries, and the day report. These are validated by synthetic CI tests and one private real day without video; the owner's real-video acceptance (M5) is still open.
+Version 0.3.0, in development; no release is approved. The overlay editor and export pipeline work, and the track-day analysis implements milestones M0–M4: whole-day import, compatible rankings, independent A/B lap comparison, reviewed segments and the Corner Analyzer, sector theoretical best, ranked time losses, consistency, G-G, temperature and heart-rate summaries, and the day report. These are validated by synthetic CI tests and one private real day without video; the owner's real-video acceptance (M5) is still open.
 
 The [product vision](docs/product-vision.md) defines the complete intended scope. The [delivery ledger](docs/product-delivery.md) is the single current status record: what is implemented, what remains, and the acceptance evidence. Distribution still requires the exact candidate's [acceptance evidence](docs/beta-acceptance.md).
 

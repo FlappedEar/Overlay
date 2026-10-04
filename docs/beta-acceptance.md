@@ -7,7 +7,7 @@
 
 
 Updated 12 September 2026. Internal candidates are not approved for distribution
-until the exact delivered archive passes acceptance. Version remains 0.2.0.
+until the exact delivered archive passes acceptance. Version is now 0.3.0.
 The old single-session-only product scope is superseded by
 [the full product contract](product-vision.md) and [delivery ledger](product-delivery.md).
 
