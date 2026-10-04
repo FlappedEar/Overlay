@@ -56,6 +56,13 @@ product split (`docs/product-split-plan.md`, epic KAN-121, now KAN-165):
   combined application and its app-level tests use it. Pure test targets
   link only `flappedear_telemetry_core`.
 
+The editor reads what it needs for laps and charts from the core and the
+document, not from `AnalysisController` (KAN-166 step 1): the lap-exclusion
+binding comes from `EventProjectCodec::primaryTelemetryBinding`, chart
+series from `telemetry/ChannelSeries`, and lap-time text from
+`formatElapsedTime` in `telemetry/LapTiming`. Editor tests resolve QML
+through `QML_SOURCE_DIR`, not through analysis file paths.
+
 ## Application
 
 `AppController` is the QML-facing application boundary. It exposes source state, playback time, synchronization, live values, project dirty state, loading state, export state, analysis state, and the `WidgetModel`. It also owns the preview `TelemetryRenderContext`, so QML reads telemetry through one time transform rather than parsing files itself.

@@ -567,4 +567,15 @@ QString formatLapTime(const double seconds, const int decimals)
     return text;
 }
 
+QString formatElapsedTime(const double seconds)
+{
+    if (!std::isfinite(seconds)) return QStringLiteral("—");
+    const auto milliseconds = static_cast<qint64>(std::llround(std::abs(seconds) * 1000.0));
+    const QString sign = seconds < 0 && milliseconds > 0 ? QStringLiteral("-") : QString();
+    if (milliseconds < 60'000)
+        return sign + QStringLiteral("%1.%2 s").arg(milliseconds / 1000).arg(milliseconds % 1000, 3, 10, QLatin1Char('0'));
+    return sign + QStringLiteral("%1:%2.%3").arg(milliseconds / 60'000).arg(milliseconds / 1000 % 60, 2, 10, QLatin1Char('0'))
+        .arg(milliseconds % 1000, 3, 10, QLatin1Char('0'));
+}
+
 } // namespace FlappedEar

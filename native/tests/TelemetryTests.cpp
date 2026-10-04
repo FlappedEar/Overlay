@@ -141,6 +141,7 @@ private slots:
     void lapExclusionPolicySharesRankingAndRenderInputs();
     void excludesAndRestoresLapThroughQml();
     void lapExclusionsSurviveSaveRecoveryAndInvalidateSafely();
+    void keepsAnalysisStateThroughOverlayEdits();
     void lapReferencesSurviveReopenAndReordering();
     void lapReferencesRejectSourceAndGateChanges();
     void lapReferencesDetectUnsampledContentChanges();
@@ -551,6 +552,13 @@ TelemetrySession speedSession(const double start, const double end, const double
     session.duration = end - start;
     session.sampleCount = speed.values.size();
     return session;
+}
+
+// A file in the application's QML source directory; components built from
+// test strings use one as their base URL so sibling types resolve.
+QString qmlSourcePath(const QString &fileName)
+{
+    return QDir(QStringLiteral(QML_SOURCE_DIR)).filePath(fileName);
 }
 
 bool writeBytes(const QString &path, const QByteArray &bytes)
@@ -978,7 +986,7 @@ void TelemetryTests::selectsEventRunThroughAnalysisQml()
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("appController"), &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
-    QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+    QQmlComponent component(&engine, QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> panel(component.createWithInitialProperties({{"mediaDuration", 0}, {"width", 900}, {"height", 600}}));
     QVERIFY2(panel, qPrintable(component.errorString()));
@@ -1171,7 +1179,7 @@ void TelemetryTests::reviewsBatchThroughProductionQml()
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQuickWindow window;
     window.resize(1180, 720);
-    QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(BATCH_IMPORT_QML_PATH)));
+    QQmlComponent component(&engine, QUrl::fromLocalFile(qmlSourcePath("BatchImportDialog.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> dialog(component.createWithInitialProperties({{"parent", QVariant::fromValue(window.contentItem())}}));
     QVERIFY2(dialog, qPrintable(component.errorString()));
@@ -1391,7 +1399,7 @@ void TelemetryTests::showsRunProgressionWithLiveContext()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 760; height: 480; OutingLapPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -1461,7 +1469,7 @@ void TelemetryTests::editsRunMetadataThroughQml()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 760; height: 480; OutingLapPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -1519,7 +1527,7 @@ void TelemetryTests::startsOutingThroughAnalysisQml()
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("appController"), &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
-    const auto path = QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml");
+    const auto path = qmlSourcePath("AnalysisWindow.qml");
     QQmlComponent component(&engine, QUrl::fromLocalFile(path));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> window(component.createWithInitialProperties({{"videoSource", QUrl{}},
@@ -1687,7 +1695,7 @@ void TelemetryTests::opensOutingLapWithoutChangingEditor()
         // that window, not the whole lap.
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("appController"), &controller);
-        QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QQmlComponent component(&engine, QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         std::unique_ptr<QObject> panel(component.createWithInitialProperties(
             {{"lapDetail", true}, {"mediaDuration", 0}, {"width", 900}, {"height", 600}}));
@@ -1904,7 +1912,7 @@ void TelemetryTests::opensRankedLapsAndRecomputesAfterExclusion()
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 760; height: 480; OutingLapPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -2198,7 +2206,7 @@ void TelemetryTests::restoresDayDecisionsAfterMoveMissingRelinkAndRecovery()
         QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
         QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
         component.setData("import QtQuick\nWindow { width: 760; height: 480; OutingLapPanel { anchors.fill: parent } }",
-            QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+            QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
         auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -2288,7 +2296,7 @@ void TelemetryTests::automaticallyGroupsRunsThroughProductionQml()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 760; height: 480; OutingLapPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -2436,7 +2444,7 @@ void TelemetryTests::automaticallyGroupsPrivateTrackDay()
     if (!screenshot.isEmpty()) {
         QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
         QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
-        component.loadUrl(QUrl::fromLocalFile(QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+        component.loadUrl(QUrl::fromLocalFile(qmlSourcePath("AnalysisWindow.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
             {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
@@ -2490,7 +2498,7 @@ void TelemetryTests::confirmsTrackConfigurationThroughQml()
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 1180; height: 720; OutingLapPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -2583,7 +2591,7 @@ void TelemetryTests::excludesAndRestoresLapThroughQml()
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 1180; height: 720; OutingLapDetailPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -2654,6 +2662,57 @@ void TelemetryTests::lapExclusionsSurviveSaveRecoveryAndInvalidateSafely()
         QVERIFY(controller.currentProjectObject().value("event").toObject().value("lapExclusions").toArray().isEmpty());
         QVERIFY(controller.outingLapMessages().join(' ').contains("could not be matched") == false);
     }
+}
+
+void TelemetryTests::keepsAnalysisStateThroughOverlayEdits()
+{
+    // KAN-166 step 1: the editor reads lap exclusions from the document, and
+    // an overlay edit saves every analysis field it did not touch unchanged.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto path = directory.filePath("run.vbo"); QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
+    const auto analysedPath = directory.filePath("analysed.fetproject"), editedPath = directory.filePath("edited.fetproject");
+    QJsonObject analysed;
+    {
+        AppController controller(nullptr, directory.filePath("recovery.json"));
+        QVERIFY(controller.importAnalysisRuns("Round trip", {QUrl::fromLocalFile(path)}));
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
+        QVERIFY(controller.setOutingLapExcluded(controller.outingLaps()[1].toMap().value("reference").toMap(), true, "Traffic"));
+        // The document binding names the same recording the analysis loads.
+        const auto binding = controller.activeLapBinding();
+        QJsonObject analysisSource;
+        for (const auto &value : controller.m_analysis.outingLapSources())
+            if (value.toObject().value("runId").toString() == controller.activeRunId()) analysisSource = value.toObject();
+        QVERIFY(!analysisSource.isEmpty());
+        for (const auto *field : {"eventId", "runId", "sourceId", "derivationKey"})
+            QCOMPARE(binding.value(field), analysisSource.value(field));
+        QCOMPARE(binding.value("expectedRevision"), analysisSource.value("expectedRevision"));
+        QCOMPARE(binding.value("sourceRevision").toString(), QString::fromLatin1(controller.m_loadedSourceRevision));
+        QVERIFY(!controller.m_lapSession.timedLaps[0].referenceEligible());
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(analysedPath)));
+        analysed = QJsonDocument::fromJson(readBytes(analysedPath)).object();
+    }
+    QCOMPARE(analysed.value("version").toInt(), 3);
+    // Fields a newer analysis app writes ride along untouched.
+    auto event = analysed.value("event").toObject();
+    event.insert("futureAnalysis", QJsonObject{{"kept", true}});
+    auto runs = event.value("runs").toArray(); auto run = runs[0].toObject();
+    run.insert("futureRunAnalysis", 3); runs[0] = run; event.insert("runs", runs);
+    analysed.insert("event", event);
+    QVERIFY(writeBytes(analysedPath, QJsonDocument(analysed).toJson()));
+    {
+        AppController controller(nullptr, directory.filePath("edit-recovery.json"));
+        QVERIFY(controller.m_document.beginProjectLoad(analysedPath, analysed));
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+        QVERIFY(!controller.m_lapSession.timedLaps[0].referenceEligible());
+        QVERIFY(controller.widgetModel()->addWidget("lapCurrent") >= 0);
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(editedPath)));
+    }
+    auto edited = QJsonDocument::fromJson(readBytes(editedPath)).object();
+    QVERIFY(edited.value("scene").toObject().value("widgets").toArray().size()
+        > analysed.value("scene").toObject().value("widgets").toArray().size());
+    for (const auto *key : {"scene", "documentState"}) { edited.remove(key); analysed.remove(key); }
+    QCOMPARE(edited, analysed);
 }
 
 void TelemetryTests::lapReferencesSurviveReopenAndReordering()
@@ -2933,7 +2992,7 @@ void TelemetryTests::selectsIndependentComparisonLapsThroughQml()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 760; height: 480; OutingLapPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -2968,7 +3027,7 @@ void TelemetryTests::selectsIndependentComparisonLapsThroughQml()
     {
         QQmlComponent mapComponent(&engine);
         mapComponent.setData("import QtQuick\nTrackMapPanel { comparisonSlot: 0; width: 200; height: 200 }",
-            QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+            QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
         QVERIFY2(mapComponent.isReady(), qPrintable(mapComponent.errorString()));
         std::unique_ptr<QObject> mapObject(mapComponent.create());
         QVERIFY2(mapObject, qPrintable(mapComponent.errorString()));
@@ -3234,9 +3293,9 @@ void TelemetryTests::comparesTwoLapsFromTheSameRun()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QQmlComponent mapComponentA(&engine), mapComponentB(&engine);
     mapComponentA.setData("import QtQuick\nTrackMapPanel { comparisonSlot: 0; width: 200; height: 200 }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     mapComponentB.setData("import QtQuick\nTrackMapPanel { comparisonSlot: 1; width: 200; height: 200 }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(mapComponentA.isReady(), qPrintable(mapComponentA.errorString()));
     QVERIFY2(mapComponentB.isReady(), qPrintable(mapComponentB.errorString()));
     std::unique_ptr<QObject> mapObjectA(mapComponentA.create()), mapObjectB(mapComponentB.create());
@@ -3336,7 +3395,7 @@ void TelemetryTests::reviewsSegmentProposalsForTheOpenLap()
         component.setData("import QtQuick\nItem { width: 900; height: 700\n"
             "SegmentReviewPanel { objectName: \"panel\"; width: 560; height: 700 }\n"
             "TrackMapPanel { x: 580; lapDetail: true; segmentReview: true; width: 300; height: 300 } }",
-            QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+            QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         std::unique_ptr<QObject> root(component.create());
         QVERIFY2(root, qPrintable(component.errorString()));
@@ -3543,7 +3602,7 @@ void TelemetryTests::editsApprovedSegmentsWithUndo()
         QQmlComponent component(&engine);
         component.setData("import QtQuick\nItem { width: 700; height: 900\n"
             "SegmentReviewPanel { objectName: \"panel\"; width: 640; height: 900 } }",
-            QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+            QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         std::unique_ptr<QObject> root(component.create());
         QVERIFY2(root, qPrintable(component.errorString()));
@@ -3828,9 +3887,9 @@ void TelemetryTests::overlaysComparisonLapsOnASharedProgressAxis()
     chartComponent.setData("import QtQuick\nComparisonOverlayChart { channel: \"latitude\"; width: 300; height: 200; "
         "totalMeters: Math.max(1, appController.comparisonProgressAxisLength); "
         "zoomEnd: totalMeters }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     mapComponent.setData("import QtQuick\nComparisonOverlayMap { width: 200; height: 200 }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(chartComponent.isReady(), qPrintable(chartComponent.errorString()));
     QVERIFY2(mapComponent.isReady(), qPrintable(mapComponent.errorString()));
     std::unique_ptr<QObject> chartObject(chartComponent.create());
@@ -4349,7 +4408,7 @@ void TelemetryTests::opensTheoreticalBestSectorThroughQml()
     component.setData("import QtQuick\nWindow { width: 1000; height: 700; visible: true; "
         "ComparisonDetailPanel { objectName: \"comparisonRoot\"; anchors.fill: parent } "
         "TheoreticalBestDialog { objectName: \"dialog\" } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -4623,7 +4682,7 @@ void TelemetryTests::ranksTimeLossesAndRecalculatesOnExclusion()
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 1000; height: 700; visible: true; "
-        "TimeLossDialog { objectName: \"dialog\" } }", QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        "TimeLossDialog { objectName: \"dialog\" } }", QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -4699,7 +4758,7 @@ void TelemetryTests::navigatesFromRankedLossToCornerEvidence()
     component.setData("import QtQuick\nWindow { width: 1100; height: 760; visible: true; "
         "OutingLapPanel { objectName: \"outingRoot\"; anchors.fill: parent; visible: !appController.comparisonViewOpen } "
         "ComparisonDetailPanel { objectName: \"comparisonRoot\"; anchors.fill: parent; visible: appController.comparisonViewOpen } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -4882,7 +4941,7 @@ void TelemetryTests::showsSectionProgressionBetweenSessions()
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 1200; height: 800; visible: true; "
-        "OutingProgressionDialog { objectName: \"dialog\" } }", QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        "OutingProgressionDialog { objectName: \"dialog\" } }", QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -4995,7 +5054,7 @@ void TelemetryTests::showsAbGgScatterWithPeaks()
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 1300; height: 800; visible: true; "
         "ComparisonDetailPanel { objectName: \"comparisonRoot\"; anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -5088,7 +5147,7 @@ void TelemetryTests::showsRecordedTemperaturesThroughTheDayInQml()
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 900; height: 600; visible: true; CarDriverView { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -5209,7 +5268,7 @@ void TelemetryTests::showsHeartRateByRunAndSegmentInQml()
         QSignalSpy warnings(&engine, &QQmlEngine::warnings);
         QQmlComponent component(&engine);
         component.setData("import QtQuick\nWindow { width: 900; height: 700; visible: true; CarDriverView { objectName: \"view\"; anchors.fill: parent } }",
-            QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+            QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
         auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -5284,7 +5343,7 @@ void TelemetryTests::showsHeartRateByRunAndSegmentInQml()
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 1300; height: 800; visible: true; "
         "ComparisonDetailPanel { objectName: \"comparisonRoot\"; anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -5427,7 +5486,7 @@ void TelemetryTests::presentsDayReportWithEvidenceNavigation()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 1180; height: 720; OutingLapPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -5568,7 +5627,7 @@ void TelemetryTests::selectsFocusAreasFromComputedObservations()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 1180; height: 720; OutingLapPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -6275,7 +6334,7 @@ void TelemetryTests::analyzesPrivateTrackDayCorners()
     if (reviewDirectory.isEmpty()) return;
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
-    component.loadUrl(QUrl::fromLocalFile(QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    component.loadUrl(QUrl::fromLocalFile(qmlSourcePath("AnalysisWindow.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
@@ -6528,7 +6587,7 @@ void TelemetryTests::selectsCornerAnalyzerSegmentThroughQml()
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 900; height: 600; visible: true; "
         "ComparisonDetailPanel { objectName: \"comparisonRoot\"; anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -6594,7 +6653,7 @@ void TelemetryTests::showsComparisonSlotCompatibilityAndCoverageContext()
     QQmlComponent component(&engine);
     component.setData(
         "import QtQuick\nWindow { width: 900; height: 600; visible: true; ComparisonDetailPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -6978,7 +7037,7 @@ void TelemetryTests::presentsDayResultStatesWithoutVideo()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings); QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 760; height: 480; OutingLapPanel { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -7107,7 +7166,7 @@ Item {
     GForceWidget { frame: frameData }
     F1GForceRadarWidget { frame: frameData }
 }
-)QML", QUrl::fromLocalFile(QStringLiteral(BATCH_IMPORT_QML_PATH)));
+)QML", QUrl::fromLocalFile(qmlSourcePath("BatchImportDialog.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> root(component.create());
     QVERIFY2(root, qPrintable(component.errorString()));
@@ -7132,7 +7191,7 @@ void TelemetryTests::displaysTimedLapsWithoutVideo()
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("appController"), &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
-    const auto panelPath = QFileInfo(QStringLiteral(BATCH_IMPORT_QML_PATH)).dir().filePath("LapTimingPanel.qml");
+    const auto panelPath = qmlSourcePath("LapTimingPanel.qml");
     QQmlComponent component(&engine, QUrl::fromLocalFile(panelPath));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> panel(component.createWithInitialProperties({{"width", 760}, {"height", 158}}));
@@ -8009,7 +8068,7 @@ void TelemetryTests::showsOneHotlapAndExportsItByDefault()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+        qmlSourcePath("Main.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create());
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -8148,7 +8207,7 @@ void TelemetryTests::showsTyreTemperatureAndPressurePerCorner()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+        qmlSourcePath("Main.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create());
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -8610,7 +8669,7 @@ void TelemetryTests::keepsAnalysisControlsReachableAtMinimumSize()
 
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QQmlComponent component(&engine);
-    component.loadUrl(QUrl::fromLocalFile(QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+    component.loadUrl(QUrl::fromLocalFile(qmlSourcePath("AnalysisWindow.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
@@ -9014,7 +9073,7 @@ void TelemetryTests::importsDroppedFilesAndFolders()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+        qmlSourcePath("AnalysisWindow.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> window(component.createWithInitialProperties({{"videoSource", QUrl{}},
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
@@ -9097,7 +9156,7 @@ void TelemetryTests::switchesTheActiveRunPrimaryWithoutStaleEditorState()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+        qmlSourcePath("AnalysisWindow.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
@@ -9188,7 +9247,7 @@ void TelemetryTests::showsCoastingOnTheOpenLap()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+        qmlSourcePath("AnalysisWindow.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
@@ -9284,7 +9343,7 @@ void TelemetryTests::showsTrailBrakingInTheCornerAnalyzer()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+        qmlSourcePath("AnalysisWindow.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
@@ -9394,7 +9453,7 @@ void TelemetryTests::coloursTheComparisonMapByAChannel()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+        qmlSourcePath("AnalysisWindow.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
@@ -9534,7 +9593,7 @@ void TelemetryTests::associatesTemperaturesWithLapPerformance()
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 900; height: 900; visible: true; CarDriverView { anchors.fill: parent } }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -9594,7 +9653,7 @@ void TelemetryTests::reviewsSourceFusionInRunDetails()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+        qmlSourcePath("AnalysisWindow.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));
@@ -9695,7 +9754,7 @@ void TelemetryTests::reviewsGoProChapterGroups()
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine);
     component.setData("import QtQuick\nWindow { width: 900; height: 640; visible: true; VideoChaptersDialog { id: d } Component.onCompleted: d.open() }",
-        QUrl::fromLocalFile(QStringLiteral(ANALYSIS_PANEL_QML_PATH)));
+        QUrl::fromLocalFile(qmlSourcePath("AnalysisPanel.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create()); QVERIFY2(object, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
@@ -9850,7 +9909,7 @@ void TelemetryTests::playsVideoChaptersAcrossBoundaries()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+        qmlSourcePath("Main.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create());
     QVERIFY2(object, qPrintable(component.errorString()));
@@ -9895,7 +9954,7 @@ void TelemetryTests::keepsAPausedSeekWhenLoadedMediaRepeats()
     QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 30000);
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+        qmlSourcePath("Main.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create());
     QVERIFY2(object, qPrintable(component.errorString()));
@@ -10013,7 +10072,7 @@ void TelemetryTests::showsSideBySideLapVideo()
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QSignalSpy warnings(&engine, &QQmlEngine::warnings);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("AnalysisWindow.qml")));
+        qmlSourcePath("AnalysisWindow.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.createWithInitialProperties({{"videoSource", QUrl{}},
         {"playbackPosition", 0}, {"playbackRunning", false}, {"mediaDuration", 0}}));

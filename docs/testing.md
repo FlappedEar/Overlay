@@ -784,7 +784,7 @@ Changes made after the first owner test with the real Jastrząb day:
   usually reviewed). Before this change, the best lap on Jastrząb had no
   projected time through one corner.
 - Lap and segment times of a minute or more display as `m:ss.mmm`
-  (`AppController::formatElapsedTime`).
+  (`FlappedEar::formatElapsedTime` in `telemetry/LapTiming`, shared by the editor and the analysis).
 
 The VBO parser still records no channel units: RaceChrono declares them in
 `[header]`, but channel units are part of the recording fingerprint, so

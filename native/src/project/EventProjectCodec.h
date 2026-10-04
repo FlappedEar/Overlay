@@ -39,6 +39,12 @@ public:
     // Full content identity, including legacy imports whose provenance is still
     // bound to the current fingerprint. Never infer identity from a path.
     [[nodiscard]] static QByteArray sourceContentRevision(const QJsonObject &source);
+    // The identity of a run's primary recording read from the document alone:
+    // eventId, runId, sourceId, reference, expectedRevision and derivationKey.
+    // Empty when the project is not an event or the run has no primary
+    // recording. The editor's lap navigation binds to it without analysis
+    // state (KAN-166).
+    [[nodiscard]] static QJsonObject primaryTelemetryBinding(const QJsonObject &project, const QString &runId);
     // All referenced path candidates, including inactive sources, for export protection.
     [[nodiscard]] static QStringList referencedPaths(const QJsonObject &project, const QString &projectPath);
 };
