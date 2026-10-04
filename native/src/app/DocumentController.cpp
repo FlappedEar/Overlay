@@ -25,7 +25,13 @@ constexpr int RecoveryRetryDelayMs = 5'000;
 struct SavedDocumentMetadata final {
     QString id;
     quint64 revision = 0;
+    QString saveId; // empty for documents saved before KAN-183
 };
+
+// KAN-183: the saveId this application wrote with its most recent save. A saved
+// copy with another saveId was written by someone else, for example FlappedEar
+// Telemetry, even when its savedRevision matches a recovery snapshot.
+const QString OwnSaveIdKey = QStringLiteral("project/ownSaveId");
 
 bool parseSavedDocumentMetadata(const QJsonObject &project, SavedDocumentMetadata *metadata)
 {
@@ -39,7 +45,8 @@ bool parseSavedDocumentMetadata(const QJsonObject &project, SavedDocumentMetadat
     bool revisionOk = false;
     const quint64 revision = state.value(QStringLiteral("savedRevision")).toString().toULongLong(&revisionOk);
     if (!revisionOk) return false;
-    if (metadata) *metadata = {id, revision};
+    const QJsonValue saveId = state.value(QStringLiteral("saveId"));
+    if (metadata) *metadata = {id, revision, saveId.isString() ? saveId.toString().left(128) : QString()};
     return true;
 }
 
@@ -65,7 +72,8 @@ enum class RecoveryValidity {
 };
 
 RecoveryValidity recoveryValidity(const ProjectRecoverySnapshot &snapshot,
-                                  const QString &rememberedProjectPath)
+                                  const QString &rememberedProjectPath,
+                                  const QString &ownSaveId)
 {
     if (!snapshot.hasLogicalMetadata) return RecoveryValidity::Valid;
     if (snapshot.revision <= snapshot.lastSavedRevision) return RecoveryValidity::Stale;
@@ -82,8 +90,14 @@ RecoveryValidity recoveryValidity(const ProjectRecoverySnapshot &snapshot,
         if (!metadata) continue;
         foundAuthority = true;
         if (metadata->id != snapshot.documentId) continue;
-        return snapshot.revision <= metadata->revision
-            ? RecoveryValidity::Stale : RecoveryValidity::Valid;
+        if (snapshot.revision > metadata->revision) return RecoveryValidity::Valid;
+        // The saved copy reached the snapshot's revision. It holds these edits
+        // only if this application saved it; a save by another application
+        // (KAN-183) counts revisions on its own, so offer the snapshot instead
+        // of dropping edits it may not contain. Copies without a saveId keep
+        // the earlier revision-only rule.
+        if (!metadata->saveId.isEmpty() && metadata->saveId != ownSaveId) return RecoveryValidity::Valid;
+        return RecoveryValidity::Stale;
     }
     // An untitled document's snapshot (no original path) is governed only by a
     // saved copy of the same document, such as a later Save As. Another
@@ -571,7 +585,13 @@ bool DocumentController::saveProject(const QUrl &url)
         m_host.showStatus(QStringLiteral("Choose Recover or Discard for the unsaved changes first."));
         return false;
     }
-    const QJsonObject project = currentProjectObject(path, m_documentState.revision());
+    QJsonObject project = currentProjectObject(path, m_documentState.revision());
+    // KAN-183: a new saveId per save tells this save apart from one by another
+    // application at the same savedRevision.
+    const QString saveId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QJsonObject documentState = project.value(QStringLiteral("documentState")).toObject();
+    documentState.insert(QStringLiteral("saveId"), saveId);
+    project.insert(QStringLiteral("documentState"), documentState);
     QString validationError;
     if (!ProjectLimits::validateProject(project, &validationError)) {
         AppLog::error(QStringLiteral("Project save rejected: %1").arg(validationError));
@@ -593,8 +613,20 @@ bool DocumentController::saveProject(const QUrl &url)
         }
         return false;
     }
+    // Remember the saveId before writing: a crash after the write must not make
+    // this save look like another application's.
+    const QVariant previousSaveId = m_settings.value(OwnSaveIdKey);
+    m_settings.setValue(OwnSaveIdKey, saveId);
+    m_settings.sync();
     const ProjectWriter::Result writeResult = m_projectWriter.write(path, payload);
     if (!writeResult.success) {
+        // The file on disk still carries the previous saveId.
+        if (previousSaveId.isValid()) {
+            m_settings.setValue(OwnSaveIdKey, previousSaveId);
+        } else {
+            m_settings.remove(OwnSaveIdKey);
+        }
+        m_settings.sync();
         AppLog::error(QStringLiteral("Project save failed: %1: %2").arg(path, writeResult.error));
         m_host.showStatus(QStringLiteral("Project save error: %1").arg(writeResult.error));
         if (m_documentState.pendingAction() != ProjectDocumentState::DestructiveAction::None) {
@@ -757,7 +789,8 @@ void DocumentController::restoreStartupState()
         }
         if (!discardedByTombstone) {
             const RecoveryValidity validity = recoveryValidity(
-                snapshot, m_settings.value(QStringLiteral("project/path")).toString());
+                snapshot, m_settings.value(QStringLiteral("project/path")).toString(),
+                m_settings.value(OwnSaveIdKey).toString());
             if (validity == RecoveryValidity::Stale) {
                 AppLog::info(QStringLiteral("Stale recovery snapshot ignored"));
                 clearRecovery(QStringLiteral("stale startup recovery"));
