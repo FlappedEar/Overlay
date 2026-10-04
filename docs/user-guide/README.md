@@ -1,7 +1,7 @@
 # User guide sources
 
 This folder holds the end-user guide published to GitHub Pages at
-<https://arekkozuch.github.io/VBOOverlay/>.
+<https://flappedear.github.io/Overlay/>.
 
 - `pages/*.html` contains one HTML body fragment per page. The first line of each page
   is a metadata comment: `<!-- title: Page title | nav: Sidebar label -->`.

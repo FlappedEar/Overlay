@@ -93,6 +93,7 @@
 #ifdef Q_OS_UNIX
 #include <signal.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 #endif
 
@@ -8393,7 +8394,7 @@ void TelemetryTests::protectsEveryDaySourceFromExport()
     // Through a symlinked folder.
     const QString alias = directory.filePath("alias");
     QVERIFY(QFile::link(directory.path(), alias));
-    for (const QString &name : {"first.vbo", "second-alternative.vbo", "day.fetproject"}) {
+    for (const QString name : {"first.vbo", "second-alternative.vbo", "day.fetproject"}) {
         const auto failure = refused(QDir(alias).filePath(name), directory.filePath(name));
         QVERIFY2(failure.isEmpty(), qPrintable(failure));
     }
@@ -10373,7 +10374,7 @@ void TelemetryTests::providesCustomizableArchetypes()
         const int index = model.addWidget(iterator.key());
         QVERIFY(index >= 0);
         const QVariantMap settings = model.widget(index).value("settings").toMap();
-        for (const QString &common : {
+        for (const QString common : {
                  "backgroundColor", "backgroundOpacity", "borderColor", "cornerRadius",
                  "textColor", "secondaryTextColor", "accentColor", "fontFamily",
                  "fontWeight", "fontSize", "valueFontScale", "labelFontScale", "padding"}) {
@@ -13878,7 +13879,7 @@ void TelemetryTests::rendersPedalsWithoutLayoutLoops()
             widgets.resizeWidget(pedals, size, size / 2);
             QVERIFY(!renderer.renderFrame(1.0).isNull());
         }
-        for (const QString &id : {"track-day", "motorsport-broadcast-smoke", "performance"}) {
+        for (const QString id : {"track-day", "motorsport-broadcast-smoke", "performance"}) {
             QVERIFY(widgets.applyTemplate(id));
             QVERIFY(!renderer.renderFrame(1.0).isNull());
         }

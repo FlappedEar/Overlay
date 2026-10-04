@@ -48,6 +48,10 @@ requests it. When publication is authorized, use a focused PR and record applica
 verification for its exact head and wait for its macOS CI jobs to pass before
 merging. After integration, verify CI on the resulting main revision. Local
 real-media and interactive acceptance remain separate; never substitute old CI results.
+Since 4 October 2026 `main` is protected by a branch ruleset: changes land only
+through a pull request, and the `macOS arm64 / Debug / Qt 6.8.3` and
+`macOS arm64 / Release / Qt 6.8.3` checks must pass first. No approval is required
+(single maintainer); force pushes and branch deletion are blocked.
 All Jira content remains in English. Record the implementation SHA, local results,
 limitations and any authorized PR/merge links. No public releases or tags are
 implied. Historical CI wording elsewhere does not override this workflow.

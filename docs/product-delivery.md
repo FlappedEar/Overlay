@@ -6,7 +6,7 @@ Product scope: [product contract](product-vision.md).
 This is the current delivery authority; old checkpoints and narrow beta documents
 must not override it. Feature implementation is not the same as runtime acceptance.
 
-## Status on 2 October 2026
+## Status on 4 October 2026
 
 This section supersedes the dated baseline below where they differ. The root
 `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` on 2 October
@@ -22,11 +22,12 @@ This section supersedes the dated baseline below where they differ. The root
 | M5 core acceptance ([KAN-10]) | 6 of 12 | Open: KAN-80 and KAN-81 (matching video), KAN-83 (clean machine), KAN-84 (Windows installer, paused), KAN-85 (notices), KAN-86 (closure) |
 | M6 full vision ([KAN-11]) | 14 of 24 | Open: KAN-89, KAN-94–KAN-96, KAN-98, KAN-99, KAN-106, KAN-108–KAN-110 |
 | Product split (KAN-121, superseded by KAN-165) | Phases 1–2 and KAN-132 done; KAN-121 closed; KAN-125 rename merged | Separate repositories (2 October 2026). Stage 1: FlappedEar Overlays standalone in this repository (KAN-125; decision 3 in KAN-122). Stage 2: FlappedEar Telemetry, a new Flutter app from a blank page in its own repository and Jira project (decision KAN-167; architect handover KAN-168; KAN-126–KAN-130 move to the new project), with one `.fetproject` format compatible between both apps (KAN-170). Stage 3, deferred: remove the analysis from Overlays only once Telemetry is mature (gate KAN-169, then KAN-166); until then Overlays stays as it is. Platforms: Overlays macOS and Windows; Telemetry macOS, Windows, iOS and Android |
-| Stabilisation (KAN-144) | 0 of 17 | From the independent audit of 2 October 2026; it gates M5 |
+| Stabilisation (KAN-144) | 9 of 17 | From the independent audit of 2 October 2026; it gates M5. Done: KAN-145 to KAN-151, KAN-156, KAN-159. Open: KAN-152 to KAN-155, KAN-157, KAN-158, KAN-160, KAN-161 (KAN-154: `main` protection enabled 4 October; the Linux CI job is still open) |
 
-- **CI:** Native CI builds macOS arm64 Debug and Release with Qt 6.8.3 and runs 39
-  CTest registrations (36 Qt Test executables, the startup smoke and two library
-  boundary checks; the storage-migration suite was added by KAN-125). `main` at `ca66169` failed in Debug on a post-import test race
+- **CI:** Native CI builds macOS arm64 Debug and Release with Qt 6.8.3 and runs 40
+  CTest registrations (37 Qt Test executables, the startup smoke and two library
+  boundary checks; the storage-migration suite was added by KAN-125 and the
+  content-id vector suite by KAN-180). `main` at `ca66169` failed in Debug on a post-import test race
   (KAN-143, KAN-150); Release passed. Windows CI remains paused; the owner
   validated Windows locally on 2 October 2026 ([record](windows-validation-2026-10-02.md)),
   and Windows code changes for its findings are resumed (KAN-172 to KAN-176).
@@ -56,7 +57,7 @@ results belong in their Jira completion records.
   and visualization foundations do not satisfy an entire F00–F20 capability.
 - **CI verification** means the configured synthetic coverage passed on that
   source state. Current Native CI builds macOS arm64 Debug and Release with Qt
-  6.8.3: 38 CTest registrations on 2 October 2026 (the seven-registration,
+  6.8.3: 40 CTest registrations on 4 October 2026 (the seven-registration,
   501-pass figure describes the 13 September baseline). Release also exercises
   deployment and SDK-isolated package startup. Windows execution remains paused.
 - **Physical acceptance** requires an identified candidate, environment and

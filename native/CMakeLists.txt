@@ -14,7 +14,7 @@ if(MSVC)
 endif()
 
 # One product version: the macOS bundle and the About dialog (KAN-140).
-set(FLAPPEDEAR_VERSION "0.2.0")
+set(FLAPPEDEAR_VERSION "0.3.0")
 add_compile_definitions(FLAPPEDEAR_VERSION="${FLAPPEDEAR_VERSION}")
 
 function(flappedear_enable_warnings target)

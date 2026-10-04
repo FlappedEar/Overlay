@@ -75,7 +75,7 @@ the read-only source of this migration
    or Discard choice.
 4. Update any Dock item or script that names the old bundle or executable path.
 
-The application version remains 0.2.0. These are internal candidates; signing,
+The application version is 0.3.0 (raised from 0.2.0 on 4 October 2026). These are internal candidates; signing,
 notarization and clean-machine acceptance remain separate gates. There is no
 automatic updater. See [candidate acceptance](beta-acceptance.md).
 
