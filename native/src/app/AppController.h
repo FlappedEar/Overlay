@@ -709,6 +709,7 @@ private:
     [[nodiscard]] static QString normalizedSourcePath(const QString &path) { return DocumentController::normalizedSourcePath(path); }
     [[nodiscard]] static QVariantList trackPointsFor(const TrackGeometry &geometry);
     void reconcileAnalysisChannels();
+    void applyAnalysisChannels(const QStringList &channels);
     void clearActiveTemplate();
     void handleExportOutput();
     void finishExport(int exitCode, QProcess::ExitStatus exitStatus);
@@ -819,6 +820,7 @@ private:
     bool m_quitAfterExport = false;
     QVariantMap m_syncCandidate;
     QStringList m_analysisChannels;
+    bool m_analysisChannelsEdited = false;
     bool m_analysisVisible = false;
     // Declared last, analysis after the document it reads: destroyed first.
     DocumentController m_document;

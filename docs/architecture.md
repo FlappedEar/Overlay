@@ -62,6 +62,9 @@ binding comes from `EventProjectCodec::primaryTelemetryBinding`, chart
 series from `telemetry/ChannelSeries`, and lap-time text from
 `formatElapsedTime` in `telemetry/LapTiming`. Editor tests resolve QML
 through `QML_SOURCE_DIR`, not through analysis file paths.
+Since step 2 the editor writes no analysis data on its own: it no longer
+approves automatic segments, and it saves `analysis.channels` as loaded
+unless the chart channels are changed in the Lap Analysis window.
 
 ## Application
 

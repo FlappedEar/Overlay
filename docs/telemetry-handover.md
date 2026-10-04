@@ -229,10 +229,10 @@ Two consequences:
 - **No cross-process lock.** There is no lock between apps and no detection of external changes, so the last writer wins. Editing the same document in both apps at once loses changes.
 
 **Where Overlays changes analysis data today**
-- **On open:** it approves automatic segments when a layout has none, which can leave a freshly opened document unsaved.
+- **On open:** nothing since KAN-166 step 2. Before that it approved automatic segments when a layout had none, which could leave a freshly opened document unsaved.
 - **On save:**
     * `trackInference` is replaced;
-    * `analysis.channels` is rewritten;
+    * `analysis.channels` is kept as loaded, unless the chart channels were changed in the Lap Analysis window (KAN-166 step 2);
     * the active run's primary reference is rewritten from the loaded file. If its fingerprint differs, `contentSha256` is added and `trackConfiguration` reset;
     * default `mapSettings`, `exportSettings` and `documentState` are added, and every reference path is rewritten.
 
@@ -511,7 +511,7 @@ separately because Telemetry never has video.
 
 **Segments** ([`SegmentReviewPanel.qml`](../native/qml/SegmentReviewPanel.qml); [segments guide](user-guide/pages/segments.html))
 
-- [ ] **Automatic segments** from the day's best lap. A `setAutomaticSegments`. Only Overlays switches this on ([`main.cpp`](../native/src/main.cpp)), and it writes analysis data (see [the shared contract](#the-shared-contract-fetproject)).
+- [ ] **Automatic segments** from the day's best lap. A `setAutomaticSegments`. Overlays switched this on until KAN-166 step 2 (October 2026); it no longer does, so only Telemetry writes automatic segments (see [the shared contract](#the-shared-contract-fetproject)).
 - [ ] **Proposals:**
     - **Shown:** state, turn angle, boundaries with tolerance, apex, uncertainty notes.
     - **Actions:** approve, reject, edit, approve all, recompute.

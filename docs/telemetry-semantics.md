@@ -649,8 +649,9 @@ These are ordinary approved segments. The lap view's segment review edits,
 splits, merges or revokes them, and **Approve all** approves every open
 proposal of a lap, whatever its boundary uncertainty. The attempt is made
 once per document, layout and best lap, so revoked segments do not come back
-by themselves. The Overlays app turns this on; the analysis controller's
-default is off, so a headless caller chooses.
+by themselves. The analysis controller's default is off, so a caller
+chooses. FlappedEar Telemetry turns it on; Overlays did until KAN-166 step 2
+(October 2026) and no longer creates segments itself.
 
 Opening the run's video, or switching the active run, while the segments are
 being created cancels that work; it is started again afterwards, so the
