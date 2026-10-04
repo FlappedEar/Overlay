@@ -4,6 +4,7 @@
 #include "export/MediaTimeline.h"
 #include "app/VideoLink.h"
 #include "app/AnalysisController.h"
+#include "app/BestLapFinder.h"
 #include "app/DocumentController.h"
 #include "app/DocumentHost.h"
 #include "telemetry/TelemetrySessionCache.h"
@@ -151,6 +152,9 @@ class AppController final : public QObject, private VideoLink, private DocumentH
     // rather than silently switching the active run and its loaded sources.
     Q_PROPERTY(bool outingLapVideoAvailable READ outingLapVideoAvailable NOTIFY outingLapVideoChanged)
     Q_PROPERTY(qint64 outingLapVideoPositionMilliseconds READ outingLapVideoPositionMilliseconds NOTIFY outingLapVideoChanged)
+    // KAN-185: the day's best lap from lap detection, for the export dialog,
+    // without the Lap Analysis window. See BestLapFinder for its states.
+    Q_PROPERTY(QVariantMap dayBestLap READ dayBestLap NOTIFY dayBestLapChanged)
     Q_PROPERTY(QVariantMap outingRanking READ outingRanking NOTIFY outingLapsChanged)
     Q_PROPERTY(QVariantMap outingProgression READ outingProgression NOTIFY outingLapsChanged)
     // KAN-56: the fastest valid time per approved sector across the current
@@ -318,6 +322,8 @@ public:
     Q_INVOKABLE bool confirmRunTrackConfiguration(const QString &runId, const QString &expectedDerivationKey,
         const QString &layoutId, const QString &direction, bool applyToMatching = false);
     Q_INVOKABLE bool selectOutingComparisonGroup(const QString &groupId);
+    [[nodiscard]] QVariantMap dayBestLap() const { return m_bestLapFinder.result(); }
+    Q_INVOKABLE void requestDayBestLap() { m_bestLapFinder.request(); }
     [[nodiscard]] QVariantMap outingRanking() const;
     [[nodiscard]] QVariantMap outingProgression() const;
     [[nodiscard]] QVariantMap outingTheoreticalBest() const;
@@ -589,6 +595,7 @@ signals:
     void batchImportChanged();
     void batchImportCommitted();
     void outingLapsChanged();
+    void dayBestLapChanged();
     void outingLapDetailChanged();
     void outingLapVideoChanged();
     void outingTheoreticalBestChanged();
@@ -825,6 +832,7 @@ private:
     // Declared last, analysis after the document it reads: destroyed first.
     DocumentController m_document;
     AnalysisController m_analysis{m_document};
+    BestLapFinder m_bestLapFinder{m_document};
 };
 
 } // namespace FlappedEar

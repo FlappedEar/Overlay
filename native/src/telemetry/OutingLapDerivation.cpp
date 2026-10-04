@@ -11,6 +11,7 @@
 
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QMap>
 #include <QSet>
 #include <stdexcept>
 
@@ -145,6 +146,33 @@ OutingLapDerivation deriveOutingLaps(const QJsonArray &sources, const QString &p
         result.messages.append(OutingSourceMessage{{}, QString::fromUtf8(error.what()), "error"});
     }
     return result;
+}
+
+QHash<QString, QJsonObject> outingRunConfigurations(const QJsonArray &sources, const InferredTrackGroups &groups)
+{
+    QHash<QString, QJsonObject> configurations;
+    for (const auto &value : sources) {
+        const auto source = value.toObject();
+        const auto runId = source.value("runId").toString();
+        configurations.insert(runId, groups.configurations.value(runId, source.value("trackConfiguration").toObject()));
+    }
+    return configurations;
+}
+
+QString outingComparisonGroup(const QVector<OutingLapRow> &rows, const QHash<QString, QJsonObject> &configurations,
+    const QString &savedGroupId, const QSet<QString> &staleRunIds)
+{
+    QMap<QString, bool> available; // resolved group -> has a current run
+    for (const auto &row : rows) {
+        const auto id = lapCompatibilityGroupId(configurations.value(row.runId));
+        if (id.isEmpty()) continue;
+        auto &current = available[id];
+        current = current || !staleRunIds.contains(row.runId);
+    }
+    if (!savedGroupId.isEmpty()) return available.contains(savedGroupId) ? savedGroupId : QString();
+    for (auto it = available.cbegin(); it != available.cend(); ++it)
+        if (it.value()) return it.key();
+    return {};
 }
 
 } // namespace FlappedEar

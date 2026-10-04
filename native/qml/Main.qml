@@ -1090,9 +1090,12 @@ ApplicationWindow {
             if (hotlapLap >= 0 && laps.length > 0)
                 exportRangeMode.currentIndex = 2;
         }
-        // The day's best lap, when the analysis knows it.
-        readonly property var dayBestLap: appController.outingRanking.bestOfDay || null
-        onOpened: selectSourceFormat()
+        // The day's best lap, found from lap detection when the dialog opens (KAN-185).
+        readonly property var dayBestLap: appController.dayBestLap.bestOfDay || null
+        onOpened: {
+            appController.requestDayBestLap();
+            selectSourceFormat();
+        }
         background: Rectangle {
             radius: 14
             color: "#0d141d"
@@ -1337,6 +1340,16 @@ ApplicationWindow {
                     visible: exportDialog.singleLapRange.valid !== true
                     text: qsTr("Choose a completed lap whose synchronized range overlaps the video.")
                     color: "#ffb84d"
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: 10
+                }
+                Label {
+                    objectName: "exportFindingDayBestLap"
+                    Layout.columnSpan: 2
+                    Layout.fillWidth: true
+                    visible: appController.dayBestLap.state === "loading"
+                    text: qsTr("Finding the day's best lap…")
+                    color: "#91a0b2"
                     wrapMode: Text.WordWrap
                     font.pixelSize: 10
                 }

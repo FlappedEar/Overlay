@@ -182,6 +182,8 @@ qt_add_library(flappedear_telemetry_app STATIC
     src/app/AnalysisControllerOuting.cpp
     src/app/AnalysisControllerSegmentReview.cpp
     src/app/AnalysisControllerTheoreticalBest.cpp
+    src/app/BestLapFinder.cpp
+    src/app/BestLapFinder.h
     src/app/DocumentController.cpp
     src/app/DocumentController.h
     src/app/DocumentControllerImport.cpp

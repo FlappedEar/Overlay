@@ -130,6 +130,7 @@ private slots:
     void linksOutingLapVideoToActiveRunOnly();
     void followsOutingLapVideoPositionWithinLapBounds();
     void opensRankedLapsAndRecomputesAfterExclusion();
+    void findsTheDayBestLapWithoutTheAnalysis();
     void groupsOutingLapsAfterExplicitConfiguration();
     void persistsDayDecisionsAndKeepsIndependentDetail();
     void restoresDayDecisionsAfterMoveMissingRelinkAndRecovery();
@@ -1888,6 +1889,55 @@ void TelemetryTests::followsOutingLapVideoPositionWithinLapBounds()
     QCOMPARE(controller.outingLapCursor(), start + 0.5);
 }
 
+void TelemetryTests::findsTheDayBestLapWithoutTheAnalysis()
+{
+    // KAN-185: the export dialog's day's best lap comes from lap detection
+    // alone, and matches the analysis ranking through exclusions and renames.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    {
+        AppController empty(nullptr, directory.filePath("empty.json"));
+        QCOMPARE(empty.dayBestLap().value("state").toString(), QString("idle"));
+        empty.requestDayBestLap();
+        QCOMPARE(empty.dayBestLap().value("state").toString(), QString("none"));
+    }
+    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
+    QVERIFY(writeBytes(first, EventProjectFixture::routeVbo()));
+    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(130, -2, 2)));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QVERIFY(controller.importAnalysisRuns("Best lap", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+    QTRY_COMPARE(controller.eventRuns().size(), 2);
+    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
+    QCOMPARE(controller.outingRanking().value("state").toString(), QString("available"));
+    QCOMPARE(controller.dayBestLap().value("state").toString(), QString("idle")); // nothing derived until asked
+    QSignalSpy changed(&controller, &AppController::dayBestLapChanged);
+    controller.requestDayBestLap();
+    QTRY_COMPARE(controller.dayBestLap().value("state").toString(), QString("available"));
+    QVERIFY(changed.size() >= 1);
+    const auto expected = controller.outingRanking().value("bestOfDay").toMap();
+    auto best = controller.dayBestLap().value("bestOfDay").toMap();
+    QVERIFY(!expected.isEmpty());
+    for (const auto *field : {"reference", "runId", "runName", "lapNumber", "durationSeconds", "groupId"})
+        QCOMPARE(best.value(field), expected.value(field));
+
+    // An exclusion re-ranks without deriving the laps again.
+    const auto serial = controller.m_bestLapFinder.m_derived.runs.value(best.value("runId").toString()).derivationSerial;
+    QVERIFY(controller.setOutingLapExcluded(best.value("reference").toMap(), true, "Traffic"));
+    QTRY_VERIFY(controller.dayBestLap().value("bestOfDay").toMap().value("reference") != best.value("reference"));
+    QTRY_COMPARE(controller.outingRanking().value("state").toString(), QString("available"));
+    QCOMPARE(controller.dayBestLap().value("bestOfDay").toMap().value("reference"),
+        controller.outingRanking().value("bestOfDay").toMap().value("reference"));
+    QCOMPARE(controller.m_bestLapFinder.m_derived.runs.value(best.value("runId").toString()).derivationSerial, serial);
+
+    // A renamed run shows its new name.
+    best = controller.dayBestLap().value("bestOfDay").toMap();
+    const auto runId = best.value("runId").toString();
+    const auto token = controller.runMetadata(runId).value("editToken").toString();
+    QVERIFY(controller.updateRunMetadata(runId, token, "Renamed run", "", "", ""));
+    QTRY_COMPARE(controller.dayBestLap().value("bestOfDay").toMap().value("runName").toString(), QString("Renamed run"));
+    QCOMPARE(controller.dayBestLap().value("bestOfDay").toMap().value("reference"), best.value("reference"));
+}
+
 void TelemetryTests::opensRankedLapsAndRecomputesAfterExclusion()
 {
     QTemporaryDir directory; QVERIFY(directory.isValid());
@@ -2436,6 +2486,14 @@ void TelemetryTests::automaticallyGroupsPrivateTrackDay()
     QCOMPARE(controller.outingProgression().value("runs").toList().size(), recordings.size());
     QCOMPARE(controller.outingCompatibilityGroups().first().toMap().value("eligibleLapCount"),
         controller.outingRanking().value("eligibleLapCount"));
+    // KAN-185: the editor's automatic best lap is the analysis's best of the day.
+    controller.requestDayBestLap();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.dayBestLap().value("state").toString(), QString("available"), 120000);
+    qInfo() << "Day's best lap:" << controller.dayBestLap().value("bestOfDay").toMap().value("runName")
+            << controller.dayBestLap().value("bestOfDay").toMap().value("lapNumber")
+            << controller.dayBestLap().value("bestOfDay").toMap().value("durationSeconds");
+    QCOMPARE(controller.dayBestLap().value("bestOfDay").toMap().value("reference"),
+        controller.outingRanking().value("bestOfDay").toMap().value("reference"));
     const auto output = qEnvironmentVariable("FLAPPEDEAR_DAY_REVIEW_PROJECT");
     if (!output.isEmpty()) QVERIFY(controller.saveProject(QUrl::fromLocalFile(output)));
     // Save As rebases source paths and queues verified cache reuse. Capture the
@@ -8165,6 +8223,8 @@ void TelemetryTests::showsOneHotlapAndExportsItByDefault()
     auto *dialog = window->findChild<QObject *>("exportDialog"); QVERIFY(dialog);
     QVERIFY(QMetaObject::invokeMethod(dialog, "open"));
     QTRY_VERIFY(dialog->property("opened").toBool());
+    // KAN-185: opening the dialog asks for the day's best lap.
+    QTRY_VERIFY(controller.dayBestLap().value("state").toString() != QString("idle"));
     QCOMPARE(window->findChild<QObject *>("exportRangeMode")->property("currentIndex").toInt(), 2);
     QCOMPARE(window->findChild<QObject *>("exportLapPicker")->property("currentIndex").toInt(), 0);
     QVERIFY(dialog->property("singleLapRange").toMap().value("valid").toBool());

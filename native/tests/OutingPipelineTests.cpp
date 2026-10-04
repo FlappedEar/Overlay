@@ -41,6 +41,7 @@ private slots:
     void derivesRanksAndSummarizesWithoutTheApplication();
     void reportsAMissingRecordingAndKeepsTheOthers();
     void cancels();
+    void choosesTheComparisonGroup();
 };
 
 void OutingPipelineTests::derivesRanksAndSummarizesWithoutTheApplication()
@@ -125,6 +126,45 @@ void OutingPipelineTests::cancels()
     const auto derived = deriveOutingLaps(QJsonArray{runSource("r1", "Session 1", path)}, {}, {}, cancellation);
     QVERIFY(derived.cancelled);
     QVERIFY(derived.rows.isEmpty());
+}
+
+void OutingPipelineTests::choosesTheComparisonGroup()
+{
+    // KAN-185: the editor's automatic best lap and the analysis rank in the
+    // same group: a saved choice while it still exists, else the first
+    // resolved group with a current run.
+    const auto configuration = [](const QString &layout) {
+        return QJsonObject{{"layoutId", layout}, {"direction", "clockwise"}, {"gateRevision", "gates-v1:" + QString(64, QLatin1Char('a'))}};
+    };
+    const QHash<QString, QJsonObject> configurations{{"a", configuration("Full")}, {"b", configuration("Short")},
+        {"c", QJsonObject{{"direction", "clockwise"}}}};
+    const auto full = lapCompatibilityGroupId(configurations.value("a"));
+    const auto shortLayout = lapCompatibilityGroupId(configurations.value("b"));
+    QVERIFY(!full.isEmpty() && !shortLayout.isEmpty() && full != shortLayout);
+    QVERIFY(lapCompatibilityGroupId(configurations.value("c")).isEmpty());
+    QVector<OutingLapRow> rows;
+    for (const auto *run : {"a", "b", "c"}) { OutingLapRow row; row.runId = run; rows.append(row); }
+    const auto first = std::min(full, shortLayout), last = std::max(full, shortLayout);
+    QCOMPARE(outingComparisonGroup(rows, configurations, {}), first);
+    QCOMPARE(outingComparisonGroup(rows, configurations, last), last);
+    QCOMPARE(outingComparisonGroup(rows, configurations, "compatibility-v1:gone"), QString());
+    QCOMPARE(outingComparisonGroup(rows, configurations, "unresolved:c"), QString());
+    // A group whose only run is stale is skipped automatically, but a saved
+    // choice of it stands.
+    const auto staleRun = first == full ? QString("a") : QString("b");
+    QCOMPARE(outingComparisonGroup(rows, configurations, {}, {staleRun}), last);
+    QCOMPARE(outingComparisonGroup(rows, configurations, first, {staleRun}), first);
+    QCOMPARE(outingComparisonGroup({}, configurations, {}), QString());
+
+    // Inferred configurations win over the saved ones.
+    const QJsonArray sources{QJsonObject{{"runId", "a"}, {"trackConfiguration", configuration("Full")}},
+        QJsonObject{{"runId", "b"}, {"trackConfiguration", configuration("Short")}}};
+    InferredTrackGroups groups;
+    groups.configurations.insert("b", configuration("Inferred"));
+    const auto resolved = outingRunConfigurations(sources, groups);
+    QCOMPARE(resolved.size(), 2);
+    QCOMPARE(resolved.value("a"), configuration("Full"));
+    QCOMPARE(resolved.value("b"), configuration("Inferred"));
 }
 
 QTEST_GUILESS_MAIN(OutingPipelineTests)

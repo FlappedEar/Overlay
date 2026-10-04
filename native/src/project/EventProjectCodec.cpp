@@ -1,5 +1,6 @@
 #include "project/EventProjectCodec.h"
 #include "telemetry/OutingLaps.h"
+#include "telemetry/TrackInference.h"
 #include "telemetry/TrackSegments.h"
 #include "telemetry/TrackSegmentReview.h"
 #include "project/ProjectLimits.h"
@@ -364,6 +365,47 @@ QJsonObject EventProjectCodec::primaryTelemetryBinding(const QJsonObject &projec
         return {};
     }
     return {};
+}
+
+QJsonArray EventProjectCodec::outingLapSources(const QJsonObject &project)
+{
+    QJsonArray sources;
+    const auto event = project.value(QStringLiteral("event")).toObject();
+    for (const QJsonValue &runValue : event.value(QStringLiteral("runs")).toArray()) {
+        const auto run = runValue.toObject();
+        const auto telemetry = run.value(QStringLiteral("sources")).toObject().value(QStringLiteral("telemetry")).toArray();
+        for (const QJsonValue &item : telemetry) {
+            const auto source = item.toObject();
+            if (source.value(QStringLiteral("id")) != run.value(QStringLiteral("primaryTelemetrySourceId"))) continue;
+            QJsonObject descriptor{{"eventId", event.value(QStringLiteral("id"))}, {"runId", run.value(QStringLiteral("id"))},
+                {"name", run.value(QStringLiteral("name"))}, {"sourceId", source.value(QStringLiteral("id"))},
+                {"reference", source.value(QStringLiteral("reference"))},
+                {"expectedRevision", QString::fromLatin1(sourceContentRevision(source))},
+                {"inference", run.value(QStringLiteral("trackInference"))}, {"inferenceVersion", trackInferenceVersion},
+                {"trackConfiguration", trackConfiguration(run)},
+                {"derivationKey", QString::fromLatin1(lapDerivationKey(run))}};
+            if (run.contains(QStringLiteral("fusion"))) {
+                auto fusion = run.value(QStringLiteral("fusion")).toObject();
+                QJsonObject alternative;
+                for (const QJsonValue &other : telemetry)
+                    if (other.toObject().value(QStringLiteral("id")) == fusion.value(QStringLiteral("alternativeSourceId")))
+                        alternative = other.toObject();
+                const auto primaryRevision = sourceContentRevision(source);
+                const auto alternativeRevision = sourceContentRevision(alternative);
+                if (!primaryRevision.isEmpty()
+                    && primaryRevision == fusion.value(QStringLiteral("primarySourceRevision")).toString().toLatin1()
+                    && !alternativeRevision.isEmpty()
+                    && alternativeRevision == fusion.value(QStringLiteral("alternativeSourceRevision")).toString().toLatin1()) {
+                    fusion.insert(QStringLiteral("alternativeReference"), alternative.value(QStringLiteral("reference")));
+                    descriptor.insert(QStringLiteral("fusion"), fusion);
+                } else {
+                    descriptor.insert(QStringLiteral("fusionNeedsRevalidation"), true);
+                }
+            }
+            sources.append(descriptor);
+        }
+    }
+    return sources;
 }
 
 QJsonObject EventProjectCodec::editorProjection(const QJsonObject &project)
