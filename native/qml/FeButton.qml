@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "Theme.js" as Theme
 
 Button {
     id: control
@@ -14,26 +15,27 @@ Button {
 
     contentItem: Text {
         text: control.text
-        color: !control.enabled ? "#596575" : control.accent ? "#07140f" : control.danger ? "#ff8090" : "#dce4ee"
-        font.family: "Helvetica Neue"
-        font.pixelSize: 12
-        font.weight: control.accent ? Font.DemiBold : Font.Medium
+        color: !control.enabled ? Theme.outline : control.accent ? Theme.onPrimary : control.danger ? Theme.error : Theme.onSurface
+        font.family: Theme.sans
+        font.features: Theme.numbers
+        font.pixelSize: Theme.body
+        font.weight: Font.DemiBold
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
     }
     background: Rectangle {
-        radius: 8
+        radius: Theme.radius
         color: {
             if (!control.enabled)
-                return "#131922";
+                return Theme.surfaceContainerLow;
             if (control.accent)
-                return control.down ? "#3fc98d" : control.hovered ? "#6af0b4" : "#55e6a5";
+                return control.down ? Theme.primaryPressed : control.hovered ? Theme.primaryHover : Theme.primary;
             if (control.danger)
-                return control.down ? "#3a1720" : control.hovered ? "#2e1820" : "#21171d";
-            return control.down ? "#202b38" : control.hovered ? "#1c2632" : "#151d27";
+                return control.down || control.hovered ? Theme.errorContainer : Theme.surfaceContainerHigh;
+            return control.down || control.hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh;
         }
-        border.width: control.activeFocus ? 2 : 1
-        border.color: control.activeFocus ? "#55e6a5" : control.danger ? "#5a2935" : "#2a3645"
+        border.width: control.activeFocus ? 2 : 0
+        border.color: control.accent ? Theme.onSurface : Theme.primary
     }
 }
