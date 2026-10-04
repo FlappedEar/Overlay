@@ -96,7 +96,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     controller.setAutomaticSegments(true); // as the application does (KAN-136)
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
-        QFileInfo(QStringLiteral(ANALYSIS_PANEL_QML_PATH)).dir().filePath("Main.qml")));
+        QDir(QStringLiteral(QML_SOURCE_DIR)).filePath("Main.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> object(component.create());
     auto *window = qobject_cast<QQuickWindow *>(object.get());

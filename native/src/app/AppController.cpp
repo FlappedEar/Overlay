@@ -14,6 +14,7 @@
 #include "project/BoundedJsonLoader.h"
 #include "project/ProjectLimits.h"
 #include "project/EventProjectCodec.h"
+#include "telemetry/ChannelSeries.h"
 #include "telemetry/TelemetrySyncEngine.h"
 #include "telemetry/VboParser.h"
 #include "telemetry/TelemetrySource.h"
@@ -1208,7 +1209,7 @@ QVariantMap AppController::telemetrySeries(
     const auto telemetryStart = videoToTelemetryTime(videoStart, m_sync);
     const auto telemetryEnd = videoToTelemetryTime(videoEnd, m_sync);
     if (!telemetryStart || !telemetryEnd) return {};
-    return AnalysisController::sessionSeries(*m_session, channelName, *telemetryStart, *telemetryEnd, maximumPoints);
+    return channelSeries(*m_session, channelName, *telemetryStart, *telemetryEnd, maximumPoints);
 }
 
 int AppController::lapNumberAtPlayback() const
