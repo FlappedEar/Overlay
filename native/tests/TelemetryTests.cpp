@@ -141,6 +141,7 @@ private slots:
     void lapExclusionPolicySharesRankingAndRenderInputs();
     void excludesAndRestoresLapThroughQml();
     void lapExclusionsSurviveSaveRecoveryAndInvalidateSafely();
+    void keepsAnalysisStateThroughOverlayEdits();
     void lapReferencesSurviveReopenAndReordering();
     void lapReferencesRejectSourceAndGateChanges();
     void lapReferencesDetectUnsampledContentChanges();
@@ -2654,6 +2655,57 @@ void TelemetryTests::lapExclusionsSurviveSaveRecoveryAndInvalidateSafely()
         QVERIFY(controller.currentProjectObject().value("event").toObject().value("lapExclusions").toArray().isEmpty());
         QVERIFY(controller.outingLapMessages().join(' ').contains("could not be matched") == false);
     }
+}
+
+void TelemetryTests::keepsAnalysisStateThroughOverlayEdits()
+{
+    // KAN-166 step 1: the editor reads lap exclusions from the document, and
+    // an overlay edit saves every analysis field it did not touch unchanged.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto path = directory.filePath("run.vbo"); QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
+    const auto analysedPath = directory.filePath("analysed.fetproject"), editedPath = directory.filePath("edited.fetproject");
+    QJsonObject analysed;
+    {
+        AppController controller(nullptr, directory.filePath("recovery.json"));
+        QVERIFY(controller.importAnalysisRuns("Round trip", {QUrl::fromLocalFile(path)}));
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
+        QVERIFY(controller.setOutingLapExcluded(controller.outingLaps()[1].toMap().value("reference").toMap(), true, "Traffic"));
+        // The document binding names the same recording the analysis loads.
+        const auto binding = controller.activeLapBinding();
+        QJsonObject analysisSource;
+        for (const auto &value : controller.m_analysis.outingLapSources())
+            if (value.toObject().value("runId").toString() == controller.activeRunId()) analysisSource = value.toObject();
+        QVERIFY(!analysisSource.isEmpty());
+        for (const auto *field : {"eventId", "runId", "sourceId", "derivationKey"})
+            QCOMPARE(binding.value(field), analysisSource.value(field));
+        QCOMPARE(binding.value("expectedRevision"), analysisSource.value("expectedRevision"));
+        QCOMPARE(binding.value("sourceRevision").toString(), QString::fromLatin1(controller.m_loadedSourceRevision));
+        QVERIFY(!controller.m_lapSession.timedLaps[0].referenceEligible());
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(analysedPath)));
+        analysed = QJsonDocument::fromJson(readBytes(analysedPath)).object();
+    }
+    QCOMPARE(analysed.value("version").toInt(), 3);
+    // Fields a newer analysis app writes ride along untouched.
+    auto event = analysed.value("event").toObject();
+    event.insert("futureAnalysis", QJsonObject{{"kept", true}});
+    auto runs = event.value("runs").toArray(); auto run = runs[0].toObject();
+    run.insert("futureRunAnalysis", 3); runs[0] = run; event.insert("runs", runs);
+    analysed.insert("event", event);
+    QVERIFY(writeBytes(analysedPath, QJsonDocument(analysed).toJson()));
+    {
+        AppController controller(nullptr, directory.filePath("edit-recovery.json"));
+        QVERIFY(controller.m_document.beginProjectLoad(analysedPath, analysed));
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+        QVERIFY(!controller.m_lapSession.timedLaps[0].referenceEligible());
+        QVERIFY(controller.widgetModel()->addWidget("lapCurrent") >= 0);
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(editedPath)));
+    }
+    auto edited = QJsonDocument::fromJson(readBytes(editedPath)).object();
+    QVERIFY(edited.value("scene").toObject().value("widgets").toArray().size()
+        > analysed.value("scene").toObject().value("widgets").toArray().size());
+    for (const auto *key : {"scene", "documentState"}) { edited.remove(key); analysed.remove(key); }
+    QCOMPARE(edited, analysed);
 }
 
 void TelemetryTests::lapReferencesSurviveReopenAndReordering()

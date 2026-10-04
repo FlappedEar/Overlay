@@ -346,6 +346,26 @@ QByteArray EventProjectCodec::sourceContentRevision(const QJsonObject &source)
         && digest.size() == 64 && digestPattern.match(digest).hasMatch() ? digest.toLatin1() : QByteArray{};
 }
 
+QJsonObject EventProjectCodec::primaryTelemetryBinding(const QJsonObject &project, const QString &runId)
+{
+    const auto event = project.value(QStringLiteral("event")).toObject();
+    for (const QJsonValue &runValue : event.value(QStringLiteral("runs")).toArray()) {
+        const auto run = runValue.toObject();
+        if (run.value(QStringLiteral("id")).toString() != runId) continue;
+        for (const QJsonValue &sourceValue : run.value(QStringLiteral("sources")).toObject()
+                 .value(QStringLiteral("telemetry")).toArray()) {
+            const auto source = sourceValue.toObject();
+            if (source.value(QStringLiteral("id")) != run.value(QStringLiteral("primaryTelemetrySourceId"))) continue;
+            return {{"eventId", event.value(QStringLiteral("id"))}, {"runId", run.value(QStringLiteral("id"))},
+                {"sourceId", source.value(QStringLiteral("id"))}, {"reference", source.value(QStringLiteral("reference"))},
+                {"expectedRevision", QString::fromLatin1(sourceContentRevision(source))},
+                {"derivationKey", QString::fromLatin1(lapDerivationKey(run))}};
+        }
+        return {};
+    }
+    return {};
+}
+
 QJsonObject EventProjectCodec::editorProjection(const QJsonObject &project)
 {
     if (!isEvent(project)) return project;
