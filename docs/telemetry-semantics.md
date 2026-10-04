@@ -547,8 +547,12 @@ in-lap):
 - identical cycles and constant speed are never approved;
 - a declared clock one minute off is a conflict.
 
-The private Jastrząb day has one VBO per session and no alternative
-recording, so there is no real-data result yet.
+**Real day (4 October 2026).** The private Jastrząb day of 29 August
+2026 (FlappedEar/refdata) has a VBO and an RCZ for each of its six
+sessions. Overlays' own `RecordingAlignment`, run on each pair through
+FlappedEar Telemetry's `cpp_fusion_dump --pairs`, aligned all six by speed
+alone: offsets −0.133 to −0.150 s, uncertainty 0.05 s, no drift, and the
+declared clocks agree within 0.01 s.
 
 ## Channel fusion policy (KAN-102)
 
@@ -604,8 +608,12 @@ its timestamp transformed; nothing is interpolated. Gaps that neither
 source covers stay gaps. When both have a sample at the same instant, the
 preferred source's sample is kept, so timestamps stay strictly increasing.
 
-**Tested on synthetic data only.** The private day has no alternative
-recording, so there is no real-data result yet.
+**Real day (4 October 2026, KAN-184).** On the same six VBO/RCZ pairs,
+with no rules, no channel is added, 31 of the 34 shared channels are
+compared and none conflict; 3 are unit mismatches (longitude and two gyro
+channels, whose values do not agree within their tolerance). Before
+KAN-184 only 2 were compared, because VBO channels declare no unit.
+FlappedEar Telemetry's port gives identical results on all six pairs.
 
 ### Reviewing and approving a fusion (KAN-103)
 

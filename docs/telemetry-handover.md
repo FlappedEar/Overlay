@@ -338,8 +338,7 @@ Recordings come from RaceChrono, as VBO text exports and native RCZ archives.
 7. **Dates.** Day-list times come from the recording's absolute start, never from file names or modification times.
 
 **Open points**
-- Alignment and fusion are verified on synthetic data only.
-- Because VBO channels carry no units, fusing a VBO primary with RCZ channels would hit the equal-unit rule. This is inferred from the code; no test covers it.
+- Alignment and fusion are verified on synthetic data and on the six VBO/RCZ pairs of the private real day (all aligned; 31 of 34 shared channels compared after KAN-184), not yet on other days or loggers.
 
 ### Analysis
 
