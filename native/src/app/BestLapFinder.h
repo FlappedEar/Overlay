@@ -9,7 +9,7 @@
 #include <atomic>
 #include <memory>
 
-class TelemetryTests;
+class SourceTests;
 
 namespace FlappedEar {
 
@@ -40,7 +40,7 @@ signals:
     void resultChanged();
 
 private:
-    friend class ::TelemetryTests; // Reuse checks in regression tests.
+    friend class ::SourceTests; // Reuse checks in regression tests.
     struct Result : OutingLapDerivation {
         QByteArray key;
     };

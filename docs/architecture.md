@@ -58,6 +58,9 @@ product split (`docs/product-split-plan.md`, epic KAN-121, now KAN-165):
 - `flappedear_core` is an interface target over all three. The current
   combined application and its app-level tests use it. Pure test targets
   link only `flappedear_telemetry_core`.
+- **`flappedear_editor`** (KAN-161) holds `AppController`, the editor's QML
+  facade, and `BundledFonts`. The application and the five
+  `flappedear_native_tests_*` suites link it, so these sources compile once.
 
 The editor reads what it needs for laps and charts from the core and the
 document, not from `AnalysisController` (KAN-166 step 1): the lap-exclusion

@@ -41,7 +41,9 @@
 #include <memory>
 #include <optional>
 
-class TelemetryTests;
+class ExportTests;
+class ProjectTests;
+class SourceTests;
 
 namespace FlappedEar {
 
@@ -302,7 +304,9 @@ signals:
     void quitApproved();
 
 private:
-    friend class ::TelemetryTests; // Controlled asynchronous completion in regression tests.
+    friend class ::ExportTests; // Controlled asynchronous completion in regression tests.
+    friend class ::ProjectTests;
+    friend class ::SourceTests;
     void invalidateSyncForTimingEdit();
     struct AutoSyncResult {
         bool success = false;

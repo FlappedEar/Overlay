@@ -8,7 +8,8 @@ endif()
 
 qt_standard_project_setup(REQUIRES 6.8)
 
-# KAN-176: TelemetryTests.cpp exceeds MSVC's default object-section limit (KAN-161 splits it).
+# KAN-176: the native GUI test suites exceeded MSVC's default object-section limit; kept
+# after the KAN-161 split as a guard for the largest of them.
 if(MSVC)
     add_compile_options(/bigobj)
 endif()
@@ -305,17 +306,33 @@ elseif(WIN32)
     list(APPEND FLAPPEDEAR_PLATFORM_ICON resources/branding/app-icon.rc)
 endif()
 
-qt_add_executable(flappedear_native MACOSX_BUNDLE
+# The editor's QML facade (KAN-161): built once and linked by the application and the
+# native GUI test suites, which used to compile these sources again.
+qt_add_library(flappedear_editor STATIC
     src/app/AppControllerDocument.cpp
     src/app/AppController.cpp
     src/app/AppController.h
     src/app/BundledFonts.cpp
     src/app/BundledFonts.h
+)
+target_compile_features(flappedear_editor PUBLIC cxx_std_20)
+target_link_libraries(flappedear_editor PUBLIC
+    flappedear_core
+    Qt6::Core
+    Qt6::Concurrent
+    Qt6::Gui
+    Qt6::Quick
+    Qt6::Multimedia
+)
+flappedear_enable_warnings(flappedear_editor)
+
+qt_add_executable(flappedear_native MACOSX_BUNDLE
     src/main.cpp
     ${FLAPPEDEAR_PLATFORM_ICON}
 )
 target_compile_features(flappedear_native PRIVATE cxx_std_20)
 target_link_libraries(flappedear_native PRIVATE
+    flappedear_editor
     flappedear_core
     Qt6::Core
     Qt6::Concurrent

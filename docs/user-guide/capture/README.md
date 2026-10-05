@@ -22,7 +22,7 @@ FLAPPEDEAR_GUIDE_VBO=/path/to/session_20260829_160659_jastrząb_kaizenvtec.vbo \
 FLAPPEDEAR_GUIDE_DAY=/path/to/folder/with/that/days/vbos \
 FLAPPEDEAR_GUIDE_CHAPTERS=/path/to/GX010091.MP4,/path/to/GX020091.MP4 \
 QTEST_FUNCTION_TIMEOUT=3600000 \
-build-native/native/tests/flappedear_native_tests capturesUserGuideScreens
+build-native/native/tests/flappedear_native_tests_editor capturesUserGuideScreens
 cp /path/to/output/*.png docs/user-guide/assets/screens/
 python3 docs/user-guide/build.py
 ```

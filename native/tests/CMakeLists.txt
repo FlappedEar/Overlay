@@ -19,80 +19,93 @@ target_compile_features(flappedear_probe_test_helper PRIVATE cxx_std_20)
 target_link_libraries(flappedear_probe_test_helper PRIVATE Qt6::Core)
 flappedear_enable_warnings(flappedear_probe_test_helper)
 
-qt_add_executable(flappedear_native_tests
-    UserGuideCapture.cpp
-    UserGuideCapture.h
-    ../src/app/AppControllerDocument.cpp
-    TelemetryTests.cpp
-    ../src/app/AppController.cpp
-    ../src/app/AppController.h
-    ../src/app/BundledFonts.cpp
-    ../src/app/BundledFonts.h
-)
-target_compile_features(flappedear_native_tests PRIVATE cxx_std_20)
-target_link_libraries(flappedear_native_tests PRIVATE flappedear_core Qt6::Concurrent Qt6::Gui Qt6::GuiPrivate Qt6::Multimedia Qt6::QuickControls2 Qt6::Test ZLIB::ZLIBSTATIC)
-flappedear_enable_warnings(flappedear_native_tests)
-qt_add_resources(flappedear_native_tests "flappedear_test_qml"
-    PREFIX "/qt/qml/FlappedEar/qml"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/../qml"
-    FILES
-        ../qml/TelemetryScene.qml
-        ../qml/widgets/LapTimeWidget.qml
-        ../qml/widgets/DesignedElements.qml
-        ../qml/widgets/DesignedWidget.qml
-        ../qml/widgets/RetroTachometerWidget.qml
-        ../qml/widgets/PedalsWidget.qml
-        ../qml/widgets/TelemetryPanel.qml
-        ../qml/widgets/TyresWidget.qml
-        ../qml/widgets/GForceData.qml
-        ../qml/widgets/tech/TechCustomValue.qml
-        ../qml/widgets/tech/TechGForce.qml
-        ../qml/widgets/tech/TechHeartRate.qml
-        ../qml/widgets/tech/TechLabel.qml
-        ../qml/widgets/tech/TechLapTime.qml
-        ../qml/widgets/tech/TechPanel.qml
-        ../qml/widgets/tech/TechPedals.qml
-        ../qml/widgets/tech/TechRadar.qml
-        ../qml/widgets/tech/TechSpeed.qml
-        ../qml/widgets/tech/TechTachometer.qml
-        ../qml/widgets/tech/TechTyres.qml
-)
-# The application's logo and fonts, so production QML loaded by tests (and the user-guide
-# capture) shows it as the application does.
-qt_add_resources(flappedear_native_tests "flappedear_test_branding"
-    PREFIX "/flappedear"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/.."
-    FILES
-        ../resources/branding/app-logo.png
-        ../resources/fonts/Sora-400.ttf
-        ../resources/fonts/Sora-500.ttf
-        ../resources/fonts/Sora-600.ttf
-        ../resources/fonts/Sora-700.ttf
-        ../resources/fonts/JetBrainsMono-500.ttf
-        ../resources/fonts/JetBrainsMono-600.ttf
-        ../resources/fonts/JetBrainsMono-700.ttf
-        ../resources/fonts/ChakraPetch-500.ttf
-        ../resources/fonts/ChakraPetch-600.ttf
-        ../resources/fonts/ChakraPetch-700.ttf
-)
-target_compile_definitions(flappedear_native_tests PRIVATE
-    GUI_SESSION_LOCK_HELPER_PATH="$<TARGET_FILE:flappedear_gui_session_lock_helper>"
-    TEST_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/basic.vbo"
-    QML_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../qml"
-    RAW_TRANSPORT_CONSUMER_PATH="$<TARGET_FILE:flappedear_raw_transport_consumer>"
-    PROBE_TEST_HELPER_PATH="$<TARGET_FILE:flappedear_probe_test_helper>"
-    FLAPPEDEAR_NATIVE_PATH="$<TARGET_FILE:flappedear_native>"
-)
-add_dependencies(flappedear_native_tests flappedear_gui_session_lock_helper flappedear_native flappedear_raw_transport_consumer flappedear_probe_test_helper)
-add_test(NAME flappedear_native_tests COMMAND flappedear_native_tests)
-# Window interaction tests need real native handles for the QRhi swapchain.
-# Offscreen QPA supplies synthetic IDs, not NSView/HWND handles. Preserve the
-# renderer/backend and all export pixel assertions; startup smoke is separate.
-if(APPLE)
-    set_tests_properties(flappedear_native_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=cocoa")
-elseif(WIN32)
-    set_tests_properties(flappedear_native_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=windows")
-endif()
+# KAN-161: the native GUI suites, one executable and one CTest entry per domain, so a
+# failure stays within its domain and CTest can run them in parallel. Each loads the
+# production QML and fonts, and can stand in as the export worker (NativeTestSupport.h).
+function(flappedear_add_native_test_suite name)
+    set(target flappedear_native_tests_${name})
+    qt_add_executable(${target} ${ARGN} NativeTestSupport.h)
+    target_compile_features(${target} PRIVATE cxx_std_20)
+    target_link_libraries(${target} PRIVATE flappedear_editor flappedear_core Qt6::Concurrent Qt6::Gui Qt6::GuiPrivate Qt6::Multimedia Qt6::QuickControls2 Qt6::Test ZLIB::ZLIBSTATIC)
+    flappedear_enable_warnings(${target})
+    # The Qt headers every suite includes, precompiled once and shared by the suites.
+    if(TARGET flappedear_native_tests_editor AND NOT name STREQUAL "editor")
+        target_precompile_headers(${target} REUSE_FROM flappedear_native_tests_editor)
+    else()
+        target_precompile_headers(${target} PRIVATE
+            <QJsonDocument> <QMediaPlayer> <QProcess> <QQmlComponent> <QQmlContext> <QQmlEngine>
+            <QQuickItem> <QQuickStyle> <QQuickWindow> <QSettings> <QTemporaryDir> <QVideoFrame>
+            <QVideoSink> <QtTest>)
+    endif()
+    qt_add_resources(${target} "flappedear_test_qml"
+        PREFIX "/qt/qml/FlappedEar/qml"
+        BASE "${CMAKE_CURRENT_SOURCE_DIR}/../qml"
+        FILES
+            ../qml/TelemetryScene.qml
+            ../qml/widgets/LapTimeWidget.qml
+            ../qml/widgets/DesignedElements.qml
+            ../qml/widgets/DesignedWidget.qml
+            ../qml/widgets/RetroTachometerWidget.qml
+            ../qml/widgets/PedalsWidget.qml
+            ../qml/widgets/TelemetryPanel.qml
+            ../qml/widgets/TyresWidget.qml
+            ../qml/widgets/GForceData.qml
+            ../qml/widgets/tech/TechCustomValue.qml
+            ../qml/widgets/tech/TechGForce.qml
+            ../qml/widgets/tech/TechHeartRate.qml
+            ../qml/widgets/tech/TechLabel.qml
+            ../qml/widgets/tech/TechLapTime.qml
+            ../qml/widgets/tech/TechPanel.qml
+            ../qml/widgets/tech/TechPedals.qml
+            ../qml/widgets/tech/TechRadar.qml
+            ../qml/widgets/tech/TechSpeed.qml
+            ../qml/widgets/tech/TechTachometer.qml
+            ../qml/widgets/tech/TechTyres.qml
+    )
+    # The application's logo and fonts, so production QML loaded by tests (and the user-guide
+    # capture) shows it as the application does.
+    qt_add_resources(${target} "flappedear_test_branding"
+        PREFIX "/flappedear"
+        BASE "${CMAKE_CURRENT_SOURCE_DIR}/.."
+        FILES
+            ../resources/branding/app-logo.png
+            ../resources/fonts/Sora-400.ttf
+            ../resources/fonts/Sora-500.ttf
+            ../resources/fonts/Sora-600.ttf
+            ../resources/fonts/Sora-700.ttf
+            ../resources/fonts/JetBrainsMono-500.ttf
+            ../resources/fonts/JetBrainsMono-600.ttf
+            ../resources/fonts/JetBrainsMono-700.ttf
+            ../resources/fonts/ChakraPetch-500.ttf
+            ../resources/fonts/ChakraPetch-600.ttf
+            ../resources/fonts/ChakraPetch-700.ttf
+    )
+    target_compile_definitions(${target} PRIVATE
+        GUI_SESSION_LOCK_HELPER_PATH="$<TARGET_FILE:flappedear_gui_session_lock_helper>"
+        TEST_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/basic.vbo"
+        QML_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../qml"
+        RAW_TRANSPORT_CONSUMER_PATH="$<TARGET_FILE:flappedear_raw_transport_consumer>"
+        PROBE_TEST_HELPER_PATH="$<TARGET_FILE:flappedear_probe_test_helper>"
+        FLAPPEDEAR_NATIVE_PATH="$<TARGET_FILE:flappedear_native>"
+    )
+    add_dependencies(${target} flappedear_gui_session_lock_helper flappedear_native flappedear_raw_transport_consumer flappedear_probe_test_helper)
+    add_test(NAME ${target} COMMAND ${target})
+    # Window interaction tests need real native handles for the QRhi swapchain.
+    # Offscreen QPA supplies synthetic IDs, not NSView/HWND handles. Preserve the
+    # renderer/backend and all export pixel assertions; startup smoke is separate.
+    if(APPLE)
+        set_tests_properties(${target} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=cocoa")
+    elseif(WIN32)
+        set_tests_properties(${target} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=windows")
+    endif()
+endfunction()
+
+flappedear_add_native_test_suite(editor NativeEditorTests.cpp UserGuideCapture.cpp UserGuideCapture.h)
+flappedear_add_native_test_suite(sources NativeSourceTests.cpp)
+flappedear_add_native_test_suite(project NativeProjectTests.cpp)
+flappedear_add_native_test_suite(export NativeExportTests.cpp)
+flappedear_add_native_test_suite(widgets NativeWidgetTests.cpp)
+
 qt_add_executable(flappedear_rcz_tests RczTests.cpp RczFixture.h)
 target_compile_features(flappedear_rcz_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_rcz_tests PRIVATE flappedear_telemetry_core Qt6::Test ZLIB::ZLIBSTATIC)

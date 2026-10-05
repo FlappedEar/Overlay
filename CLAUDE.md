@@ -37,7 +37,7 @@ cmake -S . -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH
 cmake --build build-native --parallel
 ```
 
-`flappedear_native_tests` needs an OpenGL context: install `xvfb` and `libgl1-mesa-dri`, then run
+The `flappedear_native_tests_*` suites need an OpenGL context: install `xvfb` and `libgl1-mesa-dri`, then run
 CTest under `xvfb-run -a` with `QT_QPA_PLATFORM=xcb QSG_RHI_BACKEND=opengl`. Linux is not a
 supported platform: report its results separately from macOS CI. Export tests need FFmpeg 8.1 or
 newer (`setparams` with `alpha_mode`; Ubuntu 24.04's FFmpeg 6.1 lacks it), and tests that

@@ -38,7 +38,7 @@
 #include <memory>
 #include <optional>
 
-class TelemetryTests;
+class SourceTests;
 
 namespace FlappedEar {
 
@@ -378,7 +378,7 @@ signals:
     void sourceLoadStateChanged();
 
 private:
-    friend class ::TelemetryTests; // Controlled asynchronous completion in regression tests.
+    friend class ::SourceTests; // Controlled asynchronous completion in regression tests.
     AnalysisDocument &m_document;
     QSettings m_settings;
     [[nodiscard]] bool documentEditable() const;
