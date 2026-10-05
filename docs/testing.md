@@ -7,6 +7,11 @@ cmake --build build-native --parallel
 ctest --test-dir build-native --output-on-failure
 ```
 
+Lap Analysis UI tests named in this document (for example `analyzesPrivateTrackDayCorners`,
+`selectsIndependentComparisonLapsThroughQml` and the other QML-driven analysis tests) were removed
+with the analysis QML by KAN-166 step 4 (5 October 2026). They remain at commit `7eae6cd`
+(recorded on KAN-169); their sections are kept as the record of what was verified.
+
 Run the local gate appropriate to the change before claiming a behavior works. Cloud CI is enabled for macOS Debug and Release by owner direction; Windows CI remains paused, and the owner validates Windows locally ([2 October 2026](windows-validation-2026-10-02.md)). Follow the current [local task workflow](development-workflow.md).
 
 Claude Code cloud sessions (Linux) get Qt 6.8.3 from conda-forge through the SessionStart hook in `.claude/hooks/session-start.sh`, which sets `CMAKE_PREFIX_PATH` and `QT_QPA_PLATFORM=offscreen`. Linux is not a CI platform: report Linux results separately from macOS CI. Export tests need FFmpeg 8.1 or newer on `PATH`; the Ubuntu package (6.1.1) fails the composition-filter preflight.
@@ -791,8 +796,8 @@ The VBO parser still records no channel units: RaceChrono declares them in
 adding them would ask every saved project to relink its recordings. Speeds
 therefore show without a unit.
 
-Opt-in real-day check (recordings stay out of Git; screenshots go to a local
-directory):
+Opt-in real-day check, up to commit `7eae6cd` (recordings stay out of Git;
+screenshots go to a local directory):
 
 ```bash
 FLAPPEDEAR_REAL_DAY="$PWD/jastrzab" FLAPPEDEAR_CORNER_REVIEW_DIR=/tmp/review \
@@ -1743,7 +1748,7 @@ FLAPPEDEAR_REAL_DAY="$PWD/jastrzab" \
 It expects multiple recordings of one compatible route and direction and checks
 automatic rankings/progression for every run. The repo-root `jastrzab/` directory
 is ignored; never add private sessions to the repository. Optional
-`FLAPPEDEAR_DAY_REVIEW_PROJECT` and `FLAPPEDEAR_DAY_REVIEW_IMAGE` paths write a local
+`FLAPPEDEAR_DAY_REVIEW_PROJECT` (and, up to commit `7eae6cd`, `FLAPPEDEAR_DAY_REVIEW_IMAGE`) paths write a local
 review project and captures of the production Analysis window and Progression
 dialog, correction controls and GPS traces. Store those outside the repository. These captures and keyboard-driven
 QML regressions complement, rather than establish, owner-operated acceptance.

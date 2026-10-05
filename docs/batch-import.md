@@ -29,8 +29,8 @@ Analysis then uses VBO; RCZ remains attached as an alternative source.
 
 ## Lap Analysis: the whole day
 
-Since KAN-166 step 3 (5 October 2026) the Lap Analysis window has no entry point;
-this section describes it until step 4 deletes it. Day import stays reachable
+KAN-166 removed the Lap Analysis window (steps 3 and 4, 5 October 2026); this
+section describes it as it was up to commit `7eae6cd`. Day import stays reachable
 through **File › Import telemetry runs…** until step 6 (KAN-186).
 
 1. Launch the application and choose **Lap Analysis** on the welcome screen.

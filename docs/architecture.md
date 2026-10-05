@@ -202,7 +202,7 @@ describe the remaining boundaries.
 generation guards to build the event's chronological OUT/LAP/IN rows. Unknown
 recording times remain explicit and sort after dated rows in import order.
 Opening a row loads an independent, bounded detail session for its telemetry
-range; `OutingLapDetailPanel` presents channels and a map with a shared cursor.
+range; `OutingLapDetailPanel` (up to `7eae6cd`) presented channels and a map with a shared cursor.
 This inspection does not replace the editor's active run or its video transform.
 Event statistics, independent A/B distance alignment, sectors and time-loss
 analysis are separate components (comparison, segment review, theoretical
@@ -285,7 +285,7 @@ Synchronization, telemetry time, lap seeking and the analysis video link all use
 
 **Mapping a track point to a frame.** `AnalysisController::comparisonVideoAtProgress` maps a track point to the lap's telemetry time through its projected trace. It then applies that run's own sync (telemetry = video × timeScale + offset), then a chapter and local time. `comparisonProgressForVideo` is the inverse.
 
-**The panes (`ComparisonVideoPane.qml`).**
+**The panes (`ComparisonVideoPane.qml`, up to `7eae6cd`).**
 - **Paused:** both panes show the frame at the shared cursor, or just inside the zoomed range. A paused seek plays silently until a frame at the position shows.
 - **Playing:** the first lap with footage plays in real time and reports the track progress it reaches. The shared cursor follows it, and so do the charts, the map and the other pane. The other lap keeps to the same track position, re-seeking when it drifts by more than 0.25 s, so it runs ahead or behind real time where the lap times differ.
 - **Chapters:** a chapter boundary loads the next file at the right local position.
@@ -295,7 +295,7 @@ Synchronization, telemetry time, lap seeking and the analysis video link all use
 
 The editor's look follows FlappedEar Telemetry's design language: every colour, font and corner comes from `qml/Theme.js`, and the bundled Sora and JetBrains Mono fonts are registered at startup ([editor look](ui-theme.md)).
 
-The floating Analysis window is transient UI state. It starts closed for application startup, New, and Open. A QML `Loader` creates `AnalysisWindow` and its secondary `MediaPlayer` only after the user opens Analysis; closing it deactivates the loader and releases the secondary decoder. Channel selection remains persistent project configuration.
+The Lap Analysis window and its panels and dialogs were deleted by KAN-166 step 4 (5 October 2026); they remain at commit `7eae6cd` (KAN-169). The editor's preview owns the only `MediaPlayer`, which the startup smoke checks. `AnalysisController` still runs behind `AppController` until step 5; the descriptions of analysis behaviour in this document refer to it, and the QML named in them is at that commit.
 
 `WidgetModel` owns persistent widgets, groups, appearance cues, and templates. It is also the sole semantic normalizer for direct edits, imported scenes, template application, imported templates, and template-store reload: supported numeric settings and geometry remain finite and bounded, invalid known colors fall back to defaults, invalid range pairs are repaired, cues are normalized, and persisted widget IDs must be valid and unique. Width/height/scale limits and position re-clamping keep the unrotated rectangle inside the scene during creation, import, duplication, scaling, and resizing. `TelemetryScene.qml` is the render-only telemetry layer: it has a render context and widget model but no editor-selection or media-player dependency. Its shared frame owns normalized geometry, appearance cues, background, border, title, and formatting helpers; one `Loader` then instantiates only the renderer matching each widget type from `qml/widgets/`. Editor interaction remains in the surrounding QML components, including a rotation-matched selection surface, while preview and export use the same scene definition.
 

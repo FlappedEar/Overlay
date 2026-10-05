@@ -341,29 +341,8 @@ qt_add_qml_module(flappedear_native
     QML_FILES
         qml/Theme.js
         qml/ColorField.qml
-        qml/AnalysisPanel.qml
         qml/BatchImportDialog.qml
-        qml/AnalysisWindow.qml
-        qml/AnalysisStartPanel.qml
-        qml/OutingProgressionDialog.qml
-        qml/TheoreticalBestDialog.qml
-        qml/TimeLossDialog.qml
-        qml/SectionProgressionView.qml
-        qml/CarDriverView.qml
-        qml/DayTrendChart.qml
-        qml/DayReportDialog.qml
-        qml/RunDetailsDialog.qml
         qml/VideoChaptersDialog.qml
-        qml/OutingLapPanel.qml
-        qml/OutingLapDetailPanel.qml
-        qml/ComparisonDetailPanel.qml
-        qml/ComparisonOverlayChart.qml
-        qml/ComparisonOverlayMap.qml
-        qml/ComparisonSegmentPanel.qml
-        qml/ComparisonGgPanel.qml
-        qml/ComparisonVideoPane.qml
-        qml/ComparisonLapDialog.qml
-        qml/LapTimingPanel.qml
         qml/FeButton.qml
         qml/FeCheckBox.qml
         qml/FeComboBox.qml
@@ -375,9 +354,6 @@ qt_add_qml_module(flappedear_native
         qml/StartupError.qml
         qml/Main.qml
         qml/SectionTitle.qml
-        qml/SegmentReviewPanel.qml
-        qml/CoastingPanel.qml
-        qml/TrackMapPanel.qml
         qml/TelemetryScene.qml
         qml/VisualSmokeScene.qml
         qml/WidgetOverlay.qml
