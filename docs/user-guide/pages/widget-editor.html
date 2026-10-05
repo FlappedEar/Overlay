@@ -1,0 +1,50 @@
+<!-- title: Widget editor | nav: Widget editor -->
+<h1 id="widget-editor">Widget editor</h1>
+<p class="lead">The widget editor builds your own widgets from simple elements: text, live values, bars, lap times and shapes. Keep the ones you like in <strong>My widgets</strong> and add them to any project.</p>
+
+<figure>
+  <img src="assets/screens/widget-editor.png" alt="Widget editor: element list on the left, the widget on a canvas in the middle, element properties on the right" width="1440" height="900" loading="lazy">
+  <figcaption>The widget editor with the starting design of a new widget: a label, a speed value, a unit and a speed bar.</figcaption>
+</figure>
+
+<h2 id="new">Designing a new widget</h2>
+<ol class="steps">
+  <li>In the left sidebar, under <strong>Add widget</strong>, click <strong>New widget…</strong>. A designed widget named <em>My widget</em> is added to the scene and the editor opens.</li>
+  <li>Add elements with the buttons under <strong>Add element</strong>, or select one in the <strong>Elements</strong> list or on the canvas.</li>
+  <li>Drag an element on the canvas to move it, and drag its amber corner handle to resize it. With <strong>Snap to grid</strong> on, positions and sizes snap to 2 % of the widget. The arrow keys nudge the selected element by 1 %.</li>
+  <li>Set the element's details on the right.</li>
+  <li>Click <strong>Done</strong>.</li>
+</ol>
+<p>Every change shows at once in the editor and in the preview behind it. <strong>Cancel</strong> puts the widget back exactly as it was when the editor opened, size included. <strong>Undo</strong> and <strong>Redo</strong> (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) step through changes to the elements made since the editor opened. <strong>Delete</strong> or Backspace removes the selected element; while the editor is open these keys never delete the widget itself.</p>
+<p>To change a designed widget later, select it and click <strong>Edit design…</strong> at the top of the Inspector's <strong>WIDGET</strong> tab. Its position, scale, rotation, opacity and animation cues are set in the Inspector as for any other widget.</p>
+
+<h2 id="elements">Elements</h2>
+<table>
+  <tr><th>Element</th><th>Shows</th><th>Settings</th></tr>
+  <tr><td>Text</td><td>Fixed text, such as a label or a driver name</td><td>Text, colour, size, alignment, bold</td></tr>
+  <tr><td>Value</td><td>A telemetry channel at the playhead</td><td>Channel, decimals, multiplier, offset, prefix, suffix, text when there is no data, colour, size, alignment, bold</td></tr>
+  <tr><td>Bar</td><td>A channel as a filled bar between a minimum and a maximum</td><td>Channel, multiplier, offset, minimum, maximum, direction (left to right or bottom to top), fill and track colours, corner radius</td></tr>
+  <tr><td>Lap time</td><td>Current, best or last lap time, live delta to the best lap, last lap's delta to the best, current or best lap number</td><td>What it shows, decimals, prefix, suffix, text when there is no data, colour; deltas can be coloured by gain or loss</td></tr>
+  <tr><td>Shape</td><td>A filled rectangle, for panels, stripes and separators</td><td>Colour, corner radius</td></tr>
+</table>
+<ul>
+  <li>Every element has a name (shown in the list), <strong>Visible</strong>, a placement in percent of the widget (X, Y, W, H) and an opacity. Elements later in the list are drawn on top; <strong>Forward</strong> and <strong>Backward</strong> change the order.</li>
+  <li>Text size is a fraction of the element's height. Text that is too wide for its element is made smaller to fit.</li>
+  <li>The <strong>Channel</strong> list starts with the recognised channels (speed, RPM, throttle, brake, heart rate, lateral and longitudinal G), then the loaded file's channel names. Values are read and smoothed exactly as in the other widgets (see <a href="widgets.html#data">How widgets read telemetry</a>): no data shows the element's <em>no data</em> text, an em dash <code>—</code> by default, and an empty bar.</li>
+  <li>To show mph from a km/h speed channel, set <strong>Multiplier</strong> to <code>0.621371</code> and the suffix or a text element to <code>mph</code>.</li>
+  <li>Lap time elements use the same lap timing as the lap tiles (see <a href="widgets.html#catalog">Widget catalog</a>). Before the first start-line crossing they show the <em>no data</em> text.</li>
+  <li>The <strong>Panel</strong> section sets the widget's background, border and corner radius; the font family comes from the Inspector.</li>
+  <li>The size fields under the canvas set the widget's size in pixels of a 1920×1080 frame. A widget holds at most 64 elements.</li>
+</ul>
+
+<h2 id="my-widgets">My widgets</h2>
+<p><strong>My widgets</strong> keeps widgets for reuse in every project. It holds designed widgets and also styled built-in widgets, for example a Speed widget in your colours.</p>
+<ul>
+  <li><strong>Save to My widgets</strong> (in the editor's header, or in the Inspector's <strong>WIDGET</strong> tab for any widget) stores the widget's type, size and every setting under its layer name. Position, cues and groups stay in the project.</li>
+  <li>When the widget came from My widgets, the button reads <strong>Update in My widgets</strong> and replaces the stored version.</li>
+  <li>Click a widget in the sidebar list to add a copy to the scene.</li>
+  <li><strong>⇪</strong> exports it to a <code>.fetwidget</code> file; <strong>Import widget…</strong> adds one. Files larger than 1 MiB, of an unknown widget type, or with more than 64 elements are rejected, and a red message under <strong>My widgets</strong> says why.</li>
+  <li><strong>✕</strong> deletes it from My widgets immediately, without confirmation. Widgets already in projects are not affected.</li>
+</ul>
+<p>Up to 128 widgets can be stored. They are kept in <code>widget-library.json</code> in the application's settings folder (see <a href="projects.html#files">Where files are stored</a>). If that file cannot be read, a red message appears under <strong>My widgets</strong>, the file is left untouched and saving is disabled; see <a href="troubleshooting.html#templates">Troubleshooting</a>.</p>
+<p>A designed widget is saved inside the project and in layout templates like any other widget, so a project or template that uses one opens anywhere, with or without your My widgets list.</p>

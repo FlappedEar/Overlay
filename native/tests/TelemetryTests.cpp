@@ -161,6 +161,11 @@ private slots:
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersAllComparisonTilesInProductionScene();
     void rendersTyresInExportScene();
+    void normalizesDesignedWidgetElements();
+    void persistsWidgetLibrary();
+    void rejectsMalformedWidgetLibraries();
+    void rendersDesignedWidgetInExportScene();
+    void editsDesignedWidgetInWidgetEditor();
     void rendersPedalsWithoutLayoutLoops();
     void decodesOptionalRealVideoFrameWithNativeSink();
     void benchmarksCachedOptionalRealVboPresentationLookups();
@@ -7232,6 +7237,320 @@ void TelemetryTests::rendersPedalsWithoutLayoutLoops()
     qInstallMessageHandler(previous);
     capturedLayoutWarnings = nullptr;
     QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
+}
+
+void TelemetryTests::normalizesDesignedWidgetElements()
+{
+    // KAN-191: a designed widget's elements are bounded and normalised on every path in.
+    WidgetModel model;
+    const int index = model.addWidget(QStringLiteral("designed"));
+    QVERIFY(index >= 0);
+    QVariantList defaults = model.widget(index).value("settings").toMap().value("elements").toList();
+    QCOMPARE(defaults.size(), 4);
+    QCOMPARE(defaults[1].toMap().value("kind").toString(), QStringLiteral("value"));
+    QCOMPARE(defaults[1].toMap().value("source").toString(), QStringLiteral("speed"));
+    QVERIFY(defaults[1].toMap().contains("fallbackText"));
+
+    const QVariantList raw{
+        QVariantMap{{"kind", "text"}, {"id", "same"}, {"x", 0.9}, {"w", 0.5}, {"h", -3},
+                    {"color", "not a colour"}, {"fontScale", 99}, {"align", "justify"}, {"unknown", 1}},
+        QVariantMap{{"kind", "rocket"}, {"id", "dropped"}},
+        QVariantMap{{"kind", "bar"}, {"id", "same"}, {"minValue", 10}, {"maxValue", 5},
+                    {"orientation", "vertical"}, {"decimals", 42}, {"multiplier", qQNaN()}},
+        QVariantMap{{"kind", "lap"}, {"lapField", "lastDelta"}, {"text", QString(500, QLatin1Char('x'))}},
+        QStringLiteral("not an element"),
+    };
+    model.setElements(index, raw);
+    const QVariantList elements = model.widget(index).value("settings").toMap().value("elements").toList();
+    QCOMPARE(elements.size(), 3);
+    const QVariantMap text = elements[0].toMap();
+    QCOMPARE(text.value("id").toString(), QStringLiteral("same"));
+    QCOMPARE(text.value("w").toDouble(), 0.5);
+    QCOMPARE(text.value("h").toDouble(), 0.01);
+    QCOMPARE(text.value("x").toDouble(), 0.5);
+    QCOMPARE(text.value("color").toString(), QStringLiteral("#f2f5f7"));
+    QCOMPARE(text.value("fontScale").toDouble(), 2.0);
+    QCOMPARE(text.value("align").toString(), QStringLiteral("center"));
+    QVERIFY(!text.contains("unknown"));
+    const QVariantMap bar = elements[1].toMap();
+    QVERIFY(bar.value("id").toString() != QStringLiteral("same"));
+    QCOMPARE(bar.value("minValue").toDouble(), 0.0);
+    QCOMPARE(bar.value("maxValue").toDouble(), 100.0);
+    QCOMPARE(bar.value("orientation").toString(), QStringLiteral("vertical"));
+    QCOMPARE(bar.value("decimals").toInt(), 6);
+    QCOMPARE(bar.value("multiplier").toDouble(), 1.0);
+    QCOMPARE(elements[2].toMap().value("lapField").toString(), QStringLiteral("lastDelta"));
+    QCOMPARE(elements[2].toMap().value("text").toString().size(), 200);
+
+    // The same rules apply through setSetting, and the elements survive a project round trip.
+    model.setSetting(index, QStringLiteral("elements"), raw);
+    QCOMPARE(model.widget(index).value("settings").toMap().value("elements").toList(), elements);
+    WidgetModel restored;
+    QVERIFY(restored.fromJson(model.toJson()));
+    QCOMPARE(restored.widget(index).value("settings").toMap().value("elements").toList(), elements);
+
+    // Live edits keep at most 64 elements; a document with more is rejected, not truncated.
+    QVariantList many;
+    for (int element = 0; element < 70; ++element)
+        many.append(QVariantMap{{"kind", "shape"}});
+    model.setElements(index, many);
+    QCOMPARE(model.widget(index).value("settings").toMap().value("elements").toList().size(), 64);
+    QJsonArray document = model.toJson();
+    QJsonObject widget = document[index].toObject();
+    QJsonObject settings = widget.value("settings").toObject();
+    settings.insert("elements", QJsonArray::fromVariantList(many));
+    widget.insert("settings", settings);
+    document[index] = widget;
+    QVERIFY(!restored.fromJson(document));
+}
+
+void TelemetryTests::persistsWidgetLibrary()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString libraryPath = directory.filePath("widget-library.json");
+    const bool hadOverride = qEnvironmentVariableIsSet("FLAPPEDEAR_WIDGET_LIBRARY");
+    const QByteArray previousOverride = qgetenv("FLAPPEDEAR_WIDGET_LIBRARY");
+    qputenv("FLAPPEDEAR_WIDGET_LIBRARY", libraryPath.toUtf8());
+    const auto restoreEnvironment = qScopeGuard([hadOverride, previousOverride] {
+        if (hadOverride) qputenv("FLAPPEDEAR_WIDGET_LIBRARY", previousOverride);
+        else qunsetenv("FLAPPEDEAR_WIDGET_LIBRARY");
+    });
+
+    WidgetModel source;
+    QVERIFY(source.libraryWidgets().isEmpty());
+    const int designed = source.addWidget(QStringLiteral("designed"));
+    source.resizeWidget(designed, 0.3, 0.2);
+    source.setElements(designed, QVariantList{QVariantMap{{"kind", "lap"}, {"id", "lap"}, {"lapField", "best"}}});
+    source.moveWidget(designed, 0.5, 0.5);
+    QSignalSpy changed(&source, &WidgetModel::libraryWidgetsChanged);
+    const QString designedId = source.saveWidgetToLibrary(designed, QStringLiteral("  Best lap card  "));
+    QVERIFY(!designedId.isEmpty());
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(source.widget(designed).value("settings").toMap().value("libraryId").toString(), designedId);
+    QVERIFY(source.saveWidgetToLibrary(designed, QStringLiteral("   ")).isEmpty());
+    const int speed = source.addWidget(QStringLiteral("speed"));
+    source.setSetting(speed, QStringLiteral("textColor"), QStringLiteral("#123456"));
+    const QString speedId = source.saveWidgetToLibrary(speed, QStringLiteral("Blue speed"));
+    QVERIFY(!speedId.isEmpty());
+
+    // A new model (a later app session) reads the library back.
+    WidgetModel restored;
+    const QVariantList library = restored.libraryWidgets();
+    QCOMPARE(library.size(), 2);
+    QCOMPARE(library[0].toMap().value("name").toString(), QStringLiteral("Best lap card"));
+    QCOMPARE(library[0].toMap().value("type").toString(), QStringLiteral("designed"));
+    QCOMPARE(library[0].toMap().value("elementCount").toInt(), 1);
+    const int added = restored.addLibraryWidget(designedId);
+    QCOMPARE(added, 0);
+    const QVariantMap addedWidget = restored.widget(added);
+    QCOMPARE(addedWidget.value("width").toDouble(), 0.3);
+    QCOMPARE(addedWidget.value("height").toDouble(), 0.2);
+    QCOMPARE(addedWidget.value("settings").toMap().value("name").toString(), QStringLiteral("Best lap card"));
+    QCOMPARE(addedWidget.value("settings").toMap().value("elements").toList().constFirst().toMap()
+                 .value("lapField").toString(), QStringLiteral("best"));
+    const int addedSpeed = restored.addLibraryWidget(speedId);
+    QCOMPARE(restored.widget(addedSpeed).value("settings").toMap().value("textColor").toString(),
+             QStringLiteral("#123456"));
+    QCOMPARE(restored.addLibraryWidget(QStringLiteral("missing")), -1);
+
+    // Update in place, rename, export, import, delete.
+    restored.setElements(added, QVariantList{QVariantMap{{"kind", "shape"}}, QVariantMap{{"kind", "text"}}});
+    QVERIFY(restored.updateLibraryWidget(designedId, added));
+    QCOMPARE(restored.libraryWidgets().size(), 2);
+    QCOMPARE(restored.libraryWidgets()[0].toMap().value("elementCount").toInt(), 2);
+    QVERIFY(restored.renameLibraryWidget(designedId, QStringLiteral("Card")));
+    QVERIFY(!restored.renameLibraryWidget(designedId, QStringLiteral(" ")));
+    const QUrl exported = QUrl::fromLocalFile(directory.filePath("card"));
+    QVERIFY(restored.exportLibraryWidget(designedId, exported));
+    QVERIFY(QFileInfo::exists(directory.filePath("card.fetwidget")));
+    const QString importedId = restored.importLibraryWidget(QUrl::fromLocalFile(directory.filePath("card.fetwidget")));
+    QVERIFY(!importedId.isEmpty());
+    QVERIFY(importedId != designedId);
+    QCOMPARE(restored.libraryWidgets().size(), 3);
+    QCOMPARE(restored.libraryWidgets()[2].toMap().value("name").toString(), QStringLiteral("Card"));
+    QVERIFY(restored.deleteLibraryWidget(designedId));
+    QVERIFY(!restored.deleteLibraryWidget(designedId));
+    WidgetModel reread;
+    QCOMPARE(reread.libraryWidgets().size(), 2);
+    QCOMPARE(reread.libraryWidgets()[1].toMap().value("id").toString(), importedId);
+}
+
+void TelemetryTests::rejectsMalformedWidgetLibraries()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString libraryPath = directory.filePath("widget-library.json");
+    const bool hadOverride = qEnvironmentVariableIsSet("FLAPPEDEAR_WIDGET_LIBRARY");
+    const QByteArray previousOverride = qgetenv("FLAPPEDEAR_WIDGET_LIBRARY");
+    qputenv("FLAPPEDEAR_WIDGET_LIBRARY", libraryPath.toUtf8());
+    const auto restoreEnvironment = qScopeGuard([hadOverride, previousOverride] {
+        if (hadOverride) qputenv("FLAPPEDEAR_WIDGET_LIBRARY", previousOverride);
+        else qunsetenv("FLAPPEDEAR_WIDGET_LIBRARY");
+    });
+    const auto write = [](const QString &path, const QByteArray &bytes) {
+        QFile file(path);
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+
+    // An unreadable library is reported and preserved: nothing overwrites it.
+    const QByteArray corrupt = "{\"schemaVersion\": 1, \"widgets\": [{\"id\": \"a\", \"name\": \"A\", \"type\": \"warpDrive\", \"settings\": {}}]}";
+    QVERIFY(write(libraryPath, corrupt));
+    WidgetModel model;
+    QVERIFY(model.libraryWidgets().isEmpty());
+    QVERIFY(!model.libraryError().isEmpty());
+    const int widget = model.addWidget(QStringLiteral("designed"));
+    QVERIFY(model.saveWidgetToLibrary(widget, QStringLiteral("Mine")).isEmpty());
+    QFile preserved(libraryPath);
+    QVERIFY(preserved.open(QIODevice::ReadOnly));
+    QCOMPARE(preserved.readAll(), corrupt);
+    preserved.close();
+
+    QVERIFY(write(libraryPath, "{\"schemaVersion\": 2, \"widgets\": []}"));
+    model.reloadLibrary();
+    QVERIFY(!model.libraryError().isEmpty());
+
+    QVERIFY(QFile::remove(libraryPath));
+    model.reloadLibrary();
+    QVERIFY(model.libraryError().isEmpty());
+
+    // Imports: wrong version, unknown type, too many elements, oversize file.
+    const QString package = directory.filePath("bad.fetwidget");
+    QVERIFY(write(package, "{\"flappedEarWidgetVersion\": 9, \"widget\": {\"name\": \"A\", \"type\": \"designed\", \"settings\": {}}}"));
+    QVERIFY(model.importLibraryWidget(QUrl::fromLocalFile(package)).isEmpty());
+    QVERIFY(write(package, "{\"flappedEarWidgetVersion\": 1, \"widget\": {\"name\": \"A\", \"type\": \"warpDrive\", \"settings\": {}}}"));
+    QVERIFY(model.importLibraryWidget(QUrl::fromLocalFile(package)).isEmpty());
+    QJsonArray tooMany;
+    for (int element = 0; element < 65; ++element) tooMany.append(QJsonObject{{"kind", "shape"}});
+    QJsonObject entry{{"name", "A"}, {"type", "designed"}, {"settings", QJsonObject{{"elements", tooMany}}}};
+    QVERIFY(write(package, QJsonDocument(QJsonObject{{"flappedEarWidgetVersion", 1}, {"widget", entry}}).toJson()));
+    QVERIFY(model.importLibraryWidget(QUrl::fromLocalFile(package)).isEmpty());
+    QVERIFY(write(package, QByteArray(static_cast<qsizetype>(ProjectLimits::libraryWidgetBytes) + 1, ' ')));
+    QVERIFY(model.importLibraryWidget(QUrl::fromLocalFile(package)).isEmpty());
+    QVERIFY(model.libraryWidgets().isEmpty());
+    QVERIFY(!QFileInfo::exists(libraryPath));
+}
+
+void TelemetryTests::rendersDesignedWidgetInExportScene()
+{
+    // KAN-191: the export renderer draws a designed widget's elements, with live data.
+    TelemetrySession session = speedSession(0.0, 2.0, 0.0);
+    WidgetModel widgets;
+    const int index = widgets.addWidget(QStringLiteral("designed"));
+    QVERIFY(index >= 0);
+    widgets.moveWidget(index, 0.0, 0.0);
+    widgets.resizeWidget(index, 1.0, 1.0);
+    widgets.setSetting(index, QStringLiteral("showBackground"), false);
+    widgets.setSetting(index, QStringLiteral("showBorder"), false);
+    widgets.setElements(index, QVariantList{
+        QVariantMap{{"kind", "bar"}, {"source", "speed"}, {"minValue", 40}, {"maxValue", 80},
+                    {"x", 0.0}, {"y", 0.0}, {"w", 1.0}, {"h", 0.4},
+                    {"fillColor", "#ff00ff"}, {"trackColor", "#000000"}, {"opacity", 1.0}},
+        QVariantMap{{"kind", "shape"}, {"x", 0.0}, {"y", 0.5}, {"w", 0.25}, {"h", 0.25},
+                    {"fillColor", "#00ff00"}},
+        QVariantMap{{"kind", "value"}, {"source", "speed"}, {"x", 0.5}, {"y", 0.5}, {"w", 0.5},
+                    {"h", 0.5}, {"color", "#ffffff"}},
+        QVariantMap{{"kind", "shape"}, {"visible", false}, {"x", 0.25}, {"y", 0.5}, {"w", 0.25},
+                    {"h", 0.25}, {"fillColor", "#00ff00"}},
+    });
+    TelemetryFrameRenderer renderer;
+    QVERIFY2(renderer.initialize(&widgets, &session, nullptr, SyncTransform{}, QSize(400, 300)),
+             qPrintable(renderer.errorString()));
+    const auto count = [](const QImage &image, const QRect &area, const auto &match) {
+        qsizetype pixels = 0;
+        for (int y = area.top(); y <= area.bottom(); ++y)
+            for (int x = area.left(); x <= area.right(); ++x)
+                if (match(image.pixelColor(x, y))) ++pixels;
+        return pixels;
+    };
+    const auto magenta = [](const QColor &pixel) {
+        return pixel.alpha() > 200 && pixel.red() > 200 && pixel.blue() > 200 && pixel.green() < 60;
+    };
+    const auto green = [](const QColor &pixel) {
+        return pixel.alpha() > 200 && pixel.green() > 200 && pixel.red() < 60 && pixel.blue() < 60;
+    };
+    const auto white = [](const QColor &pixel) { return pixel.alpha() > 200 && pixel.lightness() > 200; };
+    const QImage early = renderer.renderFrame(0.2);
+    const QImage late = renderer.renderFrame(1.8);
+    QVERIFY2(!early.isNull() && !late.isNull(), qPrintable(renderer.errorString()));
+    const QRect barArea(0, 0, 400, 120);
+    const qsizetype earlyFill = count(early, barArea, magenta);
+    const qsizetype lateFill = count(late, barArea, magenta);
+    QVERIFY2(earlyFill > 4000, qPrintable(QString::number(earlyFill)));
+    QVERIFY2(lateFill > earlyFill + 4000, qPrintable(QStringLiteral("%1 -> %2").arg(earlyFill).arg(lateFill)));
+    QVERIFY(count(late, QRect(10, 160, 80, 50), green) > 3000);
+    QCOMPARE(count(late, QRect(110, 160, 80, 50), green), qsizetype(0));
+    QVERIFY(count(late, QRect(200, 150, 200, 150), white) > 100);
+}
+
+void TelemetryTests::editsDesignedWidgetInWidgetEditor()
+{
+    // KAN-191: the widget editor edits a designed widget live; Undo and Cancel restore it,
+    // and the editor owns the Delete key while it is open.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const bool hadOverride = qEnvironmentVariableIsSet("FLAPPEDEAR_WIDGET_LIBRARY");
+    const QByteArray previousOverride = qgetenv("FLAPPEDEAR_WIDGET_LIBRARY");
+    qputenv("FLAPPEDEAR_WIDGET_LIBRARY", directory.filePath("widget-library.json").toUtf8());
+    const auto restoreEnvironment = qScopeGuard([hadOverride, previousOverride] {
+        if (hadOverride) qputenv("FLAPPEDEAR_WIDGET_LIBRARY", previousOverride);
+        else qunsetenv("FLAPPEDEAR_WIDGET_LIBRARY");
+    });
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    auto *model = controller.widgetModel();
+    const int widgetCount = model->count();
+    const int designed = model->addWidget(QStringLiteral("designed"));
+    QVERIFY(designed >= 0);
+    const QVariantList original = model->widget(designed).value("settings").toMap().value("elements").toList();
+
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(qmlSourcePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create());
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    QObject *editor = object->findChild<QObject *>(QStringLiteral("widgetEditor"));
+    QVERIFY(editor);
+    const auto elements = [&] { return model->widget(designed).value("settings").toMap().value("elements").toList(); };
+
+    QVERIFY(QMetaObject::invokeMethod(editor, "openFor", Q_ARG(QVariant, designed)));
+    QTRY_VERIFY(editor->property("visible").toBool());
+    QCOMPARE(editor->property("selectedElement").toInt(), 0);
+    QVERIFY(QMetaObject::invokeMethod(editor, "addElement", Q_ARG(QVariant, QStringLiteral("lap"))));
+    QCOMPARE(elements().size(), original.size() + 1);
+    QCOMPARE(elements().constLast().toMap().value("kind").toString(), QStringLiteral("lap"));
+    QCOMPARE(editor->property("selectedElement").toInt(), original.size());
+    QVERIFY(QMetaObject::invokeMethod(editor, "setField", Q_ARG(QVariant, QStringLiteral("lapField")),
+                                      Q_ARG(QVariant, QStringLiteral("best"))));
+    QCOMPARE(elements().constLast().toMap().value("lapField").toString(), QStringLiteral("best"));
+    QVERIFY(QMetaObject::invokeMethod(editor, "nudge", Q_ARG(QVariant, 0.05), Q_ARG(QVariant, 0.0)));
+    QVERIFY(std::abs(elements().constLast().toMap().value("x").toDouble() - 0.15) < 1e-9);
+    QVERIFY(QMetaObject::invokeMethod(editor, "undo"));
+    QVERIFY(std::abs(elements().constLast().toMap().value("x").toDouble() - 0.1) < 1e-9);
+    QVERIFY(QMetaObject::invokeMethod(editor, "redo"));
+    QVERIFY(std::abs(elements().constLast().toMap().value("x").toDouble() - 0.15) < 1e-9);
+
+    // Delete removes the selected element, never the widget behind the editor.
+    window->setProperty("selectedWidgetIndex", designed);
+    window->requestActivate();
+    QVERIFY(QTest::qWaitForWindowActive(window));
+    QTest::keyClick(window, Qt::Key_Delete);
+    QTRY_COMPARE(elements().size(), original.size());
+    QCOMPARE(model->count(), widgetCount + 1);
+
+    const QString review = qEnvironmentVariable("FLAPPEDEAR_LAYOUT_REVIEW_DIR");
+    if (!review.isEmpty()) {
+        QTest::qWait(300);
+        static_cast<void>(window->grabWindow().save(QDir(review).filePath("widget-editor.png")));
+    }
+
+    QVERIFY(QMetaObject::invokeMethod(editor, "cancelEditing"));
+    QTRY_VERIFY(!editor->property("visible").toBool());
+    QCOMPARE(elements(), original);
+    for (const auto &arguments : warnings)
+        for (const auto &error : arguments.first().value<QList<QQmlError>>())
+            QVERIFY2(error.toString().contains("Cannot open: qrc:"), qPrintable(error.toString()));
 }
 
 void TelemetryTests::rendersTyresInExportScene()

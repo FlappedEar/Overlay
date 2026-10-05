@@ -34,9 +34,16 @@ inline constexpr double maximumFusionOffsetSeconds = 86400.0;
 inline constexpr double maximumFusionDriftPpm = 1000.0;
 inline constexpr qsizetype maximumTemplateNameCharacters = 160;
 inline constexpr qsizetype maximumTemplateDescriptionCharacters = 2048;
+// KAN-191: a designed widget's elements, and the "My widgets" library.
+inline constexpr qsizetype maximumDesignElements = 64;
+inline constexpr qsizetype maximumLibraryWidgets = 128;
+inline constexpr qint64 libraryWidgetBytes = 1024 * 1024;
+inline constexpr qint64 widgetLibraryBytes = 8 * 1024 * 1024;
 
 bool validateProject(const QJsonObject &project, QString *error = nullptr);
 bool validateTemplate(const QJsonObject &templateObject, QString *error = nullptr);
 bool validateTemplateStore(const QJsonObject &store, QString *error = nullptr);
+bool validateLibraryWidget(const QJsonObject &entry, QString *error = nullptr);
+bool validateWidgetLibrary(const QJsonObject &library, QString *error = nullptr);
 
 } // namespace FlappedEar::ProjectLimits

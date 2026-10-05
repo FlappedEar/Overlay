@@ -105,7 +105,8 @@ Item {
                                                "retroCustomValue", "gForceMagnitudeBar",
                                                "f1GForceRadar", "retroTachometer",
                                                "lapBest", "lapCurrent", "lapDelta",
-                                               "speedBest", "speedCurrent", "speedDelta"].indexOf(widgetType) >= 0
+                                               "speedBest", "speedCurrent", "speedDelta",
+                                               "designed"].indexOf(widgetType) >= 0
 
             function configuredFontSize() {
                 const value = Number(widgetSettings.fontSize ?? 0);
@@ -206,6 +207,7 @@ Item {
                     case "retroCustomValue": return "widgets/RetroCustomValueWidget.qml";
                     case "track": return "widgets/TrackWidget.qml";
                     case "tyres": return "widgets/TyresWidget.qml";
+                    case "designed": return "widgets/DesignedWidget.qml";
                     default: return "";
                     }
                 }

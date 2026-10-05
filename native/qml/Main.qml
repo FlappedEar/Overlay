@@ -677,6 +677,9 @@ ApplicationWindow {
         return false;
     }
     function playbackShortcutBlocked() {
+        // The widget editor owns the arrow and delete keys while it is open.
+        if (widgetEditor.visible)
+            return true;
         let item = activeFocusItem;
         while (item) {
             if (item instanceof TextInput || item instanceof TextEdit || item instanceof Button
@@ -771,7 +774,8 @@ ApplicationWindow {
             fullScreenControlsTimer.restart();
     }
     function deleteSelectedWidget() {
-        if (selectedWidgetIndex < 0 || selectedWidgetIndex >= appController.widgetModel.count || textEditorHasFocus())
+        if (selectedWidgetIndex < 0 || selectedWidgetIndex >= appController.widgetModel.count || textEditorHasFocus()
+                || widgetEditor.visible)
             return;
         appController.widgetModel.removeWidgets(selectedWidgetIndices.length ? selectedWidgetIndices : [selectedWidgetIndex]);
         selectedWidgetIndices = [];
@@ -872,25 +876,25 @@ ApplicationWindow {
     Shortcut {
         sequence: "Delete"
         context: Qt.WindowShortcut
-        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0
+        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0 && !widgetEditor.visible
         onActivated: window.deleteSelectedWidget()
     }
     Shortcut {
         sequence: "Ctrl+G"
         context: Qt.WindowShortcut
-        enabled: !window.welcomeVisible && window.selectedWidgetIndices.length >= 2 && !window.textEditorHasFocus()
+        enabled: !window.welcomeVisible && window.selectedWidgetIndices.length >= 2 && !window.textEditorHasFocus() && !widgetEditor.visible
         onActivated: window.groupSelectedWidgets()
     }
     Shortcut {
         sequence: "Ctrl+Shift+G"
         context: Qt.WindowShortcut
-        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0 && !window.textEditorHasFocus()
+        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0 && !window.textEditorHasFocus() && !widgetEditor.visible
         onActivated: window.ungroupSelectedWidgets()
     }
     Shortcut {
         sequence: "Backspace"
         context: Qt.WindowShortcut
-        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0
+        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0 && !widgetEditor.visible
         onActivated: window.deleteSelectedWidget()
     }
 
@@ -910,6 +914,22 @@ ApplicationWindow {
         }
     }
     VideoChaptersDialog { id: videoChaptersDialog }
+    WidgetEditor { id: widgetEditor; objectName: "widgetEditor" }
+    property string libraryExportId: ""
+    FileDialog {
+        id: widgetImportDialog
+        title: qsTr("Import widget")
+        nameFilters: [qsTr("FlappedEar widgets (*.fetwidget *.json)")]
+        onAccepted: appController.widgetModel.importLibraryWidget(selectedFile)
+    }
+    FileDialog {
+        id: widgetExportDialog
+        title: qsTr("Export widget")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "fetwidget"
+        nameFilters: [qsTr("FlappedEar widgets (*.fetwidget)")]
+        onAccepted: appController.widgetModel.exportLibraryWidget(window.libraryExportId, selectedFile)
+    }
     FileDialog {
         id: vboDialog
         title: qsTr("Open telemetry")
@@ -2172,6 +2192,97 @@ ApplicationWindow {
                         }
                     }
 
+                    // KAN-191: design a new widget, or add one kept in My widgets.
+                    FeButton {
+                        Layout.fillWidth: true
+                        accent: true
+                        text: qsTr("New widget…")
+                        onClicked: {
+                            const index = appController.widgetModel.addWidget("designed");
+                            if (index >= 0) {
+                                appController.widgetModel.setSetting(index, "name", qsTr("My widget"));
+                                window.selectWidget(index, false);
+                                widgetEditor.openFor(index);
+                            }
+                        }
+                    }
+                    SectionTitle {
+                        text: qsTr("My widgets · %1").arg(appController.widgetModel.libraryWidgets.length)
+                    }
+                    FeLabel {
+                        Layout.fillWidth: true
+                        visible: appController.widgetModel.libraryWidgets.length === 0
+                        text: qsTr("Widgets you save with Save to My widgets appear here, ready for any project.")
+                        color: Theme.onSurfaceVariant
+                        font.pixelSize: 10
+                        wrapMode: Text.WordWrap
+                    }
+                    FeLabel {
+                        Layout.fillWidth: true
+                        visible: appController.widgetModel.libraryError.length > 0
+                        text: appController.widgetModel.libraryError
+                        color: Theme.error
+                        font.pixelSize: 10
+                        wrapMode: Text.Wrap
+                    }
+                    Repeater {
+                        model: appController.widgetModel.libraryWidgets
+                        Rectangle {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            implicitHeight: 40
+                            radius: Theme.radius
+                            color: libraryMouse.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+                            border.color: libraryMouse.containsMouse ? Theme.outline : Theme.outlineVariant
+                            MouseArea {
+                                id: libraryMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: window.selectWidget(appController.widgetModel.addLibraryWidget(modelData.id), false)
+                            }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 4
+                                spacing: 4
+                                FeLabel {
+                                    Layout.fillWidth: true
+                                    text: modelData.name
+                                    color: Theme.onSurface
+                                    font.pixelSize: 11
+                                    elide: Text.ElideRight
+                                }
+                                FeButton {
+                                    implicitWidth: 34
+                                    compact: true
+                                    text: "⇪"
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: qsTr("Export…")
+                                    onClicked: {
+                                        window.libraryExportId = modelData.id;
+                                        widgetExportDialog.open();
+                                    }
+                                }
+                                FeButton {
+                                    implicitWidth: 34
+                                    compact: true
+                                    danger: true
+                                    text: "✕"
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: qsTr("Delete from My widgets")
+                                    onClicked: appController.widgetModel.deleteLibraryWidget(modelData.id)
+                                }
+                            }
+                        }
+                    }
+                    FeButton {
+                        Layout.fillWidth: true
+                        compact: true
+                        text: qsTr("Import widget…")
+                        onClicked: widgetImportDialog.open()
+                    }
+
                     SectionTitle {
                         text: qsTr("Layers · %1").arg(appController.widgetModel.count)
                     }
@@ -2579,6 +2690,7 @@ ApplicationWindow {
                 selectedIndex: window.selectedWidgetIndex
                 onSelectionCleared: window.clearWidgetSelection()
                 onSelectionRequested: index => window.selectWidget(index, false)
+                onEditDesignRequested: index => widgetEditor.openFor(index)
             }
         }
 

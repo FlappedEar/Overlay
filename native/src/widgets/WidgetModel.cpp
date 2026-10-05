@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
+#include <QJSValue>
 #include <QColor>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -42,6 +43,8 @@ const QJsonObject &templateCatalog()
     return catalog;
 }
 
+QVariantList normalizeDesignElements(const QVariant &value);
+
 QVariantMap defaultSettings(const QString &type)
 {
     const QJsonObject defaults = templateCatalog().value("widgetDefaults").toObject();
@@ -51,6 +54,9 @@ QVariantMap defaultSettings(const QString &type)
         result.insert(iterator.key(), iterator.value());
     }
     result.insert("name", type);
+    if (result.contains(QStringLiteral("elements"))) {
+        result.insert(QStringLiteral("elements"), normalizeDesignElements(result.value(QStringLiteral("elements"))));
+    }
     return result;
 }
 
@@ -59,7 +65,7 @@ const QStringList widgetTypes = {
     "f1GForceRadar",  "gForceMagnitudeBar", "track", "customValue", "retroCustomValue", "arcGauge", "dialGauge",
     "telemetryOverlay", "lapBest", "lapCurrent", "lapDelta", "speedBest", "speedCurrent",
     "speedDelta", "retroGrandPrix", "retroTachometer", "retroGear",
-    "retroPedal", "retroSpeedArc", "retroNameplate", "brandLogo", "tyres"};
+    "retroPedal", "retroSpeedArc", "retroNameplate", "brandLogo", "tyres", "designed"};
 
 QPair<double, double> defaultSize(const QString &type)
 {
@@ -118,6 +124,9 @@ QPair<double, double> defaultSize(const QString &type)
     if (type == "tyres") {
         return {0.17, 0.20};
     }
+    if (type == "designed") {
+        return {0.20, 0.13};
+    }
     return {0.15, 0.16};
 }
 
@@ -154,6 +163,16 @@ QString templateStorePath()
     }
     return QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
         .filePath(QStringLiteral("layout-templates.json"));
+}
+
+QString widgetLibraryPath()
+{
+    const QString overridePath = qEnvironmentVariable("FLAPPEDEAR_WIDGET_LIBRARY");
+    if (!overridePath.isEmpty()) {
+        return overridePath;
+    }
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
+        .filePath(QStringLiteral("widget-library.json"));
 }
 
 bool validTemplateObject(const QJsonObject &item)
@@ -202,6 +221,117 @@ bool knownBooleanSetting(const QString &name)
         || name == QStringLiteral("mirrorY") || name == QStringLiteral("hotlapMode");
 }
 
+// KAN-191: one element of a designed widget. Geometry is a fraction of the
+// widget box; unknown keys are dropped and every value is bounded, so a
+// hand-edited project or library file cannot reach the renderer unchecked.
+QVariantMap normalizeDesignElement(const QVariantMap &raw, const int index, QSet<QString> *ids)
+{
+    static const QStringList kinds = {QStringLiteral("text"), QStringLiteral("value"),
+                                      QStringLiteral("bar"), QStringLiteral("lap"),
+                                      QStringLiteral("shape")};
+    const QString kind = raw.value(QStringLiteral("kind")).toString();
+    if (!kinds.contains(kind)) return {};
+
+    const auto number = [&raw](const QString &name, const double fallback, const double minimum,
+                               const double maximum) {
+        return finiteBounded(raw.value(name), fallback, minimum, maximum);
+    };
+    const auto text = [&raw](const QString &name, const QString &fallback, const qsizetype limit) {
+        const QVariant value = raw.value(name);
+        return value.isValid() && value.canConvert<QString>() ? value.toString().left(limit) : fallback;
+    };
+    const auto choice = [&raw](const QString &name, const QStringList &allowed) {
+        const QString value = raw.value(name).toString();
+        return allowed.contains(value) ? value : allowed.constFirst();
+    };
+    const auto colour = [&raw](const QString &name, const QString &fallback) {
+        const QString value = raw.value(name).toString();
+        return QColor(value).isValid() ? value : fallback;
+    };
+    const auto flag = [&raw](const QString &name, const bool fallback) {
+        return raw.contains(name) ? raw.value(name).toBool() : fallback;
+    };
+
+    QString id = raw.value(QStringLiteral("id")).toString();
+    const bool validId = !id.isEmpty() && id.size() <= 64
+        && std::all_of(id.cbegin(), id.cend(), [](const QChar character) {
+               return character.isLetterOrNumber() || character == QLatin1Char('-')
+                   || character == QLatin1Char('_');
+           });
+    if (!validId || ids->contains(id)) {
+        int suffix = index + 1;
+        do {
+            id = QStringLiteral("element-%1").arg(suffix++);
+        } while (ids->contains(id));
+    }
+    ids->insert(id);
+
+    const double width = number(QStringLiteral("w"), 0.5, 0.01, 1.0);
+    const double height = number(QStringLiteral("h"), 0.3, 0.01, 1.0);
+    double minimum = number(QStringLiteral("minValue"), 0.0, -1e9, 1e9);
+    double maximum = number(QStringLiteral("maxValue"), 100.0, -1e9, 1e9);
+    if (maximum <= minimum) {
+        minimum = 0.0;
+        maximum = 100.0;
+    }
+    const QString defaultFill = kind == QStringLiteral("shape") ? QStringLiteral("#16232d")
+                                                                : QStringLiteral("#55d76a");
+    return {
+        {QStringLiteral("id"), id},
+        {QStringLiteral("kind"), kind},
+        {QStringLiteral("name"), text(QStringLiteral("name"), {}, 80)},
+        {QStringLiteral("visible"), flag(QStringLiteral("visible"), true)},
+        {QStringLiteral("x"), number(QStringLiteral("x"), 0.0, 0.0, 1.0 - width)},
+        {QStringLiteral("y"), number(QStringLiteral("y"), 0.0, 0.0, 1.0 - height)},
+        {QStringLiteral("w"), width},
+        {QStringLiteral("h"), height},
+        {QStringLiteral("opacity"), number(QStringLiteral("opacity"), 1.0, 0.0, 1.0)},
+        {QStringLiteral("color"), colour(QStringLiteral("color"), QStringLiteral("#f2f5f7"))},
+        {QStringLiteral("fillColor"), colour(QStringLiteral("fillColor"), defaultFill)},
+        {QStringLiteral("trackColor"), colour(QStringLiteral("trackColor"), QStringLiteral("#2b3a46"))},
+        {QStringLiteral("gainColor"), colour(QStringLiteral("gainColor"), QStringLiteral("#20d05a"))},
+        {QStringLiteral("lossColor"), colour(QStringLiteral("lossColor"), QStringLiteral("#ef4f5f"))},
+        {QStringLiteral("radius"), number(QStringLiteral("radius"), 0.0, 0.0, 200.0)},
+        {QStringLiteral("text"), text(QStringLiteral("text"), QStringLiteral("TEXT"), 200)},
+        {QStringLiteral("source"), text(QStringLiteral("source"), {}, 128)},
+        {QStringLiteral("decimals"), qRound(number(QStringLiteral("decimals"), 0.0, 0.0, 6.0))},
+        {QStringLiteral("multiplier"), number(QStringLiteral("multiplier"), 1.0, -1e6, 1e6)},
+        {QStringLiteral("valueOffset"), number(QStringLiteral("valueOffset"), 0.0, -1e9, 1e9)},
+        {QStringLiteral("prefix"), text(QStringLiteral("prefix"), {}, 40)},
+        {QStringLiteral("suffix"), text(QStringLiteral("suffix"), {}, 40)},
+        {QStringLiteral("fallbackText"), text(QStringLiteral("fallbackText"), QStringLiteral("—"), 40)},
+        {QStringLiteral("minValue"), minimum},
+        {QStringLiteral("maxValue"), maximum},
+        {QStringLiteral("orientation"), choice(QStringLiteral("orientation"),
+             {QStringLiteral("horizontal"), QStringLiteral("vertical")})},
+        {QStringLiteral("lapField"), choice(QStringLiteral("lapField"),
+             {QStringLiteral("current"), QStringLiteral("best"), QStringLiteral("last"),
+              QStringLiteral("delta"), QStringLiteral("lastDelta"), QStringLiteral("lapNumber"),
+              QStringLiteral("bestLapNumber")})},
+        {QStringLiteral("colorBySign"), flag(QStringLiteral("colorBySign"), true)},
+        {QStringLiteral("fontScale"), number(QStringLiteral("fontScale"), 0.75, 0.1, 2.0)},
+        {QStringLiteral("align"), choice(QStringLiteral("align"),
+             {QStringLiteral("center"), QStringLiteral("left"), QStringLiteral("right")})},
+        {QStringLiteral("bold"), flag(QStringLiteral("bold"), true)},
+    };
+}
+
+QVariantList normalizeDesignElements(const QVariant &value)
+{
+    QVariantList list = value.canConvert<QJSValue>() ? value.value<QJSValue>().toVariant().toList()
+                                                     : value.toList();
+    QVariantList result;
+    QSet<QString> ids;
+    for (const QVariant &item : std::as_const(list)) {
+        if (result.size() >= ProjectLimits::maximumDesignElements) break;
+        const QVariantMap element = normalizeDesignElement(
+            item.canConvert<QJSValue>() ? item.value<QJSValue>().toVariant().toMap() : item.toMap(),
+            result.size(), &ids);
+        if (!element.isEmpty()) result.append(element);
+    }
+    return result;
+}
+
 QVariant normalizeSettingValue(
     const QVariantMap &defaults, const QString &name, const QVariant &value, bool *accepted)
 {
@@ -210,6 +340,9 @@ QVariant normalizeSettingValue(
     double number = 0.0;
     if (name == QStringLiteral("fontSize")) {
         return finiteNumber(value, &number) ? bounded(number, 0.0, 200.0) : fallback();
+    }
+    if (name == QStringLiteral("elements")) {
+        return normalizeDesignElements(value);
     }
     if (decimalSetting(name)) {
         return finiteNumber(value, &number) ? qBound(0, qRound(number), 6) : fallback();
@@ -386,12 +519,33 @@ bool normalizeTemplateObject(QJsonObject *templateObject)
     return true;
 }
 
+// A library entry keeps a widget's type, unscaled size and settings; position,
+// cues and group belong to a scene, not to the reusable widget.
+bool normalizeLibraryEntry(QJsonObject *entry)
+{
+    if (!ProjectLimits::validateLibraryWidget(*entry)) return false;
+    const QString type = entry->value(QStringLiteral("type")).toString();
+    if (!widgetTypes.contains(type)) return false;
+    const auto [defaultWidth, defaultHeight] = defaultSize(type);
+    entry->insert(QStringLiteral("width"),
+                  finiteBounded(entry->value(QStringLiteral("width")).toVariant(), defaultWidth, 0.04, 1.0));
+    entry->insert(QStringLiteral("height"),
+                  finiteBounded(entry->value(QStringLiteral("height")).toVariant(), defaultHeight, 0.04, 1.0));
+    entry->insert(QStringLiteral("name"), entry->value(QStringLiteral("name")).toString().trimmed().left(80));
+    QVariantMap settings = defaultSettings(type);
+    mergeNormalizedSettings(
+        &settings, entry->value(QStringLiteral("settings")).toObject().toVariantMap(), settings);
+    entry->insert(QStringLiteral("settings"), QJsonObject::fromVariantMap(settings));
+    return true;
+}
+
 } // namespace
 
 WidgetModel::WidgetModel(QObject *parent)
     : QAbstractListModel(parent)
 {
     loadUserTemplates();
+    loadLibrary();
 }
 
 int WidgetModel::rowCount(const QModelIndex &parent) const
@@ -1103,6 +1257,273 @@ void WidgetModel::update(const int index)
     ++m_revision;
     emit dataChanged(this->index(index), this->index(index));
     emit revisionChanged();
+}
+
+QVariantList WidgetModel::libraryWidgets() const
+{
+    QVariantList result;
+    for (const QJsonValue &value : m_library) {
+        const QJsonObject entry = value.toObject();
+        const QJsonObject settings = entry.value(QStringLiteral("settings")).toObject();
+        result.append(QVariantMap{
+            {QStringLiteral("id"), entry.value(QStringLiteral("id")).toString()},
+            {QStringLiteral("name"), entry.value(QStringLiteral("name")).toString()},
+            {QStringLiteral("type"), entry.value(QStringLiteral("type")).toString()},
+            {QStringLiteral("elementCount"), settings.value(QStringLiteral("elements")).toArray().size()},
+        });
+    }
+    return result;
+}
+
+qsizetype WidgetModel::libraryIndex(const QString &libraryId) const
+{
+    for (qsizetype index = 0; index < m_library.size(); ++index) {
+        if (m_library[index].toObject().value(QStringLiteral("id")).toString() == libraryId) return index;
+    }
+    return -1;
+}
+
+QJsonObject WidgetModel::libraryEntry(const QString &id, const QString &name, const WidgetData &widget) const
+{
+    QVariantMap settings = widget.settings;
+    settings.insert(QStringLiteral("libraryId"), id);
+    return {{QStringLiteral("id"), id},
+            {QStringLiteral("name"), name.trimmed().left(80)},
+            {QStringLiteral("type"), widget.type},
+            {QStringLiteral("width"), widget.width},
+            {QStringLiteral("height"), widget.height},
+            {QStringLiteral("settings"), QJsonObject::fromVariantMap(settings)}};
+}
+
+QString WidgetModel::saveWidgetToLibrary(const int index, const QString &name)
+{
+    const WidgetData *widget = widgetAt(index);
+    if (!widget || name.trimmed().isEmpty()) return {};
+    if (!m_libraryWritable) {
+        if (m_libraryError.isEmpty()) setLibraryError(tr("The widget library cannot be written."));
+        return {};
+    }
+    if (m_library.size() >= ProjectLimits::maximumLibraryWidgets) {
+        setLibraryError(tr("My widgets holds at most %1 widgets. Delete one before saving another.")
+                            .arg(ProjectLimits::maximumLibraryWidgets));
+        return {};
+    }
+    const QString id = QStringLiteral("widget-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+    m_library.append(libraryEntry(id, name, *widget));
+    if (!saveLibrary()) {
+        m_library.removeLast();
+        return {};
+    }
+    m_widgets[index].settings.insert(QStringLiteral("libraryId"), id);
+    update(index);
+    emit libraryWidgetsChanged();
+    return id;
+}
+
+bool WidgetModel::updateLibraryWidget(const QString &libraryId, const int index)
+{
+    const WidgetData *widget = widgetAt(index);
+    const qsizetype position = libraryIndex(libraryId);
+    if (!widget || position < 0 || !m_libraryWritable) return false;
+    const QJsonValue previous = m_library[position];
+    m_library[position] = libraryEntry(
+        libraryId, previous.toObject().value(QStringLiteral("name")).toString(), *widget);
+    if (!saveLibrary()) {
+        m_library[position] = previous;
+        return false;
+    }
+    emit libraryWidgetsChanged();
+    return true;
+}
+
+int WidgetModel::addLibraryWidget(const QString &libraryId)
+{
+    const qsizetype position = libraryIndex(libraryId);
+    if (position < 0) return -1;
+    const QJsonObject entry = m_library[position].toObject();
+    const int index = addWidget(entry.value(QStringLiteral("type")).toString());
+    if (index < 0) return -1;
+    WidgetData &widget = m_widgets[index];
+    widget.width = entry.value(QStringLiteral("width")).toDouble(widget.width);
+    widget.height = entry.value(QStringLiteral("height")).toDouble(widget.height);
+    constrainWidgetToCanvas(&widget);
+    mergeNormalizedSettings(&widget.settings,
+                            entry.value(QStringLiteral("settings")).toObject().toVariantMap(),
+                            defaultSettings(widget.type));
+    widget.settings.insert(QStringLiteral("name"), entry.value(QStringLiteral("name")).toString());
+    update(index);
+    return index;
+}
+
+bool WidgetModel::deleteLibraryWidget(const QString &libraryId)
+{
+    const qsizetype position = libraryIndex(libraryId);
+    if (position < 0 || !m_libraryWritable) return false;
+    const QJsonValue removed = m_library.takeAt(position);
+    if (!saveLibrary()) {
+        m_library.insert(position, removed);
+        return false;
+    }
+    emit libraryWidgetsChanged();
+    return true;
+}
+
+bool WidgetModel::renameLibraryWidget(const QString &libraryId, const QString &name)
+{
+    const qsizetype position = libraryIndex(libraryId);
+    if (position < 0 || name.trimmed().isEmpty() || !m_libraryWritable) return false;
+    const QJsonValue previous = m_library[position];
+    QJsonObject entry = previous.toObject();
+    entry.insert(QStringLiteral("name"), name.trimmed().left(80));
+    m_library[position] = entry;
+    if (!saveLibrary()) {
+        m_library[position] = previous;
+        return false;
+    }
+    emit libraryWidgetsChanged();
+    return true;
+}
+
+bool WidgetModel::exportLibraryWidget(const QString &libraryId, const QUrl &url)
+{
+    const qsizetype position = libraryIndex(libraryId);
+    if (position < 0 || !url.isLocalFile()) return false;
+    QString path = url.toLocalFile();
+    if (!path.endsWith(QStringLiteral(".fetwidget"), Qt::CaseInsensitive)) {
+        path.append(QStringLiteral(".fetwidget"));
+    }
+    const QJsonObject package{{QStringLiteral("flappedEarWidgetVersion"), 1},
+                              {QStringLiteral("widget"), m_library[position]}};
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)
+        || file.write(QJsonDocument(package).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
+        setLibraryError(tr("Could not export the widget: %1").arg(file.errorString()));
+        return false;
+    }
+    return true;
+}
+
+QString WidgetModel::importLibraryWidget(const QUrl &url)
+{
+    if (!url.isLocalFile()) return {};
+    const auto loaded = BoundedJsonLoader::loadFile(
+        url.toLocalFile(), ProjectLimits::libraryWidgetBytes, QStringLiteral("Widget"));
+    if (!loaded.success() || !loaded.document.isObject()) {
+        setLibraryError(loaded.error.isEmpty() ? tr("The file is not a FlappedEar widget.") : loaded.error);
+        return {};
+    }
+    const QJsonObject root = loaded.document.object();
+    QJsonObject entry = root.value(QStringLiteral("widget")).toObject();
+    entry.insert(QStringLiteral("id"),
+                 QStringLiteral("widget-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces)));
+    if (root.value(QStringLiteral("flappedEarWidgetVersion")).toInt() != 1 || !normalizeLibraryEntry(&entry)) {
+        setLibraryError(tr("The file is not a supported FlappedEar widget."));
+        return {};
+    }
+    if (!m_libraryWritable) return {};
+    if (m_library.size() >= ProjectLimits::maximumLibraryWidgets) {
+        setLibraryError(tr("My widgets holds at most %1 widgets. Delete one before importing another.")
+                            .arg(ProjectLimits::maximumLibraryWidgets));
+        return {};
+    }
+    QJsonObject settings = entry.value(QStringLiteral("settings")).toObject();
+    settings.insert(QStringLiteral("libraryId"), entry.value(QStringLiteral("id")));
+    entry.insert(QStringLiteral("settings"), settings);
+    m_library.append(entry);
+    if (!saveLibrary()) {
+        m_library.removeLast();
+        return {};
+    }
+    emit libraryWidgetsChanged();
+    return entry.value(QStringLiteral("id")).toString();
+}
+
+void WidgetModel::reloadLibrary()
+{
+    loadLibrary();
+    emit libraryWidgetsChanged();
+}
+
+void WidgetModel::setElements(const int index, const QVariant &elements)
+{
+    if (index < 0 || index >= m_widgets.size()) return;
+    m_widgets[index].settings.insert(QStringLiteral("elements"), normalizeDesignElements(elements));
+    update(index);
+}
+
+void WidgetModel::setLibraryError(const QString &error)
+{
+    if (m_libraryError == error) return;
+    m_libraryError = error;
+    emit libraryErrorChanged();
+}
+
+void WidgetModel::loadLibrary()
+{
+    m_libraryWritable = false;
+    const QString path = widgetLibraryPath();
+    if (!QFileInfo::exists(path)) {
+        m_library = {};
+        m_libraryWritable = true;
+        setLibraryError({});
+        return;
+    }
+    const auto loaded = BoundedJsonLoader::loadFile(
+        path, ProjectLimits::widgetLibraryBytes, QStringLiteral("Widget library"));
+    QString error = loaded.error;
+    const QJsonObject root = loaded.document.object();
+    if (!loaded.success() || !loaded.document.isObject()
+        || !ProjectLimits::validateWidgetLibrary(root, &error)) {
+        m_library = {};
+        setLibraryError(tr("My widgets could not be loaded from %1: %2. "
+                           "The file is preserved; restore it and reload before saving.")
+                            .arg(QDir::toNativeSeparators(path), error));
+        return;
+    }
+    QJsonArray library;
+    for (const QJsonValue &value : root.value(QStringLiteral("widgets")).toArray()) {
+        QJsonObject entry = value.toObject();
+        if (!normalizeLibraryEntry(&entry)) {
+            m_library = {};
+            setLibraryError(tr("My widgets contains an unsupported widget. "
+                               "The file is preserved; restore it and reload before saving."));
+            return;
+        }
+        library.append(entry);
+    }
+    m_library = library;
+    m_libraryWritable = true;
+    setLibraryError({});
+}
+
+bool WidgetModel::saveLibrary()
+{
+    if (!m_libraryWritable) return false;
+    const QJsonObject root{{QStringLiteral("schemaVersion"), 1}, {QStringLiteral("widgets"), m_library}};
+    QString error;
+    if (!ProjectLimits::validateWidgetLibrary(root, &error)) {
+        setLibraryError(error);
+        return false;
+    }
+    const QByteArray payload = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    if (payload.size() > ProjectLimits::widgetLibraryBytes) {
+        setLibraryError(tr("My widgets exceeds the %1 MiB storage limit. Delete an unused widget first.")
+                            .arg(ProjectLimits::widgetLibraryBytes / (1024 * 1024)));
+        return false;
+    }
+    const QString path = widgetLibraryPath();
+    if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
+        setLibraryError(tr("Could not create the widget library directory."));
+        return false;
+    }
+    QSaveFile file(path);
+    file.setDirectWriteFallback(false);
+    if (!file.open(QIODevice::WriteOnly) || file.write(payload) != payload.size() || !file.commit()) {
+        setLibraryError(tr("Could not save My widgets: %1").arg(file.errorString()));
+        return false;
+    }
+    setLibraryError({});
+    return true;
 }
 
 } // namespace FlappedEar
