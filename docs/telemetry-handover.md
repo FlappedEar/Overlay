@@ -25,7 +25,7 @@ The owner's decisions of 2 October 2026:
 - **No data loss.** The owner set this condition for every migration and for project
   data.
 - **Overlays becomes an overlay editor.** On 5 October 2026 the owner approved
-  removing its Lap Analysis window ([KAN-166], in progress). The last Overlays
+  removing its Lap Analysis window and day import ([KAN-166], done that day). The last Overlays
   `main` commit with the full analysis, `7eae6cd`, is recorded on [KAN-169] as a
   reference. Day documents keep every analysis field.
 - **The app is free for users** and is not sold.
@@ -636,7 +636,7 @@ FLAPPEDEAR_REAL_DAY=/path/to/day ./build-native/native/tests/flappedear_telemetr
 | [KAN-168] | This handover |
 | [KAN-170] | The shared `.fetproject` contract; create a twin ticket in the new project |
 | [KAN-169] | Maturity gate; the new project's parity milestone should link to it |
-| [KAN-166] | Deferred removal of the Overlays analysis window; waits for [KAN-169] |
+| [KAN-166] | Removal of the Overlays analysis window and day import; done 5 October 2026 |
 | [KAN-126]–[KAN-130] | Mobile targets, import, touch screens, memory budget and on-track acceptance; re-create in the new project |
 | [KAN-122] | Decision 5: iOS 15 and Android 8.0 to start with; desktop open. Decision 1 (store licence) was about Qt and does not apply to a Flutter app without Qt |
 | [KAN-162] | Windows: code changes resumed, CI and packaging paused |
