@@ -42,6 +42,7 @@ The parser may retain non-finite numeric values internally as placeholders so ch
 - Previous returns only the immediately preceding sample; it does not search backward across a gap.
 - Nearest returns the nearest sample even when that nearest value is missing; it does not substitute a farther finite value.
 - No mode bridges a missing gap automatically.
+- **Time gaps (KAN-157).** Two adjacent samples more than three median sample intervals apart (`telemetryGapThreshold`) enclose a gap. A lookup strictly between them is no data in every mode, even though both samples are finite. This covers decoders that drop samples rather than mark them: a GoPro loss of GPS fix, or a VBO logger pause. The rule lives in `telemetryValueAt()`, which `TelemetrySession::valueAt()` and auto-sync both use; `TelemetrySource::load` and `GoProTelemetrySource::load` compute every channel's threshold before the session is shared between threads.
 
 For example, with samples `0 s = 10`, `1 s = missing`, and `2 s = 30`, a lookup at `1 s` is no data in every mode. A linear lookup at `0.5 s` and `1.5 s` is also no data because one adjacent endpoint is missing.
 
