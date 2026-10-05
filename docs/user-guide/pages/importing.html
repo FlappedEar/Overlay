@@ -45,18 +45,7 @@
 <p>In an event, <strong>Open telemetry…</strong> replaces the active run's primary recording; it does not add a run.</p>
 
 <h2 id="runs">Importing a track day</h2>
-<p>A day at the track usually produces several recordings. Import them together into an <strong>event</strong>, where each recording becomes a <strong>run</strong>. There are two ways.</p>
-
-<h3 id="outing">From the Analysis window (recommended)</h3>
-<ol class="steps">
-  <li>Open the Analysis window (<strong>Lap Analysis →</strong> on the Welcome screen, or <kbd>⇧⌘A</kbd>).</li>
-  <li>Under <strong>Start an outing</strong>, enter an <strong>Outing name</strong>, for example the track and the day.</li>
-  <li>Click <strong>Add RCZ / VBO files…</strong> and select your files, or click <strong>Add a folder…</strong> (tick <strong>Include subfolders</strong> to search below it). You can also drag files or a folder onto the window.</li>
-</ol>
-<p>The files are imported directly and the <a href="analysis.html#day-results">Day results</a> list opens. To add more recordings later, use <strong>Add files…</strong> or <strong>Add folder…</strong> in the Analysis header, or drop files on the window. Recordings already in the event are skipped.</p>
-
-<h3 id="review">With a review step</h3>
-<p><strong>File › Import telemetry runs…</strong> lets you check each file before anything changes.</p>
+<p>A day at the track usually produces several recordings. Import them together into an <strong>event</strong>, where each recording becomes a <strong>run</strong>. <strong>File › Import telemetry runs…</strong> lets you check each file before anything changes.</p>
 <ol class="steps">
   <li>Select 1 to 64 VBO/RCZ files.</li>
   <li>In the <strong>Import runs</strong> dialog choose <strong>Create a new event</strong> (enter an event name) or <strong>Add runs to current event</strong>.</li>
@@ -69,19 +58,21 @@
 </figure>
 <p>Files are checked again just before they are committed. If you have unsaved changes, save them before creating a new event.</p>
 
+<h3 id="run-picker">Choosing the run to edit</h3>
+<p>When an event has more than one run, the header shows a run picker next to the file names. Choose a run to show its telemetry, video and synchronization in the editor; the overlay layout is shared by all runs. The picker is unavailable while a project loads, an export runs, or a question about unsaved changes is open. The Export dialog finds the day's best lap across all runs by itself (see <a href="export.html">Export</a>).</p>
+
 <h3 id="pairing">VBO and RCZ of the same session</h3>
 <p>If you exported the same session both as VBO and as RCZ, they belong to one run:</p>
 <ul>
-  <li>In the outing import, a VBO and an RCZ are grouped automatically only when their start times agree within 1 second, their durations within 2 seconds, their GPS traces agree, and the match is one-to-one. The VBO becomes the primary recording and the RCZ is kept as an alternative.</li>
-  <li>In the review dialog, choose <strong>Same run as: …</strong>. Analysis uses the file you link to; the other file is kept with that run.</li>
+  <li>In the review dialog, choose <strong>Same run as: …</strong>. The run uses the file you link to; the other file is kept with that run.</li>
   <li>Unknown clocks, different dates and ambiguous matches stay as separate runs.</li>
 </ul>
-<p>Channels of the two files are never combined automatically. See <a href="analysis.html#run-details">Run details</a> for alternatives, clock checks and reviewed channel fusion.</p>
+<p>Channels of the two files are never combined automatically.</p>
 
 <h3 id="duplicates">Duplicates and naming</h3>
 <ul>
   <li>Two files with identical content are reported as duplicates and imported once.</li>
-  <li>Runs are named <em>Session 1</em>, <em>Session 2</em>, … in recording-time order. Recordings without a clock follow in import order. Names can be changed in <a href="analysis.html#run-details">Run details</a>.</li>
+  <li>Runs are named <em>Session 1</em>, <em>Session 2</em>, … in recording-time order. Recordings without a clock follow in import order.</li>
   <li>The recording date and time come from the file's content. File names and file dates are never used.</li>
 </ul>
 

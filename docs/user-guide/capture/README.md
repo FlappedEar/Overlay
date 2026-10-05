@@ -7,9 +7,10 @@ The pictures in `assets/screens/` come from the application itself: its own
 `TelemetryTests::capturesUserGuideScreens` (`native/tests/UserGuideCapture.cpp`),
 with a real onboard video and its recording. The capture imports the day
 through **Import runs**, opens the video, runs **Auto Sync**, exports a short
-clip for real, and walks through the editor, the templates, every widget and
-Lap Analysis. `template-save-popup.png` is the only picture still made by the
-QML-only scripts below.
+clip for real, and walks through the editor, the templates and every widget. `template-save-popup.png` is the only picture still made by the
+QML-only scripts below. `welcome.png` was retaken on 5 October 2026 by the
+same test on Linux under Xvfb (with the bundled Sora fonts, as on macOS), cropped
+below the in-window menu bar that macOS does not have.
 
 The media is private. It is read in place, never copied or committed:
 
@@ -42,8 +43,6 @@ Capture notes:
 
 - The day is imported first and the video is opened at once, as a driver
   does; the automatic segments are still created (KAN-142).
-- A paused player on macOS shows no frame after a seek, so the lap view
-  plays the moment for two seconds before its picture.
 - The test executable hands `--export-worker` to the application's own
   worker, so a controller export in a test runs for real.
 
@@ -65,7 +64,7 @@ The recording is private and must never be committed. Pass its path with
     - Lap sections, the UTC clock, direction, eligibility, chart traces and channel names.
     - These are computed from the recording with the application's documented rules: the Start gate crossing, the reference-position match within the ±18 % window, gap-preserving min/max decimation, and the 12 m off-line rule.
 - **Placeholder:** the video picture is the neutral backdrop from `VisualSmokeScene.qml`, encoded as a still clip as long as the recording. Telemetry time equals video time, so the synchronization offset is 0.
-- **Not shown:** values that only exist at runtime, such as export progress, auto-sync results, comparison metrics and the day report. No screenshot shows them, rather than inventing numbers.
+- **Not shown:** values that only exist at runtime, such as export progress and auto-sync results. No screenshot shows them, rather than inventing numbers.
 
 Lap detection in `realdata.py` mirrors the application closely, but it is not the application's parser. Compare its lap times with the application when you change capture data.
 
@@ -75,13 +74,12 @@ Lap detection in `realdata.py` mirrors the application closely, but it is not th
 - The Inter font. `Helvetica Neue` is aliased to Inter through fontconfig on Linux.
 - Video frames in the editor need an OpenGL scene graph:
     - Xvfb with Mesa, plus a PulseAudio null sink. Without an audio sink, Qt Multimedia's FFmpeg backend does not advance playback.
-    - Widget and Analysis captures run with the offscreen platform and need neither.
+    - Widget captures run with the offscreen platform and need neither.
 
 ```bash
 python3 -m venv /tmp/fet-capture && /tmp/fet-capture/bin/pip install PySide6==6.8.3 imageio-ffmpeg
 export FET_CAPTURE_VBO=/path/to/session.vbo
 /tmp/fet-capture/bin/python docs/user-guide/capture/render_overlays.py
-/tmp/fet-capture/bin/python docs/user-guide/capture/render_analysis.py
 QT_QPA_PLATFORM=xcb QT_QUICK_BACKEND=rhi QSG_RHI_BACKEND=opengl \
   xvfb-run -a -s "-screen 0 2400x1400x24" /tmp/fet-capture/bin/python docs/user-guide/capture/render_editor.py
 python3 docs/user-guide/build.py

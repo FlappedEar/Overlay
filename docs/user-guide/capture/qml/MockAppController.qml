@@ -24,7 +24,6 @@ QtObject {
     property string sourceMismatchCandidateName: ""
     property string statusText: ""
     property string fixedFontFamily: "DejaVu Sans Mono"
-    property bool analysisVisible: false
     property string batchImportState: "idle"
     property var eventRuns: []
     property string activeRunId: ""

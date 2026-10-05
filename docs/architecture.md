@@ -1,6 +1,6 @@
 # Architecture
 
-FlappedEar Overlays (renamed from FlappedEar Telemetry by KAN-125) is currently one native Qt 6 application for overlay editing/generation and telemetry analysis; it keeps its analysis window and workflows until the FlappedEar Telemetry app can replace them (KAN-166, deferred). By owner decision (2 October 2026) it is being split into a desktop overlay editor (macOS and Windows) and the FlappedEar Telemetry app (macOS, Windows, iOS and Android), a new Flutter app in its own repository that shares no code with this one (Jira epic KAN-165, decision KAN-167). The library structure below remains this repository's architecture and the behavioural reference for that app ([architect handover](telemetry-handover.md)), and both apps keep one compatible `.fetproject` format (KAN-170). C++ owns telemetry, media, project, synchronization, and export behavior; QML presents the editor and the reusable telemetry scene.
+FlappedEar Overlays (renamed from FlappedEar Telemetry by KAN-125) is currently one native Qt 6 application for overlay editing/generation and telemetry analysis; its analysis window and workflows are being removed (KAN-166, approved by the owner on 5 October 2026; since step 3 the window has no entry point, and the editor header picks a day's run). By owner decision (2 October 2026) it is being split into a desktop overlay editor (macOS and Windows) and the FlappedEar Telemetry app (macOS, Windows, iOS and Android), a new Flutter app in its own repository that shares no code with this one (Jira epic KAN-165, decision KAN-167). The library structure below remains this repository's architecture and the behavioural reference for that app ([architect handover](telemetry-handover.md)), and both apps keep one compatible `.fetproject` format (KAN-170). C++ owns telemetry, media, project, synchronization, and export behavior; QML presents the editor and the reusable telemetry scene.
 
 The [product vision](product-vision.md) defines the full intended analytical workflow;
 the [delivery plan](product-delivery.md) distinguishes implementation from remaining
@@ -64,7 +64,7 @@ series from `telemetry/ChannelSeries`, and lap-time text from
 through `QML_SOURCE_DIR`, not through analysis file paths.
 Since step 2 the editor writes no analysis data on its own: it no longer
 approves automatic segments, and it saves `analysis.channels` as loaded
-unless the chart channels are changed in the Lap Analysis window.
+as it was loaded; since step 3 nothing can change them.
 
 ## Application
 

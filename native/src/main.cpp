@@ -714,8 +714,8 @@ int main(int argc, char *argv[])
             }
             QMetaObject::invokeMethod(about, "close");
             if (!engine.rootObjects().first()->property("welcomeVisible").toBool()
-                || !engine.rootObjects().first()->findChild<QObject *>(QStringLiteral("welcomeLapAnalysis"))) {
-                qCritical() << "Startup smoke failed: fresh launch must offer Lap Analysis on the welcome screen";
+                || !engine.rootObjects().first()->findChild<QObject *>(QStringLiteral("editorRunPicker"))) {
+                qCritical() << "Startup smoke failed: fresh launch must show the welcome screen over the editor";
                 return EXIT_FAILURE;
             }
             // Load the all-in-one broadcast composition as well as the normal
@@ -735,21 +735,14 @@ int main(int argc, char *argv[])
             } else {
                 QObject *root = engine.rootObjects().constFirst();
             QCoreApplication::processEvents();
-            const qsizetype closedPlayers = root->findChildren<QMediaPlayer *>().size();
-            controller.setAnalysisVisible(true);
-            QCoreApplication::processEvents();
-            const qsizetype openPlayers = root->findChildren<QMediaPlayer *>().size();
-            controller.setAnalysisVisible(false);
-            QCoreApplication::processEvents();
-            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
-            const qsizetype releasedPlayers = root->findChildren<QMediaPlayer *>().size();
-            if (closedPlayers != 1 || openPlayers != 2 || releasedPlayers != 1) {
-                qCritical().noquote() << QStringLiteral(
-                    "Startup smoke failed: media players closed=%1 open=%2 released=%3")
-                                             .arg(closedPlayers).arg(openPlayers).arg(releasedPlayers);
+            // The editor preview owns the only media player.
+            const qsizetype players = root->findChildren<QMediaPlayer *>().size();
+            if (players != 1) {
+                qCritical().noquote() << QStringLiteral("Startup smoke failed: %1 media players, expected 1")
+                                             .arg(players);
                 result = EXIT_FAILURE;
             } else {
-                qInfo() << "Startup smoke passed: Analysis decoder lifecycle is lazy and broadcast HUD composition loaded";
+                qInfo() << "Startup smoke passed: one preview decoder and broadcast HUD composition loaded";
                 result = EXIT_SUCCESS;
             }
             }

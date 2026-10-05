@@ -33,7 +33,6 @@ REPOSITORY = "https://github.com/FlappedEar/Overlay"
 NAV: list[tuple[str, list[str]]] = [
     ("Start here", ["index", "installation", "quick-start"]),
     ("Overlay editor", ["editor", "importing", "synchronization", "widgets", "templates", "export"]),
-    ("Analysis", ["analysis", "comparison", "segments", "day-report"]),
     ("Reference", ["projects", "telemetry-data", "shortcuts", "troubleshooting", "limitations"]),
 ]
 

@@ -24,9 +24,10 @@ The owner's decisions of 2 October 2026:
   and it stays compatible in both directions ([KAN-170]).
 - **No data loss.** The owner set this condition for every migration and for project
   data.
-- **Overlays stays as it is.** Its Lap Analysis window is removed only after
-  Telemetry is mature enough to replace it: [KAN-169] is the gate, [KAN-166] the
-  deferred removal.
+- **Overlays becomes an overlay editor.** On 5 October 2026 the owner approved
+  removing its Lap Analysis window ([KAN-166], in progress). The last Overlays
+  `main` commit with the full analysis, `7eae6cd`, is recorded on [KAN-169] as a
+  reference. Day documents keep every analysis field.
 - **The app is free for users** and is not sold.
 - **Identity:** `com.flappedear.telemetry` (see
   [Identity and storage](#identity-and-storage)).
@@ -483,7 +484,7 @@ separately because Telemetry never has video.
     - **Behaviour:** per file, Import, Skip or "Same run as"; the user chooses a new event or appending.
     - **Code:** [`BatchImportDialog.qml`](../native/qml/BatchImportDialog.qml); D `confirmBatchImport`.
 
-**Day results** ([`OutingLapPanel.qml`](../native/qml/OutingLapPanel.qml); [analysis guide](user-guide/pages/analysis.html))
+**Day results** ([`OutingLapPanel.qml`](../native/qml/OutingLapPanel.qml); [analysis guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/analysis.html))
 
 - [ ] **Compatibility groups:** an automatic choice, a picker, and a card per group with its best lap and the best lap of each run. A `outingCompatibilityGroups`, `selectOutingComparisonGroup`.
 - [ ] **Best of the day:** "Best day · 1:49.898 · Session 5 · LAP 2" opens that lap. A `outingRanking`, `selectOutingLapReference`.
@@ -508,7 +509,7 @@ separately because Telemetry never has video.
     - **Behaviour:** a summary per lap and per segment, measured from the pedals or inferred. Episodes are shown on the map and move the cursor.
     - **Code:** [`CoastingPanel.qml`](../native/qml/CoastingPanel.qml); A `outingLapCoasting`.
 
-**Segments** ([`SegmentReviewPanel.qml`](../native/qml/SegmentReviewPanel.qml); [segments guide](user-guide/pages/segments.html))
+**Segments** ([`SegmentReviewPanel.qml`](../native/qml/SegmentReviewPanel.qml); [segments guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/segments.html))
 
 - [ ] **Automatic segments** from the day's best lap. A `setAutomaticSegments`. Overlays switched this on until KAN-166 step 2 (October 2026); it no longer does, so only Telemetry writes automatic segments (see [the shared contract](#the-shared-contract-fetproject)).
 - [ ] **Proposals:**
@@ -519,7 +520,7 @@ separately because Telemetry never has video.
     - **Actions:** move a boundary (pick on the map; adjoining segments follow), split, merge with the next, revoke, undo and redo.
     - **Code:** A `editApprovedSegment`, `splitApprovedSegment`, `mergeApprovedSegments`, `undoSegmentEdit`.
 
-**A/B comparison** ([comparison guide](user-guide/pages/comparison.html))
+**A/B comparison** ([comparison guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/comparison.html))
 
 - [ ] **Choose laps:**
     - **Rule:** A and B come from the same compatibility group. The user can swap them, or set B to the best of A's run or the best of the group.
@@ -535,7 +536,7 @@ separately because Telemetry never has video.
     - **Code:** [`ComparisonSegmentPanel.qml`](../native/qml/ComparisonSegmentPanel.qml); A `comparisonSegmentMetrics`, `comparisonTrailBraking`, `comparisonHeartRate`.
 - [ ] **G-G:** a scatter over the zoomed range, with peaks and sample counts. [`ComparisonGgPanel.qml`](../native/qml/ComparisonGgPanel.qml); A `comparisonGgScatter`.
 
-**Day views** ([day report guide](user-guide/pages/day-report.html))
+**Day views** ([day report guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/day-report.html))
 
 - [ ] **Theoretical best:**
     - **Behaviour:** best lap, theoretical best, laps today and the time available. A map coloured by loss per segment. "Where the time is" opens the Corner Analyzer. Variability.

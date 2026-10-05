@@ -211,8 +211,8 @@ not apply to the Flutter app.
    eventually no, but not yet. Overlays is meant to become a pure overlay
    editor with data editing, and the Lap Analysis window and analysis
    workflows leave it only once FlappedEar Telemetry is mature enough to
-   replace them. Until then Overlays stays as it is and nothing is removed
-   ([KAN-166], deferred; blocked by [KAN-169]). Still open with it: whether
+   replace them. On 5 October 2026 the owner approved the removal ([KAN-169]
+   done; [KAN-166] in progress, one PR per step). Still open with it: whether
    desktop Telemetry reuses today's desktop analysis windows or the new
    touch-first QML.
 5. **Minimum OS versions and target devices** for all four platforms,
@@ -236,7 +236,7 @@ compatible `.fetproject` format ([KAN-170]).
 | --- | --- | --- |
 | 1. FlappedEar Overlays standalone (this repository) | Decision 3; "FlappedEar Overlays.app" with the new identity and a one-time move of preferences, templates, recovery and logs; macOS CI builds, tests and packages it. Merged in PR #142 | [KAN-122], [KAN-125] |
 | 2. FlappedEar Telemetry, a new Flutter app in its own repository | Decision 6 (Flutter, blank page, own Jira project); the architect handover; then, tracked in the new Jira project: the repository and its CI, the analysis app for desktop and mobile, import, touch screens, memory budget and on-track acceptance; one `.fetproject` format compatible with Overlays | [KAN-167], [KAN-168], [KAN-170], [KAN-126]–[KAN-130] (moving to the new project) |
-| 3. Remove the analysis from Overlays (deferred) | Only once Telemetry is mature enough to replace it ([KAN-169], the owner confirms): the Lap Analysis window and analysis workflows leave Overlays, and day documents keep every analysis field | [KAN-169], [KAN-166] |
+| 3. Remove the analysis from Overlays (in progress) | The owner approved it on 5 October 2026 ([KAN-169] records the last full-analysis commit, `7eae6cd`): the Lap Analysis window and analysis workflows leave Overlays, and day documents keep every analysis field | [KAN-169], [KAN-166] |
 
 ## Phases (original one-repository plan)
 

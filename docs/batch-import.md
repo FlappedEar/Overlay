@@ -29,6 +29,10 @@ Analysis then uses VBO; RCZ remains attached as an alternative source.
 
 ## Lap Analysis: the whole day
 
+Since KAN-166 step 3 (5 October 2026) the Lap Analysis window has no entry point;
+this section describes it until step 4 deletes it. Day import stays reachable
+through **File › Import telemetry runs…** until step 6 (KAN-186).
+
 1. Launch the application and choose **Lap Analysis** on the welcome screen.
 2. Enter an **Outing name** (for example, a track and day).
 3. Choose **Add RCZ / VBO files…** and select the recordings for the day.

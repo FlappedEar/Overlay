@@ -4,9 +4,9 @@
 
 <h2 id="principles">Principles</h2>
 <ul>
-  <li><strong>Missing is not zero.</strong> When a channel has no value at a moment, widgets show a dash and charts leave a gap. Gaps in a recording are never bridged in analysis.</li>
-  <li><strong>Nothing is invented.</strong> A missing brake channel is never estimated from G or speed in the overlay, and one channel is never silently replaced by another. Where analysis does infer something (for example braking from deceleration), it says <em>inferred</em>.</li>
-  <li><strong>Recorded values are not changed.</strong> The overlay smooths what it displays slightly; analysis uses raw samples.</li>
+  <li><strong>Missing is not zero.</strong> When a channel has no value at a moment, widgets show a dash and charts leave a gap. Gaps in a recording are never bridged in lap timing.</li>
+  <li><strong>Nothing is invented.</strong> A missing brake channel is never estimated from G or speed in the overlay, and one channel is never silently replaced by another.</li>
+  <li><strong>Recorded values are not changed.</strong> The overlay smooths what it displays slightly; lap timing uses raw samples.</li>
   <li>Heart rate comes from the imported VBO or RCZ recording. There is no separate heart-rate import.</li>
 </ul>
 
@@ -42,7 +42,7 @@
 </table>
 
 <h2 id="channels">How channels are recognised</h2>
-<p>Widgets and analysis use a channel's purpose (speed, RPM and so on). The application finds the channel by name, ignoring upper and lower case. For VBO files:</p>
+<p>Widgets use a channel's purpose (speed, RPM and so on). The application finds the channel by name, ignoring upper and lower case. For VBO files:</p>
 <table>
   <tr><th>Purpose</th><th>Matching column names</th></tr>
   <tr><td>Speed</td><td><code>velocity</code>, <code>speed</code>, names starting with <code>gps speed</code> or <code>obd speed</code></td></tr>
@@ -65,8 +65,18 @@
   <li>An exact 0 is treated as "no reading yet", because tyre-pressure sensors report 0 before their first reading.</li>
 </ul>
 
+<h2 id="lap-timing">How laps are found</h2>
+<p>Laps, the lap widgets and hot-lap export come from the start/finish line (timing gate) recorded in the telemetry file, for example the RaceChrono track's start line, and from GPS:</p>
+<ul>
+  <li><strong>OUT</strong>: from the start of the recording to the first crossing.</li>
+  <li><strong>LAP n</strong>: between two crossings in the same direction.</li>
+  <li><strong>IN</strong>: from the last crossing to the end of the recording.</li>
+  <li><strong>UNKNOWN</strong>: the whole recording, when no crossing could be found.</li>
+</ul>
+<p>Lap timing needs exactly one valid start gate and usable GPS. Manual start/finish placement is not available. If laps are missing, see <a href="troubleshooting.html#laps">No laps found</a>.</p>
+
 <h2 id="display">Display smoothing</h2>
-<p>To keep the overlay readable, displayed values are averaged over a short time window (about 0.1 to 0.25 seconds, depending on the channel; gear is not smoothed) and the last value is held for up to 0.75 seconds (2 seconds for heart rate) across a missing sample. Analysis charts and results always use the raw samples.</p>
+<p>To keep the overlay readable, displayed values are averaged over a short time window (about 0.1 to 0.25 seconds, depending on the channel; gear is not smoothed) and the last value is held for up to 0.75 seconds (2 seconds for heart rate) across a missing sample. Lap timing always uses the raw samples.</p>
 
 <h2 id="data-limits">File limits</h2>
 <table>

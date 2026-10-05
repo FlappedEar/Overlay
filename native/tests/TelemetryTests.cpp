@@ -116,6 +116,7 @@ private slots:
     void rejectsInvalidEventWithoutReplacingDocument();
     void rejectsLateSourceResultsAfterRunSelection();
     void selectsEventRunThroughAnalysisQml();
+    void selectsEventRunThroughEditorQml();
     void importsSixRunsAndAppendsWithoutDuplicates();
     void confirmsExplicitSourceGroups();
     void cancelsAndRejectsChangedBatchSources();
@@ -1011,6 +1012,39 @@ void TelemetryTests::selectsEventRunThroughAnalysisQml()
     QCOMPARE(picker->property("currentIndex").toInt(), 1);
     QCOMPARE(warnings.size(), 0);
     controller.cancelPendingDestructiveAction();
+}
+
+void TelemetryTests::selectsEventRunThroughEditorQml()
+{
+    // Without the Lap Analysis window, the editor header picks a day's run.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("appController"), &controller);
+    QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(qmlSourcePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> window(component.create());
+    QVERIFY2(window, qPrintable(component.errorString()));
+    auto *picker = window->findChild<QObject *>(QStringLiteral("editorRunPicker"));
+    QVERIFY(picker);
+    QVERIFY(!picker->property("visible").toBool()); // a single recording has no runs to pick
+    QVERIFY(controller.m_document.beginProjectLoad(directory.filePath("event.fetproject"), EventProjectFixture::project()));
+    QTRY_VERIFY(picker->property("visible").toBool());
+    QCOMPARE(picker->property("count").toInt(), 2);
+    QCOMPARE(picker->property("currentText").toString(), QStringLiteral("run-a"));
+    QVERIFY(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 1)));
+    QCOMPARE(controller.activeRunId(), QStringLiteral("run-b"));
+    QCOMPARE(picker->property("currentText").toString(), QStringLiteral("run-b"));
+    controller.requestNewProject();
+    QVERIFY(!picker->property("enabled").toBool());
+    QVERIFY(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 0)));
+    QCOMPARE(controller.activeRunId(), QStringLiteral("run-b"));
+    QCOMPARE(picker->property("currentIndex").toInt(), 1);
+    controller.cancelPendingDestructiveAction();
+    QCOMPARE(warnings.size(), 0);
 }
 
 namespace {
