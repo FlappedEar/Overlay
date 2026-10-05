@@ -132,7 +132,8 @@ document:
 - the saved project, its identity and revisions, and dirty state;
 - recovery;
 - new, open, save and quit decisions;
-- run selection and day import.
+- run selection and day import (day import is reached only through
+  `TelemetryController` since KAN-166 step 6; Overlays has no import UI).
 
 It implements `AnalysisDocument`. Whatever the application adds comes
 through `DocumentHost` (`src/app/DocumentHost.h`):
@@ -297,7 +298,7 @@ Synchronization, telemetry time, lap seeking and the analysis video link all use
 
 The editor's look follows FlappedEar Telemetry's design language: every colour, font and corner comes from `qml/Theme.js`, and the bundled Sora and JetBrains Mono fonts are registered at startup ([editor look](ui-theme.md)).
 
-The Lap Analysis window and its panels and dialogs were deleted by KAN-166 step 4 (5 October 2026); they remain at commit `7eae6cd` (KAN-169). The editor's preview owns the only `MediaPlayer`, which the startup smoke checks. Since step 5 `AppController` owns no `AnalysisController`: Overlays reads lap exclusions, run names, track configurations and the comparison group from the document, and saves every analysis field as loaded. `AnalysisController` runs only inside `TelemetryController`, the reference for FlappedEar Telemetry, which `flappedear_telemetry_app_tests` drive and which Overlays' day-decision tests use to make decisions. The descriptions of analysis behaviour in this document refer to that reference; the QML named in them is at that commit.
+The Lap Analysis window and its panels and dialogs were deleted by KAN-166 step 4 (5 October 2026); they remain at commit `7eae6cd` (KAN-169). The editor's preview owns the only `MediaPlayer`, which the startup smoke checks. Since step 5 `AppController` owns no `AnalysisController`, and since step 6 (KAN-186) it exposes no day import, run-recording or fusion calls, and `BatchImportDialog.qml` is gone: Overlays reads lap exclusions, run names, track configurations and the comparison group from the document, and saves every analysis field as loaded. `AnalysisController` runs only inside `TelemetryController`, the reference for FlappedEar Telemetry, which `flappedear_telemetry_app_tests` drive and which Overlays' day-decision tests use to make decisions. The descriptions of analysis behaviour in this document refer to that reference; the QML named in them is at that commit.
 
 `WidgetModel` owns persistent widgets, groups, appearance cues, and templates. It is also the sole semantic normalizer for direct edits, imported scenes, template application, imported templates, and template-store reload: supported numeric settings and geometry remain finite and bounded, invalid known colors fall back to defaults, invalid range pairs are repaired, cues are normalized, and persisted widget IDs must be valid and unique. Width/height/scale limits and position re-clamping keep the unrotated rectangle inside the scene during creation, import, duplication, scaling, and resizing. `TelemetryScene.qml` is the render-only telemetry layer: it has a render context and widget model but no editor-selection or media-player dependency. Its shared frame owns normalized geometry, appearance cues, background, border, title, and formatting helpers; one `Loader` then instantiates only the renderer matching each widget type from `qml/widgets/`. Editor interaction remains in the surrounding QML components, including a rotation-matched selection surface, while preview and export use the same scene definition.
 

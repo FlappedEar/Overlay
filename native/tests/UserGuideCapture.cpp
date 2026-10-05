@@ -1,6 +1,7 @@
 #include "UserGuideCapture.h"
 
 #include "app/AppController.h"
+#include "app/TelemetryController.h"
 #include "widgets/WidgetModel.h"
 
 #include <QDir>
@@ -105,23 +106,21 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QVERIFY(QTest::qWaitForWindowExposed(window));
     QVERIFY(shoot.window(window, "welcome"));
 
-    // The day's recordings through Import runs, as a driver adds them.
+    // The day as FlappedEar Telemetry saves it (Overlays opens days, KAN-166
+    // step 6); TelemetryController stands in for that app.
     QList<QUrl> day;
     for (const auto &path : options.day) day << QUrl::fromLocalFile(path);
     if (day.isEmpty()) day << QUrl::fromLocalFile(options.recording);
-    QVERIFY(controller.beginBatchImport(day));
-    QTRY_COMPARE_WITH_TIMEOUT(controller.batchImportState(), QStringLiteral("review"), 120000);
-    auto *batch = window->findChild<QObject *>("batchImportDialog");
-    QVERIFY(batch);
-    QVERIFY(QMetaObject::invokeMethod(batch, "open"));
-    QTRY_VERIFY(batch->property("opened").toBool());
-    auto *eventName = window->findChild<QObject *>("batchEventName");
-    QVERIFY(eventName);
-    eventName->setProperty("text", QStringLiteral("Jastrząb, 29 August"));
-    QVERIFY(shoot.window(window, "import-runs"));
-    QSignalSpy committed(&controller, &AppController::batchImportCommitted);
-    QVERIFY(QMetaObject::invokeMethod(batch, "submit"));
-    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 120000);
+    const QString dayPath = QDir(options.scratchDirectory).filePath("day.fetproject");
+    {
+        TelemetryController telemetry(QDir(options.scratchDirectory).filePath("telemetry-recovery.json"));
+        QSignalSpy committed(telemetry.document(), &DocumentController::batchImportCommitted);
+        QVERIFY(telemetry.document()->importAnalysisRuns(QStringLiteral("Jastrząb, 29 August"), day));
+        QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 120000);
+        QVERIFY(telemetry.document()->saveProject(QUrl::fromLocalFile(dayPath)));
+    }
+    controller.requestOpenProject(QUrl::fromLocalFile(dayPath));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.eventRuns().size(), day.size(), 120000);
     QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QStringLiteral("ready"), 180000);
     // The run of the onboard video becomes the active one; its video is
     // opened and synchronized as in the editor.

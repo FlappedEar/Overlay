@@ -76,5 +76,5 @@ the tyre `fallback` colours) are overlay content and stay as they are.
 
 Not restyled: the Lap Analysis window and its panels and dialogs, and
 `BatchImportDialog`, which leave this app under KAN-166: the window and its panels were
-deleted by step 4, and `BatchImportDialog` goes with day import in step 6. The overlay widgets drawn into the video keep their own
+deleted by step 4, and `BatchImportDialog` went with day import in step 6. The overlay widgets drawn into the video keep their own
 colours: they are the user's design and live in templates.

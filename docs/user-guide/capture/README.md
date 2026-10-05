@@ -5,8 +5,8 @@
 The pictures in `assets/screens/` come from the application itself: its own
 `AppController` and production QML, driven step by step by the opt-in test
 `TelemetryTests::capturesUserGuideScreens` (`native/tests/UserGuideCapture.cpp`),
-with a real onboard video and its recording. The capture imports the day
-through **Import runs**, opens the video, runs **Auto Sync**, exports a short
+with a real onboard video and its recording. The capture builds the day
+as FlappedEar Telemetry saves it (through `TelemetryController`), opens it, opens the video, runs **Auto Sync**, exports a short
 clip for real, and walks through the editor, the templates and every widget. `template-save-popup.png` is the only picture still made by the
 QML-only scripts below. `welcome.png` was retaken on 5 October 2026 by the
 same test on Linux under Xvfb (with the bundled Sora fonts, as on macOS), cropped

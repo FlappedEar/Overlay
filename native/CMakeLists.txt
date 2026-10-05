@@ -340,7 +340,6 @@ qt_add_qml_module(flappedear_native
     QML_FILES
         qml/Theme.js
         qml/ColorField.qml
-        qml/BatchImportDialog.qml
         qml/VideoChaptersDialog.qml
         qml/FeButton.qml
         qml/FeCheckBox.qml

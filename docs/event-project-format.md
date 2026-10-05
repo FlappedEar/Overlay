@@ -190,8 +190,9 @@ and alternative exports; overwrite consent cannot turn a source into an output.
    Keep the original source fixtures available. The scene is initially empty;
    apply a widget template if testing an overlay with your own video binding.
 
-Use **File → Import telemetry runs…** to create an event from multiple VBO/RCZ
-files, or add runs to the current event. See [batch import review](batch-import.md).
+Overlays no longer creates events from many recordings (KAN-166 step 6, KAN-186):
+events come from FlappedEar Telemetry. The import rules, still implemented in
+`DocumentController` for the reference app, are in [batch import review](batch-import.md).
 The separate single-file **Open telemetry…** picker still replaces the active
 run's primary source; it does **not** add another run.
 

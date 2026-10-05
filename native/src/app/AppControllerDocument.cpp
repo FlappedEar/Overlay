@@ -22,11 +22,8 @@ void AppController::initializeDocument()
     connect(&m_document, &DocumentController::destructiveActionChanged, this, &AppController::destructiveActionChanged);
     connect(&m_document, &DocumentController::projectLoadChanged, this, &AppController::projectLoadChanged);
     connect(&m_document, &DocumentController::recoveryChanged, this, &AppController::recoveryChanged);
-    connect(&m_document, &DocumentController::batchImportChanged, this, &AppController::batchImportChanged);
-    connect(&m_document, &DocumentController::batchImportCommitted, this, &AppController::batchImportCommitted);
     connect(&m_document, &DocumentController::saveAsRequested, this, &AppController::saveAsRequested);
     connect(&m_document, &DocumentController::quitApproved, this, &AppController::quitApproved);
-    connect(&m_document, &DocumentController::runRecordingsChanged, this, &AppController::runRecordingsChanged);
     // KAN-185: keep a requested best lap current through edits and reloads.
     connect(&m_document, &DocumentController::documentStateChanged, &m_bestLapFinder, &BestLapFinder::documentChanged);
     connect(&m_document, &DocumentController::projectLoadChanged, &m_bestLapFinder, &BestLapFinder::documentChanged);

@@ -3,6 +3,10 @@
 Product scope and delivery status: [vision](product-vision.md),
 [audit and milestones](product-delivery.md).
 
+Since KAN-166 step 6 (KAN-186) Overlays has no import menu or dialog; the steps below
+that name them describe Overlays up to that change. The import rules still hold in
+`DocumentController`, which the Telemetry reference (`TelemetryController`) uses.
+
 Lap quality: start-to-start measured times remain visible even with incomplete
 GPS. Such laps carry a GPS warning, are excluded from spatial references and do
 not show a numeric delta or BEST badge. Best-of-run badges use GPS-continuous
@@ -30,8 +34,11 @@ Analysis then uses VBO; RCZ remains attached as an alternative source.
 ## Lap Analysis: the whole day
 
 KAN-166 removed the Lap Analysis window (steps 3 and 4, 5 October 2026); this
-section describes it as it was up to commit `7eae6cd`. Day import stays reachable
-through **File › Import telemetry runs…** until step 6 (KAN-186).
+section describes it as it was up to commit `7eae6cd`. Step 6 (KAN-186) removed
+**File › Import telemetry runs…** and its review dialog from Overlays: days come from
+FlappedEar Telemetry as `.fetproject` files. The import itself stays in
+`DocumentController` (`flappedear_telemetry_app`), where `TelemetryController` and the
+tests use it; this document describes its rules.
 
 1. Launch the application and choose **Lap Analysis** on the welcome screen.
 2. Enter an **Outing name** (for example, a track and day).

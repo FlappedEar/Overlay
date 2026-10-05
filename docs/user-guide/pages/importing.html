@@ -1,6 +1,6 @@
 <!-- title: Importing video and telemetry | nav: Importing -->
 <h1 id="importing">Importing video and telemetry</h1>
-<p class="lead">An overlay project needs one video and one telemetry recording. A track-day event can hold many recordings, each as its own run.</p>
+<p class="lead">An overlay project needs one video and one telemetry recording. A track-day project from FlappedEar Telemetry holds many recordings, each as its own run.</p>
 
 <h2 id="video">Video</h2>
 <p>Use <strong>Open video</strong> in the header, <strong>File › Open Video…</strong> (<kbd>⇧⌘V</kbd>) or <strong>Choose video</strong>. The file picker accepts <code>.mp4</code> and <code>.mov</code> files.</p>
@@ -44,45 +44,16 @@
 <p>On success the status bar shows <em>Telemetry opened: N samples, M numeric channels.</em>, followed by up to three parser warnings. Details of supported content, recognised channels and limits are in <a href="telemetry-data.html">Telemetry data</a>.</p>
 <p>In an event, <strong>Open telemetry…</strong> replaces the active run's primary recording; it does not add a run.</p>
 
-<h2 id="runs">Importing a track day</h2>
-<p>A day at the track usually produces several recordings. Import them together into an <strong>event</strong>, where each recording becomes a <strong>run</strong>. <strong>File › Import telemetry runs…</strong> lets you check each file before anything changes.</p>
-<ol class="steps">
-  <li>Select 1 to 64 VBO/RCZ files.</li>
-  <li>In the <strong>Import runs</strong> dialog choose <strong>Create a new event</strong> (enter an event name) or <strong>Add runs to current event</strong>.</li>
-  <li>For each file choose <strong>Import as a run</strong>, <strong>Skip this file</strong> or <strong>Same run as: …</strong>. Each row shows the duration and number of complete laps, and a status: ready, duplicate or error. Tick <strong>Show file details and import warnings</strong> for paths, parser warnings and possible matches.</li>
-  <li>Click <strong>Create event</strong> or <strong>Add reviewed runs</strong>.</li>
-</ol>
-<figure>
-  <img src="assets/screens/import-runs.png" alt="Import runs dialog listing six VBO files, each ready to import as a run" width="1440" height="860" loading="lazy">
-  <figcaption>The Import runs dialog with the six VBO files of 29 August 2026 at Jastrząb, each set to <strong>Import as a run</strong>.</figcaption>
-</figure>
-<p>Files are checked again just before they are committed. If you have unsaved changes, save them before creating a new event.</p>
-
+<h2 id="runs">Track days</h2>
+<p>A day at the track usually produces several recordings. FlappedEar Telemetry, the analysis app, gathers them into an <strong>event</strong>, where each recording is a <strong>run</strong>, and saves it as a <code>.fetproject</code> file. Open that file here with <strong>File › Open project…</strong> (<kbd>⌘O</kbd>) to make overlays for any run of the day. Overlays no longer imports a day of recordings itself: it is an overlay editor.</p>
+<p>Lap exclusions, run names and the other decisions made in FlappedEar Telemetry are kept when you save, and excluded laps do not count as the best lap. Day projects made by earlier versions of this app open as before.</p>
 <h3 id="run-picker">Choosing the run to edit</h3>
 <p>When an event has more than one run, the header shows a run picker next to the file names. Choose a run to show its telemetry, video and synchronization in the editor; the overlay layout is shared by all runs. The picker is unavailable while a project loads, an export runs, or a question about unsaved changes is open. The Export dialog finds the day's best lap across all runs by itself (see <a href="export.html">Export</a>).</p>
-
-<h3 id="pairing">VBO and RCZ of the same session</h3>
-<p>If you exported the same session both as VBO and as RCZ, they belong to one run:</p>
-<ul>
-  <li>In the review dialog, choose <strong>Same run as: …</strong>. The run uses the file you link to; the other file is kept with that run.</li>
-  <li>Unknown clocks, different dates and ambiguous matches stay as separate runs.</li>
-</ul>
-<p>Channels of the two files are never combined automatically.</p>
-
-<h3 id="duplicates">Duplicates and naming</h3>
-<ul>
-  <li>Two files with identical content are reported as duplicates and imported once.</li>
-  <li>Runs are named <em>Session 1</em>, <em>Session 2</em>, … in recording-time order. Recordings without a clock follow in import order.</li>
-  <li>The recording date and time come from the file's content. File names and file dates are never used.</li>
-</ul>
 
 <h3 id="import-limits">Limits</h3>
 <table>
   <tr><th>Item</th><th>Limit</th></tr>
-  <tr><td>Files per import</td><td>64 (a folder with more is refused)</td></tr>
   <tr><td>Size of one telemetry file</td><td>128 MiB</td></tr>
-  <tr><td>Total size of one import</td><td>256 MiB</td></tr>
   <tr><td>Runs per event</td><td>64</td></tr>
   <tr><td>Recordings per run</td><td>8</td></tr>
-  <tr><td>Folder search depth</td><td>8 subfolder levels; symbolic links and hidden entries are skipped</td></tr>
 </table>

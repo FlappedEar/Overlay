@@ -19,6 +19,10 @@ report). Tests that check what Overlays does with a day's decisions now make tho
 `restoresDayDecisionsAfterMoveMissingRelinkAndRecovery`,
 `lapExclusionsSurviveSaveRecoveryAndInvalidateSafely`, `keepsAnalysisStateThroughOverlayEdits`,
 `persistsAndInvalidatesRunTrackConfiguration` and the real-day `automaticallyGroupsPrivateTrackDay`.
+Step 6 removed the import menu and `BatchImportDialog.qml` (and `reviewsBatchThroughProductionQml`).
+The import tests (`importsSixRunsAndAppendsWithoutDuplicates` and the others) still drive
+`DocumentController` directly, through `AppController::m_document`, because its import serves the
+Telemetry reference; the user-guide capture builds its day in `TelemetryController`.
 
 Run the local gate appropriate to the change before claiming a behavior works. Cloud CI is enabled for macOS Debug and Release by owner direction; Windows CI remains paused, and the owner validates Windows locally ([2 October 2026](windows-validation-2026-10-02.md)). Follow the current [local task workflow](development-workflow.md).
 
