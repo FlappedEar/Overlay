@@ -93,7 +93,6 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QSettings settings; settings.clear(); settings.sync();
     Shooter shoot(options.outputDirectory);
     AppController controller(nullptr, QDir(options.scratchDirectory).filePath("recovery.json"));
-    controller.setAutomaticSegments(true); // the screens show a day with segments, as Telemetry saves it
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
         QDir(QStringLiteral(QML_SOURCE_DIR)).filePath("Main.qml")));
@@ -123,9 +122,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QSignalSpy committed(&controller, &AppController::batchImportCommitted);
     QVERIFY(QMetaObject::invokeMethod(batch, "submit"));
     QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 120000);
-    QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 180000);
-    // Automatic segments (KAN-136) are created in the background; the video is
-    // opened at once, as a driver does (KAN-142 keeps the segments).
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QStringLiteral("ready"), 180000);
     // The run of the onboard video becomes the active one; its video is
     // opened and synchronized as in the editor.
     const int runIndex = std::max(0, int(options.day.indexOf(options.recording)));

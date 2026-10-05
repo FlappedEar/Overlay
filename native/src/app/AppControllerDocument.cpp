@@ -17,6 +17,8 @@ void AppController::initializeDocument()
     // import invalidation first, as before.
     connect(this, &AppController::sourceLoadStateChanged, &m_document, &DocumentController::sourceLoadStateChanged);
     connect(&m_document, &DocumentController::documentStateChanged, this, &AppController::documentStateChanged);
+    // The editor's laps follow the saved lap exclusions as the document changes.
+    connect(&m_document, &DocumentController::documentStateChanged, this, &AppController::applyActiveLapExclusions);
     connect(&m_document, &DocumentController::destructiveActionChanged, this, &AppController::destructiveActionChanged);
     connect(&m_document, &DocumentController::projectLoadChanged, this, &AppController::projectLoadChanged);
     connect(&m_document, &DocumentController::recoveryChanged, this, &AppController::recoveryChanged);
@@ -94,11 +96,6 @@ void AppController::applyEditorProject(const ProjectLoadResult &result)
     // A .fetproject stores a scene, not template provenance. Retain the picker preference,
     // but never let a newly opened scene overwrite a visible custom template in place.
     if (!result.runSelection) clearActiveTemplate();
-    m_analysisChannels.clear();
-    m_analysisChannelsEdited = false;
-    applyAnalysisChannels(result.analysisChannels);
-    if (!result.runSelection) setAnalysisVisible(false);
-    reconcileAnalysisChannels();
 }
 
 void AppController::announceEditorProject()
@@ -141,9 +138,6 @@ void AppController::clearEditor()
     m_previewRenderContext.setTrackGeometry(nullptr);
     m_previewRenderContext.setLapSession({});
     m_trackPoints.clear();
-    m_analysisChannelsEdited = false;
-    applyAnalysisChannels({});
-    setAnalysisVisible(false);
     m_playbackTime = 0.0;
     m_sync = {};
     m_syncCandidate.clear();
@@ -206,11 +200,10 @@ QJsonObject AppController::withEditorState(QJsonObject project, const QString &d
     QJsonObject scene = project.value("scene").toObject();
     scene.insert("widgets", m_widgetModel.toJson());
     project.insert("scene", scene);
-    // analysis.channels belongs to the analysis: an overlay edit saves the
-    // loaded value untouched; only a channel choice in the analysis rewrites it.
-    if (m_analysisChannelsEdited || project.contains(QStringLiteral("analysis"))) {
+    // analysis.channels belongs to FlappedEar Telemetry: Overlays saves it as
+    // loaded (KAN-166). The old window-visibility flag is not document state.
+    if (project.contains(QStringLiteral("analysis"))) {
         QJsonObject analysis = project.value("analysis").toObject();
-        if (m_analysisChannelsEdited) analysis.insert("channels", QJsonArray::fromStringList(m_analysisChannels));
         analysis.remove(QStringLiteral("visible"));
         project.insert("analysis", analysis);
     }
@@ -224,7 +217,9 @@ QByteArray AppController::loadedTelemetryRevision() const
 
 QJsonObject AppController::withVerifiedAnalysis(const QJsonObject &project) const
 {
-    return m_analysis.projectWithOutingInference(project);
+    // Overlays derives no analysis results to add (KAN-166 step 5): saved
+    // inference and decisions pass through as loaded.
+    return project;
 }
 
 void AppController::editorProjectSaved(const QJsonObject &project)

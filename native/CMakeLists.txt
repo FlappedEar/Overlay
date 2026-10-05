@@ -293,7 +293,6 @@ endif()
 
 qt_add_executable(flappedear_native MACOSX_BUNDLE
     src/app/AppControllerDocument.cpp
-    src/app/AppControllerAnalysis.cpp
     src/app/AppController.cpp
     src/app/AppController.h
     src/app/BundledFonts.cpp

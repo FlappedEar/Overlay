@@ -24,7 +24,6 @@ qt_add_executable(flappedear_native_tests
     UserGuideCapture.h
     ../src/app/AppControllerDocument.cpp
     TelemetryTests.cpp
-    ../src/app/AppControllerAnalysis.cpp
     ../src/app/AppController.cpp
     ../src/app/AppController.h
     ../src/app/BundledFonts.cpp

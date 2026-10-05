@@ -38,7 +38,9 @@ product split (`docs/product-split-plan.md`, epic KAN-121, now KAN-165):
   controllers:
   - `DocumentController` and `AnalysisController`;
   - `TelemetryController`, which pairs them with no editor, no video and
-    no export;
+    no export. Since KAN-166 step 5 it is the only owner of an
+    `AnalysisController`; Overlays' `AppController` uses `DocumentController`
+    and `BestLapFinder` only;
   - `AppLog`.
 
   It links the telemetry core with **Qt Core and Concurrent only** (no
@@ -295,7 +297,7 @@ Synchronization, telemetry time, lap seeking and the analysis video link all use
 
 The editor's look follows FlappedEar Telemetry's design language: every colour, font and corner comes from `qml/Theme.js`, and the bundled Sora and JetBrains Mono fonts are registered at startup ([editor look](ui-theme.md)).
 
-The Lap Analysis window and its panels and dialogs were deleted by KAN-166 step 4 (5 October 2026); they remain at commit `7eae6cd` (KAN-169). The editor's preview owns the only `MediaPlayer`, which the startup smoke checks. `AnalysisController` still runs behind `AppController` until step 5; the descriptions of analysis behaviour in this document refer to it, and the QML named in them is at that commit.
+The Lap Analysis window and its panels and dialogs were deleted by KAN-166 step 4 (5 October 2026); they remain at commit `7eae6cd` (KAN-169). The editor's preview owns the only `MediaPlayer`, which the startup smoke checks. Since step 5 `AppController` owns no `AnalysisController`: Overlays reads lap exclusions, run names, track configurations and the comparison group from the document, and saves every analysis field as loaded. `AnalysisController` runs only inside `TelemetryController`, the reference for FlappedEar Telemetry, which `flappedear_telemetry_app_tests` drive and which Overlays' day-decision tests use to make decisions. The descriptions of analysis behaviour in this document refer to that reference; the QML named in them is at that commit.
 
 `WidgetModel` owns persistent widgets, groups, appearance cues, and templates. It is also the sole semantic normalizer for direct edits, imported scenes, template application, imported templates, and template-store reload: supported numeric settings and geometry remain finite and bounded, invalid known colors fall back to defaults, invalid range pairs are repaired, cues are normalized, and persisted widget IDs must be valid and unique. Width/height/scale limits and position re-clamping keep the unrotated rectangle inside the scene during creation, import, duplication, scaling, and resizing. `TelemetryScene.qml` is the render-only telemetry layer: it has a render context and widget model but no editor-selection or media-player dependency. Its shared frame owns normalized geometry, appearance cues, background, border, title, and formatting helpers; one `Loader` then instantiates only the renderer matching each widget type from `qml/widgets/`. Editor interaction remains in the surrounding QML components, including a rotation-matched selection surface, while preview and export use the same scene definition.
 
