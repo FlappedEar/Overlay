@@ -55,9 +55,12 @@ through a pull request, and the `macOS arm64 / Debug / Qt 6.8.3` and
 Since 5 October 2026 Native CI also runs `Linux x64 / ASan+UBSan / Qt 6.8.3`
 (KAN-154), the GUI-free tests under AddressSanitizer and
 UndefinedBehaviorSanitizer. The owner made it a required check the same day.
-It also runs `Linux x64 / Fuzz parsers / Qt 6.8.3` (KAN-155): 60 seconds of libFuzzer
+Native CI also runs `Linux x64 / Fuzz parsers / Qt 6.8.3` (KAN-155): 60 seconds of libFuzzer
 on each of the VBO, RCZ and GPMF decoders from the seed corpora. It is not a
 required check.
+The macOS jobs fail when Homebrew's FFmpeg is outside the tested range, 8.1 to
+9.x (KAN-154); widening it is a reviewed change to `.github/workflows/build.yml`
+after the export tests pass on the new version.
 All Jira content remains in English. Record the implementation SHA, local results,
 limitations and any authorized PR/merge links. No public releases or tags are
 implied. Historical CI wording elsewhere does not override this workflow.

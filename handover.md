@@ -257,8 +257,9 @@ and desktop minimum OS versions.
 Split rules already in force after KAN-123:
 - `src/telemetry` and `src/project` form `flappedear_telemetry_core`, which
   links **Qt Core and zlib only**.
-- `flappedear_telemetry_core_boundary` fails the build if they include
-  overlay, app or Gui headers.
+- `flappedear_telemetry_core_boundary` fails if they reach (also through
+  relative or indirect includes) any project file not listed in the library's
+  sources, or a Gui header. A new header must be added to the library's list.
 - New analysis code goes there, and its pure tests link only that library.
 - Keep analysis features independent of video.
 

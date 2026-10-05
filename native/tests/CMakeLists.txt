@@ -296,7 +296,35 @@ set_tests_properties(flappedear_startup_smoke PROPERTIES
     PASS_REGULAR_EXPRESSION "Startup smoke passed"
     FAIL_REGULAR_EXPRESSION "ReferenceError;TypeError;Binding loop"
 )
+# KAN-123/KAN-124/KAN-154: each mobile library's boundary is checked from its
+# own SOURCES. The source lists are written at generate time.
+foreach(library IN ITEMS flappedear_telemetry_core flappedear_telemetry_app)
+    file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${library}_sources.txt"
+        CONTENT "$<JOIN:$<TARGET_PROPERTY:${library},SOURCES>,\n>\n")
+endforeach()
 add_test(NAME flappedear_telemetry_core_boundary
-    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../src -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckTelemetryCoreBoundary.cmake)
+    COMMAND ${CMAKE_COMMAND} -DNAME=flappedear_telemetry_core -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../src
+        -DBASE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/..
+        "-DSOURCE_LISTS=${CMAKE_CURRENT_BINARY_DIR}/flappedear_telemetry_core_sources.txt"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckLibraryBoundary.cmake)
 add_test(NAME flappedear_telemetry_app_boundary
-    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../src -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckTelemetryAppBoundary.cmake)
+    COMMAND ${CMAKE_COMMAND} -DNAME=flappedear_telemetry_app -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../src
+        -DBASE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/..
+        "-DSOURCE_LISTS=${CMAKE_CURRENT_BINARY_DIR}/flappedear_telemetry_app_sources.txt|${CMAKE_CURRENT_BINARY_DIR}/flappedear_telemetry_core_sources.txt"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckLibraryBoundary.cmake)
+# The check must reject a relative include reached through two allowed
+# headers, and a Qt Gui header.
+set(flappedear_boundary_fixtures
+    "relative-transitive|export/Forbidden.h is outside fixture"
+    "gui-header|Painter.cpp: #include <QPainter>")
+foreach(entry IN LISTS flappedear_boundary_fixtures)
+    string(REPLACE "|" ";" entry "${entry}")
+    list(GET entry 0 fixture)
+    list(GET entry 1 expected)
+    set(fixture_dir ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/boundary/${fixture})
+    add_test(NAME flappedear_boundary_rejects_${fixture}
+        COMMAND ${CMAKE_COMMAND} -DNAME=fixture -DSOURCE_DIR=${fixture_dir}/src -DBASE_DIR=${fixture_dir}
+            -DSOURCE_LISTS=${fixture_dir}/sources.txt -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckLibraryBoundary.cmake)
+    set_tests_properties(flappedear_boundary_rejects_${fixture} PROPERTIES
+        PASS_REGULAR_EXPRESSION "${expected}")
+endforeach()
