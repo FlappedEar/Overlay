@@ -401,7 +401,6 @@ bool DocumentController::performOpenProject(const QUrl &url)
             if (!value.isString() || value.toString().size() > ProjectLimits::maximumStringCharacters) {
                 result.error = QStringLiteral("Analysis channels are malformed."); return result;
             }
-            result.analysisChannels.append(value.toString());
         }
         result.success = true;
         result.project = project;
@@ -439,20 +438,12 @@ bool DocumentController::beginProjectLoad(
         m_host.showStatus("Project error: synchronization state is invalid.");
         return false;
     }
-    const QJsonObject analysis = project.value("analysis").toObject();
-    QStringList channels;
-    if (analysis.value("channels").isArray()) {
-        for (const QJsonValue &value : analysis.value("channels").toArray()) {
-            channels.append(value.toString());
-        }
-    }
     const quint64 generation = m_host.beginSourceGeneration(runSelection);
     ProjectLoadResult result;
     result.success = true;
     result.projectPath = std::move(projectPath);
     result.project = project;
     result.widgets = scene.value(QStringLiteral("widgets")).toArray();
-    result.analysisChannels = channels;
     result.sync = {offset, timeScale};
     result.generation = generation;
     result.recovered = recovered;

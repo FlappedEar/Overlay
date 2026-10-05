@@ -11,24 +11,6 @@
 #include "telemetry/TelemetrySession.h"
 #include "telemetry/TelemetryRenderContext.h"
 #include "telemetry/TrackGeometry.h"
-#include "telemetry/CornerPhases.h"
-#include "telemetry/TrackProgress.h"
-#include "telemetry/TrackSegmentReview.h"
-#include "telemetry/TrackSegmentEditing.h"
-#include "telemetry/SectorTiming.h"
-#include "telemetry/TheoreticalBest.h"
-#include "telemetry/TimeLoss.h"
-#include "telemetry/Consistency.h"
-#include "telemetry/DrivingVariability.h"
-#include "telemetry/CornerSpeeds.h"
-#include "telemetry/BrakingMetrics.h"
-#include "telemetry/ExitMetrics.h"
-#include "telemetry/TelemetryImportPlan.h"
-#include "telemetry/OutingLaps.h"
-#include "telemetry/OutingLapLoader.h"
-#include "telemetry/OutingLapDerivation.h"
-#include "telemetry/OutingTheoreticalBest.h"
-#include "telemetry/TrackInference.h"
 #include "export/MediaProbe.h"
 #include "export/ExportDiagnostics.h"
 #include "export/ExportOutputTransaction.h"
@@ -157,7 +139,7 @@ public:
     [[nodiscard]] bool syncing() const;
     [[nodiscard]] bool exporting() const;
     // KAN-124: the document is busy with an operation that must not be
-    // interleaved with analysis edits (today: an export). Analysis and import
+    // interleaved with document edits (today: an export). The document's
     // guards use this, not the overlay's export state.
     [[nodiscard]] bool documentBusy() const override;
     [[nodiscard]] int exportProgress() const;
