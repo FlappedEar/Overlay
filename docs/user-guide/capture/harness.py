@@ -194,9 +194,11 @@ class SampleRenderContext(QObject):
 
     def __init__(self, values: dict | None = None, points: list | None = None, current: dict | None = None,
                  lap_timing: dict | None = None, fixed_lap: dict | None = None, tyres: dict | None = None,
-                 time: float = 0.0):
+                 time: float = 0.0, history=None):
         super().__init__()
         self._values = dict(values or {})
+        # history(source, seconds_ago) -> value, for telemetryValueAgo (KAN-193 radar trail).
+        self._history = history
         self._points = points or []
         self._current = current or {}
         self._lap = lap_timing or {"available": False}
@@ -234,6 +236,20 @@ class SampleRenderContext(QObject):
     def telemetryValue(self, source):
         value = self._values.get(source)
         return None if value is None else value + self._jitter
+
+    @Slot(str, float, result="QVariant")
+    def telemetryValueAgo(self, source, seconds_ago):
+        if self._history is None:
+            return self.telemetryValue(source)
+        return self._history(source, seconds_ago)
+
+    @Slot(float, int, result=str)
+    def formatLapTime(self, seconds, decimals):
+        # As FlappedEar::formatLapTime: rounded before minutes are split (KAN-149).
+        scaled = round(seconds * 10 ** decimals)
+        minutes, rest = divmod(scaled, 60 * 10 ** decimals)
+        whole, fraction = divmod(rest, 10 ** decimals)
+        return f"{minutes}:{whole:02d}." + f"{fraction:0{decimals}d}" if decimals > 0 else f"{minutes}:{whole:02d}"
 
     @Slot(int, result="QVariantMap")
     def fixedLapTiming(self, _lap):
@@ -290,4 +306,9 @@ def real_context(rec, t: float) -> SampleRenderContext:
         fixed.update({"state": "running", "elapsedSeconds": t - best_lap["start"]})
     else:
         fixed.update({"state": "finished", "elapsedSeconds": best_lap["durationSeconds"]})
-    return SampleRenderContext(values, points, current, timing, fixed, None, t)
+    def history(source, seconds_ago):
+        column = ALIASES.get(source, source)
+        value = rec.value(column, t - seconds_ago) if column in rec.channels else None
+        return value if value is not None and math.isfinite(value) else None
+
+    return SampleRenderContext(values, points, current, timing, fixed, None, t, history)

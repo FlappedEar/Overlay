@@ -21,7 +21,8 @@ for text with tabular digits, JetBrains Mono for times.
   `assets/fonts/`. `FlappedEar::registerBundledFonts()`
   (`native/src/app/BundledFonts.cpp`) registers them at startup in every mode,
   so a widget font typed in the editor previews and exports alike. The test
-  binary bundles the same files.
+  binary bundles the same files. Chakra Petch (500 to 700, OFL 1.1) is bundled
+  for the Tech overlay style (KAN-193); the editor itself does not use it.
 - The shared controls `FeButton`, `FeCheckBox`, `FeComboBox`, `FeSlider`,
   `FeSpinBox`, `FeTextField`, `SectionTitle` and `ColorField` use only theme
   names. New screens use these controls and theme names, never their own hex

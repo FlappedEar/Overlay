@@ -41,6 +41,9 @@ public:
 
     Q_INVOKABLE QVariant telemetryValue(const QString &channelName) const;
     Q_INVOKABLE QString valueText(const QString &channelName, int decimals = 2) const;
+    // KAN-193: a channel's value `secondsAgo` before the current time, for
+    // trails drawn from the recording itself, so preview and export match.
+    Q_INVOKABLE QVariant telemetryValueAgo(const QString &channelName, double secondsAgo) const;
     Q_INVOKABLE QVariant telemetryTime() const;
     // Hotlap mode: one chosen lap only. `lapNumber` 0 picks the recording's
     // best eligible lap. {state: "before" | "running" | "finished" |

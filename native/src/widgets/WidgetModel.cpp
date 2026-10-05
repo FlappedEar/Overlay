@@ -330,6 +330,14 @@ QVariant normalizeSettingValue(
     if (name == QStringLiteral("speedDeltaRangeKmh")) {
         return finiteNumber(value, &number) ? bounded(number, 1.0, 300.0) : fallback();
     }
+    if (name == QStringLiteral("style")) {
+        // KAN-193: Classic is the original look; Tech the bottom-strip HUD look.
+        const QString style = value.toString();
+        return style == QStringLiteral("classic") || style == QStringLiteral("tech") ? QVariant(style) : fallback();
+    }
+    if (name == QStringLiteral("trailSeconds")) {
+        return finiteNumber(value, &number) ? bounded(number, 0.0, 5.0) : fallback();
+    }
     if (name == QStringLiteral("ringStepG")) {
         return finiteNumber(value, &number) ? bounded(number, 0.01, 10.0) : fallback();
     }

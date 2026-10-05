@@ -108,6 +108,26 @@
 <p>A round analog tachometer with numerals in thousands, a red warning zone, needle and digital value. Settings: <strong>Dial color</strong>, <strong>Needle color</strong>, <strong>Dial background</strong>, <strong>Background opacity</strong>.</p>
 <div class="warning"><p>A new Retro RPM is bound to the RaceChrono OBD channel name <code>rpm-obd</code>. If your file uses another name, the widget shows no data. Select the correct channel, or <strong>Automatic</strong>, in <strong>Source channel</strong>. The selector may already display <em>Automatic</em> while the stored name is not in your file; select it again to apply it.</p></div>
 
+<h2 id="styles">Styles: Classic and Tech</h2>
+<p>Every widget except a designed widget has a <strong>Style</strong> setting in the Identity section of the WIDGET tab. <strong>Classic</strong> is the look shown above and the default, so projects saved before 5 October 2026 look as they did. <strong>Tech</strong> is the bottom-strip look chosen on 5 October 2026: dark plates with two cut corners and a short amber tab, the Chakra Petch font with fixed-width digits, and the colours below. The <a href="templates.html#built-in">Tech HUD</a> template applies it to a whole layout.</p>
+<figure>
+  <img src="assets/screens/template-tech-hud.png" alt="Tech HUD template: RPM gauge with speed, lap tile, pedals, oil ATF and coolant rows, tyres, heart rate, G radar and G readout" width="1280" height="720" loading="lazy">
+  <figcaption>The Tech HUD template.</figcaption>
+</figure>
+<table>
+  <tr><th>Widget</th><th>In the Tech style</th></tr>
+  <tr><td>Retro RPM</td><td>A thin 270° arc with the scale in thousands and a red zone from <strong>Warning at</strong> (default 7500), with the speed in the middle and the RPM value under it. <strong>Show speed inside the gauge</strong> and its channel (default <code>speed</code>) can be changed; the speed is shown in km/h.</td></tr>
+  <tr><td>Speed</td><td>Label, large value and unit on a plate.</td></tr>
+  <tr><td>Pedals</td><td>Throttle and brake as slanted horizontal bars with percentages.</td></tr>
+  <tr><td>Current lap time</td><td>Lap number in amber, the running time, and <strong>BEST</strong> with the best completed lap so far (<strong>Show best lap</strong>). Hotlap mode works as in Classic.</td></tr>
+  <tr><td>Heart rate</td><td>Heart icon, BPM and the value. <strong>Show heart-rate zones</strong> adds five bars, lit from 50, 60, 70, 80 and 90 % of <strong>Maximum</strong> (set it to your own maximum heart rate; the default is 220). Off by default.</td></tr>
+  <tr><td>Retro Custom</td><td>One row: label, value and unit. <strong>Show range bar</strong> draws a bar from <strong>Minimum</strong> to <strong>Maximum</strong> with a pin at the value and the range from <strong>Normal from</strong> to <strong>Normal to</strong> in green. At or above <strong>Warning at</strong> the row turns red (0 turns the warning off). Stacked rows (OIL, ATF, COOLANT) form one plate.</td></tr>
+  <tr><td>Tyres</td><td>A block per tyre coloured by temperature: blue below <strong>Cold below</strong> (default 60 °C), green to amber in the working range, red above <strong>Hot above</strong> (default 100 °C), with temperature and pressure beside it.</td></tr>
+  <tr><td>F1 G-Force Radar</td><td>Rings every <strong>Ring step</strong>, the amber dot and a fading trail of the last <strong>Trail (s)</strong> seconds (0 to 5, default 1; 0 turns it off). The trail is read from the recording, so preview and export show the same trail.</td></tr>
+  <tr><td>G-Force Bar</td><td>A readout: combined G, then lateral (LAT) and longitudinal (LON) G.</td></tr>
+</table>
+<p>In the Tech style the <strong>Font family</strong>, <strong>Weight</strong> and most colour settings have no effect; <strong>Background panel</strong> and <strong>Panel opacity</strong> still apply. Missing data shows a dash, as in Classic.</p>
+
 <h2 id="removed">Removed widgets</h2>
 <p>On 5 October 2026 the widget list was reduced to the widgets above. These types were removed: RPM, G-Force, Track, Custom, Arc gauge, Dial gauge, Data strip, Best lap time, Lap delta, Best-lap speed, Current speed, Speed delta, Retro Grand Prix, Retro gear, Retro pedal, Retro speed, Nameplate and Logo.</p>
 <p>A project, custom template or <strong>My widgets</strong> entry that still contains one of them opens normally without those widgets. When a project leaves widgets out, the status bar says how many. Saving the project then stores it without them. Rebuild a removed widget with the <a href="widget-editor.html">widget editor</a> if you need it.</p>
@@ -117,11 +137,11 @@
 <table>
   <tr><th>Section</th><th>Settings</th></tr>
   <tr><td>Header</td><td>Widget type, <strong>Visible</strong>, and <strong>Font size</strong> (see below).</td></tr>
-  <tr><td>Identity</td><td><strong>Layer name</strong> (shown in the Layers list), <strong>Title</strong> and <strong>Show title</strong> (a small heading at the top of the widget).</td></tr>
+  <tr><td>Identity</td><td><strong>Layer name</strong> (shown in the Layers list), <strong>Title</strong> and <strong>Show title</strong> (a small heading at the top of the widget), <strong>Style</strong> (<a href="#styles">Classic or Tech</a>).</td></tr>
   <tr><td>Telemetry &amp; format</td><td><strong>Source channel</strong>, <strong>Label</strong>, <strong>Unit</strong>, <strong>Decimals</strong> (0–6), <strong>Multiplier</strong>, <strong>Value offset</strong>, <strong>Prefix</strong>, <strong>Suffix</strong>, <strong>Minimum</strong>, <strong>Maximum</strong>, <strong>Show unit</strong>, <strong>Clamp</strong>.</td></tr>
   <tr><td>Type-specific</td><td>The settings listed for each widget in the <a href="#catalog">catalog</a>.</td></tr>
   <tr><td>Geometry</td><td><strong>X</strong>, <strong>Y</strong>, <strong>W</strong>, <strong>H</strong>, <strong>Scale</strong> (0.25–3×), <strong>Rotation</strong> (−180° to 180°), <strong>Opacity</strong>.</td></tr>
-  <tr><td>Typography</td><td><strong>Font family</strong> (typed name, default Helvetica Neue; the application also includes Sora and JetBrains Mono, which look the same on every computer), <strong>Weight</strong> (400–800), <strong>Value scale</strong>, <strong>Label scale</strong>.</td></tr>
+  <tr><td>Typography</td><td><strong>Font family</strong> (typed name, default Helvetica Neue; the application also includes Sora, JetBrains Mono and Chakra Petch, which look the same on every computer), <strong>Weight</strong> (400–800), <strong>Value scale</strong>, <strong>Label scale</strong>.</td></tr>
   <tr><td>Appearance</td><td><strong>Background panel</strong>, <strong>Background color</strong>, <strong>Panel opacity</strong>, <strong>Border</strong>, <strong>Border color</strong>, <strong>Border width</strong>, <strong>Border opacity</strong>, <strong>Corner radius</strong>, <strong>Padding</strong>, <strong>Primary text</strong>, <strong>Secondary text</strong>, <strong>Primary accent</strong>, <strong>Secondary accent</strong>.</td></tr>
   <tr><td>Actions</td><td><strong>Duplicate</strong>, <strong>Delete</strong>.</td></tr>
 </table>
