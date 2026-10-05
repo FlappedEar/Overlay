@@ -43,8 +43,12 @@ TelemetrySession TelemetrySource::load(const QString &path, const CancellationCh
 {
     throwIfCancelled(cancelled);
     const auto suffix = QFileInfo(path).suffix().toLower();
-    if (suffix == "vbo") return VboParser::parseFile(path, cancelled, maximumDecodedBytes);
-    if (suffix == "rcz") return RczParser::parseFile(path, cancelled, maximumDecodedBytes);
-    throw std::runtime_error("Choose a VBO or RaceChrono RCZ telemetry file.");
+    if (suffix != "vbo" && suffix != "rcz") throw std::runtime_error("Choose a VBO or RaceChrono RCZ telemetry file.");
+    TelemetrySession session = suffix == "vbo" ? VboParser::parseFile(path, cancelled, maximumDecodedBytes)
+                                               : RczParser::parseFile(path, cancelled, maximumDecodedBytes);
+    // Every value lookup reads the gap threshold (KAN-157): compute it before
+    // the session is shared between threads.
+    freezeCachedStatistics(session, cancelled);
+    return session;
 }
 }

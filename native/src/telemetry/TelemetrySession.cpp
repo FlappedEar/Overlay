@@ -45,12 +45,17 @@ std::optional<double> TelemetrySession::valueAt(
 {
     const QString resolved = aliases.value(channelName, channelName);
     const auto channelIterator = channels.constFind(resolved);
-    if (channelIterator == channels.cend() || channelIterator->timestamps.isEmpty()
-        || channelIterator->values.isEmpty() || !std::isfinite(time)) {
+    if (channelIterator == channels.cend()) {
         return std::nullopt;
     }
+    return telemetryValueAt(channelIterator.value(), time, mode);
+}
 
-    const TelemetryChannel &channel = channelIterator.value();
+std::optional<double> telemetryValueAt(const TelemetryChannel &channel, const double time, const InterpolationMode mode)
+{
+    if (channel.timestamps.isEmpty() || channel.values.isEmpty() || !std::isfinite(time)) {
+        return std::nullopt;
+    }
     const auto &timestamps = channel.timestamps;
     const auto &values = channel.values;
     if (timestamps.size() != values.size() || time < timestamps.front() || time > timestamps.back()) {
@@ -75,6 +80,13 @@ std::optional<double> TelemetrySession::valueAt(
         return std::nullopt;
     }
     const qsizetype previous = next - 1;
+    // KAN-157: the one gap rule. Between two samples farther apart than the
+    // channel's gap threshold there is no data in any mode: a held, nearest
+    // or interpolated value would bridge a loss of signal.
+    const double gapThreshold = telemetryGapThreshold(channel);
+    if (gapThreshold > 0.0 && timestamps[next] - timestamps[previous] > gapThreshold) {
+        return std::nullopt;
+    }
     if (mode == InterpolationMode::Previous) {
         return finiteValueAt(previous);
     }

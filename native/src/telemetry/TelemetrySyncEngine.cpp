@@ -76,24 +76,6 @@ double significanceOf(const double score, const int samples)
     return std::atanh(std::clamp(score, -0.999999, 0.999999)) * std::sqrt(static_cast<double>(samples - 3));
 }
 
-std::optional<double> interpolate(const TelemetryChannel &signal, const double time)
-{
-    if (!std::isfinite(time) || signal.timestamps.isEmpty() || time < signal.timestamps.constFirst()
-        || time > signal.timestamps.constLast()) {
-        return std::nullopt;
-    }
-    const auto after = std::lower_bound(signal.timestamps.cbegin(), signal.timestamps.cend(), time);
-    if (after == signal.timestamps.cbegin()) {
-        return signal.values.constFirst();
-    }
-    const qsizetype high = std::distance(signal.timestamps.cbegin(), after);
-    const qsizetype low = high - 1;
-    const double span = signal.timestamps[high] - signal.timestamps[low];
-    const double ratio = span == 0.0 ? 0.0 : (time - signal.timestamps[low]) / span;
-    return static_cast<double>(signal.values[low])
-        + (static_cast<double>(signal.values[high]) - signal.values[low]) * ratio;
-}
-
 double correlation(
     const QVector<double> &a,
     const QVector<double> &b,
@@ -157,8 +139,10 @@ SyncCandidate calculate(
         for (int sampleIndex = 0; sampleIndex < samples; ++sampleIndex) {
             if ((sampleIndex & 0xff) == 0) throwIfCancelled(cancelled);
             const double time = gridTime(video.timestamps.constFirst(), step, sampleIndex);
-            const auto av = interpolate(video, time);
-            const auto bv = interpolate(telemetry, time + offset);
+            // KAN-157: the shared lookup, so a loss of GPS fix is not bridged
+            // into a ramp that correlates.
+            const auto av = telemetryValueAt(video, time);
+            const auto bv = telemetryValueAt(telemetry, time + offset);
             if (av && bv && std::isfinite(*av) && std::isfinite(*bv)) {
                 a.append(*av);
                 b.append(*bv);

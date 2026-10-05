@@ -481,6 +481,7 @@ GoProTelemetryResult GoProTelemetrySource::decodeGpsPackets(
     session.aliases.insert("latitude", "GoPro latitude");
     session.aliases.insert("longitude", "GoPro longitude");
     session.aliases.insert("speed", "GoPro GPS speed");
+    freezeCachedStatistics(session, cancelled);
     return {std::move(session), packets.size(), state.recordCount, streamName};
 }
 

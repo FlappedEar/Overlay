@@ -13,6 +13,7 @@
 #include "telemetry/TelemetryImportPlan.h"
 #include "telemetry/TelemetrySession.h"
 #include "telemetry/TelemetrySource.h"
+#include "telemetry/TelemetrySyncEngine.h"
 #include "telemetry/TrackGeometry.h"
 #include "telemetry/TrackInference.h"
 #include "telemetry/TyreData.h"
@@ -67,6 +68,8 @@ private slots:
     void prefersRaceChronoCalculatedAcceleration();
     void parsesRealisticFixture();
     void toleratesMalformedRows();
+    void neverBridgesALossOfSignal();
+    void syncIgnoresALossOfGpsFix();
     void preservesRepeatedDataSections();
     void rejectsMissingSections();
     void interpolatesByTime();
@@ -413,6 +416,64 @@ void TelemetryCoreTests::toleratesMalformedRows()
     QVERIFY(!session.valueAt("speed", 1.0));
     QVERIFY(!session.valueAt("speed", 1.5));
     QCOMPARE(session.warnings.size(), 2);
+}
+
+void TelemetryCoreTests::neverBridgesALossOfSignal()
+{
+    // KAN-157: a 30 s loss of GPS fix (samples dropped, as the GoPro decoder
+    // does) is no data in every interpolation mode; samples either side stay.
+    TelemetrySession session;
+    TelemetryChannel speed;
+    speed.name = QStringLiteral("speed");
+    for (int tick = 0; tick <= 600; ++tick) {
+        if (tick > 200 && tick < 500) continue; // no fix from 20.0 s to 50.0 s
+        speed.timestamps.append(tick / 10.0);
+        speed.values.append(static_cast<float>(tick));
+    }
+    session.channels.insert(speed.name, speed);
+    freezeCachedStatistics(session);
+    for (const auto mode : {InterpolationMode::Linear, InterpolationMode::Nearest, InterpolationMode::Previous}) {
+        QVERIFY(!session.valueAt(QStringLiteral("speed"), 20.05, mode));
+        QVERIFY(!session.valueAt(QStringLiteral("speed"), 35.0, mode));
+        QVERIFY(!session.valueAt(QStringLiteral("speed"), 49.95, mode));
+    }
+    QCOMPARE(session.valueAt(QStringLiteral("speed"), 20.0).value(), 200.0);
+    QCOMPARE(session.valueAt(QStringLiteral("speed"), 50.0).value(), 500.0);
+    QVERIFY(qAbs(session.valueAt(QStringLiteral("speed"), 10.05).value() - 100.5) < 1e-6);
+    QCOMPARE(session.valueAt(QStringLiteral("speed"), 10.04, InterpolationMode::Previous).value(), 100.0);
+    QCOMPARE(telemetryValueAt(session.channels.value(QStringLiteral("speed")), 35.0), std::nullopt);
+}
+
+void TelemetryCoreTests::syncIgnoresALossOfGpsFix()
+{
+    // KAN-157: auto-sync must not correlate the straight ramp it would draw
+    // across a loss of fix. Dropped samples now count exactly like samples
+    // explicitly marked as no data.
+    const auto speedAt = [](const double time) {
+        return static_cast<float>(50.0 + 18.0 * std::sin(time * 0.21) + 7.0 * std::sin(time * 0.73) + time * 0.08);
+    };
+    const auto session = [&](const bool lossOfFix, const bool markLoss) {
+        TelemetrySession result;
+        TelemetryChannel speed;
+        speed.name = QStringLiteral("speed");
+        for (int tick = 0; tick <= 600; ++tick) {
+            const double time = tick * 0.2;
+            const bool lost = lossOfFix && time > 40.0 && time < 70.0;
+            if (lost && !markLoss) continue;
+            speed.timestamps.append(time);
+            speed.values.append(lost ? std::numeric_limits<float>::quiet_NaN() : speedAt(time));
+        }
+        result.channels.insert(speed.name, speed);
+        result.aliases.insert(QStringLiteral("speed"), speed.name);
+        return result;
+    };
+    const auto telemetry = session(false, false);
+    const auto dropped = TelemetrySyncEngine::synchronize(session(true, false), telemetry);
+    const auto marked = TelemetrySyncEngine::synchronize(session(true, true), telemetry);
+    QVERIFY(qAbs(dropped.offset) < 0.05);
+    QCOMPARE(dropped.diagnostics.validSamples, marked.diagnostics.validSamples);
+    const auto continuous = TelemetrySyncEngine::synchronize(session(false, false), telemetry);
+    QVERIFY(dropped.diagnostics.validSamples < continuous.diagnostics.validSamples - 250);
 }
 
 void TelemetryCoreTests::preservesRepeatedDataSections()

@@ -51,7 +51,8 @@ public:
 
     // Public telemetry semantics are intentionally strict: queries outside a
     // channel's range and internal non-finite samples are no data. Linear
-    // interpolation requires two adjacent finite samples; gaps are never bridged.
+    // interpolation requires two adjacent finite samples; gaps are never bridged
+    // (telemetryValueAt, KAN-157).
     [[nodiscard]] std::optional<double> valueAt(
         const QString &channelName,
         double time,
@@ -79,8 +80,14 @@ void preferAcceleratorPedalForThrottle(TelemetrySession &session);
 [[nodiscard]] std::optional<double> videoToTelemetryTime(double videoTime, const SyncTransform &transform);
 [[nodiscard]] std::optional<double> telemetryToVideoTime(
     double telemetryTime, const SyncTransform &transform);
+// A gap is two adjacent samples more than three median sample intervals apart
+// (or minimumSeconds, if larger). Every consumer uses this one threshold.
 [[nodiscard]] double telemetryGapThreshold(
     const TelemetryChannel &channel, double minimumSeconds = 0.0);
+// KAN-157: the shared value lookup behind TelemetrySession::valueAt. Outside the
+// channel, at a non-finite sample, or inside a gap there is no data.
+[[nodiscard]] std::optional<double> telemetryValueAt(
+    const TelemetryChannel &channel, double time, InterpolationMode mode = InterpolationMode::Linear);
 
 // Every channel's lazily-computed cadence statistics are non-atomic mutable
 // state. Call this once, single-threaded, before a TelemetrySession is
