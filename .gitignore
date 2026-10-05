@@ -11,6 +11,8 @@ __MACOSX/
 /samples/*.vbo
 /jastrzab/
 *.rcz
+# Synthetic fuzz seeds built from native/tests/RczFixture.h (KAN-155).
+!/native/fuzz/seeds/rcz/*.rcz
 
 __pycache__/
 docs/user-guide/_site/
