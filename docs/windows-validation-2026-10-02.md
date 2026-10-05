@@ -31,12 +31,8 @@ NVIDIA driver at 617.14. Everything passes, with no failures and no local workar
   1080p exports ([KAN-177]).
 
 **Still open**
-- An MP4 trimmed without re-encoding (with an edit list) still has its frames
-  miscounted, so the export is refused ([KAN-175]).
 - About 135 harmless "access denied" registry warnings during test cleanup
   ([KAN-179]).
-- An unknown command-line flag, such as the removed `--export-test`, opens the
-  editor instead of reporting an error ([KAN-178]).
 
 ## First run (`c8f0c9f`)
 
@@ -79,10 +75,10 @@ packaging; frame-by-frame inspection of the exported file.
 | Seeking while paused jumps back to the start (the Windows backend reports `LoadedMedia` again) | [KAN-172] | Fixed; verified on Windows (retest) |
 | Folder import picks up macOS `._*` metadata files | [KAN-173] | Fixed; verified on Windows (retest) |
 | NVENC is never selected (the encoder probe used a 64×64 frame) | [KAN-174] | Fixed (256×256 probe); verified on Windows (retest) |
-| An MP4 with an edit list fails to export: frames are counted from packets, and validation refuses the output | [KAN-175] | Open; reproduced in the retest |
+| An MP4 with an edit list fails to export: frames are counted from packets, and validation refuses the output | [KAN-175] | Fixed on 5 October 2026 (PR #167); not yet re-checked on Windows |
 | Build and test portability (Mach headers, `/bigobj`, smoke logging, VideoToolbox skip) and three MSVC warnings | [KAN-176] | Fixed; verified on Windows (retest) |
 | No GPU choice for rendering; CPU-side 10-bit composition limits export speed | [KAN-177] | Recorded idea; not scheduled |
-| `--export-test` rejected every export | — | Obsolete: KAN-156 removed that mode. An unknown flag now opens the editor ([KAN-178]) |
+| `--export-test` rejected every export | — | Obsolete: KAN-156 removed that mode. An unknown flag opened the editor until 5 October 2026; it now reports a usage error ([KAN-178]) |
 | About 135 harmless "access denied" registry warnings during test cleanup | [KAN-179] | Open |
 
 ### Intel and NVIDIA

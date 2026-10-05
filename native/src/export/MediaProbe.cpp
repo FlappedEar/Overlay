@@ -94,14 +94,15 @@ std::optional<qint64> jsonSignedInteger(const QJsonValue &value)
     return ok ? std::optional<qint64>(parsed) : std::nullopt;
 }
 
-MediaInfo runProbe(
+QByteArray runProbeOutput(
     const QString &path,
     const QString &requestedFfprobePath,
     const QStringList &arguments,
     const int timeoutMilliseconds,
     const QString &mode,
     const MediaProbeProgressCallback &progressCallback,
-    const MediaProbeCancellationCallback &cancellationCallback)
+    const MediaProbeCancellationCallback &cancellationCallback,
+    const qint64 outputLimitBytes = ProcessOutputLimits::ffprobeJsonBytes)
 {
     const QString executable = requestedFfprobePath.isEmpty()
         ? FfmpegTools::ffprobePath()
@@ -124,7 +125,7 @@ MediaInfo runProbe(
         progressCallback({MediaProbeEvent::Phase::Started, 0, executable, arguments, path, mode, 0});
     }
     DiagnosticHeartbeat heartbeat(500);
-    BoundedProcessOutput stdoutOutput(BoundedProcessOutput::Mode::CompletePayload, ProcessOutputLimits::ffprobeJsonBytes);
+    BoundedProcessOutput stdoutOutput(BoundedProcessOutput::Mode::CompletePayload, outputLimitBytes);
     BoundedProcessOutput stderrOutput(BoundedProcessOutput::Mode::DiagnosticTail, ProcessOutputLimits::ffmpegDiagnosticTailBytes);
     const auto drain = [&] {
         stdoutOutput.append(process.readAllStandardOutput());
@@ -140,7 +141,7 @@ MediaInfo runProbe(
         drain();
         if (stdoutOutput.exceeded()) {
             stopAndReap(process); drain();
-            throw std::runtime_error(QStringLiteral("ffprobe %1 output exceeded %2 bytes while probing %3 (observed %4 bytes).").arg(mode).arg(ProcessOutputLimits::ffprobeJsonBytes).arg(path).arg(stdoutOutput.observedBytes()).toStdString());
+            throw std::runtime_error(QStringLiteral("ffprobe %1 output exceeded %2 bytes while probing %3 (observed %4 bytes).").arg(mode).arg(outputLimitBytes).arg(path).arg(stdoutOutput.observedBytes()).toStdString());
         }
         const qint64 remaining = timeoutMilliseconds - elapsed.elapsed();
         finished = process.waitForFinished(static_cast<int>(qMin<qint64>(250, remaining)));
@@ -161,7 +162,7 @@ MediaInfo runProbe(
 
     drain();
     if (stdoutOutput.exceeded()) {
-        throw std::runtime_error(QStringLiteral("ffprobe %1 output exceeded %2 bytes while probing %3 (observed %4 bytes).").arg(mode).arg(ProcessOutputLimits::ffprobeJsonBytes).arg(path).arg(stdoutOutput.observedBytes()).toStdString());
+        throw std::runtime_error(QStringLiteral("ffprobe %1 output exceeded %2 bytes while probing %3 (observed %4 bytes).").arg(mode).arg(outputLimitBytes).arg(path).arg(stdoutOutput.observedBytes()).toStdString());
     }
     if (progressCallback) {
         progressCallback({MediaProbeEvent::Phase::Finished, elapsed.elapsed(), executable,
@@ -177,7 +178,57 @@ MediaInfo runProbe(
             QStringLiteral("ffprobe exited with code %1 while probing: %2. stderr: %3")
                 .arg(process.exitCode()).arg(path, stderrDiagnostic(stderrOutput.bytes())).toStdString());
     }
-    return MediaProbe::parseJson(stdoutOutput.bytes(), path);
+    return stdoutOutput.bytes();
+}
+
+MediaInfo runProbe(
+    const QString &path,
+    const QString &requestedFfprobePath,
+    const QStringList &arguments,
+    const int timeoutMilliseconds,
+    const QString &mode,
+    const MediaProbeProgressCallback &progressCallback,
+    const MediaProbeCancellationCallback &cancellationCallback)
+{
+    return MediaProbe::parseJson(
+        runProbeOutput(path, requestedFfprobePath, arguments, timeoutMilliseconds, mode,
+                       progressCallback, cancellationCallback),
+        path);
+}
+
+// KAN-175: an MP4 trimmed without re-encoding starts at the keyframe before the
+// cut and hides the frames before it with an edit list. nb_frames counts those
+// packets, while the stream duration covers only the presented frames. A header
+// count above what the duration holds is checked against the packets themselves.
+bool frameCountMayIncludeHiddenPackets(const MediaInfo &info)
+{
+    if (info.videoFrameCount <= 0) return false;
+    if (!info.timeBase.isValid() || !info.frameRate.isValid() || info.videoDurationTicks <= 0) return true;
+    const long double presentedFrames = static_cast<long double>(info.videoDurationTicks)
+        * info.timeBase.numerator * info.frameRate.numerator
+        / (static_cast<long double>(info.timeBase.denominator) * info.frameRate.denominator);
+    return static_cast<long double>(info.videoFrameCount) > presentedFrames + 0.5L;
+}
+
+// The video packets a decoder presents: those the demuxer does not flag as
+// discarded ("D") by the edit list.
+qsizetype presentedVideoPacketCount(
+    const QString &path,
+    const QString &requestedFfprobePath,
+    const MediaProbeProgressCallback &progressCallback,
+    const MediaProbeCancellationCallback &cancellationCallback)
+{
+    const QByteArray output = runProbeOutput(
+        path, requestedFfprobePath,
+        {"-v", "error", "-select_streams", "v:0", "-show_entries", "packet=flags", "-of", "csv=p=0", path},
+        frameCountProbeTimeoutMilliseconds, QStringLiteral("presentedPackets"), progressCallback,
+        cancellationCallback, ProcessOutputLimits::ffprobePacketFlagsBytes);
+    qsizetype presented = 0;
+    for (const QByteArray &line : output.split('\n')) {
+        const QByteArray flags = line.trimmed();
+        if (!flags.isEmpty() && !flags.contains('D')) ++presented;
+    }
+    return presented;
 }
 
 } // namespace
@@ -220,11 +271,22 @@ MediaInfo MediaProbe::probe(
     const int effectiveTimeout = timeoutMilliseconds >= 0
         ? timeoutMilliseconds
         : (countVideoFrames ? frameCountProbeTimeoutMilliseconds : metadataProbeTimeoutMilliseconds);
-    return runProbe(path, requestedFfprobePath, arguments, effectiveTimeout,
-                    countVideoFrames ? QStringLiteral("frameCount")
-                                     : (countVideoPackets ? QStringLiteral("packetCount")
-                                                          : QStringLiteral("full")),
-                    progressCallback, cancellationCallback);
+    MediaInfo info = runProbe(path, requestedFfprobePath, arguments, effectiveTimeout,
+                              countVideoFrames ? QStringLiteral("frameCount")
+                                               : (countVideoPackets ? QStringLiteral("packetCount")
+                                                                    : QStringLiteral("full")),
+                              progressCallback, cancellationCallback);
+    // nb_read_frames is already the presented count; packet counts stay packet counts.
+    if (!countVideoFrames && !countVideoPackets && frameCountMayIncludeHiddenPackets(info)) {
+        const qsizetype presented = presentedVideoPacketCount(
+            path, requestedFfprobePath, progressCallback, cancellationCallback);
+        if (presented <= 0) {
+            throw std::runtime_error(
+                QStringLiteral("ffprobe found no presented video frames in: %1").arg(path).toStdString());
+        }
+        info.videoFrameCount = presented;
+    }
+    return info;
 }
 
 MediaInfo MediaProbe::probeSummary(

@@ -135,6 +135,7 @@ private slots:
     void savesReopensAndRelinksRcz();
     void exportsSyntheticRczThroughWorker_data();
     void exportsSyntheticRczThroughWorker();
+    void exportsEditListSourceThroughWorker();
     void preservesMissingTelemetryGaps();
     void filtersOverlayPresentationValues();
     void samplesTelemetryRanges();
@@ -5487,6 +5488,73 @@ void TelemetryTests::exportsSyntheticRczThroughWorker()
         }
         QVERIFY(std::sqrt(power / 4800) > .03); // Audible tone starts with the delayed stream.
     } else QVERIFY(media.audioCodecs.isEmpty());
+}
+
+// KAN-175: an MP4 trimmed losslessly keeps the packets from the keyframe before
+// the cut, and its edit list hides them. The header's nb_frames counts them; the
+// export must schedule only the frames that are presented.
+void TelemetryTests::exportsEditListSourceThroughWorker()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    QVERIFY2(!ffmpeg.isEmpty(), "FFmpeg is required for the edit-list export regression.");
+    const auto source = directory.filePath("synthetic.rcz");
+    const auto untrimmed = directory.filePath("untrimmed.mp4");
+    const auto video = directory.filePath("input.mp4");
+    const auto output = directory.filePath("output.mp4");
+    const auto config = directory.filePath("worker.json");
+    QVERIFY(writeBytes(source, RczFixture::zip(RczFixture::members())));
+    const auto runFfmpeg = [&ffmpeg](const QStringList &arguments) {
+        QProcess process;
+        process.start(ffmpeg, arguments);
+        QVERIFY2(process.waitForFinished(30'000), qPrintable(process.errorString()));
+        QVERIFY2(process.exitCode() == 0, process.readAllStandardError().constData());
+    };
+    // Keyframes every second; a copy-trim at 1.5 s starts at the 1 s keyframe
+    // and hides its first 15 frames with an edit list.
+    runFfmpeg({"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=320x240:r=30:d=4",
+               "-c:v", "libx264", "-g", "30", "-bf", "2", "-pix_fmt", "yuv420p", untrimmed});
+    runFfmpeg({"-hide_banner", "-loglevel", "error", "-y", "-ss", "1.5", "-i", untrimmed, "-c", "copy", video});
+    QCOMPARE(MediaProbe::probe(video, {}, false, -1, {}, {}, true).videoPacketCount, qsizetype(90));
+    const MediaInfo input = MediaProbe::probe(video);
+    QCOMPARE(input.videoFrameCount, qsizetype(75));
+    const auto fullRange = ExportEngine::fullVideoFrameRange(input, {30, 1});
+    QVERIFY(fullRange);
+    QCOMPARE(fullRange->firstFrame, 0);
+    QCOMPARE(fullRange->lastFrame, 74);
+    // Without an edit list, the header count is used as before.
+    QCOMPARE(MediaProbe::probe(untrimmed).videoFrameCount, qsizetype(120));
+
+    ExportOutputTransaction transaction;
+    QCOMPARE(transaction.prepare(output, video, {source}, false).status,
+             ExportOutputTransaction::PreparationStatus::Ready);
+    const auto id = transaction.transactionId();
+    const auto overlay = QDir::temp().filePath(QStringLiteral("flappedear-overlay-%1.mkv").arg(id));
+    const auto manifestPath = ExportArtifactManifest::manifestPathFor(id);
+    QString error;
+    QVERIFY2(ExportArtifactManifest::create({id, QDateTime::currentMSecsSinceEpoch(), overlay,
+        transaction.stagingPath(), output, QCoreApplication::applicationPid(), "preparing"}, &error), qPrintable(error));
+    const auto cleanup = qScopeGuard([&] { static_cast<void>(ExportArtifactManifest::cleanupOwned(manifestPath)); });
+    WidgetModel widgets;
+    // No frame range: the worker exports the whole source, as the editor does.
+    const QJsonObject settings{{"vboPath", source}, {"inputPath", video}, {"outputPath", transaction.stagingPath()},
+        {"manifestPath", manifestPath}, {"temporaryOverlayPath", overlay},
+        {"widgets", widgets.toJson()}, {"sync", QJsonObject{{"offset", .1}, {"timeScale", 1.0}}},
+        {"audioEnabled", false}, {"encoder", "libx265"}};
+    QVERIFY(writeBytes(config, QJsonDocument(settings).toJson()));
+    QProcess worker;
+    worker.start(QStringLiteral(FLAPPEDEAR_NATIVE_PATH), {"--export-worker", config});
+    QVERIFY(worker.waitForStarted());
+    QVERIFY2(worker.waitForFinished(60'000), qPrintable(worker.errorString()));
+    const auto events = worker.readAllStandardOutput() + worker.readAllStandardError();
+    QCOMPARE(worker.exitStatus(), QProcess::NormalExit);
+    QByteArray failures;
+    for (const auto &line : events.split('\n'))
+        if (line.contains("\"passed\":false") || line.contains("\"state\":\"failed\"")) failures += line + '\n';
+    QVERIFY2(worker.exitCode() == 0, (failures.isEmpty() ? events.right(4000) : failures.left(4000)).constData());
+    QVERIFY2(transaction.commit(&error), qPrintable(error));
+    QCOMPARE(MediaProbe::probe(output, {}, true).videoFrameCount, qsizetype(75));
 }
 
 void TelemetryTests::savesReopensAndRelinksRcz()
