@@ -4,7 +4,7 @@
 
 The owner has resumed Cloud CI after the quota pause. Native CI runs on pull
 requests, pushes to `main`, and manual dispatch, with macOS Debug and Release
-builds/tests and Release deployment/startup validation. Verify successful runs
+builds/tests, Release deployment/startup validation, and a Linux sanitizer job. Verify successful runs
 for the exact published PR head and resulting main revision; earlier task CI
 results are not evidence for new code.
 Since 2 October 2026, Windows code changes are resumed for defects found by the
@@ -52,6 +52,10 @@ Since 4 October 2026 `main` is protected by a branch ruleset: changes land only
 through a pull request, and the `macOS arm64 / Debug / Qt 6.8.3` and
 `macOS arm64 / Release / Qt 6.8.3` checks must pass first. No approval is required
 (single maintainer); force pushes and branch deletion are blocked.
+Since 5 October 2026 Native CI also runs `Linux x64 / ASan+UBSan / Qt 6.8.3`
+(KAN-154), the GUI-free tests under AddressSanitizer and
+UndefinedBehaviorSanitizer. Wait for it as well before merging. Making it a
+required check is the owner's setting in the ruleset.
 All Jira content remains in English. Record the implementation SHA, local results,
 limitations and any authorized PR/merge links. No public releases or tags are
 implied. Historical CI wording elsewhere does not override this workflow.
