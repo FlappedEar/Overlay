@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: native-ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # KAN-154: a newer push supersedes a pull request run, but every main
+  # revision keeps its completed run.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:
@@ -186,5 +188,85 @@ jobs:
             ci-logs/
             build-native/Testing/Temporary/
             build-native/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: warn
+          retention-days: 14
+
+  # KAN-154: the GUI-free test programs on Linux with GCC, under AddressSanitizer
+  # (including leak checks) and UndefinedBehaviorSanitizer. The editor, its
+  # QRhi pixel tests and the FFmpeg export integrations stay on macOS.
+  linux-sanitizers:
+    name: Linux x64 / ASan+UBSan / Qt 6.8.3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+      QT_QPA_PLATFORM: offscreen
+      # A 32 MiB quarantine instead of 256 MiB: freed memory held for
+      # use-after-free detection otherwise counts toward the peak-memory
+      # budget in boundsVboHeaderAndDecodedValues (562 MiB against 300 alone).
+      ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1:quarantine_size_mb=32
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      # The editor, its startup and the export integrations need a display,
+      # a GPU and FFmpeg 8.1; macOS runs them. The boundary checks are scripts.
+      EXCLUDED_TESTS: flappedear_native_tests|flappedear_startup_smoke|flappedear_command_line_usage|flappedear_telemetry_core_boundary|flappedear_telemetry_app_boundary
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ninja-build libgl-dev libegl-dev \
+            libxkbcommon-dev libvulkan-dev libfontconfig1-dev libfreetype-dev
+
+      - name: Install Qt 6.8.3 and modules
+        uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: '6.8.3'
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtmultimedia qtshadertools
+          cache: true
+          cache-key-prefix: native-ci-qt-6.8.3-linux-v1
+
+      - name: Configure sanitizer build
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          flags='-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined'
+          cmake -S . -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR" \
+            "-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined" 2>&1 | tee ci-logs/configure.log
+
+      - name: Build the GUI-free test programs
+        run: |
+          set -o pipefail
+          # Each remaining CTest test runs the executable of the same name.
+          ctest --test-dir build-native -N | awk '/Test +#/ {print $3}' | grep -vE "^($EXCLUDED_TESTS)\$" > ci-logs/tests.txt
+          test -s ci-logs/tests.txt
+          cmake --build build-native --target $(cat ci-logs/tests.txt) 2>&1 | tee ci-logs/build.log
+
+      - name: Run them under the sanitizers
+        timeout-minutes: 25
+        run: |
+          set -o pipefail
+          ctest --test-dir build-native --output-on-failure --no-tests=error --timeout 900 -j 4 \
+            -R "^($(paste -sd'|' ci-logs/tests.txt))\$" --output-junit "$GITHUB_WORKSPACE/ci-logs/ctest.xml" 2>&1 | tee ci-logs/ctest.log
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-ci-linux-sanitizers-qt-6.8.3
+          path: |
+            ci-logs/
+            build-native/Testing/Temporary/
           if-no-files-found: warn
           retention-days: 14

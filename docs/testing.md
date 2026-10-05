@@ -1680,11 +1680,38 @@ published change against its own CI run; historical task records do not validate
 new code. Keep the [local task workflow](development-workflow.md) for implementation
 and private-media acceptance.
 
-[Native CI](../.github/workflows/build.yml) runs on pull requests, pushes to `main`, and manual dispatch. Two macOS arm64 jobs configure Debug and Release Ninja builds with Qt 6.8.3 (the supported minimum minor), compile the application and tests with C++20, and run all 40 CTest registrations: 37 Qt Test executables (the GUI application suite, the telemetry-core and telemetry-app suites, the per-module suites, the KAN-125 storage-migration suite and the KAN-180 content-id vector suite), the production QML startup smoke, and the two library-boundary checks. Release jobs additionally deploy Qt and run installed startup with the build SDK hidden, then attach internal candidate archives. Windows builds, tests and installer validation are paused by owner direction on 13 September 2026; resume them only when explicitly requested. Earlier Windows results below are historical. See [Windows installer](windows-installer.md).
+[Native CI](../.github/workflows/build.yml) runs on pull requests, pushes to `main`, and manual dispatch. Two macOS arm64 jobs configure Debug and Release Ninja builds with Qt 6.8.3 (the supported minimum minor), compile the application and tests with C++20, and run all 42 CTest registrations: 38 Qt Test executables (the GUI application suite, the telemetry-core and telemetry-app suites, the per-module suites, the KAN-125 storage-migration suite, the KAN-180 content-id vector suite and the KAN-178 command-line suite), the production QML startup smoke, the KAN-178 command-line usage check, and the two library-boundary checks. Release jobs additionally deploy Qt and run installed startup with the build SDK hidden, then attach internal candidate archives. Windows builds, tests and installer validation are paused by owner direction on 13 September 2026; resume them only when explicitly requested. Earlier Windows results below are historical. See [Windows installer](windows-installer.md).
 
 | Job | Renderer | Toolchain |
 | --- | --- | --- |
 | `macOS arm64 / Debug or Release / Qt 6.8.3` | Metal; Cocoa for native window interaction | `macos-15`, Apple Clang |
+| `Linux x64 / ASan+UBSan / Qt 6.8.3` | None (offscreen; GUI-free tests only) | `ubuntu-24.04`, GCC, AddressSanitizer with leak checks and UndefinedBehaviorSanitizer |
+
+A third job (KAN-154) builds a Debug configuration on Linux with
+`-fsanitize=address,undefined -fno-sanitize-recover=undefined` and runs every
+CTest test except the GUI application suite, the startup smoke, the command-line
+usage check and the two boundary scripts: 37 Qt Test executables. Those excluded
+need a display, a GPU and FFmpeg 8.1, which the macOS jobs supply. Any sanitizer
+report, including a leak, fails the job. Checked locally on 5 October 2026 with
+Qt 6.8.3 and GCC 13: all 37 pass, `flappedear_recording_alignment_tests` takes
+about 3.5 minutes under the sanitizers, and a heap overflow injected into a test
+fails it with an AddressSanitizer report. The job sets
+`ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1:quarantine_size_mb=32`.
+The smaller quarantine (default 256 MiB) keeps freed memory held for
+use-after-free detection from counting toward the 300 MiB peak-memory budget of
+`boundsVboHeaderAndDecodedValues`: run alone, that test grows by 26 MiB without
+sanitizers, by 563 MiB with the default quarantine and by 150 MiB with 32 MiB.
+The budget still catches the gigabyte-scale growth it guards against. To run the
+same locally:
+
+```bash
+flags='-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined'
+cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_C_FLAGS=$flags" \
+  "-DCMAKE_CXX_FLAGS=$flags" "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"
+```
+
+Pull request runs are cancelled by a newer push to the same pull request; runs
+on `main` are never cancelled, so every `main` revision gets a completed run.
 
 Native interaction tests expose real windows and therefore require native QPA handles. Offscreen QPA cannot supply the NSView/HWND required by a native QRhi swapchain. Export pixel tests retain QRhi render-control targets; the separate startup smoke explicitly uses offscreen/software. Do not suppress input assertions or renderer coverage to avoid a platform mismatch.
 
