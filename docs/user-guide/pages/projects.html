@@ -62,6 +62,7 @@
   <tr><td>Recovery data (<code>project-recovery.json</code>)</td><td><code>~/Library/Application Support/FlappedEar/FlappedEar Overlays/</code></td></tr>
   <tr><td>Custom templates (<code>layout-templates.json</code>)</td><td><code>~/Library/Preferences/FlappedEar/FlappedEar Overlays/</code></td></tr>
   <tr><td>Preferences (window positions, last project, selected template, analysis channels)</td><td>macOS preferences for the application</td></tr>
+  <tr><td>Export clean-up records (<code>flappedear-export-….manifest.json</code>)</td><td><code>~/Library/Application Support/FlappedEar/FlappedEar Overlays/export-manifests/</code>; removed after each export, or at the next start if the app closed unexpectedly</td></tr>
   <tr><td>Temporary export files</td><td>The system temporary folder; removed after each export</td></tr>
 </table>
 <p>Replacing the application with a newer version keeps all of these. Remove only the application bundle, never these folders, when upgrading. Builds named FlappedEar Telemetry kept the same items under <code>FlappedEar Telemetry</code> folders; the first start of FlappedEar Overlays moves them to the folders above and copies the preferences. Anything that could not be moved stays in the old folder, and the app tells you where.</p>

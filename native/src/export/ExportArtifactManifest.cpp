@@ -10,8 +10,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QStandardPaths>
 #include <QUuid>
 #include <limits>
+#include <utility>
 
 #ifdef Q_OS_UNIX
 #include <cerrno>
@@ -33,6 +35,11 @@ bool isValidId(const QString &id)
     return QUuid(QStringLiteral("{%1}").arg(id)).isNull() == false;
 }
 
+QString manifestFileName(const QString &exportId)
+{
+    return QStringLiteral("flappedear-export-%1.manifest.json").arg(exportId);
+}
+
 bool validOwnedData(const QString &manifestPath, const ExportArtifactManifestData &data)
 {
     if (!isValidId(data.exportId) || data.createdUtcMilliseconds <= 0 || data.temporaryOverlayPath.isEmpty()
@@ -42,8 +49,11 @@ bool validOwnedData(const QString &manifestPath, const ExportArtifactManifestDat
     const QString expectedOverlay = normalized(QDir(tempRoot).filePath(
         QStringLiteral("flappedear-overlay-%1.mkv").arg(data.exportId)));
     if (normalized(overlay.absoluteFilePath()) != expectedOverlay) return false;
-    const QString expectedManifest = normalized(ExportArtifactManifest::manifestPathFor(data.exportId));
-    if (normalized(manifestPath) != expectedManifest) return false;
+    // KAN-164: the manifest is matched by file name, not folder. The GUI tells
+    // the worker where it is, and the two may resolve the application data
+    // folder differently (QStandardPaths test mode is per process). Ownership
+    // of what cleanup deletes is proven by the artifact paths checked here.
+    if (QFileInfo(manifestPath).fileName() != manifestFileName(data.exportId)) return false;
     const QFileInfo target(data.finalTargetPath);
     QString baseName = target.completeBaseName();
     if (baseName.isEmpty()) baseName = QStringLiteral("export");
@@ -65,15 +75,32 @@ QJsonObject asJson(const ExportArtifactManifestData &data)
 }
 }
 
+QString ExportArtifactManifest::manifestDirectory()
+{
+    // KAN-164: not the temporary folder, which macOS may purge before the
+    // next start would clean up after a crash.
+    const QString data = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    return data.isEmpty() ? QDir::tempPath() : QDir(data).filePath(QStringLiteral("export-manifests"));
+}
+
 QString ExportArtifactManifest::manifestPathFor(const QString &exportId)
 {
-    return QDir::temp().filePath(QStringLiteral("flappedear-export-%1.manifest.json").arg(exportId));
+    return QDir(manifestDirectory()).filePath(manifestFileName(exportId));
+}
+
+QString ExportArtifactManifest::legacyManifestPathFor(const QString &exportId)
+{
+    return QDir::temp().filePath(manifestFileName(exportId));
 }
 
 bool ExportArtifactManifest::create(const ExportArtifactManifestData &data, QString *error)
 {
     if (!validOwnedData(manifestPathFor(data.exportId), data)) {
         if (error) *error = QStringLiteral("Export manifest ownership data is invalid.");
+        return false;
+    }
+    if (!QDir().mkpath(manifestDirectory())) {
+        if (error) *error = QStringLiteral("Could not create the export manifest folder %1.").arg(manifestDirectory());
         return false;
     }
     return update(manifestPathFor(data.exportId), data, error);
@@ -133,9 +160,15 @@ bool ExportArtifactManifest::cleanupOwned(const QString &manifestPath, QString *
 QStringList ExportArtifactManifest::recoverStale(QStringList *diagnostics)
 {
     QStringList cleaned;
-    QDirIterator it(QDir::tempPath(), {QStringLiteral("flappedear-export-*.manifest.json")}, QDir::Files);
-    while (it.hasNext()) {
-        const QString path = it.next();
+    QStringList paths;
+    // Manifests written before KAN-164 live in the temporary folder.
+    QStringList folders{manifestDirectory(), QDir::tempPath()};
+    folders.removeDuplicates();
+    for (const QString &folder : folders) {
+        QDirIterator it(folder, {QStringLiteral("flappedear-export-*.manifest.json")}, QDir::Files);
+        while (it.hasNext()) paths.append(it.next());
+    }
+    for (const QString &path : std::as_const(paths)) {
         ExportArtifactManifestData data;
         QString error;
         if (!read(path, &data, &error)) { if (diagnostics) diagnostics->append(QStringLiteral("Skipped %1: %2").arg(path, error)); continue; }

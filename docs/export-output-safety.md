@@ -120,7 +120,7 @@ the disk image, which is fast.
 
 ## Active artifact manifests and recovery
 
-Before a worker is started, the controller writes an atomic versioned JSON manifest in the system temporary directory. It records the export UUID, creation time, worker PID, state, temporary FFV1 path, staging path, and final target for diagnostics. The manifest is the authorization record: only its validated overlay and staging paths may be removed automatically; the final target is never a cleanup candidate.
+Before a worker is started, the controller writes an atomic versioned JSON manifest in `export-manifests/` under the application's local data folder (KAN-164; older versions used the system temporary directory, which is still scanned at startup). It records the export UUID, creation time, worker PID, state, temporary FFV1 path, staging path, and final target for diagnostics. The manifest is the authorization record: only its validated overlay and staging paths may be removed automatically; the final target is never a cleanup candidate.
 
 The separate per-export diagnostic log is stored beneath the application-data `exports` directory, never beside the executable or selected output. Its retention cleanup recognizes only the application's `export-*.log` filename convention inside that dedicated directory; it does not authorize removal of output, manifest, or arbitrary support files.
 
