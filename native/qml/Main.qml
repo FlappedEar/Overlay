@@ -551,6 +551,39 @@ ApplicationWindow {
         }
         Menu {
             font.family: Theme.sans
+            title: qsTr("Widget")
+            Action {
+                text: qsTr("New Widget…")
+                shortcut: "Ctrl+Shift+N"
+                enabled: !widgetEditor.visible
+                onTriggered: window.newDesignedWidget()
+            }
+            Action {
+                text: qsTr("Edit Widget Design…")
+                enabled: !widgetEditor.visible && window.selectedWidgetType() === "designed"
+                onTriggered: widgetEditor.openFor(window.selectedWidgetIndex)
+            }
+            Action {
+                text: qsTr("Save Widget to My Widgets")
+                enabled: window.selectedWidgetIndex >= 0
+                onTriggered: {
+                    const settings = appController.widgetModel.widget(window.selectedWidgetIndex).settings || {};
+                    const id = settings.libraryId || "";
+                    const exists = appController.widgetModel.libraryWidgets.some(entry => entry.id === id);
+                    if (exists)
+                        appController.widgetModel.updateLibraryWidget(id, window.selectedWidgetIndex);
+                    else
+                        appController.widgetModel.saveWidgetToLibrary(window.selectedWidgetIndex,
+                            settings.name || window.selectedWidgetType());
+                }
+            }
+            Action {
+                text: qsTr("Import Widget…")
+                onTriggered: widgetImportDialog.open()
+            }
+        }
+        Menu {
+            font.family: Theme.sans
             title: qsTr("View")
             Action {
                 text: window.fullScreenPreview ? qsTr("Exit Full Screen") : qsTr("Enter Full Screen")
@@ -601,7 +634,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         contentItem: FeLabel {
             width: 390
-            text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
+            text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nCtrl/Cmd+Shift+N  New widget (widget editor)\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
             color: Theme.onSurface
             wrapMode: Text.WordWrap
             font.pixelSize: 12
@@ -675,6 +708,19 @@ ApplicationWindow {
             item = item.parent;
         }
         return false;
+    }
+    // KAN-191: a new designed widget, opened in the widget editor.
+    function newDesignedWidget() {
+        const index = appController.widgetModel.addWidget("designed");
+        if (index < 0)
+            return;
+        appController.widgetModel.setSetting(index, "name", qsTr("My widget"));
+        window.selectWidget(index, false);
+        widgetEditor.openFor(index);
+    }
+    function selectedWidgetType() {
+        appController.widgetModel.revision;
+        return selectedWidgetIndex >= 0 ? String(appController.widgetModel.widget(selectedWidgetIndex).type || "") : "";
     }
     function playbackShortcutBlocked() {
         // The widget editor owns the arrow and delete keys while it is open.
@@ -2197,14 +2243,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         accent: true
                         text: qsTr("New widget…")
-                        onClicked: {
-                            const index = appController.widgetModel.addWidget("designed");
-                            if (index >= 0) {
-                                appController.widgetModel.setSetting(index, "name", qsTr("My widget"));
-                                window.selectWidget(index, false);
-                                widgetEditor.openFor(index);
-                            }
-                        }
+                        onClicked: window.newDesignedWidget()
                     }
                     SectionTitle {
                         text: qsTr("My widgets · %1").arg(appController.widgetModel.libraryWidgets.length)

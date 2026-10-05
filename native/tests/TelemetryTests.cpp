@@ -7548,6 +7548,14 @@ void TelemetryTests::editsDesignedWidgetInWidgetEditor()
     QVERIFY(QMetaObject::invokeMethod(editor, "cancelEditing"));
     QTRY_VERIFY(!editor->property("visible").toBool());
     QCOMPARE(elements(), original);
+
+    // Widget › New Widget… adds a designed widget and opens it in the editor.
+    QVERIFY(QMetaObject::invokeMethod(object.get(), "newDesignedWidget"));
+    QCOMPARE(model->count(), widgetCount + 2);
+    QCOMPARE(model->widget(widgetCount + 1).value("type").toString(), QStringLiteral("designed"));
+    QTRY_VERIFY(editor->property("visible").toBool());
+    QCOMPARE(editor->property("widgetIndex").toInt(), widgetCount + 1);
+    QVERIFY(QMetaObject::invokeMethod(editor, "close"));
     for (const auto &arguments : warnings)
         for (const auto &error : arguments.first().value<QList<QQmlError>>())
             QVERIFY2(error.toString().contains("Cannot open: qrc:"), qPrintable(error.toString()));
