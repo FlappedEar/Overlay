@@ -684,7 +684,7 @@ int main(int argc, char *argv[])
         }
         // KAN-166 step 2: Overlays no longer creates track segments on its own
         // (KAN-136 moved to FlappedEar Telemetry); segments saved by Telemetry
-        // or reviewed in the analysis window are kept and used as before.
+        // or reviewed in the former analysis window are kept and used as before.
         QQmlApplicationEngine engine;
         engine.rootContext()->setContextProperty("appController", &controller);
         QObject::connect(

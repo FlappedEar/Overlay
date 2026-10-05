@@ -20,7 +20,6 @@ struct ProjectLoadResult {
     QString projectPath;
     QJsonObject project;
     QJsonArray widgets;
-    QStringList analysisChannels;
     SyncTransform sync;
     ProjectSourceReference videoReference;
     ProjectSourceReference vboReference;
