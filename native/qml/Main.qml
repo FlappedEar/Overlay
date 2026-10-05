@@ -542,12 +542,6 @@ ApplicationWindow {
                 shortcut: "Ctrl+Shift+T"
                 onTriggered: vboDialog.open()
             }
-            Action {
-                text: qsTr("Import telemetry runs…")
-                enabled: !appController.exporting && !appController.projectLoading && !appController.recoveryPending
-                    && ["idle", "review", "error"].indexOf(appController.batchImportState) >= 0
-                onTriggered: batchFilesDialog.open()
-            }
             MenuSeparator {}
             Action {
                 text: qsTr("Quit")
@@ -927,23 +921,6 @@ ApplicationWindow {
         title: qsTr("Locate project video")
         nameFilters: [qsTr("Video files (*.mp4 *.mov)")]
         onAccepted: appController.relinkVideo(selectedFile)
-    }
-    FileDialog {
-        id: batchFilesDialog
-        title: qsTr("Import telemetry runs")
-        fileMode: FileDialog.OpenFiles
-        nameFilters: [qsTr("Telemetry (*.vbo *.rcz *.VBO *.RCZ)")]
-        onAccepted: {
-            const started = appController.beginBatchImport(selectedFiles);
-            if (started || appController.batchImportState === "error") {
-                window.welcomeVisible = false;
-                batchReview.open();
-            }
-        }
-    }
-    BatchImportDialog {
-        id: batchReview
-        parent: Overlay.overlay
     }
     FileDialog {
         id: vboRelinkDialog

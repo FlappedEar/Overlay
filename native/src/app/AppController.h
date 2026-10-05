@@ -106,15 +106,9 @@ class AppController final : public QObject, private DocumentHost {
     Q_PROPERTY(QString eventName READ eventName NOTIFY documentStateChanged)
     Q_PROPERTY(QVariantList eventRuns READ eventRuns NOTIFY documentStateChanged)
     Q_PROPERTY(QString activeRunId READ activeRunId NOTIFY documentStateChanged)
-    Q_PROPERTY(QString batchImportState READ batchImportState NOTIFY batchImportChanged)
-    Q_PROPERTY(QString batchImportError READ batchImportError NOTIFY batchImportChanged)
-    Q_PROPERTY(QStringList analysisImportMessages READ analysisImportMessages NOTIFY batchImportChanged)
     // KAN-185: the day's best lap from lap detection, for the export dialog,
     // without the Lap Analysis window. See BestLapFinder for its states.
     Q_PROPERTY(QVariantMap dayBestLap READ dayBestLap NOTIFY dayBestLapChanged)
-    Q_PROPERTY(QVariantList batchImportRows READ batchImportRows NOTIFY batchImportChanged)
-    Q_PROPERTY(int batchImportProcessed READ batchImportProcessed NOTIFY batchImportChanged)
-    Q_PROPERTY(int batchImportTotal READ batchImportTotal NOTIFY batchImportChanged)
     Q_PROPERTY(bool dirty READ dirty NOTIFY documentStateChanged)
     Q_PROPERTY(quint64 lastSavedRevision READ lastSavedRevision NOTIFY documentStateChanged)
     Q_PROPERTY(QString pendingDestructiveAction READ pendingDestructiveAction NOTIFY destructiveActionChanged)
@@ -141,7 +135,6 @@ class AppController final : public QObject, private DocumentHost {
     Q_PROPERTY(QString sourceMismatchCandidateName READ sourceMismatchCandidateName NOTIFY sourceMismatchChanged)
     Q_PROPERTY(QString selectedTemplateId READ selectedTemplateId NOTIFY templateUiStateChanged)
     Q_PROPERTY(QString activeTemplateId READ activeTemplateId NOTIFY templateUiStateChanged)
-    Q_PROPERTY(QVariantMap runRecordingReview READ runRecordingReview NOTIFY runRecordingsChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr, QString recoveryPath = {},
@@ -232,26 +225,7 @@ public:
     // "1:49.898" for anything a minute or longer, "28.662 s" below that; "—"
     // when not finite. One formatter for every lap and segment time.
     Q_INVOKABLE static QString formatElapsedTime(double seconds);
-    [[nodiscard]] QString batchImportState() const { return m_document.batchImportState(); }
-    [[nodiscard]] QString batchImportError() const { return m_document.batchImportError(); }
-    [[nodiscard]] QStringList analysisImportMessages() const { return m_document.analysisImportMessages(); }
-    [[nodiscard]] QVariantList batchImportRows() const { return m_document.batchImportRows(); }
-    [[nodiscard]] int batchImportProcessed() const { return m_document.batchImportProcessed(); }
-    [[nodiscard]] int batchImportTotal() const { return m_document.batchImportTotal(); }
     Q_INVOKABLE bool beginBatchImport(const QList<QUrl> &urls) { return m_document.beginBatchImport(urls); }
-    Q_INVOKABLE bool importAnalysisRuns(const QString &name, const QList<QUrl> &urls) { return m_document.importAnalysisRuns(name, urls); }
-    Q_INVOKABLE bool importAnalysisFolder(const QString &name, const QUrl &folder, bool includeSubfolders) { return m_document.importAnalysisFolder(name, folder, includeSubfolders); }
-    Q_INVOKABLE bool importAnalysisSources(const QString &name, const QList<QUrl> &urls, bool includeSubfolders) { return m_document.importAnalysisSources(name, urls, includeSubfolders); }
-    Q_INVOKABLE QVariantList runRecordings(const QString &runId) const { return m_document.runRecordings(runId); }
-    Q_INVOKABLE bool attachRunRecording(const QString &runId, const QUrl &url) { return m_document.attachRunRecording(runId, url); }
-    Q_INVOKABLE bool confirmRunRecording() { return m_document.confirmRunRecording(); }
-    Q_INVOKABLE void cancelRunRecording() { m_document.cancelRunRecording(); }
-    Q_INVOKABLE bool setRunPrimarySource(const QString &runId, const QString &sourceId) { return m_document.setRunPrimarySource(runId, sourceId); }
-    Q_INVOKABLE bool checkRunRecordingAlignment(const QString &runId, const QString &sourceId) { return m_document.checkRunRecordingAlignment(runId, sourceId); }
-    Q_INVOKABLE bool reviewRunFusion(const QString &runId, const QString &sourceId) { return m_document.reviewRunFusion(runId, sourceId); }
-    Q_INVOKABLE bool approveRunFusion(const QVariantMap &rules) { return m_document.approveRunFusion(rules); }
-    Q_INVOKABLE bool removeRunFusion(const QString &runId) { return m_document.removeRunFusion(runId); }
-    [[nodiscard]] QVariantMap runRecordingReview() const { return m_document.runRecordingReview(); }
     Q_INVOKABLE void cancelBatchImport() { m_document.cancelBatchImport(); }
     Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices) { return m_document.confirmBatchImport(name, append, choices); }
     Q_INVOKABLE void relinkVideo(const QUrl &url);
@@ -321,8 +295,6 @@ public slots:
     void setTimeScale(double scale);
 
 signals:
-    void batchImportChanged();
-    void batchImportCommitted();
     void dayBestLapChanged();
     void videoSourceChanged();
     void videoChaptersChanged();
@@ -345,7 +317,6 @@ signals:
     void templateUiStateChanged();
     void saveAsRequested();
     void quitApproved();
-    void runRecordingsChanged();
 
 private:
     friend class ::TelemetryTests; // Controlled asynchronous completion in regression tests.

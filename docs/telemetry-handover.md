@@ -477,13 +477,13 @@ separately because Telemetry never has video.
 - [ ] **Start an outing.**
     - **Flow:** the user names it and adds VBO/RCZ files or a folder (optionally with subfolders), or drops files. Progress has Cancel and import notes.
     - **Code:** [`AnalysisStartPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/AnalysisStartPanel.qml); D `importAnalysisRuns`, `importAnalysisFolder`, `importAnalysisSources`, `cancelBatchImport`.
-    - **Guide:** [importing](user-guide/pages/importing.html).
+    - **Guide:** [importing](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/importing.html#runs).
 - [ ] **Pairing and naming.**
     - **Behaviour:** the VBO and RCZ of one session become one run. Runs are named "Session N" in recording-time order.
     - **Code:** [`DocumentControllerImport.cpp`](../native/src/app/DocumentControllerImport.cpp).
 - [ ] **Reviewed import.**
     - **Behaviour:** per file, Import, Skip or "Same run as"; the user chooses a new event or appending.
-    - **Code:** [`BatchImportDialog.qml`](../native/qml/BatchImportDialog.qml); D `confirmBatchImport`.
+    - **Code:** [`BatchImportDialog.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/BatchImportDialog.qml); D `confirmBatchImport`.
 
 **Day results** ([`OutingLapPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/OutingLapPanel.qml); [analysis guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/analysis.html))
 

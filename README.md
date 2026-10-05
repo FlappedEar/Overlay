@@ -1,6 +1,6 @@
 # FlappedEar Overlays
 
-FlappedEar Overlays (formerly FlappedEar Telemetry, bundle identifier `com.flappedear.overlays`) is a native desktop application for video telemetry overlay editing and generation. By owner decision (2 October 2026) the product is split into two applications: this desktop overlay editor for macOS and Windows, and the FlappedEar Telemetry analysis app for macOS, Windows, iOS and Android (`com.flappedear.telemetry`), a new Flutter app started from a blank page in its own repository and Jira project, which shares no code with this one and cross-references it ([architect handover](docs/telemetry-handover.md)). On 5 October 2026 the owner approved removing the Lap Analysis window and analysis workflows from this app (KAN-166, in progress; the last `main` commit with the full analysis, `7eae6cd`, is recorded on KAN-169). The View menu, welcome and transport entry points are gone; the editor header picks a day's run, and export finds the day's best lap by itself (KAN-185). Both apps read and write one compatible `.fetproject` format (KAN-170). The first start after the rename moves the previous preferences, templates, recovery data and logs across without deleting or overwriting anything ([application identity](docs/application-identity.md)). See the [product split plan](docs/product-split-plan.md).
+FlappedEar Overlays (formerly FlappedEar Telemetry, bundle identifier `com.flappedear.overlays`) is a native desktop application for video telemetry overlay editing and generation. By owner decision (2 October 2026) the product is split into two applications: this desktop overlay editor for macOS and Windows, and the FlappedEar Telemetry analysis app for macOS, Windows, iOS and Android (`com.flappedear.telemetry`), a new Flutter app started from a blank page in its own repository and Jira project, which shares no code with this one and cross-references it ([architect handover](docs/telemetry-handover.md)). On 5 October 2026 the owner approved removing the Lap Analysis window and analysis workflows from this app (KAN-166, in progress; day import is removed too, so Overlays opens days saved by Telemetry; the last `main` commit with the full analysis, `7eae6cd`, is recorded on KAN-169). The View menu, welcome and transport entry points are gone; the editor header picks a day's run, and export finds the day's best lap by itself (KAN-185). Both apps read and write one compatible `.fetproject` format (KAN-170). The first start after the rename moves the previous preferences, templates, recovery data and logs across without deleting or overwriting anything ([application identity](docs/application-identity.md)). See the [product split plan](docs/product-split-plan.md).
 
 ## Status
 
@@ -16,41 +16,28 @@ Its sources live in [docs/user-guide](docs/user-guide/README.md).
 ## Current capabilities
 
 Saved events use **Event → Run → Lap**, with independent source references and
-video synchronization per run. Analysis imports a whole day (files, folders or
-drag and drop) and lists each outing's OUT/LAP/IN laps chronologically when
-recording timestamps are available. Opening a lap shows its map and telemetry
-with a shared cursor, without requiring video. From there it compares two laps
-from compatible runs, reviews automatic straight and corner segments, and links
-ranked time losses to the Corner Analyzer and the day report. The
+video synchronization per run. Track days come from FlappedEar Telemetry as
+`.fetproject` files; the editor header picks the run to edit, and export finds
+the day's best lap by itself. Lap exclusions, run names and every other analysis
+field saved by Telemetry are kept. The
 [user guide](https://flappedear.github.io/Overlay/) describes every screen.
 
 - MP4/MOV playback with timeline controls and preview overlays.
 - RaceChrono and VBOX VBO telemetry import, plus native single-session RaceChrono RCZ import ([supported format](docs/rcz-format.md)).
-- Multi-file outing import and advanced import review, duplicate/error reporting, persisted source groups, and event save/reopen. The outing workflow selects VBO for unique RCZ/VBO matches supported by recording-date/time and GPS evidence; ambiguous sources stay separate. Grouping retains alternatives without combining channels.
-- Chronological outing laps and interactive single-lap speed/G/channel detail with a synchronized map cursor; missing timestamps and source failures remain visible.
-- Independent A/B lap comparison on a shared track-progress axis: delta time, channels, map layers, G-G and optional side-by-side video from each run's own footage.
-- Automatic segment proposals with review and editing, Corner Analyzer metrics, sector theoretical best, ranked time losses, consistency, temperature and heart-rate summaries, and a day report with links to its evidence.
+- Track-day events opened and saved with their runs, alternative recordings and analysis decisions.
 - GoPro chapter groups reviewed before loading and played as one continuous timeline. Exporting a chaptered video is not available yet (KAN-106).
 - GoPro GPMF GPS extraction and GPS-speed auto synchronization.
 - A visual widget editor, projects, built-in layouts, and shareable templates. Both editor sidebars remain fully scrollable at the supported 1180×720 minimum size.
-- Lazily loaded synchronized telemetry analysis, including charts and a track view; its secondary decoder exists only while the Analysis window is open.
-- Source-defined RaceChrono Start-gate parsing, raw-GPS lap derivation, fastest-lap state, and Analysis navigation for Out lap, each measured lap, and In lap.
+- Source-defined RaceChrono Start-gate parsing, raw-GPS lap derivation, fastest-lap state, and lap navigation for Out lap, each measured lap, and In lap.
 - Independent Best, Current, and Delta tiles for lap time and speed comparison against the best completed lap.
 - Source-driven CFR HEVC/AAC MP4 export at the effective rational export rate, including runtime raster/profile checks, validated 8-bit and 10-bit SDR preservation, custom SMPTE ranges, and single-lap hotlap ranges with configurable 5–8 second handles, progress, cancellation, and verbose diagnostics retained in a durable per-export log.
 - Portable `.fetproject` media references with project-relative lookup, bounded source fingerprints, missing-media recovery, explicit relinking, and stale asynchronous-result rejection.
 - Crash-safe export-output handling with state-bound overwrite consent, atomic project saving, and explicit unsaved-change recovery.
 - Resource-bounded external JSON documents and subprocess output, with visible recovery-protection warnings when automatic snapshots cannot be persisted.
 
-Lap analysis lets you add up to four recorded channels, change a channel using
-its row selector, and remove it with ×. Selections are remembered as analysis
-preferences. Channel selectors use a wider label column and a dropdown at least
-320 px wide when the window allows; long names wrap instead of being shortened.
-Dropdowns stay within the window. Longitudinal-G graphs show braking upward while retaining the
-original signed values.
-
 ## Keyboard controls
 
-Space plays or pauses. Left/Right seek five seconds; Shift+Left/Right seek thirty seconds; Home/End seek to the first/last actual video frame. These playback shortcuts are disabled while typing or operating a focused editor control. Ctrl/Cmd+E opens Export and Ctrl/Cmd+Shift+A toggles Lap Analysis. The platform full-screen shortcut (⌃⌘F on macOS) enters full screen and Escape leaves it; the F1 help still lists F11 (KAN-140). Full-screen preview provides the same visible transport and scrubber as the editor.
+Space plays or pauses. Left/Right seek five seconds; Shift+Left/Right seek thirty seconds; Home/End seek to the first/last actual video frame. These playback shortcuts are disabled while typing or operating a focused editor control. Ctrl/Cmd+E opens Export. The platform full-screen shortcut (⌃⌘F on macOS) enters full screen and Escape leaves it; the F1 help still lists F11 (KAN-140). Full-screen preview provides the same visible transport and scrubber as the editor.
 
 Very Verbose export diagnostics follow the live tail until the user scrolls into history. Historical inspection stays fixed while new lines arrive; **Jump to latest** explicitly resumes following.
 
