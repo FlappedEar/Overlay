@@ -3,19 +3,14 @@
 <p class="lead">The editor is where you load a video and a telemetry file, arrange overlay widgets on the picture, set timing and export the result.</p>
 
 <h2 id="welcome">Welcome screen</h2>
-<p>When no project, video or event is open, the application shows the Welcome screen, headed <em>Your track day, in detail</em>. It offers two paths:</p>
-<ul>
-  <li><strong>Lap Analysis →</strong> closes the Welcome screen and opens the <a href="analysis.html">Analysis window</a>. Video is not needed for analysis.</li>
-  <li>The three cards build an overlay project:
-    <ol>
-      <li><strong>1 · Video clip</strong>: <strong>Choose video</strong> picks an MP4 or MOV file.</li>
-      <li><strong>2 · Telemetry</strong>: <strong>Choose telemetry</strong> picks a VBO or RCZ file. This step is optional at this point.</li>
-      <li><strong>Saved project</strong>: <strong>Open project…</strong> resumes a saved <code>.fetproject</code>.</li>
-    </ol>
-  </li>
-</ul>
+<p>When no project, video or event is open, the application shows the Welcome screen, headed <em>Your track day, on video</em>. Its three cards build an overlay project:</p>
+<ol>
+  <li><strong>1 · Video clip</strong>: <strong>Choose video</strong> picks an MP4 or MOV file.</li>
+  <li><strong>2 · Telemetry</strong>: <strong>Choose telemetry</strong> picks a VBO or RCZ file. This step is optional at this point.</li>
+  <li><strong>Saved project</strong>: <strong>Open project…</strong> resumes a saved <code>.fetproject</code>.</li>
+</ol>
 <figure>
-  <img src="assets/screens/welcome.png" alt="Welcome screen with Lap Analysis, video, telemetry and saved project cards" width="1440" height="860" loading="lazy">
+  <img src="assets/screens/welcome.png" alt="Welcome screen with the video, telemetry and saved project cards" width="1440" height="820" loading="lazy">
   <figcaption>The Welcome screen on first launch.</figcaption>
 </figure>
 <p><strong>Enter Studio →</strong> becomes available once a video is chosen and opens the editor. You can return to this screen with <strong>File › Welcome</strong>.</p>
@@ -28,11 +23,11 @@
 <p>The window cannot be made smaller than 1180 × 720 pixels; it opens at 1440 × 900 the first time and remembers its position and size afterwards. From top to bottom and left to right it contains:</p>
 <table>
   <tr><th>Area</th><th>Contents</th></tr>
-  <tr><td>Header bar</td><td>Logo, current video file name (or <em>No video selected</em>), current telemetry file name (or <em>No telemetry selected</em>), a <code>SYNC x.xxx s</code> pill when a non-zero timing offset is set, and the buttons <strong>Open video</strong>, <strong>Open telemetry</strong> and <strong>Export</strong>. When a project's source is missing or does not match, a <strong>… missing · Locate…</strong> or <strong>… mismatch · Locate…</strong> button appears here.</td></tr>
+  <tr><td>Header bar</td><td>Logo, current video file name (or <em>No video selected</em>), current telemetry file name (or <em>No telemetry selected</em>), in a track-day project a run picker that chooses the run shown in the editor (see <a href="importing.html#runs">Importing a track day</a>), a <code>SYNC x.xxx s</code> pill when a non-zero timing offset is set, and the buttons <strong>Open video</strong>, <strong>Open telemetry</strong> and <strong>Export</strong>. When a project's source is missing or does not match, a <strong>… missing · Locate…</strong> or <strong>… mismatch · Locate…</strong> button appears here.</td></tr>
   <tr><td>Left sidebar</td><td><strong>Layout template</strong>, <strong>Add widget</strong> and <strong>Layers</strong> sections, in one vertical scroll area.</td></tr>
   <tr><td>Preview</td><td>The video, letter-boxed to its display size, with the overlay drawn on top.</td></tr>
   <tr><td>Right sidebar</td><td>The Inspector, with the tabs <strong>WIDGET</strong>, <strong>DATA</strong> and <strong>CUES</strong>.</td></tr>
-  <tr><td>Transport bar</td><td>Play/pause, current timecode, timeline slider, end timecode, <strong>ANALYSIS</strong> and full-screen (<strong>⛶</strong>) buttons.</td></tr>
+  <tr><td>Transport bar</td><td>Play/pause, current timecode, timeline slider, end timecode and the full-screen (<strong>⛶</strong>) button.</td></tr>
   <tr><td>Status bar</td><td>The latest status message, the widget count and a dot that turns green when both video and telemetry are ready.</td></tr>
 </table>
 <p>At the minimum window size every sidebar control is still reachable by scrolling the sidebar.</p>
@@ -55,7 +50,6 @@
 <h3 id="menu-view">View</h3>
 <ul>
   <li><strong>Enter Full Screen / Exit Full Screen</strong>: full-screen preview.</li>
-  <li><strong>Lap Analysis</strong>: shows or hides the Analysis window.</li>
   <li><strong>Keyboard Shortcuts</strong>: a short reminder of the main shortcuts. The complete list is on <a href="shortcuts.html">Keyboard shortcuts</a>.</li>
 </ul>
 <h3 id="menu-help">Help</h3>

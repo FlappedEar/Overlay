@@ -1,6 +1,6 @@
 <!-- title: Quick start | nav: Quick start -->
 <h1 id="quick-start">Quick start</h1>
-<p class="lead">Two short walkthroughs: making an overlay video, and analysing a track day.</p>
+<p class="lead">Two short walkthroughs: making an overlay video, and making one from a track day of recordings.</p>
 
 <h2 id="overlay">Make a telemetry overlay video</h2>
 <p>You need an MP4 or MOV video and a VBO or RCZ telemetry file from the same session.</p>
@@ -26,15 +26,12 @@
   <li>Optionally add <strong>Best lap time</strong> and <strong>Lap delta</strong>.</li>
   <li>Open Export. It starts in <strong>Single lap · hotlap</strong> mode with the same lap. Choose a <strong>Handle</strong> of 5–8 seconds and export.</li>
 </ol>
-<p>Lap timing needs a start/finish gate in the telemetry; see <a href="analysis.html#lap-timing">How laps are found</a>.</p>
+<p>Lap timing needs a start/finish gate in the telemetry; see <a href="telemetry-data.html#lap-timing">How laps are found</a>.</p>
 
-<h2 id="track-day">Analyse a track day</h2>
+<h2 id="track-day">Overlay a track day</h2>
 <ol class="steps">
-  <li>On the Welcome screen click <strong>Lap Analysis →</strong>.</li>
-  <li>Enter an <strong>Outing name</strong> and click <strong>Add RCZ / VBO files…</strong>, or drop the day's recordings on the window. For RaceChrono, VBO exports with calculated G give the best G data.</li>
-  <li>The <strong>Day results</strong> list shows every OUT, LAP and IN section in time order. The <strong>Best day</strong> button opens the best lap.</li>
-  <li>Click any lap to see its map and channels. Drag on a chart to zoom.</li>
-  <li>Click <strong>Compare laps…</strong>, choose two laps and click <strong>Compare A / B</strong> to see where time was gained or lost.</li>
-  <li>Open <strong>Day report…</strong> for the best lap, theoretical best, largest losses and session progression.</li>
-  <li>Save the event with <kbd>⌘S</kbd> in the editor window. Exclusions, corrections and approved segments are saved with it.</li>
+  <li>Choose <strong>File › Import telemetry runs…</strong>, select the day's VBO or RCZ files and click <strong>Create event</strong>. For RaceChrono, VBO exports with calculated G give the best G data.</li>
+  <li>Pick the run you filmed in the run picker in the header, then open its video and synchronize it.</li>
+  <li>Open Export and choose <strong>Single lap · hotlap</strong>. The dialog finds the day's best lap: <strong>Select the day's best lap</strong> picks it in this run, or <strong>Open …</strong> switches to the run it is in.</li>
+  <li>Save the event with <kbd>⌘S</kbd>.</li>
 </ol>

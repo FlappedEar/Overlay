@@ -75,6 +75,6 @@ Widget colour defaults shown in the inspector (`colorValue: ... || "#..."` and
 the tyre `fallback` colours) are overlay content and stay as they are.
 
 Not restyled: the Lap Analysis window and its panels and dialogs, and
-`BatchImportDialog`, which leave this app under KAN-166; they only pick up the
-shared controls. The overlay widgets drawn into the video keep their own
+`BatchImportDialog`, which leave this app under KAN-166 (the window is no longer
+reachable; its files go next); they only pick up the shared controls. The overlay widgets drawn into the video keep their own
 colours: they are the user's design and live in templates.

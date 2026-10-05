@@ -24,9 +24,10 @@ The owner's decisions of 2 October 2026:
   and it stays compatible in both directions ([KAN-170]).
 - **No data loss.** The owner set this condition for every migration and for project
   data.
-- **Overlays stays as it is.** Its Lap Analysis window is removed only after
-  Telemetry is mature enough to replace it: [KAN-169] is the gate, [KAN-166] the
-  deferred removal.
+- **Overlays becomes an overlay editor.** On 5 October 2026 the owner approved
+  removing its Lap Analysis window ([KAN-166], in progress). The last Overlays
+  `main` commit with the full analysis, `7eae6cd`, is recorded on [KAN-169] as a
+  reference. Day documents keep every analysis field.
 - **The app is free for users** and is not sold.
 - **Identity:** `com.flappedear.telemetry` (see
   [Identity and storage](#identity-and-storage)).

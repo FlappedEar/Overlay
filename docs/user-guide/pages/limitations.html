@@ -6,7 +6,7 @@
 <ul>
   <li>There is no public release. Test builds are not signed with a Developer ID or notarized.</li>
   <li>Development and testing focus on macOS (Apple Silicon). Windows builds are paused.</li>
-  <li>Automated tests use synthetic data. Real-recording testing has covered a limited number of recordings and one Mac setup. Analysis features based on segments, corners, coasting, driving states and temperatures still await feedback from real track use.</li>
+  <li>Automated tests use synthetic data. Real-recording testing has covered a limited number of recordings and one Mac setup.</li>
 </ul>
 
 <h2 id="video">Video and export</h2>
@@ -32,21 +32,16 @@
 <h2 id="editor">Editor</h2>
 <ul>
   <li>No undo/redo, layer locking or layer stacking order control in the overlay editor.</li>
-  <li>No drag-and-drop into the editor window (the Analysis window accepts dropped recordings).</li>
+  <li>No drag-and-drop into the editor window.</li>
   <li>The Logo widget shows only the application logo; custom images are not supported.</li>
   <li>Some widget settings exist only in templates and have no control in the Inspector (for example the Retro Custom icon and stacking, and comparison tile labels). The Speed widget's <em>Show speed gauge</em> option has no visible effect.</li>
   <li>Template import and export failures are not reported with a message.</li>
   <li>There is no preferences window, and project files do not open by double-clicking in Finder.</li>
 </ul>
 
-<h2 id="analysis">Analysis</h2>
+<h2 id="analysis">Lap analysis</h2>
 <ul>
-  <li>No background map tiles; maps show the GPS trace only.</li>
-  <li>Single-lap charts use time on the horizontal axis; comparison charts use track position. This cannot be switched.</li>
-  <li>Segments are approved per run. The Corner Analyzer needs the same approved segments on both laps.</li>
-  <li>Theoretical best is a sum of the fastest sectors. A validated "realistic potential" lap is not implemented.</li>
-  <li>Day-level results are calculated within one track configuration and one day. Reusable track and vehicle profiles and comparisons across days are not implemented.</li>
-  <li>The day report does not open automatically after import.</li>
-  <li>Session trends are drawn in recording order without showing the length of breaks.</li>
+  <li>FlappedEar Overlays is an overlay editor. The Lap Analysis window (day results, lap detail, comparison, segments and the day report) has been removed. Event projects saved with it still open, and their analysis decisions are kept when saved.</li>
+  <li>Run names, lap exclusions and grouping corrections cannot be changed in Overlays; saved ones are still used.</li>
   <li>VBO channel units are not read, even when the file's header declares them, so VBO values are shown without units. RCZ units are kept.</li>
 </ul>

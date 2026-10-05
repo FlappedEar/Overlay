@@ -1648,7 +1648,9 @@ and after initialization of the new display name, then reopen a saved project,
 preferences and unsaved recovery across that rename. Production preference values
 are never read or changed by these tests. Existing test identities remain isolated.
 The production startup smoke checks the window and About titles, opens About and
-then exercises the existing welcome, scene and startup-error paths. Release
+then exercises the existing welcome, scene and startup-error paths. Since KAN-166
+step 3 it expects the welcome screen over the editor (whose header holds the
+`editorRunPicker`) and exactly one media player, the editor preview's. Release
 packaging validates the renamed executable and bundle name, the stable bundle ID
 and the unchanged absence of document/URL registration before SDK-isolated startup.
 The `.fetproject` schema and File > Open Project workflow remain unchanged.

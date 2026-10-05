@@ -1,13 +1,13 @@
 <!-- title: FlappedEar Overlays User Guide | nav: Overview -->
 <h1 id="overview">FlappedEar Overlays User Guide</h1>
-<p class="lead">FlappedEar Overlays (formerly FlappedEar Telemetry) is a macOS application for motorsport video and data. It puts live telemetry overlays on your onboard video, and it analyses a whole track day of recordings lap by lap.</p>
+<p class="lead">FlappedEar Overlays (formerly FlappedEar Telemetry) is a macOS application for motorsport video and data. It puts live telemetry overlays on your onboard video, for one session or for a whole track day of recordings.</p>
 
 <figure>
   <img src="assets/screens/editor-window.png" alt="Editor window with the Track Day overlay over the video preview, the widget sidebar and the Inspector" width="1440" height="860" loading="lazy">
   <figcaption>The editor with the <em>Track Day</em> layout over the onboard video of Session 5 at Jastrząb on 29 August 2026 (GoPro clip and RaceChrono Pro VBO), synchronized by Auto Sync, 38 s into the best lap.</figcaption>
 </figure>
 
-<p class="data-note">About the pictures: every screenshot in this guide is taken from the application's own controller and interface with real data: the onboard GoPro video and RaceChrono Pro VBO of Session 5 at Jastrząb on 29 August 2026, synchronized by Auto Sync, and all six sessions of that day in Lap Analysis. How the pictures are produced is described in the <a href="https://github.com/FlappedEar/Overlay/tree/main/docs/user-guide/capture">capture tools</a>.</p>
+<p class="data-note">About the pictures: every screenshot in this guide is taken from the application's own controller and interface with real data: the onboard GoPro video and RaceChrono Pro VBO of Session 5 at Jastrząb on 29 August 2026, synchronized by Auto Sync, and all six sessions of that day imported as one event. How the pictures are produced is described in the <a href="https://github.com/FlappedEar/Overlay/tree/main/docs/user-guide/capture">capture tools</a>.</p>
 
 <h2 id="what">What it does</h2>
 <h3 id="overlay">Overlay editor</h3>
@@ -17,23 +17,19 @@
   <li>Arrange speed, RPM, pedals, G-force, track map, heart rate, tyre, lap time and delta widgets, or start from a template.</li>
   <li>Export an H.265/HEVC MP4 of the whole video, a timecode range, or a single hot lap.</li>
 </ul>
-<h3 id="analysis-intro">Track-day analysis</h3>
+<h3 id="track-days">Track days</h3>
 <ul>
-  <li>Import a day's recordings into one event and see every lap in time order.</li>
-  <li>Inspect any lap's map and channels; compare two laps on a shared track position axis.</li>
-  <li>Review corners and straights, then see the theoretical best, the largest time losses, session progression and a day report.</li>
-  <li>No video is needed for analysis.</li>
+  <li>Import a day's recordings into one event, each as a run, and pick the run to edit in the header.</li>
+  <li>Export finds the day's best lap across all runs, from lap detection, and offers it as the hot lap.</li>
 </ul>
 
 <h2 id="start">Where to start</h2>
 <div class="cards">
   <a href="installation.html"><strong>Installation</strong>Requirements, FFmpeg and upgrading.</a>
-  <a href="quick-start.html"><strong>Quick start</strong>Your first overlay video and your first track-day analysis.</a>
+  <a href="quick-start.html"><strong>Quick start</strong>Your first overlay video, and one from a track day.</a>
   <a href="editor.html"><strong>Editor window</strong>A tour of menus, preview, layers and Inspector.</a>
   <a href="widgets.html"><strong>Widgets</strong>Every overlay widget and its settings.</a>
   <a href="export.html"><strong>Export</strong>Formats, ranges, hot laps and progress.</a>
-  <a href="analysis.html"><strong>Lap analysis</strong>Events, laps, eligibility and lap detail.</a>
-  <a href="comparison.html"><strong>Lap comparison</strong>A/B charts, delta, map layers, G-G and video.</a>
   <a href="troubleshooting.html"><strong>Troubleshooting</strong>Messages and what to do about them.</a>
 </div>
 
@@ -46,8 +42,7 @@
   <tr><td>Template</td><td>A saved arrangement of widgets.</td></tr>
   <tr><td>Event, run, lap</td><td>A track day, one session on track, and one timed lap of a session.</td></tr>
   <tr><td>Timing gate</td><td>The start/finish line stored in the telemetry file, used to cut laps.</td></tr>
-  <tr><td>Eligible lap</td><td>A complete lap with good GPS on the selected layout, used for rankings and comparisons.</td></tr>
-  <tr><td>Segment</td><td>A corner, straight or sector of the track, used for corner and sector results.</td></tr>
+  <tr><td>Eligible lap</td><td>A complete lap with good GPS on the day's layout, used to find the day's best lap.</td></tr>
 </table>
 
 <h2 id="about">About this guide</h2>

@@ -563,13 +563,6 @@ ApplicationWindow {
                 shortcut: StandardKey.FullScreen
                 onTriggered: window.toggleFullScreen()
             }
-            Action {
-                text: qsTr("Lap Analysis")
-                checkable: true
-                checked: appController.analysisVisible
-                shortcut: "Ctrl+Shift+A"
-                onTriggered: appController.analysisVisible = checked
-            }
             MenuSeparator {}
             Action {
                 text: qsTr("Keyboard Shortcuts")
@@ -598,7 +591,7 @@ ApplicationWindow {
         title: qsTr("About %1").arg(Application.displayName)
         standardButtons: Dialog.Close
         contentItem: FeLabel {
-            text: qsTr("Version %1").arg(Application.version) + "\n" + qsTr("Video telemetry overlays and motorsport analysis.")
+            text: qsTr("Version %1").arg(Application.version) + "\n" + qsTr("Video telemetry overlays for track days.")
             wrapMode: Text.WordWrap
         }
     }
@@ -614,7 +607,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         contentItem: FeLabel {
             width: 390
-            text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+Shift+A  Lap Analysis\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
+            text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
             color: Theme.onSurface
             wrapMode: Text.WordWrap
             font.pixelSize: 12
@@ -1886,22 +1879,6 @@ ApplicationWindow {
         }
     }
 
-    Loader {
-        id: analysisWindowLoader
-        active: appController.analysisVisible
-        sourceComponent: Component {
-            AnalysisWindow {
-                videoSource: appController.videoChapterSource
-                chapterStartMilliseconds: appController.videoChapterStartMilliseconds
-                playbackPosition: window.timelinePosition
-                playbackRunning: mediaPlayer.playbackState === MediaPlayer.PlayingState
-                mediaDuration: appController.previewEndPositionMilliseconds
-                onSeekRequested: milliseconds => window.seekTimeline(milliseconds)
-                onTogglePlaybackRequested: window.togglePlayback()
-            }
-        }
-    }
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -1970,6 +1947,23 @@ ApplicationWindow {
                         font.pixelSize: 10
                         elide: Text.ElideMiddle
                         Layout.fillWidth: true
+                    }
+                }
+                // A day project holds several runs; this picks the one the editor shows.
+                FeComboBox {
+                    id: editorRunPicker
+                    objectName: "editorRunPicker"
+                    visible: appController.eventRuns.length > 1
+                    Layout.preferredWidth: 210
+                    implicitHeight: 28
+                    model: appController.eventRuns.map(run => run.name)
+                    currentIndex: appController.eventRuns.findIndex(run => run.id === appController.activeRunId)
+                    enabled: !appController.projectLoading && !appController.exporting
+                        && !appController.recoveryPending && appController.pendingDestructiveAction === ""
+                    onActivated: index => {
+                        appController.selectEventRun(appController.eventRuns[index].id);
+                        // Restore the authoritative selection even if a guarded switch was refused.
+                        currentIndex = Qt.binding(() => appController.eventRuns.findIndex(run => run.id === appController.activeRunId));
                     }
                 }
                 Item {
@@ -2589,12 +2583,6 @@ ApplicationWindow {
                                 font.pixelSize: 10
                             }
                             FeButton {
-                                compact: true
-                                accent: appController.analysisVisible
-                                text: qsTr("ANALYSIS")
-                                onClicked: appController.analysisVisible = !appController.analysisVisible
-                            }
-                            FeButton {
                                 width: 38
                                 implicitWidth: 38
                                 compact: true
@@ -2726,7 +2714,7 @@ ApplicationWindow {
                 spacing: 5
                 FeLabel {
                     Layout.alignment: Qt.AlignHCenter
-                    text: qsTr("Your track day, in detail")
+                    text: qsTr("Your track day, on video")
                     color: Theme.onSurface
                     font.family: Theme.sans
                     font.pixelSize: 25
@@ -2734,20 +2722,9 @@ ApplicationWindow {
                 }
                 FeLabel {
                     Layout.alignment: Qt.AlignHCenter
-                    text: qsTr("Analyse your laps or create a telemetry overlay.")
+                    text: qsTr("Pair a video clip with telemetry and create an overlay.")
                     color: Theme.onSurfaceVariant
                     font.pixelSize: 12
-                }
-            }
-
-            FeButton {
-                objectName: "welcomeLapAnalysis"
-                Layout.fillWidth: true
-                text: qsTr("Lap Analysis  →")
-                accent: true
-                onClicked: {
-                    window.welcomeVisible = false;
-                    appController.analysisVisible = true;
                 }
             }
 
