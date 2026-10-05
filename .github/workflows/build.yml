@@ -201,7 +201,10 @@ jobs:
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: '4'
       QT_QPA_PLATFORM: offscreen
-      ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
+      # A 32 MiB quarantine instead of 256 MiB: freed memory held for
+      # use-after-free detection otherwise counts toward the peak-memory
+      # budget in boundsVboHeaderAndDecodedValues (562 MiB against 300 alone).
+      ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1:quarantine_size_mb=32
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
       # The editor, its startup and the export integrations need a display,
       # a GPU and FFmpeg 8.1; macOS runs them. The boundary checks are scripts.

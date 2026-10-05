@@ -1695,7 +1695,14 @@ need a display, a GPU and FFmpeg 8.1, which the macOS jobs supply. Any sanitizer
 report, including a leak, fails the job. Checked locally on 5 October 2026 with
 Qt 6.8.3 and GCC 13: all 37 pass, `flappedear_recording_alignment_tests` takes
 about 3.5 minutes under the sanitizers, and a heap overflow injected into a test
-fails it with an AddressSanitizer report. To run the same locally:
+fails it with an AddressSanitizer report. The job sets
+`ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1:quarantine_size_mb=32`.
+The smaller quarantine (default 256 MiB) keeps freed memory held for
+use-after-free detection from counting toward the 300 MiB peak-memory budget of
+`boundsVboHeaderAndDecodedValues`: run alone, that test grows by 26 MiB without
+sanitizers, by 563 MiB with the default quarantine and by 150 MiB with 32 MiB.
+The budget still catches the gigabyte-scale growth it guards against. To run the
+same locally:
 
 ```bash
 flags='-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined'
