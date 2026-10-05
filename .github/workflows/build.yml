@@ -270,3 +270,66 @@ jobs:
             build-native/Testing/Temporary/
           if-no-files-found: warn
           retention-days: 14
+
+  # KAN-155: a short libFuzzer pass over the VBO, RCZ and GPMF decoders on
+  # every push, starting from the seed corpora. Longer runs are manual
+  # (docs/testing.md); a crash input is uploaded with the logs.
+  linux-fuzz:
+    name: Linux x64 / Fuzz parsers / Qt 6.8.3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+      ASAN_OPTIONS: detect_leaks=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ninja-build clang-18 libclang-rt-18-dev \
+            libgl-dev libegl-dev libxkbcommon-dev libvulkan-dev libfontconfig1-dev libfreetype-dev
+
+      - name: Install Qt 6.8.3 and modules
+        uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: '6.8.3'
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtmultimedia qtshadertools
+          cache: true
+          cache-key-prefix: native-ci-qt-6.8.3-linux-v1
+
+      - name: Build the fuzz harnesses
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          cmake -S . -B build-fuzz -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR" \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DFLAPPEDEAR_BUILD_FUZZERS=ON \
+            2>&1 | tee ci-logs/configure.log
+          cmake --build build-fuzz --target flappedear_fuzz_vbo flappedear_fuzz_rcz flappedear_fuzz_gpmf \
+            2>&1 | tee ci-logs/build.log
+
+      - name: Fuzz each parser for 60 seconds
+        run: |
+          set -o pipefail
+          for format in vbo rcz gpmf; do
+            mkdir -p "fuzz-corpus/$format" "ci-logs/crashes-$format"
+            cp "native/fuzz/seeds/$format/"* "fuzz-corpus/$format/"
+            "build-fuzz/native/fuzz/flappedear_fuzz_$format" "fuzz-corpus/$format" \
+              -max_total_time=60 -max_len=65536 -timeout=30 -rss_limit_mb=2560 \
+              "-artifact_prefix=ci-logs/crashes-$format/" 2>&1 | tee "ci-logs/fuzz-$format.log" | tail -n 60
+          done
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-ci-linux-fuzz-qt-6.8.3
+          path: ci-logs/
+          if-no-files-found: warn
+          retention-days: 14

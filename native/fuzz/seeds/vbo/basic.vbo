@@ -1,0 +1,12 @@
+[header]
+coordinate units = degrees
+creation date = 19/08/2026
+vehicle = Test Car
+
+[column names]
+sats time latitude longitude velocity rpm throttle brake heart_rate lateral_acceleration longitudinal_acceleration mystery
+
+[data]
+12 111428.00 52.000000 21.000000 0 900 0 0 110 0.0 0.0 7
+12 111428.50 52.000100 21.000100 50 3000 45 0 135 0.2 0.4 8
+12 111429.00 52.000200 21.000200 100 6000 100 35 150 -0.3 -0.5 9
