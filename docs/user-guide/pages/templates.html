@@ -3,64 +3,17 @@
 <p class="lead">A template is a complete overlay arrangement: widgets, positions, channel bindings, styles, cues and groups. Use templates to start quickly and to reuse a layout across projects.</p>
 
 <h2 id="built-in">Built-in templates</h2>
-<p>A new project starts with <em>Track Day</em>. The built-in templates cannot be changed or deleted, but you can apply one and save the result as your own.</p>
+<p>There is one built-in template, <em>Motorsport Broadcast HUD</em>, and a new project starts with it. It cannot be changed or deleted, but you can apply it and save the result as your own.</p>
 <table>
   <tr><th>Template</th><th>Description</th><th>Widgets</th></tr>
-  <tr><td>Track Day</td><td>Balanced driving data for review and export</td><td>Speed, RPM, Pedals, G-Force, Track</td></tr>
-  <tr><td>Minimal</td><td>Clean speed and RPM treatment with transparent panels</td><td>Speed, RPM</td></tr>
-  <tr><td>Broadcast</td><td>High-contrast lower-third telemetry presentation</td><td>Speed, RPM, G-Force</td></tr>
   <tr><td>Motorsport Broadcast HUD</td><td>Full modern motorsport broadcast HUD composition for visual review</td><td>Retro RPM, Speed, Pedals, three Retro Custom tiles (OIL, ATF, COOLANT), Heart rate, F1 G-Force Radar, G-Force Bar</td></tr>
-  <tr><td>Performance</td><td>Arc speed, analog RPM and a compact four-channel data strip</td><td>Arc gauge, Dial gauge, Data strip</td></tr>
-  <tr><td>Circuit Pro</td><td>Dense circuit analysis with gauges, pedals, G-force and track position</td><td>Arc gauge, Dial gauge, Pedals, G-Force, Track, Data strip</td></tr>
-  <tr><td>Endurance</td><td>Long-session essentials with heart rate, track and compact vehicle data</td><td>Speed, Heart rate, Track, Data strip</td></tr>
-  <tr><td>Drag Strip</td><td>Large RPM dial, acceleration speed arc and pedal trace for straight-line runs</td><td>Dial gauge, Arc gauge, Pedals</td></tr>
-  <tr><td>Clean HUD</td><td>Minimal transparent heads-up display for footage that should stay dominant</td><td>Arc gauge, Data strip, Track</td></tr>
-  <tr><td>2000s Grand Prix</td><td>Period-inspired onboard graphic with circular RPM dial, pedal states, speed arc and driver timing bar</td><td>Retro RPM, Retro gear, two Retro pedals, Retro speed, Nameplate</td></tr>
 </table>
-<p>Each template over the same moment of Session 5 at Jastrząb on 29 August 2026 (GoPro clip and RaceChrono Pro VBO), 38 s into the best lap:</p>
-<div class="gallery">
-  <figure>
-    <img src="assets/screens/template-track-day.png" alt="Track Day template" width="1280" height="720" loading="lazy">
-    <figcaption>Track Day</figcaption>
-  </figure>
-  <figure>
-    <img src="assets/screens/template-minimal.png" alt="Minimal template" width="1280" height="720" loading="lazy">
-    <figcaption>Minimal</figcaption>
-  </figure>
-  <figure>
-    <img src="assets/screens/template-broadcast.png" alt="Broadcast template" width="1280" height="720" loading="lazy">
-    <figcaption>Broadcast</figcaption>
-  </figure>
-  <figure>
-    <img src="assets/screens/template-motorsport-broadcast-smoke.png" alt="Motorsport Broadcast HUD template" width="1280" height="720" loading="lazy">
-    <figcaption>Motorsport Broadcast HUD</figcaption>
-  </figure>
-  <figure>
-    <img src="assets/screens/template-performance.png" alt="Performance template" width="1280" height="720" loading="lazy">
-    <figcaption>Performance</figcaption>
-  </figure>
-  <figure>
-    <img src="assets/screens/template-circuit-pro.png" alt="Circuit Pro template" width="1280" height="720" loading="lazy">
-    <figcaption>Circuit Pro</figcaption>
-  </figure>
-  <figure>
-    <img src="assets/screens/template-endurance.png" alt="Endurance template" width="1280" height="720" loading="lazy">
-    <figcaption>Endurance</figcaption>
-  </figure>
-  <figure>
-    <img src="assets/screens/template-drag-strip.png" alt="Drag Strip template" width="1280" height="720" loading="lazy">
-    <figcaption>Drag Strip</figcaption>
-  </figure>
-  <figure>
-    <img src="assets/screens/template-clean-hud.png" alt="Clean HUD template" width="1280" height="720" loading="lazy">
-    <figcaption>Clean HUD</figcaption>
-  </figure>
-  <figure>
-    <img src="assets/screens/template-2000s-grand-prix.png" alt="2000s Grand Prix template" width="1280" height="720" loading="lazy">
-    <figcaption>2000s Grand Prix</figcaption>
-  </figure>
-</div>
-<div class="note"><p>Some template widgets are bound to channel names that your recording may not have. For example, the temperature tiles in <em>Motorsport Broadcast HUD</em> and the retro widgets in <em>2000s Grand Prix</em> show <code>—</code> until you select your own channel in <strong>Source channel</strong>. Check every widget after applying a template.</p></div>
+<p>The OIL, ATF and COOLANT tiles read RaceChrono's OBD channels <code>engine_oil_temp-obd</code>, <code>gearbox_temp-obd</code> and <code>coolant_temp-obd</code>. With another logger they show <code>—</code> until you select your own channel in <strong>Source channel</strong>. The template has no lap timer: add <strong>Current lap time</strong> from the widget list if you want one.</p>
+<figure>
+  <img src="assets/screens/template-motorsport-broadcast-smoke.png" alt="Motorsport Broadcast HUD template" width="1280" height="720" loading="lazy">
+  <figcaption>Motorsport Broadcast HUD over Session 5 at Jastrząb on 29 August 2026 (GoPro clip and RaceChrono Pro VBO), 38 s into the best lap.</figcaption>
+</figure>
+<div class="note"><p>Earlier versions had nine more built-in templates (Track Day, Minimal, Broadcast, Performance, Circuit Pro, Endurance, Drag Strip, Clean HUD and 2000s Grand Prix). They were removed with the widgets they used. A custom template or project saved from one of them still opens, without the removed widgets; see <a href="widgets.html#removed">Removed widgets</a>.</p></div>
 
 <h2 id="apply">Applying a template</h2>
 <ol class="steps">
@@ -85,7 +38,7 @@
 <h2 id="share">Sharing templates</h2>
 <ul>
   <li><strong>Export…</strong> writes the selected template, built-in or custom, to a <code>.fettemplate</code> file.</li>
-  <li><strong>Import…</strong> reads a <code>.fettemplate</code> (or <code>.json</code>) file and adds it to your custom templates. Files larger than 2 MiB, or containing unknown widget types, are rejected.</li>
+  <li><strong>Import…</strong> reads a <code>.fettemplate</code> (or <code>.json</code>) file and adds it to your custom templates. Files larger than 2 MiB, or containing unknown widget types, are rejected. Widgets of <a href="widgets.html#removed">removed types</a> are left out of the imported template.</li>
 </ul>
 <p>If an import or export fails, no message is currently shown. If the template does not appear in the list after <strong>Import…</strong>, the file was not accepted.</p>
 

@@ -59,11 +59,6 @@ ApplicationWindow {
             "icon": "KM"
         },
         {
-            "label": "RPM",
-            "type": "rpm",
-            "icon": "RPM"
-        },
-        {
             "label": "Heart rate",
             "type": "heartRate",
             "icon": "♥"
@@ -72,11 +67,6 @@ ApplicationWindow {
             "label": "Pedals",
             "type": "pedals",
             "icon": "▥"
-        },
-        {
-            "label": "G-Force",
-            "type": "gForce",
-            "icon": "G"
         },
         {
             "label": "F1 G-Force Radar",
@@ -89,16 +79,6 @@ ApplicationWindow {
             "icon": "G="
         },
         {
-            "label": "Track",
-            "type": "track",
-            "icon": "⌁"
-        },
-        {
-            "label": "Custom",
-            "type": "customValue",
-            "icon": "123"
-        },
-        {
             "label": "Tyres",
             "type": "tyres",
             "icon": "◫"
@@ -109,79 +89,14 @@ ApplicationWindow {
             "icon": "R+"
         },
         {
-            "label": "Arc gauge",
-            "type": "arcGauge",
-            "icon": "◒"
-        },
-        {
-            "label": "Dial gauge",
-            "type": "dialGauge",
-            "icon": "◉"
-        },
-        {
-            "label": "Data strip",
-            "type": "telemetryOverlay",
-            "icon": "▤"
-        },
-        {
-            "label": "Best lap time",
-            "type": "lapBest",
-            "icon": "T★"
-        },
-        {
             "label": "Current lap time",
             "type": "lapCurrent",
             "icon": "NOW"
         },
         {
-            "label": "Lap delta",
-            "type": "lapDelta",
-            "icon": "ΔT"
-        },
-        {
-            "label": "Best-lap speed",
-            "type": "speedBest",
-            "icon": "V★"
-        },
-        {
-            "label": "Current speed",
-            "type": "speedCurrent",
-            "icon": "V"
-        },
-        {
-            "label": "Speed delta",
-            "type": "speedDelta",
-            "icon": "ΔV"
-        },
-        {
             "label": "Retro RPM",
             "type": "retroTachometer",
             "icon": "R"
-        },
-        {
-            "label": "Retro gear",
-            "type": "retroGear",
-            "icon": "G"
-        },
-        {
-            "label": "Retro pedal",
-            "type": "retroPedal",
-            "icon": "%"
-        },
-        {
-            "label": "Retro speed",
-            "type": "retroSpeedArc",
-            "icon": "S"
-        },
-        {
-            "label": "Nameplate",
-            "type": "retroNameplate",
-            "icon": "ID"
-        },
-        {
-            "label": "Logo",
-            "type": "brandLogo",
-            "icon": "FE"
         }
     ]
 

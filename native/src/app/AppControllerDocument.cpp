@@ -46,7 +46,18 @@ bool AppController::acceptsEditorProject(const QJsonObject &project, const QStri
 
 bool AppController::applyEditorScene(const ProjectLoadResult &result, QString *error)
 {
-    if (m_widgetModel.fromJson(result.widgets)) return true;
+    m_sceneNotice.clear();
+    if (m_widgetModel.fromJson(result.widgets)) {
+        const int retired = m_widgetModel.retiredWidgetsDropped();
+        if (retired > 0) {
+            AppLog::warn(QStringLiteral("Project load left out %1 widget(s) of retired types: %2")
+                             .arg(retired).arg(result.projectPath));
+            m_sceneNotice = retired == 1
+                ? QStringLiteral("1 widget of a removed type was left out.")
+                : QStringLiteral("%1 widgets of removed types were left out.").arg(retired);
+        }
+        return true;
+    }
     AppLog::error(QStringLiteral("Project load failed while applying widget scene: %1")
                       .arg(result.projectPath));
     *error = QStringLiteral("widget scene could not be applied.");

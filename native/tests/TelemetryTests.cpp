@@ -159,7 +159,7 @@ private slots:
     void keepsAPausedSeekWhenLoadedMediaRepeats();
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
-    void rendersAllComparisonTilesInProductionScene();
+    void rendersLapTimeTileInProductionScene();
     void rendersTyresInExportScene();
     void normalizesDesignedWidgetElements();
     void persistsWidgetLibrary();
@@ -173,6 +173,7 @@ private slots:
     void normalizesWidgetSemanticsAcrossMutationAndImport();
     void rejectsNonFiniteWidgetGeometryAndDuplicateIds();
     void loadsVisualTemplates();
+    void dropsRetiredWidgetTypes();
     void providesCustomizableArchetypes();
     void persistsAndSharesCustomTemplates();
     void updatesCustomTemplatesInPlace();
@@ -191,7 +192,6 @@ private slots:
     void projectsWestPositiveTracksWithoutMirroring();
     void persistsAndInvalidatesRunTrackConfiguration();
     void cachesStaticTrackGeometry();
-    void keepsStaticTrackIndependentFromTime();
     void decodesGps9Gpmf();
     void rejectsMalformedGpmf();
     void cancelsSlowGoProProbePromptly();
@@ -1540,7 +1540,6 @@ Item {
         property color accent: "orange"
         function raw(source, alias) { return alias === "longitudinalAcceleration" ? root.acceleration : 0; }
     }
-    GForceWidget { frame: frameData }
     F1GForceRadarWidget { frame: frameData }
 }
 )QML", QUrl::fromLocalFile(qmlSourcePath("Main.qml")));
@@ -1548,7 +1547,7 @@ Item {
     std::unique_ptr<QObject> root(component.create());
     QVERIFY2(root, qPrintable(component.errorString()));
     const auto dots = root->findChildren<QQuickItem *>(QStringLiteral("gForceDot"));
-    QCOMPARE(dots.size(), 2);
+    QCOMPARE(dots.size(), 1);
     for (auto *dot : dots) {
         QVERIFY(dot->isVisible());
         QVERIFY(dot->y() + dot->height() / 2 < 120);
@@ -3478,7 +3477,7 @@ void TelemetryTests::persistsWidgetScenes()
 {
     WidgetModel source;
     source.resetDefaults();
-    const int custom = source.addWidget("customValue");
+    const int custom = source.addWidget("retroCustomValue");
     source.setSetting(custom, "source", "oiltemp");
     source.setSetting(custom, "label", "Oil temperature");
     source.setWidgetProperty(custom, "rotation", 12.0);
@@ -3487,7 +3486,7 @@ void TelemetryTests::persistsWidgetScenes()
     QVERIFY(restored.fromJson(source.toJson()));
     QCOMPARE(restored.count(), source.count());
     const QVariantMap widget = restored.widget(custom);
-    QCOMPARE(widget.value("type").toString(), QString("customValue"));
+    QCOMPARE(widget.value("type").toString(), QString("retroCustomValue"));
     QCOMPARE(widget.value("rotation").toDouble(), 12.0);
     QCOMPARE(widget.value("settings").toMap().value("source").toString(), QString("oiltemp"));
 }
@@ -3495,7 +3494,7 @@ void TelemetryTests::persistsWidgetScenes()
 void TelemetryTests::normalizesWidgetSemanticsAcrossMutationAndImport()
 {
     WidgetModel edited;
-    const int editedIndex = edited.addWidget(QStringLiteral("rpm"));
+    const int editedIndex = edited.addWidget(QStringLiteral("retroTachometer"));
     QVERIFY(editedIndex >= 0);
     edited.setSetting(editedIndex, QStringLiteral("decimals"), 999999);
     edited.setSetting(editedIndex, QStringLiteral("backgroundColor"), QStringLiteral("not-a-color"));
@@ -3507,7 +3506,7 @@ void TelemetryTests::normalizesWidgetSemanticsAcrossMutationAndImport()
     WidgetModel imported;
     const QJsonArray invalid{
         QJsonObject{{QStringLiteral("id"), QStringLiteral("rpm-widget")},
-                    {QStringLiteral("type"), QStringLiteral("rpm")},
+                    {QStringLiteral("type"), QStringLiteral("retroTachometer")},
                     {QStringLiteral("settings"), QJsonObject{{QStringLiteral("decimals"), 999999},
                                                                {QStringLiteral("fontSize"), 999999},
                                                                {QStringLiteral("backgroundColor"), QStringLiteral("invalid")},
@@ -3530,7 +3529,7 @@ void TelemetryTests::normalizesWidgetSemanticsAcrossMutationAndImport()
     QCOMPARE(importedWidget.value(QStringLiteral("settings")).toMap()
                  .value(QStringLiteral("minValue")).toDouble(), 0.0);
     QCOMPARE(importedWidget.value(QStringLiteral("settings")).toMap()
-                 .value(QStringLiteral("maxValue")).toDouble(), 8000.0);
+                 .value(QStringLiteral("maxValue")).toDouble(), 9000.0);
     const QVariantMap cue = importedWidget.value(QStringLiteral("cues")).toList().front().toMap();
     QCOMPARE(cue.value(QStringLiteral("start")).toDouble(), 0.0);
     QCOMPARE(cue.value(QStringLiteral("duration")).toDouble(), 0.1);
@@ -3548,7 +3547,7 @@ void TelemetryTests::normalizesWidgetSemanticsAcrossMutationAndImport()
     const QString importedTemplatePath = templateDirectory.filePath("unsafe.fettemplate");
     const QJsonObject templateWidget{
         {QStringLiteral("id"), QStringLiteral("template-rpm")},
-        {QStringLiteral("type"), QStringLiteral("rpm")},
+        {QStringLiteral("type"), QStringLiteral("retroTachometer")},
         {QStringLiteral("settings"), QJsonObject{{QStringLiteral("decimals"), 999999}}},
     };
     const QJsonObject unsafeTemplate{
@@ -3577,7 +3576,7 @@ void TelemetryTests::rejectsNonFiniteWidgetGeometryAndDuplicateIds()
         QJsonObject{{QStringLiteral("id"), QStringLiteral("duplicate")},
                     {QStringLiteral("type"), QStringLiteral("speed")}},
         QJsonObject{{QStringLiteral("id"), QStringLiteral("duplicate")},
-                    {QStringLiteral("type"), QStringLiteral("rpm")}},
+                    {QStringLiteral("type"), QStringLiteral("heartRate")}},
     };
     QVERIFY(!model.fromJson(duplicates));
 }
@@ -3585,24 +3584,7 @@ void TelemetryTests::rejectsNonFiniteWidgetGeometryAndDuplicateIds()
 void TelemetryTests::loadsVisualTemplates()
 {
     WidgetModel model;
-    QVERIFY(model.templates().size() >= 3);
-    QVERIFY(model.applyTemplate("minimal"));
-    QCOMPARE(model.count(), 2);
-    QCOMPARE(model.widget(0).value("type").toString(), QString("speed"));
-    QCOMPARE(
-        model.widget(0).value("settings").toMap().value("showBackground").toBool(),
-        false);
-    QVERIFY(model.applyTemplate("performance"));
-    QCOMPARE(model.count(), 3);
-    QCOMPARE(model.widget(0).value("type").toString(), QString("arcGauge"));
-    QCOMPARE(model.widget(1).value("type").toString(), QString("dialGauge"));
-    QCOMPARE(model.widget(2).value("type").toString(), QString("telemetryOverlay"));
-    QVERIFY(model.applyTemplate("2000s-grand-prix"));
-    QCOMPARE(model.count(), 6);
-    QCOMPARE(model.widget(0).value("type").toString(), QString("retroTachometer"));
-    QCOMPARE(model.widget(1).value("type").toString(), QString("retroGear"));
-    QCOMPARE(model.widget(2).value("type").toString(), QString("retroPedal"));
-    QCOMPARE(model.widget(3).value("settings").toMap().value("source").toString(), QString("brake_pos-obd"));
+    QCOMPARE(model.templates().size(), 1);
     QVERIFY(model.applyTemplate("motorsport-broadcast-smoke"));
     QCOMPARE(model.count(), 9);
     QCOMPARE(model.widget(0).value("type").toString(), QString("retroTachometer"));
@@ -3612,7 +3594,67 @@ void TelemetryTests::loadsVisualTemplates()
     QCOMPARE(model.widget(3).value("settings").toMap().value("stackPosition").toString(), QString("top"));
     QCOMPARE(model.widget(4).value("settings").toMap().value("stackPosition").toString(), QString("middle"));
     QCOMPARE(model.widget(5).value("settings").toMap().value("stackPosition").toString(), QString("bottom"));
+    // KAN-192: ATF reads RaceChrono's gearbox temperature channel.
+    QCOMPARE(model.widget(4).value("settings").toMap().value("source").toString(), QString("gearbox_temp-obd"));
     QVERIFY(!model.applyTemplate("missing-template"));
+    // Retired built-ins are gone.
+    for (const QString id : {"track-day", "minimal", "performance", "2000s-grand-prix"})
+        QVERIFY2(!model.applyTemplate(id), qPrintable(id));
+}
+
+void TelemetryTests::dropsRetiredWidgetTypes()
+{
+    // KAN-192: a project or custom template saved with a removed type still
+    // opens; only those widgets are left out.
+    WidgetModel model;
+    for (const QString retired : {"rpm", "gForce", "track", "customValue", "arcGauge", "dialGauge",
+             "telemetryOverlay", "lapBest", "lapDelta", "speedBest", "speedCurrent", "speedDelta",
+             "retroGrandPrix", "retroGear", "retroPedal", "retroSpeedArc", "retroNameplate", "brandLogo"})
+        QCOMPARE(model.addWidget(retired), -1);
+    const QJsonArray scene{
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("kept")}, {QStringLiteral("type"), QStringLiteral("speed")}},
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("old-rpm")}, {QStringLiteral("type"), QStringLiteral("rpm")}},
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("old-track")}, {QStringLiteral("type"), QStringLiteral("track")}},
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("lap")}, {QStringLiteral("type"), QStringLiteral("lapCurrent")}},
+    };
+    QVERIFY(model.fromJson(scene));
+    QCOMPARE(model.count(), 2);
+    QCOMPARE(model.retiredWidgetsDropped(), 2);
+    QCOMPARE(model.widget(0).value("type").toString(), QString("speed"));
+    QCOMPARE(model.widget(1).value("type").toString(), QString("lapCurrent"));
+    QVERIFY(model.fromJson(QJsonArray{scene.at(0)}));
+    QCOMPARE(model.retiredWidgetsDropped(), 0);
+    // A type that never existed still makes the scene invalid.
+    QVERIFY(!model.fromJson(QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("x")},
+                                                   {QStringLiteral("type"), QStringLiteral("unknownType")}}}));
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const bool hadOverride = qEnvironmentVariableIsSet("FLAPPEDEAR_TEMPLATE_STORE");
+    const QByteArray previousOverride = qgetenv("FLAPPEDEAR_TEMPLATE_STORE");
+    qputenv("FLAPPEDEAR_TEMPLATE_STORE", directory.filePath("templates.json").toUtf8());
+    const auto restoreEnvironment = qScopeGuard([hadOverride, previousOverride] {
+        if (hadOverride) qputenv("FLAPPEDEAR_TEMPLATE_STORE", previousOverride);
+        else qunsetenv("FLAPPEDEAR_TEMPLATE_STORE");
+    });
+    const QString path = directory.filePath("old.fettemplate");
+    const QJsonObject oldTemplate{
+        {QStringLiteral("name"), QStringLiteral("Old layout")},
+        {QStringLiteral("widgets"), QJsonArray{
+             QJsonObject{{QStringLiteral("id"), QStringLiteral("dial")}, {QStringLiteral("type"), QStringLiteral("dialGauge")}},
+             QJsonObject{{QStringLiteral("id"), QStringLiteral("hr")}, {QStringLiteral("type"), QStringLiteral("heartRate")}}}},
+    };
+    QVERIFY(writeBytes(path, QJsonDocument(QJsonObject{{QStringLiteral("template"), oldTemplate}}).toJson()));
+    WidgetModel templates;
+    const QString id = templates.importTemplate(QUrl::fromLocalFile(path));
+    QVERIFY(!id.isEmpty());
+    QVERIFY(templates.applyTemplate(id));
+    QCOMPARE(templates.count(), 1);
+    QCOMPARE(templates.widget(0).value("type").toString(), QString("heartRate"));
+    WidgetModel reloaded;
+    QVERIFY(reloaded.lastError().isEmpty());
+    QVERIFY(reloaded.applyTemplate(id));
+    QCOMPARE(reloaded.count(), 1);
 }
 
 void TelemetryTests::providesCustomizableArchetypes()
@@ -3620,26 +3662,14 @@ void TelemetryTests::providesCustomizableArchetypes()
     WidgetModel model;
     const QHash<QString, QStringList> specialized = {
         {"speed", {"showGauge", "unit", "maxValue"}},
-        {"rpm", {"showBar", "warningValue", "maxValue"}},
         {"heartRate", {"showIcon", "unit", "accentColor"}},
         {"pedals", {"acceleratorSource", "brakeSource", "acceleratorColor", "brakeColor"}},
-        {"gForce", {"lateralSource", "longitudinalSource", "invertLateral", "invertLongitudinal", "gRange", "gridColor"}},
         {"f1GForceRadar", {"lateralSource", "longitudinalSource", "invertLateral", "invertLongitudinal", "maxG", "ringStepG", "showCrosshair", "showCenterBox", "showRingLabels", "radarBackgroundColor", "dotColor", "gridColor"}},
         {"gForceMagnitudeBar", {"lateralSource", "longitudinalSource", "invertLateral", "invertLongitudinal", "maxG", "labelText", "showLabel", "showValue", "barColor", "barBackgroundColor", "barRadius"}},
-        {"track", {"lineColor", "lineWidth", "markerColor", "mirrorX", "mirrorY"}},
-        {"customValue", {"label", "decimals", "multiplier"}},
         {"retroCustomValue", {"source", "label", "fallbackText", "panelColor", "valueColor", "labelColor", "icon", "stackPosition", "showSeparator"}},
-        {"arcGauge", {"source", "startAngle", "endAngle", "arcWidth", "trackColor"}},
-        {"dialGauge", {"source", "startAngle", "endAngle", "majorTicks", "needleColor"}},
-        {"telemetryOverlay", {"source1", "source2", "source3", "source4", "columns"}},
-        {"retroGrandPrix", {"rpmSource", "speedSource", "gearSource", "throttleSource", "brakeSource", "driverName"}},
         {"retroTachometer", {"source", "minValue", "maxValue", "needleColor"}},
-        {"retroGear", {"source", "label", "fallbackText", "panelColor"}},
-        {"retroPedal", {"source", "minValue", "maxValue", "fillColor", "emptyColor"}},
-        {"retroSpeedArc", {"source", "minValue", "maxValue", "segments", "lowColor"}},
-        {"retroNameplate", {"topSource", "bottomSource", "topText", "bottomText"}},
-        {"brandLogo", {"logoOpacity", "logoScale"}},
         {"tyres", {"label", "showTemperature", "showPressure", "pressureUnit", "coldBelow", "hotAbove"}},
+        {"lapCurrent", {"label", "timingDecimals"}},
     };
     for (auto iterator = specialized.cbegin(); iterator != specialized.cend(); ++iterator) {
         const int index = model.addWidget(iterator.key());
@@ -3674,7 +3704,7 @@ void TelemetryTests::updatesCustomTemplatesInPlace()
     });
 
     WidgetModel source;
-    QVERIFY(source.applyTemplate("minimal"));
+    QVERIFY(source.addWidget("speed") == 0 && source.addWidget("heartRate") == 1);
     const QString templateId = source.saveCurrentAsTemplate("My layout", "Keep this description");
     QVERIFY(!templateId.isEmpty());
     const int templateCount = source.templates().size();
@@ -3683,7 +3713,7 @@ void TelemetryTests::updatesCustomTemplatesInPlace()
     QCOMPARE(source.addWidget("retroCustomValue"), 2);
     QVERIFY(source.updateTemplate(templateId));
     QCOMPARE(source.templates().size(), templateCount);
-    QVERIFY(!source.updateTemplate("minimal"));
+    QVERIFY(!source.updateTemplate("motorsport-broadcast-smoke"));
 
     WidgetModel restored;
     const QVariantList restoredTemplates = restored.templates();
@@ -3747,7 +3777,7 @@ void TelemetryTests::rejectsTemplateStoreCountGrowth()
     const QString path = directory.filePath("templates.json");
     qputenv("FLAPPEDEAR_TEMPLATE_STORE", path.toUtf8());
     WidgetModel model;
-    QVERIFY(model.applyTemplate("minimal"));
+    QVERIFY(model.addWidget("speed") == 0 && model.addWidget("heartRate") == 1);
     const qsizetype builtInCount = model.templates().size();
     QJsonArray templates;
     for (qsizetype index = 0; index < ProjectLimits::maximumTemplateCount; ++index) {
@@ -3791,7 +3821,7 @@ void TelemetryTests::rejectsTemplateStoreByteGrowth()
     const QString path = directory.filePath("templates.json");
     qputenv("FLAPPEDEAR_TEMPLATE_STORE", path.toUtf8());
     WidgetModel source;
-    QVERIFY(source.applyTemplate("minimal"));
+    QVERIFY(source.addWidget("speed") == 0 && source.addWidget("heartRate") == 1);
     QJsonArray futureData;
     for (int index = 0; index < 2044; ++index) futureData.append(QString(4096, QLatin1Char('x')));
     const QJsonObject root{{"schemaVersion", 1}, {"templates", QJsonArray{QJsonObject{
@@ -3829,7 +3859,7 @@ void TelemetryTests::preservesRejectedTemplateStores()
     const QString path = directory.filePath("templates.json");
     qputenv("FLAPPEDEAR_TEMPLATE_STORE", path.toUtf8());
     WidgetModel model;
-    QVERIFY(model.applyTemplate("minimal"));
+    QVERIFY(model.addWidget("speed") == 0 && model.addWidget("heartRate") == 1);
     const QString id = model.saveCurrentAsTemplate("Preserved", "");
     QVERIFY(!id.isEmpty());
     const QByteArray good = readBytes(path);
@@ -3852,7 +3882,7 @@ void TelemetryTests::preservesRejectedTemplateStores()
         QCOMPARE(readBytes(path), bytes);
         WidgetModel restarted;
         QVERIFY(!restarted.lastError().isEmpty());
-        QVERIFY(restarted.applyTemplate("minimal")); // Built-ins remain usable.
+        QVERIFY(restarted.applyTemplate("motorsport-broadcast-smoke")); // Built-ins remain usable.
         QVERIFY(restarted.saveCurrentAsTemplate("Would overwrite after restart", "").isEmpty());
         QCOMPARE(readBytes(path), bytes);
     }
@@ -3980,7 +4010,7 @@ void TelemetryTests::preservesTemplatePickerSelectionById()
 void TelemetryTests::preservesOptionalFontSettings()
 {
     WidgetModel source;
-    const int gear = source.addWidget("retroGear");
+    const int gear = source.addWidget("retroCustomValue");
     QVERIFY(gear >= 0);
     QCOMPARE(source.widget(gear).value("settings").toMap().value("fontSize").toDouble(), 0.0);
     source.setSetting(gear, "fontSize", 0);
@@ -4002,7 +4032,7 @@ void TelemetryTests::preservesOptionalFontSettings()
 void TelemetryTests::preservesGForcePresentationSettings()
 {
     WidgetModel source;
-    const int gForce = source.addWidget("gForce");
+    const int gForce = source.addWidget("f1GForceRadar");
     const QVariantMap defaults = source.widget(gForce).value("settings").toMap();
     QVERIFY(!defaults.value("invertLateral").toBool());
     QVERIFY(!defaults.value("invertLongitudinal").toBool());
@@ -4075,7 +4105,7 @@ void TelemetryTests::persistsAndSharesCustomTemplates()
     });
 
     WidgetModel source;
-    QVERIFY(source.applyTemplate("2000s-grand-prix"));
+    QVERIFY(source.applyTemplate("motorsport-broadcast-smoke"));
     const QString templateId =
         source.saveCurrentAsTemplate("My broadcast", "Reusable race insert");
     QVERIFY(!templateId.isEmpty());
@@ -4098,7 +4128,7 @@ void TelemetryTests::persistsAndSharesCustomTemplates()
 void TelemetryTests::persistsWidgetAnimationCues()
 {
     WidgetModel source;
-    const int widget = source.addWidget("telemetryOverlay");
+    const int widget = source.addWidget("lapCurrent");
     QCOMPARE(source.addCue(widget, 12.5, 4.0, "slideUp"), 0);
     source.setCueProperty(widget, 0, "fadeIn", 0.6);
     source.setCueProperty(widget, 0, "fadeOut", 0.8);
@@ -4120,8 +4150,8 @@ void TelemetryTests::persistsWidgetAnimationCues()
 void TelemetryTests::groupsAndMovesWidgets()
 {
     WidgetModel model;
-    const int first = model.addWidget("retroGear");
-    const int second = model.addWidget("retroPedal");
+    const int first = model.addWidget("heartRate");
+    const int second = model.addWidget("retroCustomValue");
     const double firstX = model.widget(first).value("x").toDouble();
     const double secondX = model.widget(second).value("x").toDouble();
     const QString groupId = model.groupWidgets({first, second});
@@ -4347,18 +4377,6 @@ void TelemetryTests::cachesStaticTrackGeometry()
                       << " time-marker-updates=10000 updates-ms="
                       << updateNanoseconds / 1'000'000.0
                       << " additional-conversions=" << additionalConversions;
-}
-
-void TelemetryTests::keepsStaticTrackIndependentFromTime()
-{
-    QFile source(QStringLiteral(TRACK_WIDGET_QML_PATH));
-    QVERIFY2(source.open(QIODevice::ReadOnly), qPrintable(source.errorString()));
-    const QByteArray qml = source.readAll();
-    QVERIFY(qml.contains("frame.renderContext.trackRevision"));
-    QVERIFY(qml.contains("PathPolyline"));
-    QVERIFY(!qml.contains("function onTimeChanged()"));
-    QVERIFY(!qml.contains("requestPaint"));
-    QVERIFY(!qml.contains("onRevisionChanged"));
 }
 
 void TelemetryTests::preservesTimingEditsDuringAutoSync_data()
@@ -5956,7 +5974,7 @@ void TelemetryTests::recoversAndDiscardsUnsavedDocuments()
     int recoveredWidgetCount = 0;
     {
         AppController controller(nullptr, recoveryPath);
-        controller.widgetModel()->addWidget(QStringLiteral("customValue"));
+        controller.widgetModel()->addWidget(QStringLiteral("retroCustomValue"));
         controller.setSyncOffset(4.0);
         recoveredWidgetCount = controller.widgetModel()->count();
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
@@ -6000,7 +6018,7 @@ void TelemetryTests::discardsUnsavedStateForQuitNewAndOpen()
     {
         AppController controller(nullptr, recoveryPath);
         QTRY_VERIFY(!controller.projectLoading());
-        controller.widgetModel()->addWidget(QStringLiteral("customValue"));
+        controller.widgetModel()->addWidget(QStringLiteral("retroCustomValue"));
         controller.setSyncOffset(8.0);
         controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
         QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
@@ -7128,10 +7146,6 @@ void TelemetryTests::rendersCanvasWidgetsInFirstOffscreenFrames_data()
 {
     QTest::addColumn<QString>("widgetType");
     QTest::newRow("retroTachometer") << QStringLiteral("retroTachometer");
-    QTest::newRow("arcGauge") << QStringLiteral("arcGauge");
-    QTest::newRow("dialGauge") << QStringLiteral("dialGauge");
-    QTest::newRow("retroGrandPrix") << QStringLiteral("retroGrandPrix");
-    QTest::newRow("retroSpeedArc") << QStringLiteral("retroSpeedArc");
 }
 
 void TelemetryTests::rendersCanvasWidgetsInFirstOffscreenFrames()
@@ -7229,7 +7243,7 @@ void TelemetryTests::rendersPedalsWithoutLayoutLoops()
             widgets.resizeWidget(pedals, size, size / 2);
             QVERIFY(!renderer.renderFrame(1.0).isNull());
         }
-        for (const QString id : {"track-day", "motorsport-broadcast-smoke", "performance"}) {
+        for (const QString id : {"motorsport-broadcast-smoke"}) {
             QVERIFY(widgets.applyTemplate(id));
             QVERIFY(!renderer.renderFrame(1.0).isNull());
         }
@@ -7621,13 +7635,11 @@ void TelemetryTests::rendersTyresInExportScene()
     }
 }
 
-void TelemetryTests::rendersAllComparisonTilesInProductionScene()
+void TelemetryTests::rendersLapTimeTileInProductionScene()
 {
     TelemetrySession session = speedSession(0.0, 2.0, 0.0);
     WidgetModel widgets;
-    const QStringList types{
-        QStringLiteral("lapBest"), QStringLiteral("lapCurrent"), QStringLiteral("lapDelta"),
-        QStringLiteral("speedBest"), QStringLiteral("speedCurrent"), QStringLiteral("speedDelta")};
+    const QStringList types{QStringLiteral("lapCurrent")};
     for (qsizetype index = 0; index < types.size(); ++index) {
         const int widget = widgets.addWidget(types[index]);
         QVERIFY2(widget >= 0, qPrintable(types[index]));
@@ -7648,7 +7660,7 @@ void TelemetryTests::rendersAllComparisonTilesInProductionScene()
         const int y = static_cast<int>((0.14 + 0.42 * static_cast<double>(index / 3) + 0.14) * image.height());
         const QColor pixel = image.pixelColor(x, y);
         QVERIFY2(pixel.alpha() > 80,
-                 qPrintable(QStringLiteral("%1 did not create an opaque comparison tile at %2,%3")
+                 qPrintable(QStringLiteral("%1 did not create an opaque lap time tile at %2,%3")
                                 .arg(types[index]).arg(x).arg(y)));
     }
 }

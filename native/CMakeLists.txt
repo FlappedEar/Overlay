@@ -358,32 +358,19 @@ qt_add_qml_module(flappedear_native
         qml/VisualSmokeScene.qml
         qml/WidgetEditor.qml
         qml/WidgetOverlay.qml
-        qml/widgets/ArcGaugeWidget.qml
-        qml/widgets/BrandLogoWidget.qml
-        qml/widgets/CustomValueWidget.qml
         qml/widgets/DesignedElements.qml
         qml/widgets/DesignedWidget.qml
-        qml/widgets/DialGaugeWidget.qml
-        qml/widgets/GForceWidget.qml
         qml/widgets/GForceData.qml
         qml/widgets/F1GForceRadarWidget.qml
         qml/widgets/GForceMagnitudeBarWidget.qml
         qml/widgets/TyresWidget.qml
         qml/widgets/HeartRateWidget.qml
-        qml/widgets/ComparisonTileWidget.qml
+        qml/widgets/LapTimeWidget.qml
         qml/widgets/PedalsWidget.qml
-        qml/widgets/RetroGearWidget.qml
         qml/widgets/RetroCustomValueWidget.qml
-        qml/widgets/RetroGrandPrixWidget.qml
-        qml/widgets/RetroNameplateWidget.qml
-        qml/widgets/RetroPedalWidget.qml
-        qml/widgets/RetroSpeedArcWidget.qml
         qml/widgets/RetroTachometerWidget.qml
-        qml/widgets/RpmWidget.qml
         qml/widgets/SpeedWidget.qml
-        qml/widgets/TelemetryOverlayWidget.qml
         qml/widgets/TelemetryPanel.qml
-        qml/widgets/TrackWidget.qml
     RESOURCES
         qml/assets/change-car-oil-svgrepo-com.svg
         qml/assets/temperature-transmission.svg

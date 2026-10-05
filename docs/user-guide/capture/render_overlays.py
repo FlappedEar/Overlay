@@ -35,31 +35,14 @@ MOMENT_IN_BEST_LAP = 27.0
 # (catalog type, file name, geometry overrides, setting overrides)
 GALLERY = [
     ("speed", "widget-speed", {}, {}),
-    ("rpm", "widget-rpm", {"width": 0.22}, {}),
     ("heartRate", "widget-heart-rate", {}, {}),
     ("pedals", "widget-pedals", {}, {}),
-    ("gForce", "widget-gforce", {}, {}),
     ("f1GForceRadar", "widget-f1-radar", {}, {}),
     ("gForceMagnitudeBar", "widget-gforce-bar", {}, {}),
-    ("track", "widget-track", {"width": 0.20, "height": 0.30}, {}),
-    ("customValue", "widget-custom", {}, {"source": "engine_oil_temp-obd", "label": "OIL", "unit": "°C", "decimals": 0}),
     ("tyres", "widget-tyres", {}, {}),
     ("retroCustomValue", "widget-retro-custom", {"height": 0.06}, {"source": "coolant_temp-obd", "label": "COOLANT", "unit": "°C", "decimals": 0}),
-    ("arcGauge", "widget-arc-gauge", {}, {}),
-    ("dialGauge", "widget-dial-gauge", {}, {}),
-    ("telemetryOverlay", "widget-data-strip", {}, {}),
-    ("lapBest", "widget-lap-best", {}, {}),
     ("lapCurrent", "widget-lap-current", {}, {}),
-    ("lapDelta", "widget-lap-delta", {}, {}),
-    ("speedBest", "widget-speed-best", {}, {}),
-    ("speedCurrent", "widget-speed-current", {}, {}),
-    ("speedDelta", "widget-speed-delta", {}, {}),
     ("retroTachometer", "widget-retro-rpm", {}, {}),
-    ("retroGear", "widget-retro-gear", {"width": 0.16, "height": 0.06}, {}),
-    ("retroPedal", "widget-retro-pedal", {"width": 0.16, "height": 0.06}, {"showValue": True}),
-    ("retroSpeedArc", "widget-retro-speed", {}, {}),
-    ("retroNameplate", "widget-nameplate", {}, {}),
-    ("brandLogo", "widget-logo", {}, {}),
 ]
 
 
