@@ -28,9 +28,9 @@ CornerSpeedValue speedAt(const QVector<ProgressSegment> &lap, const TelemetrySes
     const auto speed = session.valueAt(channel, *time);
     if (!speed) return unavailable(progress, cornerPhaseIncompleteCoverage);
     CornerSpeedValue value;
-    value.value = *speed;
+    value.value = speed;
     value.progressMeters = progress;
-    value.telemetryTime = *time;
+    value.telemetryTime = time;
     return value;
 }
 

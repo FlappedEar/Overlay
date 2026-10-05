@@ -1,0 +1,6 @@
+# KAN-154: in tests a value is dereferenced after QVERIFY/QCOMPARE checked it,
+# which the optional and null-pointer checks cannot see.
+InheritParentConfig: true
+Checks: >
+  -bugprone-unchecked-optional-access,
+  -clang-analyzer-core.NullDereference

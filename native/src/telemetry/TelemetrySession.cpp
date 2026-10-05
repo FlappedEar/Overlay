@@ -157,15 +157,13 @@ QVector<QVector<QPointF>> TelemetrySession::sampledSegments(
         }
         if (!std::isfinite(value)) {
             if (!current.isEmpty()) {
-                rawSegments.append(std::move(current));
-                current.clear();
+                rawSegments.append(std::exchange(current, {}));
             }
             continue;
         }
         if (!current.isEmpty() && gapThreshold > 0.0
             && timestamp - current.back().x() > gapThreshold) {
-            rawSegments.append(std::move(current));
-            current.clear();
+            rawSegments.append(std::exchange(current, {}));
         }
         current.append(QPointF(timestamp, value));
     }

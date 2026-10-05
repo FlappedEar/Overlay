@@ -1,0 +1,29 @@
+# KAN-154: Native CI runs clang-tidy on the C++ files a pull request changes
+# (docs/development-workflow.md). Errors are findings that point at real
+# defects; the rest are advice. Checks with too many false positives on this
+# code base are off; see docs/testing.md before adding one. The analyzer's
+# new/delete checks misread Qt's reference counting (qsharedpointer_impl.h,
+# qobjectdefs.h); AddressSanitizer covers those defects instead.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-switch-missing-default-case,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-empty-catch,
+  -bugprone-integer-division,
+  clang-analyzer-*,
+  -clang-analyzer-security.FloatLoopCounter,
+  -clang-analyzer-cplusplus.NewDelete,
+  -clang-analyzer-cplusplus.NewDeleteLeaks,
+  performance-*,
+  -performance-enum-size,
+  -performance-implicit-conversion-in-loop
+WarningsAsErrors: >
+  bugprone-*,
+  -bugprone-unchecked-optional-access,
+  clang-analyzer-*
+HeaderFilterRegex: '.*/native/(src|tests)/.*'
+FormatStyle: none

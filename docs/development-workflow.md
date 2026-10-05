@@ -55,6 +55,9 @@ through a pull request, and the `macOS arm64 / Debug / Qt 6.8.3` and
 Since 5 October 2026 Native CI also runs `Linux x64 / ASan+UBSan / Qt 6.8.3`
 (KAN-154), the GUI-free tests under AddressSanitizer and
 UndefinedBehaviorSanitizer. The owner made it a required check the same day.
+On pull requests Native CI also runs `Linux x64 / clang-tidy / Qt 6.8.3` (KAN-154)
+on the changed C++ files, with the checks in `.clang-tidy`; bugprone and
+analyzer findings fail it. It is not a required check.
 Native CI also runs `Linux x64 / Fuzz parsers / Qt 6.8.3` (KAN-155): 60 seconds of libFuzzer
 on each of the VBO, RCZ and GPMF decoders from the seed corpora. It is not a
 required check.

@@ -2408,3 +2408,41 @@ Checked on Linux with Qt 6.8.3, clang 18 and ASan, UBSan and leak detection,
 libFuzzer grows the input length slowly, so the VBO inputs stayed near the
 seed size (414 bytes); the size limits themselves stay with the existing
 limit tests, such as `boundsVboHeaderAndDecodedValues`.
+
+## KAN-154: clang-tidy
+
+`.clang-tidy` at the repository root enables `bugprone-*`, `clang-analyzer-*`
+and `performance-*`. `bugprone-*` and `clang-analyzer-*` findings are errors;
+`performance-*` and `bugprone-unchecked-optional-access` are advice. These
+checks are off because, on this code base, they flagged only intended code:
+
+| Check | Why it is off |
+| --- | --- |
+| `bugprone-easily-swappable-parameters`, `-narrowing-conversions`, `-implicit-widening-of-multiplication-result` | style, hundreds of hits |
+| `bugprone-switch-missing-default-case`, `-assignment-in-if-condition`, `-empty-catch` | deliberate patterns (the empty catches carry a comment) |
+| `bugprone-integer-division` | grid layout code divides on purpose, even inside `static_cast<double>` |
+| `clang-analyzer-security.FloatLoopCounter` | tests step time in floating point on purpose |
+| `clang-analyzer-cplusplus.NewDelete`, `-NewDeleteLeaks` | report inside Qt's `QSharedPointer` and `QObject` code; ASan covers these defects |
+| `performance-enum-size`, `-implicit-conversion-in-loop` | no measurable gain |
+
+`native/tests/.clang-tidy` also turns off the optional and null-pointer
+checks: a test dereferences a value after `QVERIFY` has checked it, which the
+analyzer cannot see.
+
+Native CI's `Linux x64 / clang-tidy / Qt 6.8.3` job runs on pull requests
+only. It builds with clang 18 for the compile database and the moc files, then
+runs `clang-tidy-18` on each changed `native/**/*.cpp` file in that database.
+Locally:
+
+```bash
+cmake -S . -B build-tidy -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-18 \
+  -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build build-tidy
+run-clang-tidy-18 -p build-tidy -quiet "$PWD/native/(src|tests)/"
+```
+
+The first run over `native/src` and `native/tests` found no defect; an injected
+use-after-move fails the file with exit code 1. It flagged
+two use-after-move false positives (a moved `QVector` reused after `clear()`,
+now `std::exchange`) and an optional unwrapped and wrapped again
+(`CornerSpeeds.cpp`); both are rewritten.
