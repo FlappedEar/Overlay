@@ -203,6 +203,8 @@ flappedear_enable_warnings(flappedear_telemetry_app)
 # telemetry core (KAN-101), shared by video and recording alignment.
 qt_add_library(flappedear_overlay_core STATIC
     src/app/ApplicationIdentity.h
+    src/app/CommandLine.cpp
+    src/app/CommandLine.h
     src/app/GuiSessionLock.cpp
     src/app/GuiSessionLock.h
     src/app/LegacyStorageMigration.cpp

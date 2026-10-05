@@ -2,6 +2,7 @@
 #include "app/AppController.h"
 #include "app/AppLog.h"
 #include "app/BundledFonts.h"
+#include "app/CommandLine.h"
 #include "app/GuiSessionLock.h"
 #include "app/LegacyStorageMigration.h"
 #include "export/TelemetryFrameRenderer.h"
@@ -43,6 +44,7 @@
 #include <QThread>
 #include <QTimer>
 #include <cmath>
+#include <cstdio>
 #include <numbers>
 #include <memory>
 
@@ -571,13 +573,22 @@ int exportWorker(const QString &configPath)
 
 int main(int argc, char *argv[])
 {
-    const bool renderStillMode = argc == 3 && QString::fromLocal8Bit(argv[1]) == "--render-still";
-    const QString command = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString{};
-    const bool renderVisualSmokeMode = argc == 3 && command == "--render-visual-smoke";
-    const bool renderVisualSmokeDarkMode = argc == 3 && command == "--render-visual-smoke-dark";
-    const bool exportWorkerMode = argc == 3 && QString::fromLocal8Bit(argv[1]) == "--export-worker";
-    const bool benchmarkRenderMode = argc == 5 && QString::fromLocal8Bit(argv[1]) == "--benchmark-render";
-    const bool startupSmokeMode = argc == 2 && QString::fromLocal8Bit(argv[1]) == "--startup-smoke";
+    QStringList arguments;
+    for (int i = 1; i < argc; ++i) arguments.append(QString::fromLocal8Bit(argv[i]));
+    using FlappedEar::CommandLine::Mode;
+    const FlappedEar::CommandLine::Parsed commandLine = FlappedEar::CommandLine::parse(arguments);
+    if (commandLine.mode == Mode::UsageError) {
+        // KAN-178: report before any Qt or GUI start-up, so a mistyped flag
+        // neither opens the editor nor takes the session lock.
+        std::fputs(FlappedEar::CommandLine::usage(commandLine.error).toLocal8Bit().constData(), stderr);
+        return 2;
+    }
+    const bool renderStillMode = commandLine.mode == Mode::RenderStill;
+    const bool renderVisualSmokeMode = commandLine.mode == Mode::RenderVisualSmoke;
+    const bool renderVisualSmokeDarkMode = commandLine.mode == Mode::RenderVisualSmokeDark;
+    const bool exportWorkerMode = commandLine.mode == Mode::ExportWorker;
+    const bool benchmarkRenderMode = commandLine.mode == Mode::BenchmarkRender;
+    const bool startupSmokeMode = commandLine.mode == Mode::StartupSmoke;
     if (qEnvironmentVariableIntValue("FLAPPEDEAR_EXPORT_SOFTWARE") == 1) {
         qputenv("QT_QUICK_BACKEND", "software");
     }
@@ -588,9 +599,7 @@ int main(int argc, char *argv[])
     // and exports alike.
     FlappedEar::registerBundledFonts();
     FlappedEar::ApplicationIdentity::initialize();
-    const bool applicationMode = !renderStillMode && !renderVisualSmokeMode && !renderVisualSmokeDarkMode
-        && !exportWorkerMode
-        && !benchmarkRenderMode && !startupSmokeMode;
+    const bool applicationMode = commandLine.mode == Mode::Editor;
     std::unique_ptr<FlappedEar::GuiSessionLock> guiSessionLock;
     FlappedEar::LegacyStorageMigration::Result storageMigration;
     if (applicationMode) {
@@ -632,24 +641,24 @@ int main(int argc, char *argv[])
     }
     app.setWindowIcon(QIcon(QStringLiteral(":/flappedear/resources/branding/app-logo.png")));
     if (renderStillMode) {
-        return renderStill(QString::fromLocal8Bit(argv[2]));
+        return renderStill(commandLine.arguments.at(0));
     }
     if (renderVisualSmokeMode) {
-        return renderVisualSmoke(QString::fromLocal8Bit(argv[2]), false);
+        return renderVisualSmoke(commandLine.arguments.at(0), false);
     }
     if (renderVisualSmokeDarkMode) {
-        return renderVisualSmoke(QString::fromLocal8Bit(argv[2]), true);
+        return renderVisualSmoke(commandLine.arguments.at(0), true);
     }
     if (exportWorkerMode) {
-        return exportWorker(QString::fromLocal8Bit(argv[2]));
+        return exportWorker(commandLine.arguments.at(0));
     }
     if (benchmarkRenderMode) {
         bool widthOk = false;
         bool heightOk = false;
         bool framesOk = false;
-        const int width = QString::fromLocal8Bit(argv[2]).toInt(&widthOk);
-        const int height = QString::fromLocal8Bit(argv[3]).toInt(&heightOk);
-        const int frames = QString::fromLocal8Bit(argv[4]).toInt(&framesOk);
+        const int width = commandLine.arguments.at(0).toInt(&widthOk);
+        const int height = commandLine.arguments.at(1).toInt(&heightOk);
+        const int frames = commandLine.arguments.at(2).toInt(&framesOk);
         if (!widthOk || !heightOk || !framesOk || width <= 0 || height <= 0 || frames <= 0) {
             qCritical() << "Usage: --benchmark-render <width> <height> <frames>";
             return EXIT_FAILURE;
