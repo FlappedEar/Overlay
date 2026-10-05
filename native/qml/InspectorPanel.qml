@@ -17,6 +17,7 @@ Rectangle {
     property int currentTab: 0
     signal selectionCleared
     signal selectionRequested(int index)
+    signal editDesignRequested(int index)
 
     color: Theme.surfaceContainerLow
     border.color: Theme.outlineVariant
@@ -138,6 +139,36 @@ Rectangle {
                             }
                         }
 
+                        // KAN-191: designed widgets open in the widget editor; any
+                        // widget can be kept in My widgets.
+                        FeButton {
+                            visible: root.selectedWidget.type === "designed"
+                            Layout.fillWidth: true
+                            accent: true
+                            text: qsTr("Edit design…")
+                            onClicked: root.editDesignRequested(root.selectedIndex)
+                        }
+                        FeButton {
+                            Layout.fillWidth: true
+                            compact: true
+                            readonly property string libraryId: root.settings.libraryId || ""
+                            readonly property bool inLibrary: {
+                                const library = appController.widgetModel.libraryWidgets;
+                                for (let index = 0; index < library.length; ++index)
+                                    if (library[index].id === libraryId)
+                                        return true;
+                                return false;
+                            }
+                            text: inLibrary ? qsTr("Update in My widgets") : qsTr("Save to My widgets")
+                            onClicked: {
+                                if (inLibrary)
+                                    appController.widgetModel.updateLibraryWidget(libraryId, root.selectedIndex);
+                                else
+                                    appController.widgetModel.saveWidgetToLibrary(root.selectedIndex,
+                                        root.settings.name || root.selectedWidget.type);
+                            }
+                        }
+
                         RowLayout {
                             visible: ["speed", "rpm", "heartRate", "customValue", "retroCustomValue", "arcGauge", "dialGauge", "retroGear", "retroPedal", "retroSpeedArc", "retroTachometer", "retroNameplate", "gForceMagnitudeBar", "tyres"].includes(root.selectedWidget.type)
                             Layout.fillWidth: true
@@ -195,17 +226,17 @@ Rectangle {
                         }
 
                         SectionTitle {
-                            visible: root.selectedWidget.type !== "brandLogo" && !root.isComparisonTile
+                            visible: root.selectedWidget.type !== "brandLogo" && !root.isComparisonTile && root.selectedWidget.type !== "designed"
                             text: qsTr("Telemetry & format")
                         }
                         FeLabel {
-                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres"
+                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres" && root.selectedWidget.type !== "designed"
                             text: qsTr("Source channel")
                             color: Theme.onSurfaceVariant
                             font.pixelSize: 11
                         }
                         FeComboBox {
-                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres"
+                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres" && root.selectedWidget.type !== "designed"
                             Layout.fillWidth: true
                             model: root.channelModel()
                             currentIndex: Math.max(0, model.indexOf(root.settings.source || qsTr("Automatic")))
@@ -213,7 +244,7 @@ Rectangle {
                         }
 
                         GridLayout {
-                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres"
+                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres" && root.selectedWidget.type !== "designed"
                             Layout.fillWidth: true
                             columns: 2
                             columnSpacing: 8
@@ -311,7 +342,7 @@ Rectangle {
                             }
                         }
                         RowLayout {
-                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres"
+                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres" && root.selectedWidget.type !== "designed"
                             FeCheckBox {
                                 text: qsTr("Show unit")
                                 checked: root.settings.showUnit ?? true

@@ -356,10 +356,13 @@ qt_add_qml_module(flappedear_native
         qml/SectionTitle.qml
         qml/TelemetryScene.qml
         qml/VisualSmokeScene.qml
+        qml/WidgetEditor.qml
         qml/WidgetOverlay.qml
         qml/widgets/ArcGaugeWidget.qml
         qml/widgets/BrandLogoWidget.qml
         qml/widgets/CustomValueWidget.qml
+        qml/widgets/DesignedElements.qml
+        qml/widgets/DesignedWidget.qml
         qml/widgets/DialGaugeWidget.qml
         qml/widgets/GForceWidget.qml
         qml/widgets/GForceData.qml

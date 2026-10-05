@@ -61,6 +61,19 @@
     },
     "track": { "lineColor": "#55e6a5", "lineWidth": 3, "markerColor": "#ffffff", "markerSize": 10, "trackPadding": 10, "mirrorX": false, "mirrorY": false },
     "customValue": { "label": "VALUE", "decimals": 1 },
+    "designed": {
+      "padding": 0, "cornerRadius": 10, "designName": "", "libraryId": "",
+      "elements": [
+        { "id": "label", "kind": "text", "name": "Label", "text": "SPEED", "x": 0.06, "y": 0.08, "w": 0.88, "h": 0.24,
+          "color": "#c0cad2", "fontScale": 0.8, "align": "left", "bold": true },
+        { "id": "value", "kind": "value", "name": "Speed", "source": "speed", "decimals": 0, "suffix": "",
+          "x": 0.06, "y": 0.30, "w": 0.62, "h": 0.52, "color": "#f2f5f7", "fontScale": 0.9, "align": "left", "bold": true },
+        { "id": "unit", "kind": "text", "name": "Unit", "text": "km/h", "x": 0.68, "y": 0.50, "w": 0.26, "h": 0.26,
+          "color": "#55d76a", "fontScale": 0.8, "align": "right", "bold": true },
+        { "id": "bar", "kind": "bar", "name": "Bar", "source": "speed", "minValue": 0, "maxValue": 250,
+          "x": 0.06, "y": 0.84, "w": 0.88, "h": 0.07, "fillColor": "#55d76a", "trackColor": "#2b3a46", "radius": 3 }
+      ]
+    },
     "tyres": {
       "label": "TYRES", "showLabel": true, "showTemperature": true, "showPressure": true,
       "pressureUnit": "bar", "pressureDecimals": 2, "coldBelow": 0, "hotAbove": 0

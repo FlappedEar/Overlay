@@ -39,6 +39,8 @@ qt_add_resources(flappedear_native_tests "flappedear_test_qml"
         ../qml/TelemetryScene.qml
         ../qml/widgets/ArcGaugeWidget.qml
         ../qml/widgets/ComparisonTileWidget.qml
+        ../qml/widgets/DesignedElements.qml
+        ../qml/widgets/DesignedWidget.qml
         ../qml/widgets/DialGaugeWidget.qml
         ../qml/widgets/RetroGrandPrixWidget.qml
         ../qml/widgets/RetroSpeedArcWidget.qml
