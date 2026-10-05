@@ -124,6 +124,19 @@ target_include_directories(flappedear_storage_migration_tests PRIVATE ../src)
 target_link_libraries(flappedear_storage_migration_tests PRIVATE Qt6::Core Qt6::Test)
 flappedear_enable_warnings(flappedear_storage_migration_tests)
 add_test(NAME flappedear_storage_migration_tests COMMAND flappedear_storage_migration_tests)
+# KAN-178: Qt Core only; the parser runs before any Gui start-up.
+qt_add_executable(flappedear_command_line_tests
+    CommandLineTests.cpp
+    ../src/app/CommandLine.cpp
+)
+target_compile_features(flappedear_command_line_tests PRIVATE cxx_std_20)
+target_include_directories(flappedear_command_line_tests PRIVATE ../src)
+target_link_libraries(flappedear_command_line_tests PRIVATE Qt6::Core Qt6::Test)
+flappedear_enable_warnings(flappedear_command_line_tests)
+add_test(NAME flappedear_command_line_tests COMMAND flappedear_command_line_tests)
+add_test(NAME flappedear_command_line_usage
+    COMMAND ${CMAKE_COMMAND} -DAPP=$<TARGET_FILE:flappedear_native>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckCommandLineUsage.cmake)
 # KAN-180: content ids shared with FlappedEar Telemetry (KAN-170).
 qt_add_executable(flappedear_content_id_vector_tests ContentIdVectorTests.cpp)
 target_compile_features(flappedear_content_id_vector_tests PRIVATE cxx_std_20)

@@ -2302,3 +2302,20 @@ revision followed by a newline, which Qt's `$` used to accept.
 
 Checked on Linux with Qt 6.8.3 (Debug): the test passes, and altering one
 recorded gate revision makes `gateRevisions` fail.
+
+## KAN-178: command-line modes
+
+`native/src/app/CommandLine.cpp` decides the mode before Qt starts. A known
+mode needs its exact argument count; any other argument that starts with `--`
+prints the supported modes to stderr and exits with code 2, without opening the
+editor or taking the session lock. Arguments without `--`, such as Qt's own
+`-platform`, still open the editor.
+
+- `flappedear_command_line_tests` (Qt Core only) checks every mode, unknown
+  options, missing and extra arguments, and the usage text.
+- `flappedear_command_line_usage` runs the application with `--export-test x y`
+  and `--startup-smoke extra` and requires a non-zero exit and the usage text
+  within 30 seconds; an editor that opened would time out.
+
+Checked on Linux with Qt 6.8.3 (Debug): both tests and the startup smoke pass,
+and the usage script fails against a program that exits 0 or prints nothing.
