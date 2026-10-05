@@ -235,6 +235,7 @@ private slots:
     void cancelsBlockedRawFrameTransportPromptly();
     void cleansOnlyManifestOwnedArtifacts();
     void preservesLiveManifestForStartupRecovery();
+    void recoversManifestsFromDataAndLegacyFolders();
     void keepsStaleExportArtifactsFromCommandLineRuns();
     void noticesWhenTheParentProcessExits();
     void supervisesUnixExportProcessTree();
@@ -4914,6 +4915,58 @@ void TelemetryTests::preservesLiveManifestForStartupRecovery()
     QVERIFY(!recovered.contains(manifestPath));
     QVERIFY(QFileInfo::exists(overlay));
     QVERIFY2(ExportArtifactManifest::cleanupOwned(manifestPath, &error), qPrintable(error));
+}
+
+void TelemetryTests::recoversManifestsFromDataAndLegacyFolders()
+{
+    // KAN-164: new manifests live in the application data folder, which the
+    // system does not purge; manifests left in the temporary folder by older
+    // versions are still recovered.
+    QTemporaryDir destination;
+    QVERIFY(destination.isValid());
+    const auto leaveCrashedExport = [&destination](const QString &id, ExportArtifactManifestData *manifest) {
+        const QString overlay = QDir::temp().filePath(QStringLiteral("flappedear-overlay-%1.mkv").arg(id));
+        const QString staging = destination.filePath(QStringLiteral(".result.flappedear-%1.part.mp4").arg(id));
+        *manifest = {id, QDateTime::currentMSecsSinceEpoch(), overlay, staging,
+                     destination.filePath("result.mp4"), 0, "stageA"};
+        return writeBytes(overlay, "overlay") && writeBytes(staging, "staging");
+    };
+    const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    ExportArtifactManifestData manifest;
+    QVERIFY(leaveCrashedExport(id, &manifest));
+    QString error;
+    QVERIFY2(ExportArtifactManifest::create(manifest, &error), qPrintable(error));
+    const QString manifestPath = ExportArtifactManifest::manifestPathFor(id);
+    QVERIFY(QFileInfo::exists(manifestPath));
+    QCOMPARE(QFileInfo(manifestPath).absolutePath(), QDir(ExportArtifactManifest::manifestDirectory()).absolutePath());
+    QVERIFY(QFileInfo(manifestPath).absolutePath() != QDir(QDir::tempPath()).absolutePath());
+    QVERIFY(!QFileInfo::exists(ExportArtifactManifest::legacyManifestPathFor(id)));
+
+    const QString legacyId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    ExportArtifactManifestData legacy;
+    QVERIFY(leaveCrashedExport(legacyId, &legacy));
+    const QString legacyPath = ExportArtifactManifest::legacyManifestPathFor(legacyId);
+    QVERIFY2(ExportArtifactManifest::update(legacyPath, legacy, &error), qPrintable(error));
+
+    const QStringList recovered = ExportArtifactManifest::recoverStale();
+    QVERIFY(recovered.contains(manifestPath));
+    QVERIFY(recovered.contains(legacyPath));
+    for (const auto &data : {manifest, legacy}) {
+        QVERIFY(!QFileInfo::exists(data.temporaryOverlayPath));
+        QVERIFY(!QFileInfo::exists(data.outputStagingPath));
+    }
+    QVERIFY(!QFileInfo::exists(manifestPath) && !QFileInfo::exists(legacyPath));
+
+    // The worker is told the manifest path; it may resolve the data folder
+    // differently, so the path is accepted wherever it is, by name and content.
+    const QString otherFolderId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    ExportArtifactManifestData elsewhere;
+    QVERIFY(leaveCrashedExport(otherFolderId, &elsewhere));
+    const QString elsewherePath = destination.filePath(QStringLiteral("flappedear-export-%1.manifest.json").arg(otherFolderId));
+    QVERIFY2(ExportArtifactManifest::update(elsewherePath, elsewhere, &error), qPrintable(error));
+    QVERIFY(ExportArtifactManifest::read(elsewherePath, nullptr, &error));
+    QVERIFY(!ExportArtifactManifest::update(destination.filePath("renamed.manifest.json"), elsewhere, &error));
+    QVERIFY2(ExportArtifactManifest::cleanupOwned(elsewherePath, &error), qPrintable(error));
 }
 
 void TelemetryTests::keepsStaleExportArtifactsFromCommandLineRuns()
