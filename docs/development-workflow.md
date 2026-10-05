@@ -54,8 +54,7 @@ through a pull request, and the `macOS arm64 / Debug / Qt 6.8.3` and
 (single maintainer); force pushes and branch deletion are blocked.
 Since 5 October 2026 Native CI also runs `Linux x64 / ASan+UBSan / Qt 6.8.3`
 (KAN-154), the GUI-free tests under AddressSanitizer and
-UndefinedBehaviorSanitizer. Wait for it as well before merging. Making it a
-required check is the owner's setting in the ruleset.
+UndefinedBehaviorSanitizer. The owner made it a required check the same day.
 All Jira content remains in English. Record the implementation SHA, local results,
 limitations and any authorized PR/merge links. No public releases or tags are
 implied. Historical CI wording elsewhere does not override this workflow.
