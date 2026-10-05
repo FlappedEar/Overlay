@@ -2319,3 +2319,17 @@ editor or taking the session lock. Arguments without `--`, such as Qt's own
 
 Checked on Linux with Qt 6.8.3 (Debug): both tests and the startup smoke pass,
 and the usage script fails against a program that exits 0 or prints nothing.
+
+## KAN-175: sources trimmed with an edit list
+
+`exportsEditListSourceThroughWorker` encodes a 4 s, 30 fps H.264 video with a
+keyframe every second, then trims it at 1.5 s with `-c copy`. The trimmed MP4
+has 90 video packets, but its edit list hides the first 15, so 75 frames are
+presented. The test checks that `MediaProbe::probe` reports 75 frames, that the
+full export range is frames 0 to 74, that the untrimmed source still reports
+its header count of 120, and that a whole-video export through the worker
+passes final validation with 75 frames.
+
+Checked on Linux with Qt 6.8.3 (Debug) and conda-forge FFmpeg 8.1.2: before
+the fix the worker failed final validation with "Video packet count expected=90
+actual=75"; after it, the test passes.

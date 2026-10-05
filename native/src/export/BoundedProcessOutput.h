@@ -34,6 +34,8 @@ private:
 
 namespace ProcessOutputLimits {
 inline constexpr qint64 ffprobeJsonBytes = 4 * 1024 * 1024;
+// One short line of packet flags per video packet: room for about 16 million (KAN-175).
+inline constexpr qint64 ffprobePacketFlagsBytes = 64 * 1024 * 1024;
 inline constexpr qint64 ffmpegDiagnosticTailBytes = 128 * 1024;
 inline constexpr qint64 encoderListingBytes = 2 * 1024 * 1024;
 inline constexpr qint64 workerMessageBytes = 128 * 1024;
