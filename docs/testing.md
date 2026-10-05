@@ -24,6 +24,27 @@ The import tests (`importsSixRunsAndAppendsWithoutDuplicates` and the others) st
 `DocumentController` directly, through `AppController::m_document`, because its import serves the
 Telemetry reference; the user-guide capture builds its day in `TelemetryController`.
 
+KAN-161 (5 October 2026) split the editor's GUI suite, `TelemetryTests.cpp` and its single CTest
+entry `flappedear_native_tests`, into five executables, each its own CTest entry, so one failure
+stays within its domain and CTest can run them in parallel:
+
+| CTest entry | Source | Covers |
+| --- | --- | --- |
+| `flappedear_native_tests_editor` | `NativeEditorTests.cpp` | controller presentation, lap state, preview, user-guide capture |
+| `flappedear_native_tests_sources` | `NativeSourceTests.cpp` | events and day import, video chapters, media probing, GoPro GPMF, synchronisation |
+| `flappedear_native_tests_project` | `NativeProjectTests.cpp` | save, reopen, relink, recovery, the single-instance guard |
+| `flappedear_native_tests_export` | `NativeExportTests.cpp` | export targets and storage, process supervision, FFmpeg composition, diagnostics |
+| `flappedear_native_tests_widgets` | `NativeWidgetTests.cpp` | widget scenes, templates, the widget library, widget rendering |
+
+Helpers more than one suite uses, the settings isolation and the export-worker `main()` are in
+`NativeTestSupport.h`. The 216 test functions are unchanged; a test this document names as
+`TelemetryTests::name` is now in the suite for its domain (`-functions` lists a suite's tests).
+Run one suite, or one test in it, directly:
+
+```bash
+./build-native/native/tests/flappedear_native_tests_sources automaticallyGroupsPrivateTrackDay
+```
+
 Run the local gate appropriate to the change before claiming a behavior works. Cloud CI is enabled for macOS Debug and Release by owner direction; Windows CI remains paused, and the owner validates Windows locally ([2 October 2026](windows-validation-2026-10-02.md)). Follow the current [local task workflow](development-workflow.md).
 
 Claude Code cloud sessions (Linux) get Qt 6.8.3 from conda-forge through the SessionStart hook in `.claude/hooks/session-start.sh`, which sets `CMAKE_PREFIX_PATH` and `QT_QPA_PLATFORM=offscreen`. Linux is not a CI platform: report Linux results separately from macOS CI. Export tests need FFmpeg 8.1 or newer on `PATH`; the Ubuntu package (6.1.1) fails the composition-filter preflight.

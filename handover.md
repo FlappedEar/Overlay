@@ -288,7 +288,7 @@ Since KAN-166 step 4 (5 October 2026) the Lap Analysis QML and its UI tests are 
 `main`; they remain at commit `7eae6cd` (KAN-169). Since step 5 `AppController` has no
 `AnalysisController`; the day-decision tests make their decisions in `TelemetryController`
 ([testing](docs/testing.md)). The real-day checks on `main` are
-`TelemetryTests::automaticallyGroupsPrivateTrackDay` (grouping and ranking in `TelemetryController`, then Overlays'
+`SourceTests::automaticallyGroupsPrivateTrackDay` in `flappedear_native_tests_sources` (grouping and ranking in `TelemetryController`, then Overlays'
 automatic best lap, Session 5 lap 2, 1:49.898) and `TelemetryAppTests::measuresAPrivateFullDay`.
 The record below describes `analyzesPrivateTrackDayCorners` at that commit.
 

@@ -21,7 +21,8 @@
 #include <memory>
 #include <optional>
 
-class TelemetryTests;
+class ProjectTests;
+class SourceTests;
 
 namespace FlappedEar {
 
@@ -191,7 +192,8 @@ signals:
     void sourceLoadStateChanged();
 
 private:
-    friend class ::TelemetryTests; // Controlled asynchronous completion in regression tests.
+    friend class ::ProjectTests; // Controlled asynchronous completion in regression tests.
+    friend class ::SourceTests;
     struct BatchImportResult {
         std::shared_ptr<TelemetryImportPlan> plan;
         QHash<QString, QJsonObject> fingerprints;

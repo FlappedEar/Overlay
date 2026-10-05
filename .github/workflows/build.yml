@@ -218,7 +218,7 @@ jobs:
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
       # The editor, its startup and the export integrations need a display,
       # a GPU and FFmpeg 8.1; macOS runs them. The boundary checks are scripts.
-      EXCLUDED_TESTS: flappedear_native_tests|flappedear_startup_smoke|flappedear_command_line_usage|flappedear_telemetry_core_boundary|flappedear_telemetry_app_boundary|flappedear_boundary_rejects_relative-transitive|flappedear_boundary_rejects_gui-header
+      EXCLUDED_TESTS: flappedear_native_tests_[a-z]+|flappedear_startup_smoke|flappedear_command_line_usage|flappedear_telemetry_core_boundary|flappedear_telemetry_app_boundary|flappedear_boundary_rejects_relative-transitive|flappedear_boundary_rejects_gui-header
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
