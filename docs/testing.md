@@ -11,6 +11,14 @@ Lap Analysis UI tests named in this document (for example `analyzesPrivateTrackD
 `selectsIndependentComparisonLapsThroughQml` and the other QML-driven analysis tests) were removed
 with the analysis QML by KAN-166 step 4 (5 October 2026). They remain at commit `7eae6cd`
 (recorded on KAN-169); their sections are kept as the record of what was verified.
+Step 5 removed `AnalysisController` from `AppController` and with it the `TelemetryTests` that
+drove the analysis through the editor's controller (run notes, segments, comparison, the day
+report). Tests that check what Overlays does with a day's decisions now make those decisions in
+`TelemetryController`, which stands in for FlappedEar Telemetry, save the day and open it in
+`AppController`: `findsTheDayBestLapWithoutTheAnalysis`,
+`restoresDayDecisionsAfterMoveMissingRelinkAndRecovery`,
+`lapExclusionsSurviveSaveRecoveryAndInvalidateSafely`, `keepsAnalysisStateThroughOverlayEdits`,
+`persistsAndInvalidatesRunTrackConfiguration` and the real-day `automaticallyGroupsPrivateTrackDay`.
 
 Run the local gate appropriate to the change before claiming a behavior works. Cloud CI is enabled for macOS Debug and Release by owner direction; Windows CI remains paused, and the owner validates Windows locally ([2 October 2026](windows-validation-2026-10-02.md)). Follow the current [local task workflow](development-workflow.md).
 

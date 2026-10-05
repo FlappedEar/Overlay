@@ -232,8 +232,7 @@ Two consequences:
 **Where Overlays changes analysis data today**
 - **On open:** nothing since KAN-166 step 2. Before that it approved automatic segments when a layout had none, which could leave a freshly opened document unsaved.
 - **On save:**
-    * `trackInference` is replaced;
-    * `analysis.channels` is kept as loaded, unless the chart channels were changed in the Lap Analysis window (KAN-166 step 2);
+    * `trackInference` and `analysis.channels` are kept as loaded (since KAN-166 step 5; before it Overlays' analysis replaced `trackInference`). Replacing the active run's recording removes that run's `trackInference`;
     * the active run's primary reference is rewritten from the loaded file. If its fingerprint differs, `contentSha256` is added and `trackConfiguration` reset;
     * default `mapSettings`, `exportSettings` and `documentState` are added, and every reference path is rewritten.
 

@@ -1,9 +1,11 @@
 #include "gopro/GoProTelemetrySource.h"
+#include "app/AnalysisController.h"
 #include "app/AppController.h"
 #include "app/ApplicationIdentity.h"
 #include "app/BundledFonts.h"
 #include "app/GuiSessionLock.h"
 #include "app/PreviewPlayback.h"
+#include "app/TelemetryController.h"
 #include "export/EncoderDetector.h"
 #include "export/BoundedProcessOutput.h"
 #include "export/ExportEngine.h"
@@ -102,13 +104,11 @@ using namespace FlappedEar;
 class TelemetryTests final : public QObject {
     Q_OBJECT
 
-    static QJsonArray approveAllSegmentsOnRun(FlappedEar::AppController &controller, const QString &runName);
     static QStringList unreachableControls(QQuickWindow *window);
 private slots:
     void initTestCase();
     void usesOverlaysIdentityWithItsOwnStorage();
     void preservesSignedSamplesWithBrakingUpPresentation();
-    void persistsEditableLapChannels();
     void reopensPreferencesProjectAndRecoveryAfterDisplayRename();
     void cleanupTestCase();
     void persistsEventSelectionAndRunLocalSync();
@@ -123,49 +123,14 @@ private slots:
     void reviewsBatchThroughProductionQml();
     void importsAnalysisRunsAutomatically();
     void guardsAutomaticAnalysisImport();
-    void editsRunMetadataWithoutChangingAnalysis();
-    void linksOutingLapVideoToActiveRunOnly();
-    void followsOutingLapVideoPositionWithinLapBounds();
     void findsTheDayBestLapWithoutTheAnalysis();
-    void groupsOutingLapsAfterExplicitConfiguration();
-    void persistsDayDecisionsAndKeepsIndependentDetail();
     void restoresDayDecisionsAfterMoveMissingRelinkAndRecovery();
-    void rejectsStaleDayDetailCompletion();
-    void separatesAutomaticGroupsAfterSourceReplacement();
     void automaticallyGroupsPrivateTrackDay();
     void lapExclusionPolicySharesRankingAndRenderInputs();
     void lapExclusionsSurviveSaveRecoveryAndInvalidateSafely();
     void keepsAnalysisStateThroughOverlayEdits();
-    void lapReferencesSurviveReopenAndReordering();
-    void lapReferencesRejectSourceAndGateChanges();
-    void lapReferencesDetectUnsampledContentChanges();
     void recordsVboUtcChronology();
-    void ordersWholeOutingAndReopensSources();
-    void restoresComparisonSelectionAfterReopen();
-    void restoresComparisonRangeAndChannelsAfterReopen();
-    void preservesComparisonSlotAcrossFailuresAndReplacement();
-    void showsCornerAnalyzerSegmentMetricsForBothLaps();
-    void calculatesOutingTheoreticalBestAcrossPopulation();
-    void opensTheoreticalBestDonorFromAnotherRun();
-    void acceptsM3SegmentationCornerAndTheoreticalBestWorkflow();
-    void derivesTimeLossObservationsForComparisonPair();
-    void reportsLapAndSectorConsistency();
-    void reportsCornerVariabilityWithGpsLimits();
-    void summarizesRecordedTemperaturesPerRunAndSection();
-    void buildsDayReportWithProvenance();
-    void acceptsM4ReportLossCornerEvidenceWorkflow();
-    void summarizesHeartRatePerRunSectionAndInterval();
     void formatsElapsedTimes();
-    void createsSegmentsAutomaticallyFromTheBestLap();
-    void discardsDayResultsFromThePreviousDay();
-    void keepsAutomaticSegmentsWhenTheRunChangesDuringCreation();
-    void persistsSegmentationAcrossSaveRecoveryAndReopen();
-    void timesApprovedSectorsForTheOpenLap();
-    void sharesComparisonCacheAndRevalidatesSources();
-    void rejectsComparisonBeyondSharedBudget();
-    void cancelsSupersededComparisonWaitingForCache();
-    void excludesChannelMissingFromOneComparisonSlot();
-    void comparesKnownDeltaThroughFullComparisonPipeline();
     void presentsBrakingUpInGForceWidgets();
     void rejectsBatchLinksWithDifferentPersistedFormats();
     void savesReopensAndRelinksRcz();
@@ -186,7 +151,6 @@ private slots:
     void keepsOutputSafeWhenTheDestinationFills_data();
     void keepsOutputSafeWhenTheDestinationFills();
     void describesOutOfSpaceExportFailures();
-    void keepsACompleteDayThroughMoveRelinkAndRecovery();
     void keepsRecoveryWhenQuittingAtTheRecoveryPrompt();
     void offersRecoveryOfAnEventCreatedByImport();
     void reviewsGoProChapterGroups();
@@ -220,7 +184,6 @@ private slots:
     void constrainsWidgetGeometry();
     void projectsWestPositiveTracksWithoutMirroring_data();
     void projectsWestPositiveTracksWithoutMirroring();
-    void preservesLongitudeConventionInLapDetail();
     void persistsAndInvalidatesRunTrackConfiguration();
     void cachesStaticTrackGeometry();
     void keepsStaticTrackIndependentFromTime();
@@ -542,58 +505,6 @@ QByteArray readBytes(const QString &path)
     return file.readAll();
 }
 
-// KAN-42: EventProjectFixture::routeVbo() never has more than time/latitude/
-// longitude columns, so a "missing sensor" comparison fixture (one recording
-// has a channel the other lacks) needs a real extra column appended to its
-// text, not just a differently-shaped session -- the actual VBO parser must
-// see and name the column the same way a real logger's extra channel would.
-QByteArray withSyntheticSpeedChannel(const QByteArray &vbo)
-{
-    QString text = QString::fromUtf8(vbo);
-    text.replace(QStringLiteral("[column names]\ntime latitude longitude\n[data]\n"),
-        QStringLiteral("[column names]\ntime latitude longitude speed\n[data]\n"));
-    const QStringList lines = text.split('\n');
-    QStringList result;
-    result.reserve(lines.size());
-    bool inData = false;
-    int index = 0;
-    for (const QString &line : lines) {
-        if (line == QStringLiteral("[data]")) { inData = true; result.append(line); continue; }
-        if (inData && !line.isEmpty())
-            result.append(line + QString(" %1").arg(40.0 + 5.0 * std::sin(index++ * 0.3), 0, 'f', 3));
-        else
-            result.append(line);
-    }
-    return result.join('\n').toUtf8();
-}
-
-// KAN-42: a known, deterministic pace difference between two SEPARATE
-// imported runs of the identical physical path (same coordinates, only time
-// uniformly rescaled) -- the full-pipeline equivalent of
-// TrackProgressTests::knownDelayHasCorrectSignAndFinishLineMagnitude, which
-// exercises the same guarantee directly against buildProgressAxis/
-// computeDeltaSeries without import, comparison-slot selection or the shared
-// progress axis built through AppController.
-QByteArray routeVboWithTimeScale(const double scale, const QByteArray &vbo)
-{
-    const QStringList lines = QString::fromUtf8(vbo).split('\n');
-    QStringList result;
-    result.reserve(lines.size());
-    bool inData = false;
-    for (const QString &line : lines) {
-        if (line == QStringLiteral("[data]")) { inData = true; result.append(line); continue; }
-        if (inData && !line.isEmpty()) {
-            const QStringList parts = line.split(' ');
-            if (parts.size() >= 3) {
-                result.append(QString("%1 %2 %3").arg(parts[0].toDouble() * scale, 0, 'f', 6).arg(parts[1]).arg(parts[2]));
-                continue;
-            }
-        }
-        result.append(line);
-    }
-    return result.join('\n').toUtf8();
-}
-
 QJsonObject testProject(const double offset, const QJsonObject &extra = {})
 {
     WidgetModel widgets;
@@ -645,54 +556,6 @@ void TelemetryTests::preservesSignedSamplesWithBrakingUpPresentation()
     QVERIFY(!AnalysisController::sessionSeries(session, "latacc-calc", 0, 1, 100).value("brakingUp").toBool());
     QVERIFY(!AnalysisController::sessionSeries(session, "velocity", 0, 1, 100).value("brakingUp").toBool());
     QCOMPARE(session.valueAt("longitudinalAcceleration", 0).value(), double(float(-0.8)));
-}
-
-void TelemetryTests::persistsEditableLapChannels()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto project = directory.filePath("channels.fetproject");
-    const auto recovery = directory.filePath("recovery.json");
-    {
-        AppController controller(nullptr, recovery);
-        QVERIFY(controller.importAnalysisRuns("Channels", {QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH))}));
-        QTRY_COMPARE(controller.outingLaps().size(), 1);
-        QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(project)));
-        QTRY_VERIFY(controller.selectOutingLap(0));
-        QTRY_COMPARE(controller.outingLapDetailState(), QStringLiteral("ready"));
-        const auto document = controller.currentProjectObject();
-        const auto geometry = controller.outingLapTrack();
-        const auto activeRun = controller.activeRunId();
-        const auto cursor = controller.outingLapCursor();
-        QVERIFY(controller.outingLapAvailableChannels().contains("rpm"));
-        controller.setOutingLapChannels({"rpm", "rpm", "missing", "heart_rate", "brake", "velocity", "mystery"});
-        QCOMPARE(controller.outingLapChannels(), QStringList({"rpm", "heart_rate", "brake", "velocity"}));
-        controller.closeOutingLap();
-        QVERIFY(controller.outingLapAvailableChannels().isEmpty());
-        controller.setOutingLapChannels({"mystery"}); // No active detail cannot change preferences.
-        QVERIFY(controller.selectOutingLap(0));
-        QTRY_COMPARE(controller.outingLapDetailState(), QStringLiteral("ready"));
-        QCOMPARE(controller.outingLapChannels(), QStringList({"rpm", "heart_rate", "brake", "velocity"}));
-        QCOMPARE(controller.currentProjectObject(), document);
-        QCOMPARE(controller.outingLapTrack(), geometry);
-        QCOMPARE(controller.activeRunId(), activeRun);
-        QCOMPARE(controller.outingLapCursor(), cursor);
-        QVERIFY(!controller.dirty());
-    }
-    {
-        AppController reopened(nullptr, recovery);
-        QTRY_VERIFY(!reopened.projectLoading());
-        QTRY_COMPARE(reopened.outingLaps().size(), 1);
-        QVERIFY(reopened.selectOutingLap(0));
-        QTRY_COMPARE(reopened.outingLapDetailState(), QStringLiteral("ready"));
-        QCOMPARE(reopened.outingLapChannels(), QStringList({"rpm", "heart_rate", "brake", "velocity"}));
-        reopened.setOutingLapChannels({});
-        reopened.closeOutingLap();
-        QVERIFY(reopened.selectOutingLap(0));
-        QTRY_COMPARE(reopened.outingLapDetailState(), QStringLiteral("ready"));
-        QVERIFY(reopened.outingLapChannels().isEmpty());
-    }
 }
 
 void TelemetryTests::usesOverlaysIdentityWithItsOwnStorage()
@@ -758,7 +621,7 @@ void TelemetryTests::reopensPreferencesProjectAndRecoveryAfterDisplayRename()
         controller.resolveStartupRecovery("recover");
         QTRY_VERIFY(!controller.projectLoading());
         QCOMPARE(controller.syncOffset(), 7.0);
-        QCOMPARE(controller.analysisWindowWidth(), 777);
+        QCOMPARE(controller.m_settings.value("analysis/windowWidth").toInt(), 777);
         QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(projectPath).canonicalFilePath());
         QVERIFY(controller.dirty());
         QCOMPARE(readBytes(projectPath), projectBytes);
@@ -792,7 +655,6 @@ void TelemetryTests::persistsEventSelectionAndRunLocalSync()
     QVERIFY(!controller.dirty());
     QCOMPARE(controller.lastSavedRevision(), quint64(4));
     const QString documentId = controller.m_document.m_documentId;
-    controller.setAnalysisVisible(true);
     controller.m_activeTemplateId = QStringLiteral("test-template");
     controller.setSyncOffset(9.0);
     controller.setTimeScale(1.002);
@@ -804,7 +666,6 @@ void TelemetryTests::persistsEventSelectionAndRunLocalSync()
     QCOMPARE(controller.timeScale(), 1.0);
     QCOMPARE(controller.videoLoadState(), QStringLiteral("idle"));
     QVERIFY(controller.videoSource().isEmpty());
-    QVERIFY(controller.analysisVisible());
     QCOMPARE(controller.activeTemplateId(), QStringLiteral("test-template"));
     QVERIFY(controller.dirty());
     QCOMPARE(controller.lastSavedRevision(), quint64(4));
@@ -1179,7 +1040,6 @@ void TelemetryTests::importsAnalysisRunsAutomatically()
     QCOMPARE(controller.analysisImportMessages().size(), 2);
     QVERIFY(controller.batchImportError().isEmpty());
     QVERIFY(controller.videoSource().isEmpty());
-    QVERIFY(controller.analysisVisible());
     QVERIFY(controller.dirty());
     const auto active = controller.activeRunId();
     controller.setSyncOffset(4);
@@ -1230,237 +1090,26 @@ void TelemetryTests::guardsAutomaticAnalysisImport()
     QVERIFY(controller.eventRuns().isEmpty());
 }
 
-void TelemetryTests::editsRunMetadataWithoutChangingAnalysis()
+namespace {
+// Since KAN-166 a day's decisions (exclusions, notes, track configuration)
+// come from FlappedEar Telemetry. The reference analysis, TelemetryController,
+// stands in for it: this imports a day there and waits for its laps.
+bool importReferenceDay(TelemetryController &reference, const QString &name, const QList<QUrl> &urls, const int timeout = 30000)
 {
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("20260901-rain.vbo");
-    const auto secondPath = directory.filePath("second.vbo");
-    QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
-    QVERIFY(writeBytes(secondPath, EventProjectFixture::lapsVbo().replace("15 52.0001", "16 52.0001")));
-    const auto savedPath = directory.filePath("day.fetproject");
-    const auto recoveryPath = directory.filePath("recovery.json");
-    QString runId;
-    {
-        AppController controller(nullptr, recoveryPath);
-        QVERIFY(controller.importAnalysisRuns("Metadata", {QUrl::fromLocalFile(path), QUrl::fromLocalFile(secondPath)}));
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 10);
-        runId = controller.activeRunId();
-        QVERIFY(controller.setRunTrackConfiguration(runId, "Full", "clockwise"));
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-        QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-        QString group;
-        for (const auto &value : controller.outingCompatibilityGroups())
-            if (value.toMap().value("resolved").toBool()) group = value.toMap().value("id").toString();
-        QVERIFY(controller.selectOutingComparisonGroup(group));
-        QVERIFY(controller.saveCurrentProject());
-        const auto winner = controller.outingRanking().value("bestOfDay").toMap().value("reference").toMap();
-        QVERIFY(controller.selectOutingLapReference(winner));
-        QTRY_COMPARE(controller.outingLapDetailState(), QString("ready")); controller.setOutingLapCursor(1);
-        const auto cursor = controller.outingLapCursor(); const auto track = controller.outingLapTrack();
-        const auto detail = controller.m_analysis.m_outingLapDetailSession; const auto *session = controller.m_session.get();
-        const auto generation = controller.m_document.m_sourceGeneration; const auto key = controller.m_analysis.outingLapKey();
-        const auto config = controller.runTrackConfiguration(runId);
-        const auto before = controller.currentProjectObject(); const auto revision = controller.m_document.m_documentState.revision();
-        const auto metadata = controller.runMetadata(runId); const auto token = metadata.value("editToken").toString();
-        QVERIFY(metadata.value("conditions").isNull()); QVERIFY(metadata.value("setupChanges").isNull());
-        QVERIFY(controller.runMetadata("missing").isEmpty()); QVERIFY(!controller.dirty());
-        QVERIFY(controller.updateRunMetadata(runId, token, metadata.value("name").toString(), "", "", ""));
-        QCOMPARE(controller.currentProjectObject(), before); QCOMPARE(controller.m_document.m_documentState.revision(), revision);
-        for (const auto &badName : {QString(" "), QString(161, 'x'), QString("x") + QChar::Null})
-            QVERIFY(!controller.updateRunMetadata(runId, token, badName, "", "", ""));
-        for (const auto &bad : {QString(4097, 'x'), QString("x") + QChar::Null}) {
-            QVERIFY(!controller.updateRunMetadata(runId, token, "Renamed", bad, "", ""));
-            QVERIFY(!controller.updateRunMetadata(runId, token, "Renamed", "", bad, ""));
-            QVERIFY(!controller.updateRunMetadata(runId, token, "Renamed", "", "", bad));
-        }
-        QCOMPARE(controller.currentProjectObject(), before); QVERIFY(!controller.dirty());
-        QVERIFY(controller.updateRunMetadata(runId, token, " Renamed run ", "Driver notes\nSecond line", "Damp, 18 °C", "Front pressure +0.1 bar"));
-        QVERIFY(controller.dirty()); QCOMPARE(controller.m_document.m_documentState.revision(), revision + 1);
-        QVERIFY(!controller.updateRunMetadata(runId, token, "Stale overwrite", "", "", ""));
-        QCOMPARE(controller.runMetadata(runId).value("name").toString(), QString("Renamed run"));
-        QCOMPARE(controller.m_document.m_sourceGeneration, generation); QCOMPARE(controller.m_session.get(), session);
-        QCOMPARE(controller.m_analysis.outingLapKey(), key); QCOMPARE(controller.runTrackConfiguration(runId), config);
-        QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail); QCOMPARE(controller.outingLapTrack(), track);
-        QCOMPARE(controller.outingLapCursor(), cursor); QCOMPARE(controller.outingLapDetailState(), QString("ready"));
-        QCOMPARE(controller.selectedOutingLap().value("runName").toString(), QString("Renamed run"));
-        QCOMPARE(controller.selectedOutingLap().value("reference").toMap(), winner);
-        QCOMPARE(controller.outingRanking().value("bestOfDay").toMap().value("reference").toMap(), winner);
-        QCOMPARE(controller.outingRanking().value("bestOfDay").toMap().value("runName").toString(), QString("Renamed run"));
-        QVERIFY(controller.outingLapMessages().join('\n').contains("Renamed run: recording date/time unavailable"));
-        QVERIFY(!controller.outingLapMessages().join('\n').contains(metadata.value("name").toString() + ":"));
-        for (const auto &value : controller.outingLaps()) if (value.toMap().value("runId").toString() == runId) {
-            QCOMPARE(value.toMap().value("runName").toString(), QString("Renamed run"));
-            QVERIFY(!value.toMap().value("chronologyKnown").toBool());
-        }
-        const auto updated = controller.currentProjectObject();
-        const auto runsBefore = EventProjectFixture::runs(before); const auto runsAfter = EventProjectFixture::runs(updated);
-        for (qsizetype i = 0; i < runsBefore.size(); ++i) {
-            auto a = runsBefore[i].toObject(); auto b = runsAfter[i].toObject();
-            for (const auto *field : {"name", "notes", "conditions", "setupChanges"}) { a.remove(field); b.remove(field); }
-            QCOMPARE(a, b);
-        }
-        QString inactive;
-        for (const auto &value : controller.eventRuns()) if (value.toMap().value("id").toString() != runId) inactive = value.toMap().value("id").toString();
-        const auto inactiveMetadata = controller.runMetadata(inactive);
-        QVERIFY(controller.updateRunMetadata(inactive, inactiveMetadata.value("editToken").toString(), "Second run", "", "", "Rear damping -1"));
-        QCOMPARE(controller.activeRunId(), runId); QCOMPARE(controller.m_session.get(), session);
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath))); QVERIFY(!controller.dirty());
-    }
-    {
-        AppController controller(nullptr, recoveryPath);
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 10);
-        const auto metadata = controller.runMetadata(runId);
-        QCOMPARE(metadata.value("notes").toString(), QString("Driver notes\nSecond line"));
-        QCOMPARE(metadata.value("conditions").toString(), QString("Damp, 18 °C"));
-        QCOMPARE(metadata.value("setupChanges").toString(), QString("Front pressure +0.1 bar"));
-        QVERIFY(controller.updateRunMetadata(runId, metadata.value("editToken").toString(), "Recovered run", "Unsaved notes", "", ""));
-        QVERIFY(controller.runMetadata(runId).value("conditions").isNull());
-        controller.m_document.writeRecoverySnapshot(); QVERIFY(QFileInfo::exists(recoveryPath));
-    }
-    {
-        AppController controller(nullptr, recoveryPath); QVERIFY(controller.recoveryPending());
-        controller.resolveStartupRecovery("recover"); QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-        QTRY_COMPARE(controller.outingLaps().size(), 10); QVERIFY(controller.dirty());
-        const auto metadata = controller.runMetadata(runId);
-        QCOMPARE(metadata.value("name").toString(), QString("Recovered run"));
-        QCOMPARE(metadata.value("notes").toString(), QString("Unsaved notes"));
-        QVERIFY(metadata.value("conditions").isNull()); QVERIFY(metadata.value("setupChanges").isNull());
-    }
+    QSignalSpy committed(reference.document(), &DocumentController::batchImportCommitted);
+    if (!reference.document()->importAnalysisRuns(name, urls)) return false;
+    const auto &analysis = *reference.analysis();
+    return QTest::qWaitFor([&] { return committed.size() == 1; }, timeout)
+        && QTest::qWaitFor([&] { return !analysis.outingLapsLoading() && !analysis.outingLaps().isEmpty(); }, timeout);
 }
-
-void TelemetryTests::linksOutingLapVideoToActiveRunOnly()
-{
-    // KAN-39: video linkage is gated to the open lap's run being the
-    // currently active/loaded one. Uses direct member access (this class is
-    // a declared friend) to give the controller a deterministic, known video
-    // duration without needing a real decodable file -- outingLapVideoAvailable/
-    // outingLapVideoPositionMilliseconds only need m_videoSource non-empty and
-    // m_exportSourceInfo populated, the same fields the existing preview-bound
-    // invokables already read.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
-    QVERIFY(writeBytes(first, EventProjectFixture::routeVbo()));
-    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(130, -2, 2)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Video linkage", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto active = controller.activeRunId();
-    QVariantMap sameRunLap, otherRunLap;
-    for (const auto &value : controller.outingLaps()) {
-        const auto row = value.toMap();
-        if (row.value("type") != "LAP") continue;
-        if (sameRunLap.isEmpty() && row.value("runId").toString() == active) sameRunLap = row;
-        else if (otherRunLap.isEmpty() && row.value("runId").toString() != active) otherRunLap = row;
-    }
-    QVERIFY(!sameRunLap.isEmpty() && !otherRunLap.isEmpty());
-
-    // No video loaded at all: unavailable regardless of which lap is open.
-    QVERIFY(controller.selectOutingLapReference(sameRunLap.value("reference").toMap()));
-    QTRY_COMPARE(controller.outingLapDetailState(), QStringLiteral("ready"));
-    QVERIFY(!controller.outingLapVideoAvailable());
-
-    // A synthetic video at 30fps, without decoding anything real, long enough
-    // to cover mid-lap but deliberately shorter than the lap's own end --
-    // the "past the last real frame" case below needs that gap to exist.
-    const auto start = sameRunLap.value("startTime").toDouble(), end = sameRunLap.value("endTime").toDouble();
-    const auto midpoint = (start + end) / 2.0;
-    controller.m_videoSource = QUrl::fromLocalFile(QStringLiteral("/synthetic/video.mp4"));
-    MediaInfo info;
-    info.frameRate = {30, 1};
-    info.averageFrameRate = {30, 1};
-    info.videoFrameCount = qRound64((midpoint + 1.0) * 30.0);
-    info.timeBase = {1, 30};
-    info.videoDurationTicks = info.videoFrameCount;
-    controller.m_exportSourceInfo = info;
-    controller.m_sync = {0.0, 1.0}; // offset 0, 1:1 scale -- telemetry time == video time here.
-
-    // Lap belongs to the active run: available, and mid-lap maps to a real,
-    // in-range video position.
-    controller.setOutingLapCursor(midpoint);
-    QVERIFY(controller.outingLapVideoAvailable());
-    QCOMPARE(controller.outingLapVideoPositionMilliseconds(), qRound64((start + end) / 2 * 1000.0));
-
-    // Past the video's last real frame: unavailable, not clamped into a
-    // misleadingly-nearby frame. The synthetic video was deliberately sized
-    // to end before the lap does, so this gap is guaranteed to exist.
-    controller.setOutingLapCursor(end);
-    QVERIFY(end * 1000.0 > controller.previewEndPositionMilliseconds());
-    QVERIFY(!controller.outingLapVideoAvailable());
-
-    // A lap from the non-active run: unavailable even with video loaded and
-    // sync configured, and following a video position must not move its cursor.
-    controller.closeOutingLap();
-    QVERIFY(controller.selectOutingLapReference(otherRunLap.value("reference").toMap()));
-    QTRY_COMPARE(controller.outingLapDetailState(), QStringLiteral("ready"));
-    QVERIFY(!controller.outingLapVideoAvailable());
-    const auto otherCursorBefore = controller.outingLapCursor();
-    QVERIFY(!controller.followOutingLapVideoPosition(1000));
-    QCOMPARE(controller.outingLapCursor(), otherCursorBefore);
-}
-
-void TelemetryTests::followsOutingLapVideoPositionWithinLapBounds()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("first.vbo");
-    QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Follow video", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QVariantMap lap;
-    for (const auto &value : controller.outingLaps()) {
-        const auto row = value.toMap();
-        if (row.value("type") == "LAP") { lap = row; break; }
-    }
-    QVERIFY(!lap.isEmpty());
-    QVERIFY(controller.selectOutingLapReference(lap.value("reference").toMap()));
-    QTRY_COMPARE(controller.outingLapDetailState(), QStringLiteral("ready"));
-    controller.m_videoSource = QUrl::fromLocalFile(QStringLiteral("/synthetic/video.mp4"));
-    MediaInfo info;
-    info.frameRate = {30, 1};
-    info.averageFrameRate = {30, 1};
-    info.videoFrameCount = 6000; // 200 seconds, comfortably covering the lap
-    info.timeBase = {1, 30};
-    info.videoDurationTicks = 6000;
-    controller.m_exportSourceInfo = info;
-    controller.m_sync = {10.0, 1.0}; // telemetry = video + 10s
-
-    const auto start = lap.value("startTime").toDouble(), end = lap.value("endTime").toDouble();
-    // A video position mapping inside the lap moves the cursor there exactly.
-    // sync offset is 10 (telemetry = video + 10), so video position (start - 10 + 0.5)s
-    // maps to telemetry time (start + 0.5)s.
-    QVERIFY(controller.followOutingLapVideoPosition(qRound64((start - 10.0 + 0.5) * 1000.0)));
-    QCOMPARE(controller.outingLapCursor(), start + 0.5);
-
-    // A video position mapping before/after the lap clamps to the lap's own
-    // bounds (setOutingLapCursor's existing clamp), never runs the cursor
-    // outside the lap it belongs to.
-    QVERIFY(controller.followOutingLapVideoPosition(qRound64((start - 10.0 - 5.0) * 1000.0)));
-    QCOMPARE(controller.outingLapCursor(), start);
-    QVERIFY(controller.followOutingLapVideoPosition(qRound64((end - 10.0 + 5.0) * 1000.0)));
-    QCOMPARE(controller.outingLapCursor(), end);
-
-    // KAN-124: analysis without a video link (FlappedEar Telemetry) has no
-    // lap video and never follows one; the cursor stays where it is.
-    auto *link = controller.m_analysis.m_videoLink;
-    controller.m_analysis.m_videoLink = nullptr;
-    QVERIFY(!controller.outingLapVideoAvailable());
-    QCOMPARE(controller.outingLapVideoPositionMilliseconds(), qint64(0));
-    QVERIFY(!controller.followOutingLapVideoPosition(qRound64((start - 10.0 + 0.5) * 1000.0)));
-    QCOMPARE(controller.outingLapCursor(), end);
-    controller.m_analysis.m_videoLink = link;
-    QVERIFY(controller.followOutingLapVideoPosition(qRound64((start - 10.0 + 0.5) * 1000.0)));
-    QCOMPARE(controller.outingLapCursor(), start + 0.5);
-}
+} // namespace
 
 void TelemetryTests::findsTheDayBestLapWithoutTheAnalysis()
 {
     // KAN-185: the export dialog's day's best lap comes from lap detection
     // alone, and matches the analysis ranking through exclusions and renames.
+    // Since KAN-166 those decisions come from FlappedEar Telemetry; the
+    // reference analysis (TelemetryController) stands in for it here.
     QTemporaryDir directory; QVERIFY(directory.isValid());
     QSettings settings; settings.clear(); settings.sync();
     {
@@ -1472,194 +1121,65 @@ void TelemetryTests::findsTheDayBestLapWithoutTheAnalysis()
     const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
     QVERIFY(writeBytes(first, EventProjectFixture::routeVbo()));
     QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(130, -2, 2)));
+    TelemetryController reference(directory.filePath("reference.json"));
+    auto &referenceDocument = *reference.document();
+    auto &analysis = *reference.analysis();
+    QVERIFY(importReferenceDay(reference, "Best lap", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+    QTRY_COMPARE(analysis.outingRanking().value("state").toString(), QString("available"));
+    const auto dayPath = directory.filePath("day.fetproject");
+    QVERIFY(referenceDocument.saveProject(QUrl::fromLocalFile(dayPath)));
+
     AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Best lap", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+    controller.requestOpenProject(QUrl::fromLocalFile(dayPath));
     QTRY_COMPARE(controller.eventRuns().size(), 2);
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    QCOMPARE(controller.outingRanking().value("state").toString(), QString("available"));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
     QCOMPARE(controller.dayBestLap().value("state").toString(), QString("idle")); // nothing derived until asked
     QSignalSpy changed(&controller, &AppController::dayBestLapChanged);
     controller.requestDayBestLap();
     QTRY_COMPARE(controller.dayBestLap().value("state").toString(), QString("available"));
     QVERIFY(changed.size() >= 1);
-    const auto expected = controller.outingRanking().value("bestOfDay").toMap();
+    const auto expected = analysis.outingRanking().value("bestOfDay").toMap();
     auto best = controller.dayBestLap().value("bestOfDay").toMap();
     QVERIFY(!expected.isEmpty());
     for (const auto *field : {"reference", "runId", "runName", "lapNumber", "durationSeconds", "groupId"})
         QCOMPARE(best.value(field), expected.value(field));
 
-    // An exclusion re-ranks without deriving the laps again.
+    // An exclusion made in Telemetry re-ranks without deriving the laps again.
     const auto serial = controller.m_bestLapFinder.m_derived.runs.value(best.value("runId").toString()).derivationSerial;
-    QVERIFY(controller.setOutingLapExcluded(best.value("reference").toMap(), true, "Traffic"));
+    QVERIFY(analysis.setOutingLapExcluded(best.value("reference").toMap(), true, "Traffic"));
+    QTRY_COMPARE(analysis.outingRanking().value("state").toString(), QString("available"));
+    auto project = controller.m_document.analysisProject();
+    auto event = project.value("event").toObject();
+    event.insert("lapExclusions", referenceDocument.analysisProject().value("event").toObject().value("lapExclusions"));
+    project.insert("event", event);
+    controller.m_document.commitAnalysisProject(project);
     QTRY_VERIFY(controller.dayBestLap().value("bestOfDay").toMap().value("reference") != best.value("reference"));
-    QTRY_COMPARE(controller.outingRanking().value("state").toString(), QString("available"));
     QCOMPARE(controller.dayBestLap().value("bestOfDay").toMap().value("reference"),
-        controller.outingRanking().value("bestOfDay").toMap().value("reference"));
+        analysis.outingRanking().value("bestOfDay").toMap().value("reference"));
     QCOMPARE(controller.m_bestLapFinder.m_derived.runs.value(best.value("runId").toString()).derivationSerial, serial);
 
-    // A renamed run shows its new name.
+    // A run renamed in Telemetry shows its new name.
     best = controller.dayBestLap().value("bestOfDay").toMap();
     const auto runId = best.value("runId").toString();
-    const auto token = controller.runMetadata(runId).value("editToken").toString();
-    QVERIFY(controller.updateRunMetadata(runId, token, "Renamed run", "", "", ""));
+    project = controller.m_document.analysisProject();
+    event = project.value("event").toObject();
+    auto runs = event.value("runs").toArray();
+    for (qsizetype i = 0; i < runs.size(); ++i) {
+        auto run = runs[i].toObject();
+        if (run.value("id").toString() == runId) { run.insert("name", "Renamed run"); runs[i] = run; }
+    }
+    event.insert("runs", runs); project.insert("event", event);
+    controller.m_document.commitAnalysisProject(project);
     QTRY_COMPARE(controller.dayBestLap().value("bestOfDay").toMap().value("runName").toString(), QString("Renamed run"));
     QCOMPARE(controller.dayBestLap().value("bestOfDay").toMap().value("reference"), best.value("reference"));
 }
 
-void TelemetryTests::groupsOutingLapsAfterExplicitConfiguration()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
-    QVERIFY(writeBytes(first, EventProjectFixture::lapsVbo()));
-    auto other = EventProjectFixture::lapsVbo(); other.replace("52.0008", "52.0007");
-    QVERIFY(writeBytes(second, other));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Compatibility", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_COMPARE(controller.outingLaps().size(), 10);
-    QCOMPARE(controller.outingCompatibilityGroups().size(), 2);
-    for (const auto &value : controller.outingCompatibilityGroups()) {
-        QVERIFY(!value.toMap().value("resolved").toBool());
-        QVERIFY(value.toMap().value("eligibleMembers").toList().isEmpty());
-        QVERIFY(!controller.selectOutingComparisonGroup(value.toMap().value("id").toString()));
-    }
-    const auto run1 = controller.eventRuns()[0].toMap().value("id").toString();
-    const auto run2 = controller.eventRuns()[1].toMap().value("id").toString();
-    const auto confirm = [&](const QString &run, const QString &layout, const QString &direction) {
-        return controller.confirmRunTrackConfiguration(run, controller.runTrackConfiguration(run).value("derivationKey").toString(), layout, direction);
-    };
-    QVERIFY(!controller.confirmRunTrackConfiguration(run1, "stale", "Circuit", "clockwise"));
-    const auto previous = controller.runTrackConfiguration(run1);
-    QVERIFY(confirm(run1, "Circuit", "clockwise"));
-    QVERIFY(!controller.confirmRunTrackConfiguration(run1, previous.value("derivationKey").toString(), "Other", "clockwise"));
-    QVERIFY(confirm(run2, "Circuit", "clockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    QCOMPARE(controller.outingCompatibilityGroups().size(), 1);
-    const auto group = controller.outingCompatibilityGroups()[0].toMap();
-    const auto groupId = group.value("id").toString();
-    QCOMPARE(group.value("lapCount").toInt(), 6);
-    QCOMPARE(group.value("eligibleLapCount").toInt(), 6);
-    QCOMPARE(controller.outingComparisonGroupId(), groupId);
-    QVERIFY(controller.selectOutingComparisonGroup(groupId));
-    QVariantMap excludedReference;
-    for (const auto &value : controller.outingLaps()) {
-        const auto row = value.toMap();
-        if (row.value("type") == "LAP") {
-            QVERIFY(row.value("comparisonEligible").toBool());
-            excludedReference = row.value("reference").toMap();
-        } else QVERIFY(!row.value("comparisonEligible").toBool());
-    }
-    QVERIFY(controller.setOutingLapExcluded(excludedReference, true, "Traffic"));
-    QCOMPARE(controller.outingCompatibilityGroups()[0].toMap().value("eligibleLapCount").toInt(), 5);
-    QCOMPARE(controller.outingCompatibilityGroups()[0].toMap().value("lapCount").toInt(), 6);
-    QVERIFY(controller.selectOutingLapReference(excludedReference));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    QVERIFY(controller.selectedOutingLap().value("compatibilityReasons").toStringList().contains("user-exclusion"));
-    // GPS and user restrictions coexist rather than replacing one another.
-    for (auto &row : controller.m_analysis.m_outingRawLapRows)
-        if (row.reference.toVariantMap() == excludedReference) { row.referenceIssue = LapReferenceIssue::GpsGap; row.referenceEligible = false; }
-    controller.m_analysis.refreshLapExclusionPolicy();
-    const auto reasons = controller.selectedOutingLap().value("compatibilityReasons").toStringList();
-    QVERIFY(reasons.contains("incomplete-gps")); QVERIFY(reasons.contains("user-exclusion"));
-    // Opposite direction creates a distinct group, even with identical gates/layout.
-    QVERIFY(confirm(run2, "Circuit", "counterclockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    QCOMPARE(controller.outingCompatibilityGroups().size(), 2);
-    QVERIFY(controller.selectOutingComparisonGroup(groupId));
-    for (const auto &value : controller.outingLaps()) {
-        const auto row = value.toMap();
-        if (row.value("runId") == run2) {
-            QVERIFY(row.value("compatibilityReasons").toStringList().contains("opposite-direction"));
-            QVERIFY(!row.value("comparisonEligible").toBool());
-        }
-    }
-    // Save As/reopen retains the explicit group decision as well as run configuration.
-    const auto savedPath = directory.filePath("day.fetproject");
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    const auto groups = controller.outingCompatibilityGroups();
-    AppController reopened(nullptr, directory.filePath("reopened.json"));
-    QTRY_COMPARE(reopened.outingCompatibilityGroups(), groups);
-    QCOMPARE(reopened.outingComparisonGroupId(), groupId);
-    // New derivation/generation cannot serve stale groups during the timer gap.
-    QVERIFY(confirm(run1, "Changed circuit", "clockwise"));
-    QVERIFY(controller.outingCompatibilityGroups().isEmpty());
-    QVERIFY(!controller.selectOutingComparisonGroup(groupId));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    QVERIFY(controller.outingComparisonGroupId().isEmpty());
-}
-
-void TelemetryTests::persistsDayDecisionsAndKeepsIndependentDetail()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
-    QVERIFY(writeBytes(first, EventProjectFixture::lapsVbo()));
-    auto other = EventProjectFixture::lapsVbo(); other.replace("52.0008", "52.0007");
-    QVERIFY(writeBytes(second, other));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Decisions", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 10);
-    const auto runA = controller.eventRuns()[0].toMap().value("id").toString();
-    const auto runB = controller.eventRuns()[1].toMap().value("id").toString();
-    QVERIFY(controller.setRunTrackConfiguration(runA, "Circuit", "clockwise"));
-    QVERIFY(controller.setRunTrackConfiguration(runB, "Circuit", "clockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    const auto group = controller.outingCompatibilityGroups().first().toMap().value("id").toString();
-    const auto savedPath = directory.filePath("day.fetproject");
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    QVERIFY(controller.selectOutingComparisonGroup(group));
-    QVERIFY(controller.dirty());
-    const auto revision = controller.m_document.m_documentState.revision();
-    QVERIFY(controller.selectOutingComparisonGroup(group));
-    QCOMPARE(controller.m_document.m_documentState.revision(), revision);
-    QVariantMap referenceB;
-    for (const auto &item : controller.outingLaps()) {
-        const auto row = item.toMap();
-        if (row.value("runId") == runB && row.value("type") == "LAP") referenceB = row.value("reference").toMap();
-    }
-    QVERIFY(controller.selectOutingLapReference(referenceB));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    QCOMPARE(controller.m_document.m_documentState.revision(), revision); // Inspection is not a comparison decision.
-    controller.setOutingLapCursor(controller.selectedOutingLap().value("startTime").toDouble() + .1);
-    const auto detail = controller.m_analysis.m_outingLapDetailSession;
-    const auto track = controller.outingLapTrack(); const auto cursor = controller.outingLapCursor();
-    const auto serialB = controller.m_analysis.m_outingRunCache.value(runB).derivationSerial;
-    QVERIFY(controller.setRunTrackConfiguration(runA, "Other", "counterclockwise"));
-    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
-    QCOMPARE(controller.outingLapTrack(), track); QCOMPARE(controller.outingLapCursor(), cursor);
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
-    QCOMPARE(controller.m_analysis.m_outingRunCache.value(runB).derivationSerial, serialB);
-    QCOMPARE(controller.outingRanking().value("runs").toList().size(), 1);
-    const auto metadata = controller.runMetadata(runA);
-    const auto serialA = controller.m_analysis.m_outingRunCache.value(runA).derivationSerial;
-    QVERIFY(controller.updateRunMetadata(runA, metadata.value("editToken").toString(), "Morning", "Traffic", "Dry", "Tyres"));
-    QCoreApplication::processEvents();
-    QCOMPARE(controller.m_analysis.m_outingRunCache.value(runA).derivationSerial, serialA);
-    QCOMPARE(controller.m_analysis.m_outingRunCache.value(runB).derivationSerial, serialB);
-    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
-    // Replacing A cancels only its dependent detail; B's session/cursor survive.
-    const auto replacement = directory.filePath("replacement.vbo");
-    QVERIFY(writeBytes(replacement, EventProjectFixture::lapsVbo().replace("52.0008", "52.0006")));
-    controller.loadVbo(QUrl::fromLocalFile(replacement));
-    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, detail);
-    QCOMPARE(controller.outingLapTrack(), track); QCOMPARE(controller.outingLapCursor(), cursor);
-    QCOMPARE(controller.m_analysis.m_outingRunCache.value(runB).derivationSerial, serialB);
-    QVERIFY(controller.runTrackConfiguration(runA).value("layoutId").isNull());
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    AppController reopened(nullptr, directory.filePath("reopened.json"));
-    QTRY_COMPARE(reopened.outingComparisonGroupId(), group);
-    QVERIFY(!reopened.dirty()); QVERIFY(reopened.selectedOutingLap().isEmpty());
-}
-
 void TelemetryTests::restoresDayDecisionsAfterMoveMissingRelinkAndRecovery()
 {
+    // Decisions made in FlappedEar Telemetry (exclusions, notes, track
+    // configurations, the comparison group) survive Overlays' Save As, a move,
+    // a missing and relinked recording, a refused wrong relink and recovery,
+    // and keep excluding the lap from the editor's timing.
     QTemporaryDir directory; QVERIFY(directory.isValid());
     QSettings settings; settings.clear(); settings.sync();
     const auto original = directory.filePath("original"), moved = directory.filePath("moved");
@@ -1671,162 +1191,109 @@ void TelemetryTests::restoresDayDecisionsAfterMoveMissingRelinkAndRecovery()
     const auto savedPath = QDir(original).filePath("day.fetproject");
     QString runA, runB, group;
     QJsonObject savedEvent;
-    QVariantMap excludedA, excludedB;
     {
-        AppController controller(nullptr, recovery);
-        QVERIFY(controller.importAnalysisRuns("Portable decisions", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 10);
-        runA = controller.activeRunId(); runB = controller.eventRuns()[1].toMap().value("id").toString();
-        QVERIFY(controller.setRunTrackConfiguration(runA, "Circuit A", "clockwise"));
-        QVERIFY(controller.setRunTrackConfiguration(runB, "Circuit B", "counterclockwise"));
-        QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-        for (const auto &value : controller.outingLaps()) {
+        TelemetryController reference(directory.filePath("reference.json"));
+        auto &analysis = *reference.analysis();
+        QVERIFY(importReferenceDay(reference, "Portable decisions", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+        QTRY_COMPARE(analysis.outingLaps().size(), 10);
+        runA = reference.document()->eventRuns()[0].toMap().value("id").toString();
+        runB = reference.document()->eventRuns()[1].toMap().value("id").toString();
+        QVERIFY(analysis.setRunTrackConfiguration(runA, "Circuit A", "clockwise"));
+        QVERIFY(analysis.setRunTrackConfiguration(runB, "Circuit B", "counterclockwise"));
+        QTRY_VERIFY(!analysis.outingLapsLoading() && analysis.m_outingLapRequestedKey == analysis.outingLapKey());
+        QVariantMap excludedA, excludedB;
+        for (const auto &value : analysis.outingLaps()) {
             const auto row = value.toMap(); if (row.value("type") != "LAP") continue;
             if (row.value("runId") == runA) { excludedA = row.value("reference").toMap(); group = row.value("compatibilityGroupId").toString(); }
             else excludedB = row.value("reference").toMap();
         }
-        QVERIFY(controller.setOutingLapExcluded(excludedA, true, "Traffic A"));
-        QVERIFY(controller.setOutingLapExcluded(excludedB, true, "Cooldown B"));
-        const auto revision = controller.m_document.m_documentState.revision();
-        QVERIFY(controller.setOutingLapExcluded(excludedA, true, "Traffic A"));
-        QCOMPARE(controller.m_document.m_documentState.revision(), revision); // Entry order is not an edit.
+        QVERIFY(analysis.setOutingLapExcluded(excludedA, true, "Traffic A"));
+        QVERIFY(analysis.setOutingLapExcluded(excludedB, true, "Cooldown B"));
         for (const auto &id : {runA, runB}) {
-            auto metadata = controller.runMetadata(id);
-            QVERIFY(controller.updateRunMetadata(id, metadata.value("editToken").toString(), metadata.value("name").toString(),
+            const auto metadata = analysis.runMetadata(id);
+            QVERIFY(analysis.updateRunMetadata(id, metadata.value("editToken").toString(), metadata.value("name").toString(),
                 id == runA ? "Morning notes" : "Afternoon notes", "Dry", "No changes"));
         }
-        QVERIFY(controller.selectOutingComparisonGroup(group));
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-        savedEvent = controller.currentProjectObject().value("event").toObject();
+        QVERIFY(analysis.selectOutingComparisonGroup(group));
+        QVERIFY(reference.document()->saveProject(QUrl::fromLocalFile(savedPath)));
+        savedEvent = QJsonDocument::fromJson(readBytes(savedPath)).object().value("event").toObject();
+        QVERIFY(!savedEvent.value("analysisDecisions").toObject().isEmpty());
+        QCOMPARE(savedEvent.value("lapExclusions").toArray().size(), 2);
+    }
+    // The decisions Overlays must carry unchanged, and its view of them.
+    const auto sameDecisions = [&](AppController &controller) {
+        const auto event = controller.currentProjectObject().value("event").toObject();
+        if (event.value("analysisDecisions") != savedEvent.value("analysisDecisions")) return QString("analysisDecisions changed");
+        if (event.value("lapExclusions") != savedEvent.value("lapExclusions")) return QString("lapExclusions changed");
+        const auto runs = event.value("runs").toArray(), savedRuns = savedEvent.value("runs").toArray();
+        if (runs.size() != savedRuns.size()) return QString("run count changed");
+        for (qsizetype i = 0; i < runs.size(); ++i)
+            for (const auto *field : {"id", "name", "notes", "trackConfiguration"})
+                if (runs[i].toObject().value(field) != savedRuns[i].toObject().value(field)) return QString("run ") + field + " changed";
+        return QString();
+    };
+    const auto excludedInEditor = [](AppController &controller) {
+        qsizetype excluded = 0;
+        for (const auto &lap : controller.m_lapSession.timedLaps) excluded += lap.referenceEligible() ? 0 : 1;
+        return excluded;
+    };
+    {
+        AppController controller(nullptr, recovery);
+        controller.requestOpenProject(QUrl::fromLocalFile(savedPath));
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+        QCOMPARE(controller.activeRunId(), runA);
+        QCOMPARE(excludedInEditor(controller), qsizetype(1));
         const auto saveAs = QDir(original).filePath("save-as/day.fetproject");
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(saveAs)));
-        QTRY_COMPARE(controller.outingComparisonSelectionState(), QString("applied"));
-        const auto saved = QJsonDocument::fromJson(readBytes(saveAs)).object();
-        const auto event = saved.value("event").toObject();
-        QCOMPARE(event.value("analysisDecisions"), savedEvent.value("analysisDecisions"));
-        QCOMPARE(event.value("lapExclusions"), savedEvent.value("lapExclusions"));
-        const auto runs = event.value("runs").toArray();
-        for (qsizetype i = 0; i < runs.size(); ++i) {
-            QCOMPARE(runs[i].toObject().value("id"), savedEvent.value("runs").toArray()[i].toObject().value("id"));
-            QCOMPARE(runs[i].toObject().value("trackConfiguration"), savedEvent.value("runs").toArray()[i].toObject().value("trackConfiguration"));
+        const auto failure = sameDecisions(controller); QVERIFY2(failure.isEmpty(), qPrintable(failure));
+        const auto runs = QJsonDocument::fromJson(readBytes(saveAs)).object().value("event").toObject().value("runs").toArray();
+        for (qsizetype i = 0; i < runs.size(); ++i)
             QCOMPARE(EventProjectFixture::reference(runs[i].toObject()).value("relativePath").toString(),
                 i == 0 ? QString("../first.vbo") : QString("../second.vbo"));
-        }
     }
     QVERIFY(QDir().rename(original, moved));
     const auto movedProject = QDir(moved).filePath("save-as/day.fetproject");
     settings.setValue("project/path", movedProject); settings.sync();
     {
         AppController controller(nullptr, recovery);
-        QTRY_COMPARE(controller.outingComparisonGroupId(), group);
         QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QVERIFY(!controller.dirty());
-        QCOMPARE(controller.resolveOutingLapReference(excludedA).value("state").toString(), QString("resolved"));
-        QCOMPARE(controller.resolveOutingLapReference(excludedB).value("state").toString(), QString("resolved"));
-        QCOMPARE(controller.currentProjectObject().value("event").toObject().value("lapExclusions"), savedEvent.value("lapExclusions"));
-        QCOMPARE(controller.runMetadata(runB).value("notes").toString(), QString("Afternoon notes"));
+        QCOMPARE(excludedInEditor(controller), qsizetype(1));
+        const auto failure = sameDecisions(controller); QVERIFY2(failure.isEmpty(), qPrintable(failure));
     }
     const auto missing = QDir(moved).filePath("first.vbo"), relocated = QDir(moved).filePath("relocated.vbo");
     QVERIFY(QFile::rename(missing, relocated));
     {
         AppController controller(nullptr, recovery);
         QTRY_COMPARE(controller.vboLoadState(), QString("missing"));
-        QTRY_COMPARE(controller.outingComparisonSelectionState(), QString("unavailable"));
-        QVERIFY(!controller.dirty()); QVERIFY(controller.outingComparisonGroupId().isEmpty());
-        QCOMPARE(controller.currentProjectObject().value("event").toObject().value("analysisDecisions"), savedEvent.value("analysisDecisions"));
-        QCOMPARE(controller.resolveOutingLapReference(excludedA).value("state").toString(), QString("unavailable"));
-        QCOMPARE(controller.resolveOutingLapReference(excludedB).value("state").toString(), QString("resolved"));
+        QVERIFY(!controller.dirty());
+        auto failure = sameDecisions(controller); QVERIFY2(failure.isEmpty(), qPrintable(failure));
+        // The other run's recording is refused by identity.
+        controller.relinkVbo(QUrl::fromLocalFile(QDir(moved).filePath("second.vbo")));
+        QTRY_COMPARE(controller.sourceMismatchType(), QString("telemetry"));
+        controller.resolveSourceMismatch(false);
+        QVERIFY(controller.vboLoadState() != "ready");
         controller.relinkVbo(QUrl::fromLocalFile(relocated));
         QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-        QTRY_COMPARE(controller.outingComparisonGroupId(), group);
-        QCOMPARE(controller.resolveOutingLapReference(excludedA).value("state").toString(), QString("resolved"));
+        QCOMPARE(excludedInEditor(controller), qsizetype(1));
         QVERIFY(controller.saveCurrentProject()); QVERIFY(!controller.dirty());
-        const auto revision = controller.m_document.m_documentState.revision();
-        QVERIFY(controller.selectOutingComparisonGroup(group));
-        QCOMPARE(controller.m_document.m_documentState.revision(), revision); QVERIFY(!controller.dirty());
-        QVERIFY(controller.selectOutingComparisonGroup(""));
-        QTRY_COMPARE(controller.outingComparisonSelectionState(), QString("automatic")); QVERIFY(controller.dirty());
+        failure = sameDecisions(controller); QVERIFY2(failure.isEmpty(), qPrintable(failure));
+        QVERIFY(controller.widgetModel()->addWidget("lapCurrent") >= 0);
+        QVERIFY(controller.dirty());
         controller.m_document.writeRecoverySnapshot(); QVERIFY(QFileInfo::exists(recovery));
     }
     {
         AppController recovered(nullptr, recovery); QVERIFY(recovered.recoveryPending());
         recovered.resolveStartupRecovery("recover");
-        QTRY_COMPARE(recovered.vboLoadState(), QString("ready")); QTRY_COMPARE(recovered.outingLaps().size(), 10);
-        QVERIFY(recovered.dirty()); QCOMPARE(recovered.outingComparisonSelectionState(), QString("automatic"));
-        QVERIFY(recovered.selectOutingComparisonGroup(group));
-        recovered.m_document.writeRecoverySnapshot();
-    }
-    {
-        AppController recovered(nullptr, recovery); QVERIFY(recovered.recoveryPending());
-        recovered.resolveStartupRecovery("recover");
-        QTRY_COMPARE(recovered.outingComparisonGroupId(), group); QVERIFY(recovered.dirty());
+        QTRY_COMPARE(recovered.vboLoadState(), QString("ready"));
+        QVERIFY(recovered.dirty());
+        QCOMPARE(excludedInEditor(recovered), qsizetype(1));
+        const auto failure = sameDecisions(recovered); QVERIFY2(failure.isEmpty(), qPrintable(failure));
         QVERIFY(recovered.saveCurrentProject()); QVERIFY(!recovered.dirty());
     }
     AppController clean(nullptr, recovery);
-    QVERIFY(!clean.recoveryPending()); QTRY_COMPARE(clean.outingComparisonGroupId(), group);
-    QVERIFY(!clean.dirty()); QVERIFY(clean.selectedOutingLap().isEmpty());
-}
-
-void TelemetryTests::rejectsStaleDayDetailCompletion()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("laps.vbo"); QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Stale detail", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
-    QVERIFY(controller.selectOutingLap(1));
-    controller.m_analysis.m_outingLapDetailTimer.stop();
-    AnalysisController::OutingLapDetailResult late; late.request = controller.m_analysis.m_outingLapDetailRequest;
-    late.session = std::make_shared<TelemetrySession>(TelemetrySource::load(path));
-    QPromise<AnalysisController::OutingLapDetailResult> pending; pending.start();
-    controller.m_analysis.m_outingLapDetailPending = true;
-    controller.m_analysis.m_outingLapDetailCancellation = std::make_shared<std::atomic_bool>(false);
-    const auto cancellation = controller.m_analysis.m_outingLapDetailCancellation;
-    controller.m_analysis.m_outingLapDetailWatcher.setFuture(pending.future());
-    QVERIFY(controller.setRunTrackConfiguration(controller.activeRunId(), "Changed", "clockwise"));
-    QVERIFY(cancellation->load()); QCOMPARE(controller.outingLapDetailState(), QString("idle"));
-    pending.addResult(late); pending.finish();
-    QTRY_VERIFY(!controller.m_analysis.m_outingLapDetailPending);
-    QVERIFY(!controller.m_analysis.m_outingLapDetailSession); QVERIFY(controller.selectedOutingLap().isEmpty());
-}
-
-void TelemetryTests::separatesAutomaticGroupsAfterSourceReplacement()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
-    QVERIFY(writeBytes(first, EventProjectFixture::routeVbo()));
-    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(240, -1, 0, false, 300, 4, 1)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Replacement day", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.outingRanking().value("state").toString(), QString("available"));
-    QCOMPARE(controller.outingRanking().value("eligibleLapCount").toInt(), 5);
-    QCOMPARE(controller.outingRanking().value("lapCount").toInt(), 6);
-    QCOMPARE(controller.outingCompatibilityGroups().first().toMap().value("eligibleLapCount").toInt(), 5);
-    auto ids = controller.m_analysis.m_outingRunCache.keys(); std::sort(ids.begin(), ids.end());
-    QCOMPARE(ids.size(), 2);
-    const auto oldGroup = controller.outingComparisonGroupId();
-    QVERIFY(controller.selectOutingComparisonGroup(oldGroup));
-    QVERIFY(controller.selectEventRun(ids.first()));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto otherSerial = controller.m_analysis.m_outingRunCache.value(ids.last()).derivationSerial;
-    const auto changed = directory.filePath("different-route.vbo");
-    QVERIFY(writeBytes(changed, EventProjectFixture::routeVbo(240, -1, 0, false, 450)));
-    controller.loadVbo(QUrl::fromLocalFile(changed));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QCOMPARE(controller.outingCompatibilityGroups().size(), 2);
-    QCOMPARE(controller.outingComparisonGroupId(), oldGroup);
-    QCOMPARE(controller.outingRanking().value("runs").toList().size(), 1);
-    QCOMPARE(controller.outingRanking().value("runs").toList().first().toMap().value("runId").toString(), ids.last());
-    QCOMPARE(controller.m_analysis.m_outingRunCache.value(ids.last()).derivationSerial, otherSerial);
-    for (const auto &value : controller.outingCompatibilityGroups())
-        QCOMPARE(value.toMap().value("ranking").toMap().value("runs").toList().size(), 1);
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath("day.fetproject"))));
-    AppController reopened(nullptr, directory.filePath("reopened.json"));
-    QTRY_COMPARE(reopened.outingComparisonGroupId(), oldGroup);
-    QCOMPARE(reopened.outingCompatibilityGroups().size(), 2); QVERIFY(!reopened.dirty());
+    QVERIFY(!clean.recoveryPending()); QTRY_COMPARE(clean.vboLoadState(), QString("ready"));
+    QVERIFY(!clean.dirty());
+    const auto failure = sameDecisions(clean); QVERIFY2(failure.isEmpty(), qPrintable(failure));
 }
 
 void TelemetryTests::automaticallyGroupsPrivateTrackDay()
@@ -1838,29 +1305,35 @@ void TelemetryTests::automaticallyGroupsPrivateTrackDay()
     QList<QUrl> recordings;
     for (const auto &name : QDir(path).entryList({"*.vbo"}, QDir::Files, QDir::Name)) recordings.append(QUrl::fromLocalFile(QDir(path).filePath(name)));
     QVERIFY(recordings.size() > 1);
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Local track day", recordings));
-    QTRY_COMPARE_WITH_TIMEOUT(controller.eventRuns().size(), recordings.size(), 120000);
-    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey(), 120000);
-    for (auto it = controller.m_analysis.m_outingRunCache.cbegin(); it != controller.m_analysis.m_outingRunCache.cend(); ++it)
+    // The reference analysis groups the day and ranks it.
+    TelemetryController reference(directory.filePath("reference.json"));
+    auto &analysis = *reference.analysis();
+    QVERIFY(importReferenceDay(reference, "Local track day", recordings, 120000));
+    QTRY_VERIFY_WITH_TIMEOUT(!analysis.outingLapsLoading() && analysis.m_outingLapRequestedKey == analysis.outingLapKey(), 120000);
+    for (auto it = analysis.m_outingRunCache.cbegin(); it != analysis.m_outingRunCache.cend(); ++it)
         qInfo() << "Run route:" << it->inference.route.lengthMeters << it->inference.route.direction
             << "supported laps:" << it->inference.matchingLaps.size() << it->inference.reason;
-    qInfo() << "Groups:" << controller.outingCompatibilityGroups().size() << "Ranking:" << controller.outingRanking().value("state")
-        << "Eligible:" << controller.outingRanking().value("eligibleLapCount") << controller.outingLapMessages();
-    QCOMPARE(controller.outingCompatibilityGroups().size(), 1);
-    QCOMPARE(controller.outingRanking().value("state").toString(), QString("available"));
-    QCOMPARE(controller.outingRanking().value("runs").toList().size(), recordings.size());
-    QCOMPARE(controller.outingProgression().value("runs").toList().size(), recordings.size());
-    QCOMPARE(controller.outingCompatibilityGroups().first().toMap().value("eligibleLapCount"),
-        controller.outingRanking().value("eligibleLapCount"));
-    // KAN-185: the editor's automatic best lap is the analysis's best of the day.
+    qInfo() << "Groups:" << analysis.outingCompatibilityGroups().size() << "Ranking:" << analysis.outingRanking().value("state")
+        << "Eligible:" << analysis.outingRanking().value("eligibleLapCount") << analysis.outingLapMessages();
+    QCOMPARE(analysis.outingCompatibilityGroups().size(), 1);
+    QCOMPARE(analysis.outingRanking().value("state").toString(), QString("available"));
+    QCOMPARE(analysis.outingRanking().value("runs").toList().size(), recordings.size());
+    QCOMPARE(analysis.outingProgression().value("runs").toList().size(), recordings.size());
+    QCOMPARE(analysis.outingCompatibilityGroups().first().toMap().value("eligibleLapCount"),
+        analysis.outingRanking().value("eligibleLapCount"));
+    const auto dayPath = directory.filePath("day.fetproject");
+    QVERIFY(reference.document()->saveProject(QUrl::fromLocalFile(dayPath)));
+    // KAN-185: Overlays' automatic best lap is the analysis's best of the day.
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.requestOpenProject(QUrl::fromLocalFile(dayPath));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.eventRuns().size(), recordings.size(), 120000);
     controller.requestDayBestLap();
     QTRY_COMPARE_WITH_TIMEOUT(controller.dayBestLap().value("state").toString(), QString("available"), 120000);
     qInfo() << "Day's best lap:" << controller.dayBestLap().value("bestOfDay").toMap().value("runName")
             << controller.dayBestLap().value("bestOfDay").toMap().value("lapNumber")
             << controller.dayBestLap().value("bestOfDay").toMap().value("durationSeconds");
     QCOMPARE(controller.dayBestLap().value("bestOfDay").toMap().value("reference"),
-        controller.outingRanking().value("bestOfDay").toMap().value("reference"));
+        analysis.outingRanking().value("bestOfDay").toMap().value("reference"));
     const auto output = qEnvironmentVariable("FLAPPEDEAR_DAY_REVIEW_PROJECT");
     if (!output.isEmpty()) QVERIFY(controller.saveProject(QUrl::fromLocalFile(output)));
 }
@@ -1905,46 +1378,45 @@ void TelemetryTests::lapExclusionPolicySharesRankingAndRenderInputs()
 
 void TelemetryTests::lapExclusionsSurviveSaveRecoveryAndInvalidateSafely()
 {
+    // An exclusion made in FlappedEar Telemetry removes the lap from the
+    // editor's timing through save and recovery, and stops applying (while
+    // staying saved) once its reference no longer matches the run.
     QTemporaryDir directory; QVERIFY(directory.isValid());
     QSettings settings; settings.clear(); settings.sync();
     const auto path = directory.filePath("run.vbo"); QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
     const auto savedPath = directory.filePath("day.fetproject"); const auto recoveryPath = directory.filePath("recovery.json");
-    QVariantMap reference;
     {
-        AppController controller(nullptr, recoveryPath);
-        QVERIFY(controller.importAnalysisRuns("Exclusions", {QUrl::fromLocalFile(path)}));
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
-        reference = controller.outingLaps()[1].toMap().value("reference").toMap();
-        QVERIFY(controller.setOutingLapExcluded(reference, true, "Traffic"));
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-        QTRY_COMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("resolved"));
+        TelemetryController reference(directory.filePath("reference.json"));
+        auto &analysis = *reference.analysis();
+        QVERIFY(importReferenceDay(reference, "Exclusions", {QUrl::fromLocalFile(path)}));
+        QTRY_COMPARE(analysis.outingLaps().size(), 5);
+        QVERIFY(analysis.setOutingLapExcluded(analysis.outingLaps()[1].toMap().value("reference").toMap(), true, "Traffic"));
+        QVERIFY(reference.document()->saveProject(QUrl::fromLocalFile(savedPath)));
     }
     {
         AppController controller(nullptr, recoveryPath);
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
-        QCOMPARE(controller.outingLaps()[1].toMap().value("exclusionReason").toString(), QString("Traffic"));
+        controller.requestOpenProject(QUrl::fromLocalFile(savedPath));
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
         QVERIFY(!controller.m_lapSession.timedLaps[0].referenceEligible());
-        QVERIFY(controller.setOutingLapExcluded(reference, true, "Cooldown"));
+        QVERIFY(controller.m_lapSession.timedLaps[1].referenceEligible());
+        QVERIFY(controller.widgetModel()->addWidget("lapCurrent") >= 0);
         controller.m_document.writeRecoverySnapshot(); QVERIFY(QFileInfo::exists(recoveryPath));
     }
     {
         AppController controller(nullptr, recoveryPath); QVERIFY(controller.recoveryPending());
         controller.resolveStartupRecovery("recover");
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
         QVERIFY(controller.dirty());
-        QCOMPARE(controller.outingLaps()[1].toMap().value("exclusionReason").toString(), QString("Cooldown"));
         QVERIFY(!controller.m_lapSession.timedLaps[0].referenceEligible());
-        QVERIFY(controller.setRunTrackConfiguration(controller.activeRunId(), "other-layout", "unknown"));
-        QTRY_COMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("stale"));
-        QTRY_VERIFY(controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey()
-            && !controller.outingLapsLoading() && controller.outingLaps().size() == 5);
-        QVERIFY(!controller.outingLaps()[1].toMap().value("excluded").toBool());
-        QVERIFY(controller.m_lapSession.timedLaps[0].referenceEligible());
-        QVERIFY(controller.outingLapMessages().join(' ').contains("could not be matched"));
+        // Another track configuration changes the lap identity: the exclusion is stale.
+        auto project = controller.m_document.analysisProject();
+        auto runs = EventProjectFixture::runs(project); auto run = runs[0].toObject();
+        auto configuration = EventProjectCodec::trackConfiguration(run);
+        configuration.insert("layoutId", "other-layout");
+        run.insert("trackConfiguration", configuration); runs[0] = run; EventProjectFixture::setRuns(project, runs);
+        controller.m_document.commitAnalysisProject(project);
+        QTRY_VERIFY(controller.m_lapSession.timedLaps[0].referenceEligible());
         QCOMPARE(controller.currentProjectObject().value("event").toObject().value("lapExclusions").toArray().size(), 1);
-        QVERIFY(controller.setOutingLapExcluded(reference, false));
-        QVERIFY(controller.currentProjectObject().value("event").toObject().value("lapExclusions").toArray().isEmpty());
-        QVERIFY(controller.outingLapMessages().join(' ').contains("could not be matched") == false);
     }
 }
 
@@ -1958,14 +1430,20 @@ void TelemetryTests::keepsAnalysisStateThroughOverlayEdits()
     const auto analysedPath = directory.filePath("analysed.fetproject"), editedPath = directory.filePath("edited.fetproject");
     QJsonObject analysed;
     {
+        TelemetryController reference(directory.filePath("reference.json"));
+        auto &analysis = *reference.analysis();
+        QVERIFY(importReferenceDay(reference, "Round trip", {QUrl::fromLocalFile(path)}));
+        QTRY_COMPARE(analysis.outingLaps().size(), 5);
+        QVERIFY(analysis.setOutingLapExcluded(analysis.outingLaps()[1].toMap().value("reference").toMap(), true, "Traffic"));
+        QVERIFY(reference.document()->saveProject(QUrl::fromLocalFile(analysedPath)));
+        analysed = QJsonDocument::fromJson(readBytes(analysedPath)).object();
+        // The editor's document binding names the same recording the analysis loads.
         AppController controller(nullptr, directory.filePath("recovery.json"));
-        QVERIFY(controller.importAnalysisRuns("Round trip", {QUrl::fromLocalFile(path)}));
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
-        QVERIFY(controller.setOutingLapExcluded(controller.outingLaps()[1].toMap().value("reference").toMap(), true, "Traffic"));
-        // The document binding names the same recording the analysis loads.
+        controller.requestOpenProject(QUrl::fromLocalFile(analysedPath));
+        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
         const auto binding = controller.activeLapBinding();
         QJsonObject analysisSource;
-        for (const auto &value : controller.m_analysis.outingLapSources())
+        for (const auto &value : analysis.outingLapSources())
             if (value.toObject().value("runId").toString() == controller.activeRunId()) analysisSource = value.toObject();
         QVERIFY(!analysisSource.isEmpty());
         for (const auto *field : {"eventId", "runId", "sourceId", "derivationKey"})
@@ -1973,8 +1451,6 @@ void TelemetryTests::keepsAnalysisStateThroughOverlayEdits()
         QCOMPARE(binding.value("expectedRevision"), analysisSource.value("expectedRevision"));
         QCOMPARE(binding.value("sourceRevision").toString(), QString::fromLatin1(controller.m_loadedSourceRevision));
         QVERIFY(!controller.m_lapSession.timedLaps[0].referenceEligible());
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(analysedPath)));
-        analysed = QJsonDocument::fromJson(readBytes(analysedPath)).object();
     }
     QCOMPARE(analysed.value("version").toInt(), 3);
     // Fields a newer analysis app writes ride along untouched.
@@ -1999,184 +1475,6 @@ void TelemetryTests::keepsAnalysisStateThroughOverlayEdits()
         > analysed.value("scene").toObject().value("widgets").toArray().size());
     for (const auto *key : {"scene", "documentState"}) { edited.remove(key); analysed.remove(key); }
     QCOMPARE(edited, analysed);
-    // A channel choice made in the analysis is still saved.
-    QString chosen;
-    {
-        AppController controller(nullptr, directory.filePath("channel-recovery.json"));
-        QVERIFY(controller.m_document.beginProjectLoad(editedPath, QJsonDocument::fromJson(readBytes(editedPath)).object()));
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-        QVERIFY(!controller.analysisChannels().isEmpty());
-        chosen = controller.analysisChannels().first();
-        controller.setAnalysisChannels({chosen});
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(editedPath)));
-    }
-    QCOMPARE(QJsonDocument::fromJson(readBytes(editedPath)).object().value("analysis").toObject(),
-        (QJsonObject{{"channels", QJsonArray{chosen}}, {"futureSetting", 1}}));
-}
-
-void TelemetryTests::lapReferencesSurviveReopenAndReordering()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("run.vbo");
-    QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("References", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_COMPARE(controller.outingLaps().size(), 5);
-    const auto reference = controller.outingLaps()[1].toMap().value("reference").toMap();
-    const auto portable = QJsonDocument::fromJson(QJsonDocument(QJsonObject::fromVariantMap(reference)).toJson()).object().toVariantMap();
-    QCOMPARE(portable, reference);
-    QVERIFY(!reference.contains("lapNumber"));
-    QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("resolved"));
-    QVERIFY(controller.selectOutingLapReference(reference));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    const auto before = controller.currentProjectObject();
-    auto invalid = reference; invalid.remove("version");
-    QCOMPARE(controller.resolveOutingLapReference(invalid).value("state").toString(), QString("invalid"));
-    QVERIFY(!controller.selectOutingLapReference(invalid));
-    QCOMPARE(controller.currentProjectObject(), before);
-    QVERIFY(QDir().mkpath(directory.filePath("moved-project")));
-    const auto savedPath = directory.filePath("moved-project/day.fetproject");
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    const auto saved = QJsonDocument::fromJson(readBytes(savedPath)).object();
-    AppController reopened(nullptr, directory.filePath("reopened-recovery.json"));
-    QVERIFY(reopened.m_document.beginProjectLoad(savedPath, saved));
-    QCOMPARE(reopened.resolveOutingLapReference(portable).value("state").toString(), QString("loading"));
-    QTRY_COMPARE(reopened.outingLaps().size(), 5);
-    QCOMPARE(reopened.outingLaps()[1].toMap().value("reference").toMap(), portable);
-    // The reference remains valid after ordering and display numbering changes.
-    std::reverse(reopened.m_analysis.m_outingLapRows.begin(), reopened.m_analysis.m_outingLapRows.end());
-    auto row = reopened.m_analysis.m_outingLapRows[3].toMap(); row.insert("lapNumber", 99); reopened.m_analysis.m_outingLapRows[3] = row;
-    QCOMPARE(reopened.resolveOutingLapReference(portable).value("index").toInt(), 3);
-    QVERIFY(reopened.selectOutingLapReference(portable));
-    QTRY_COMPARE(reopened.outingLapDetailState(), QString("ready"));
-    QCOMPARE(reopened.selectedOutingLap().value("reference").toMap(), portable);
-    QCOMPARE(reopened.selectedOutingLap().value("lapNumber").toInt(), 99);
-    // Failed lookups never choose the nearest time, same number, or another run.
-    for (const auto *field : {"eventId", "runId", "sourceId", "algorithm", "derivationKey", "sourceRevision", "startTime", "type"}) {
-        auto stale = portable;
-        stale.insert(field, QString(field) == "startTime" ? QVariant(portable.value(field).toDouble() + .001)
-            : QString(field) == "type" ? QVariant("IN")
-            : QString(field).endsWith("Key") || QString(field) == "sourceRevision" ? QVariant(QString(64, '0')) : QVariant("changed"));
-        QCOMPARE(reopened.resolveOutingLapReference(stale).value("state").toString(), QString("stale"));
-        QVERIFY(!reopened.selectOutingLapReference(stale));
-        QCOMPARE(reopened.selectedOutingLap().value("reference").toMap(), portable);
-    }
-    // Two identical candidates are ambiguous, never selected arbitrarily.
-    reopened.m_analysis.m_outingLapRows.append(reopened.m_analysis.m_outingLapRows[3]);
-    QCOMPARE(reopened.resolveOutingLapReference(portable).value("state").toString(), QString("stale"));
-    QVERIFY(!reopened.selectOutingLapReference(portable));
-}
-
-void TelemetryTests::lapReferencesRejectSourceAndGateChanges()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("run.vbo");
-    QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Stale references", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
-    const auto reference = controller.outingLaps()[1].toMap().value("reference").toMap();
-    const auto savedPath = directory.filePath("day.fetproject"); QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    const auto saved = QJsonDocument::fromJson(readBytes(savedPath)).object();
-    QVERIFY(controller.setRunTrackConfiguration(controller.activeRunId(), "layout", "clockwise"));
-    // Immediate rejection before the queued refresh clears the previous rows.
-    QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("stale"));
-    QVERIFY(!controller.selectOutingLapReference(reference)); QVERIFY(!controller.selectOutingLap(1));
-    QTRY_VERIFY(!controller.outingLapsLoading() && !controller.outingLaps().isEmpty()
-        && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    auto project = controller.currentProjectObject(); auto runs = EventProjectFixture::runs(project); auto run = runs[0].toObject();
-    const auto configuredReference = controller.outingLaps()[1].toMap().value("reference").toMap();
-    auto config = EventProjectCodec::trackConfiguration(run); config.insert("gateRevision", "gates-v1:" + QString(64, '0'));
-    run.insert("trackConfiguration", config); runs[0] = run; EventProjectFixture::setRuns(project, runs);
-    controller.m_document.m_projectTemplate = project; controller.markPersistentChange();
-    QCOMPARE(controller.resolveOutingLapReference(configuredReference).value("state").toString(), QString("stale"));
-    QVERIFY(!controller.selectOutingLapReference(configuredReference));
-    // Ordinary reopening of the original derivation still resolves its original reference.
-    QVERIFY(controller.m_document.beginProjectLoad(savedPath, saved));
-    QTRY_COMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("resolved"));
-    QVERIFY(controller.selectOutingLapReference(reference)); QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    auto changedGates = EventProjectFixture::lapsVbo(); changedGates.replace("Start 21.0000", "Start 21.0001");
-    QVERIFY(writeBytes(path, changedGates));
-    QVERIFY(controller.selectOutingLapReference(reference)); QTRY_COMPARE(controller.outingLapDetailState(), QString("error"));
-    QVERIFY(controller.outingLapDetailError().contains("stale"));
-    QVERIFY(controller.outingLapSeries("latitude", 200).isEmpty());
-    QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("stale"));
-    controller.relinkVbo(QUrl::fromLocalFile(path));
-    QTRY_COMPARE(controller.vboLoadState(), QString("mismatch"));
-    controller.resolveSourceMismatch(true);
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("stale"));
-    QVERIFY(!controller.selectOutingLapReference(reference));
-    // Missing source data is unavailable, not reassigned to another section.
-    QVERIFY(QFile::remove(path)); QVERIFY(controller.m_document.beginProjectLoad(savedPath, saved));
-    QTRY_COMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("unavailable"));
-    QVERIFY(!controller.selectOutingLapReference(reference));
-}
-
-void TelemetryTests::lapReferencesDetectUnsampledContentChanges()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    auto bytes = EventProjectFixture::lapsVbo() + "[comments]\n";
-    for (int i = 0; i < 512; ++i) bytes += QByteArray(1023, 'a') + '\n';
-    const auto path = directory.filePath("large.vbo"); QVERIFY(writeBytes(path, bytes));
-    const auto sampled = ProjectSourceReferenceCodec::telemetryFingerprint(path, TelemetrySource::load(path));
-    const auto full = TelemetrySource::contentSha256(path, bytes.size());
-    QVERIFY_THROWS_EXCEPTION(OperationCancelled, static_cast<void>(TelemetrySource::contentSha256(path, bytes.size(), [] { return true; })));
-    QVERIFY_THROWS_EXCEPTION(ResourceLimitError, static_cast<void>(TelemetrySource::contentSha256(path, 128LL * 1024 * 1024 + 1)));
-    QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(TelemetrySource::contentSha256(path, bytes.size() - 1)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Content identity", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_COMPARE(controller.outingLaps().size(), 5);
-    QVERIFY(controller.setRunTrackConfiguration(controller.activeRunId(), "Circuit", "clockwise"));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    const auto group = controller.outingCompatibilityGroups().first().toMap().value("id").toString();
-    QVERIFY(controller.selectOutingComparisonGroup(group));
-    const auto reference = controller.outingLaps()[1].toMap().value("reference").toMap();
-    QVERIFY(controller.setOutingLapExcluded(reference, true, "Traffic"));
-    const auto savedPath = directory.filePath("content.fetproject");
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.m_analysis.m_outingLapRequestedKey == controller.m_analysis.outingLapKey());
-    const auto saved = QJsonDocument::fromJson(readBytes(savedPath)).object();
-    QCOMPARE(reference.value("sourceRevision").toString().toLatin1(), full.toHex());
-    QVERIFY(controller.selectOutingLapReference(reference));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    QVERIFY(controller.m_analysis.m_analysisSourceCache->usedBytes() > 0); // Prime the verified cache before mutation.
-    bytes[100000] = 'b'; QVERIFY(writeBytes(path, bytes));
-    QCOMPARE(ProjectSourceReferenceCodec::telemetryFingerprint(path, TelemetrySource::load(path)), sampled);
-    QVERIFY(TelemetrySource::contentSha256(path, bytes.size()) != full);
-    QVERIFY(controller.selectOutingLapReference(reference));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("error"));
-    QVERIFY(controller.outingLapDetailError().contains("stale"));
-    QVERIFY(controller.outingLapTrack().isEmpty());
-    QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("stale"));
-    QVERIFY(!controller.selectOutingLapReference(reference));
-    // An unchanged sampled fingerprint cannot authorize changed complete content.
-    controller.m_analysis.m_outingLapRequestedKey.clear(); controller.m_analysis.refreshOutingLaps();
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QVERIFY(controller.outingLaps().isEmpty());
-    QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("unavailable"));
-    QVERIFY(controller.outingLapMessages().join(' ').contains("complete recording content differs"));
-    QVERIFY(!controller.selectOutingLapReference(reference));
-    QCOMPARE(controller.outingComparisonSelectionState(), QString("unavailable"));
-    QVERIFY(controller.m_document.beginProjectLoad(savedPath, saved));
-    QTRY_COMPARE(controller.vboLoadState(), QString("mismatch"));
-    QTRY_COMPARE(controller.outingComparisonSelectionState(), QString("unavailable"));
-    QVERIFY(!controller.dirty()); QVERIFY(controller.channelNames().isEmpty());
-    QCOMPARE(controller.currentProjectObject().value("event"), saved.value("event"));
-    controller.relinkVbo(QUrl::fromLocalFile(path));
-    QTRY_COMPARE(controller.vboLoadState(), QString("mismatch"));
-    controller.resolveSourceMismatch(true); // Explicitly accept changed content as a replacement.
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_COMPARE(controller.outingLaps().size(), 5);
-    QCOMPARE(controller.resolveOutingLapReference(reference).value("state").toString(), QString("stale"));
-    QVERIFY(controller.runTrackConfiguration(controller.activeRunId()).value("layoutId").isNull());
-    QVERIFY(!controller.outingLaps()[1].toMap().value("excluded").toBool());
-    QCOMPARE(controller.currentProjectObject().value("event").toObject().value("lapExclusions"),
-        saved.value("event").toObject().value("lapExclusions"));
 }
 
 void TelemetryTests::recordsVboUtcChronology()
@@ -2198,675 +1496,7 @@ void TelemetryTests::recordsVboUtcChronology()
     QCOMPARE(recordingTimestamp(midnight).value(), QDateTime::fromString("2027-01-01T00:00:00.100Z", Qt::ISODateWithMs).toMSecsSinceEpoch());
 }
 
-void TelemetryTests::ordersWholeOutingAndReopensSources()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto recording = [](int hour) {
-        auto text = QString::fromUtf8(EventProjectFixture::lapsVbo());
-        text.replace("Start 21.0000 52.0000 21.0000 52.0002 start", "Start 1260.0000 3120.006 1260.0195 3120.006 start");
-        text.replace("coordinate units = degrees", "coordinate units = arc-minutes");
-        const auto data = text.indexOf("[data]\n") + 7;
-        auto lines = text.mid(data).split('\n', Qt::SkipEmptyParts);
-        for (auto &line : lines) {
-            auto cells = line.split(' ');
-            cells[0] = QTime(hour, 0).addMSecs(qRound(cells[0].toDouble() * 1000)).toString("HHmmss.zzz");
-            cells[1] = QString::number(cells[1].toDouble() * 60.0, 'f', 9);
-            cells[2] = QString::number(cells[2].toDouble() * 60.0, 'f', 9);
-            line = cells.join(' ');
-        }
-        return (QString("File created on 29/08/2026 at %1:00:00\n[comments]\nGenerated by RaceChrono Pro v10.2.4\n").arg(hour, 2, 10, QChar('0'))
-            + text.first(data) + lines.join('\n') + '\n').toUtf8();
-    };
-    const auto late = directory.filePath("late.vbo"); const auto early = directory.filePath("early.vbo");
-    QVERIFY(writeBytes(late, recording(15))); QVERIFY(writeBytes(early, recording(9)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Whole day", {QUrl::fromLocalFile(late), QUrl::fromLocalFile(early)}));
-    QTRY_COMPARE(controller.outingLaps().size(), 10);
-    QVERIFY(!controller.outingLapsLoading());
-    QCOMPARE(controller.outingLapMessages().size(), 2);
-    for (const auto &message : controller.outingLapMessages()) QVERIFY(message.contains("repeated, complete GPS laps"));
-    const auto rows = controller.outingLaps();
-    // KAN-119: named by recording time, not import order or filename.
-    QCOMPARE(rows[0].toMap().value("runName").toString(), QStringLiteral("Session 1"));
-    QCOMPARE(rows[0].toMap().value("type").toString(), QStringLiteral("OUT"));
-    QCOMPARE(rows[4].toMap().value("type").toString(), QStringLiteral("IN"));
-    QCOMPARE(rows[5].toMap().value("runName").toString(), QStringLiteral("Session 2"));
-    const auto path = directory.filePath("day.fetproject");
-    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(path)));
-    QVERIFY(controller.m_document.beginProjectLoad(path, QJsonDocument::fromJson(readBytes(path)).object()));
-    QTRY_COMPARE(controller.outingLaps(), rows);
-    QVERIFY(QFile::remove(early));
-    QVERIFY(controller.m_document.beginProjectLoad(path, QJsonDocument::fromJson(readBytes(path)).object()));
-    QTRY_COMPARE(controller.outingLaps().size(), 5);
-    QCOMPARE(controller.outingLapMessages().size(), 2);
-    QVERIFY(controller.outingLapMessages().join(' ').contains("missing"));
-    QVERIFY(controller.outingLapMessages().join(' ').contains("repeated, complete GPS laps"));
-    QVERIFY(writeBytes(late, recording(16)));
-    QVERIFY(controller.m_document.beginProjectLoad(path, QJsonDocument::fromJson(readBytes(path)).object()));
-    QTRY_VERIFY(!controller.outingLapsLoading() && controller.outingLapMessages().size() == 2);
-    QVERIFY(controller.outingLaps().isEmpty());
-    QVERIFY(controller.outingLapMessages().join(' ').contains("identity"));
-    // A completed old worker result must not repopulate a newly cleared document.
-    AnalysisController::OutingLapResult stale;
-    stale.key = controller.m_analysis.outingLapKey(); stale.generation = controller.m_document.m_sourceGeneration;
-    stale.rows = {{"stale", "Stale", LapSectionType::Lap, 1, 0, 10, {}, 0}};
-    QPromise<AnalysisController::OutingLapResult> promise; promise.start();
-    controller.m_analysis.m_outingLapWatcher.setFuture(promise.future());
-    controller.requestNewProject();
-    promise.addResult(stale); promise.finish();
-    QTRY_VERIFY(controller.outingLaps().isEmpty());
-    QTRY_VERIFY(!controller.m_analysis.m_outingLapWatcher.isRunning());
-    QVERIFY(controller.eventRuns().isEmpty());
-}
-
-void TelemetryTests::restoresComparisonSelectionAfterReopen()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("morning.vbo"), second = directory.filePath("afternoon.vbo");
-    QVERIFY(writeBytes(first, EventProjectFixture::routeVbo()));
-    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(130, -2, 2)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("RoundTrip", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto candidates = controller.comparisonLaps(); QVERIFY(candidates.size() >= 2);
-    QVariantMap a, b;
-    for (const auto &value : candidates) {
-        const auto row = value.toMap();
-        if (a.isEmpty()) a = row;
-        else if (b.isEmpty() && row.value("runId") != a.value("runId")
-            && row.value("compatibilityGroupId") == a.value("compatibilityGroupId")) b = row;
-    }
-    QVERIFY(!a.isEmpty() && !b.isEmpty());
-    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_VERIFY(controller.comparisonPairReady());
-    const auto referenceA = a.value("reference").toMap(), referenceB = b.value("reference").toMap();
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath("day.fetproject"))));
-
-    AppController reopened(nullptr, directory.filePath("reopened-recovery.json"));
-    QTRY_VERIFY(!reopened.projectLoading());
-    QTRY_VERIFY(!reopened.outingLapsLoading());
-    QTRY_COMPARE(reopened.comparisonSlots()[0].toMap().value("state").toString(), QString("ready"));
-    QTRY_COMPARE(reopened.comparisonSlots()[1].toMap().value("state").toString(), QString("ready"));
-    QCOMPARE(reopened.comparisonSlots()[0].toMap().value("lap").toMap().value("reference").toMap(), referenceA);
-    QCOMPARE(reopened.comparisonSlots()[1].toMap().value("lap").toMap().value("reference").toMap(), referenceB);
-    QVERIFY(!reopened.dirty());
-
-    // A cleared slot's persisted reference must also survive reopen as empty,
-    // not silently resurrect the previous pick.
-    reopened.clearComparisonLap(0);
-    QVERIFY(reopened.saveCurrentProject());
-    AppController reopenedAgain(nullptr, directory.filePath("reopened-again-recovery.json"));
-    QTRY_VERIFY(!reopenedAgain.projectLoading());
-    QTRY_VERIFY(!reopenedAgain.outingLapsLoading());
-    QTRY_COMPARE(reopenedAgain.comparisonSlots()[1].toMap().value("state").toString(), QString("ready"));
-    QCOMPARE(reopenedAgain.comparisonSlots()[0].toMap().value("state").toString(), QString("empty"));
-}
-
-void TelemetryTests::restoresComparisonRangeAndChannelsAfterReopen()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("morning.vbo"), second = directory.filePath("afternoon.vbo");
-    QVERIFY(writeBytes(first, EventProjectFixture::routeVbo()));
-    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(130, -2, 2)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("RoundTrip", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto candidates = controller.comparisonLaps(); QVERIFY(candidates.size() >= 2);
-    QVariantMap a, b;
-    for (const auto &value : candidates) {
-        const auto row = value.toMap();
-        if (a.isEmpty()) a = row;
-        else if (b.isEmpty() && row.value("runId") != a.value("runId")
-            && row.value("compatibilityGroupId") == a.value("compatibilityGroupId")) b = row;
-    }
-    QVERIFY(!a.isEmpty() && !b.isEmpty());
-    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_VERIFY(controller.comparisonPairReady());
-
-    // Nothing persisted yet: reading back gives an empty/default result, not a
-    // fabricated range or channel list.
-    QVERIFY(controller.comparisonPersistedRangeMeters().isEmpty());
-    QVERIFY(controller.comparisonPersistedChannels().isEmpty());
-
-    controller.persistComparisonRange(12.5, 87.25);
-    controller.persistComparisonChannels({"speed", "throttle"});
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath("day.fetproject"))));
-
-    AppController reopened(nullptr, directory.filePath("reopened-recovery.json"));
-    QTRY_VERIFY(!reopened.projectLoading());
-    QTRY_VERIFY(!reopened.outingLapsLoading());
-    const auto restoredRange = reopened.comparisonPersistedRangeMeters();
-    QCOMPARE(restoredRange.value("startMeters").toDouble(), 12.5);
-    QCOMPARE(restoredRange.value("endMeters").toDouble(), 87.25);
-    QCOMPARE(reopened.comparisonPersistedChannels(), QStringList({"speed", "throttle"}));
-    QVERIFY(!reopened.dirty());
-
-    // Malformed writes must not corrupt the document: an inverted/non-finite
-    // range or an over-budget channel list is rejected rather than silently
-    // clamped or truncated into something that looks plausible.
-    reopened.persistComparisonRange(50.0, 10.0);
-    QCOMPARE(reopened.comparisonPersistedRangeMeters().value("startMeters").toDouble(), 12.5);
-    reopened.persistComparisonRange(std::numeric_limits<double>::infinity(), 10.0);
-    QCOMPARE(reopened.comparisonPersistedRangeMeters().value("startMeters").toDouble(), 12.5);
-    reopened.persistComparisonChannels({"a", "b", "c", "d", "e"});
-    QCOMPARE(reopened.comparisonPersistedChannels(), QStringList({"speed", "throttle"}));
-}
-
-void TelemetryTests::preservesComparisonSlotAcrossFailuresAndReplacement()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
-    const auto secondBytes = EventProjectFixture::routeVbo(130, -2, 2);
-    QVERIFY(writeBytes(first, EventProjectFixture::routeVbo())); QVERIFY(writeBytes(second, secondBytes));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Independent slots", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto runA = controller.eventRuns()[0].toMap().value("id").toString();
-    QVariantMap a, b;
-    for (const auto &value : controller.comparisonLaps()) {
-        const auto row = value.toMap();
-        if (row.value("runId") == runA) a = row; else b = row;
-    }
-    QVERIFY(!a.isEmpty() && !b.isEmpty());
-    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
-    const auto sessionA = controller.m_analysis.m_comparisonSlots[0].session;
-    const auto trackA = controller.m_analysis.m_comparisonSlots[0].track;
-    // Missing B fails through the shared verified-source loader without disturbing A.
-    QVERIFY(QFile::remove(second));
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("error"));
-    QVERIFY(!controller.m_analysis.m_comparisonSlots[1].error.isEmpty());
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, sessionA); QCOMPARE(controller.m_analysis.m_comparisonSlots[0].track, trackA);
-    QVERIFY(writeBytes(second, secondBytes));
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_VERIFY(controller.comparisonPairReady());
-    const auto sessionB = controller.m_analysis.m_comparisonSlots[1].session;
-    // Hold one completion so swap/replacement races are deterministic.
-    QTRY_VERIFY(!controller.m_analysis.m_comparisonPending);
-    AnalysisController::OutingLapDetailResult stale;
-    stale.request = controller.m_analysis.m_comparisonSlots[1].request;
-    stale.session = sessionB; stale.error = "Obsolete worker result";
-    controller.m_analysis.m_comparisonSlots[1].state = "loading";
-    controller.m_analysis.m_comparisonPending = true; controller.m_analysis.m_comparisonLoadingSlot = 1;
-    QPromise<AnalysisController::OutingLapDetailResult> promise; promise.start();
-    controller.m_analysis.m_comparisonWatcher.setFuture(promise.future());
-    QVERIFY(controller.swapComparisonLaps());
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, sessionA);
-    promise.addResult(stale); promise.finish();
-    QTRY_VERIFY(controller.comparisonPairReady());
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, sessionA);
-    QVERIFY(controller.m_analysis.m_comparisonSlots[0].error.isEmpty());
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].row.value("reference"), b.value("reference"));
-    // Replacing editor run A invalidates only its B slot, retaining the other run.
-    const auto retained = controller.m_analysis.m_comparisonSlots[0].session;
-    const auto replacement = directory.filePath("replacement.vbo");
-    QVERIFY(writeBytes(replacement, EventProjectFixture::routeVbo(200, -1.2, 1, false, 450)));
-    QCOMPARE(controller.activeRunId(), runA);
-    controller.loadVbo(QUrl::fromLocalFile(replacement));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_VERIFY(!controller.outingLapsLoading());
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("error"));
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, retained);
-    // Starting another document clears both and cannot accept a late pair result.
-    QTRY_VERIFY(!controller.m_analysis.m_comparisonPending);
-    stale.request = controller.m_analysis.m_comparisonSlots[0].request;
-    controller.m_analysis.m_comparisonSlots[0].state = "loading";
-    controller.m_analysis.m_comparisonPending = true; controller.m_analysis.m_comparisonLoadingSlot = 0;
-    QPromise<AnalysisController::OutingLapDetailResult> late; late.start();
-    controller.m_analysis.m_comparisonWatcher.setFuture(late.future());
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath("day.fetproject"))));
-    controller.requestNewProject();
-    late.addResult(stale); late.finish();
-    QTRY_VERIFY(!controller.m_analysis.m_comparisonPending);
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("empty"));
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("empty"));
-    QVERIFY(!controller.m_analysis.m_comparisonSlots[0].session && !controller.m_analysis.m_comparisonSlots[1].session);
-}
-
-void TelemetryTests::persistsSegmentationAcrossSaveRecoveryAndReopen()
-{
-    // KAN-50: save, recovery and reopen keep segment IDs, bounds and review
-    // decisions; a result stamp stays current across them and goes stale on a
-    // segment edit, a calculation change or a layout change.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("session.vbo");
-    QVERIFY(writeBytes(path, EventProjectFixture::routeVbo()));
-    const auto projectPath = directory.filePath("segments.fetproject");
-    const auto recoveryPath = directory.filePath("recovery-after-reopen.json");
-    const QString calculation = "sector-times-test-v1";
-    const auto openReview = [](AppController &controller, const int lapIndex) {
-        QTRY_VERIFY(controller.selectOutingLap(lapIndex));
-        QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-        controller.requestSegmentReview();
-        QTRY_COMPARE(controller.segmentReviewState(), QString("ready"));
-    };
-    int lapIndex = -1;
-    QString runId, configuration, firstId, firstName;
-    double firstStart = 0.0, firstEnd = 0.0;
-    SegmentationResultStamp stamp;
-    {
-        AppController controller(nullptr, directory.filePath("recovery-first.json"));
-        QVERIFY(controller.importAnalysisRuns("Persistence", {QUrl::fromLocalFile(path)}));
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-        QTRY_VERIFY(!controller.outingLapsLoading());
-        const auto rows = controller.outingLaps();
-        for (int i = 0; i < rows.size() && lapIndex < 0; ++i) {
-            const auto row = rows[i].toMap();
-            if (row.value("type") == "LAP" && !row.value("compatibilityGroupId").toString().isEmpty()) lapIndex = i;
-        }
-        QVERIFY(lapIndex >= 0);
-        openReview(controller, lapIndex);
-        QVERIFY(controller.segmentReviewItems().size() >= 3);
-        runId = controller.selectedOutingLap().value("runId").toString();
-        configuration = controller.selectedOutingLap().value("compatibilityGroupId").toString();
-        QCOMPARE(controller.approveSegmentProposal(0), QString());
-        QVERIFY(controller.setSegmentProposalRejected(1, true));
-        QVERIFY(validTrackSegmentReview(controller.m_analysis.storedRunValue(runId, "trackSegmentReview")));
-        QVERIFY(controller.m_analysis.storedRunValue(runId, "trackSegmentReview").isObject());
-        const auto first = controller.m_analysis.storedRunTrackSegments(runId).toArray().first().toObject();
-        firstId = first.value("id").toString();
-        firstStart = first.value("startProgressMeters").toDouble();
-        firstEnd = first.value("endProgressMeters").toDouble();
-        firstName = QStringLiteral("Turn A");
-        QCOMPARE(controller.editApprovedSegment(firstId, firstName, first.value("type").toString(), firstStart, firstEnd, true),
-            QString());
-        stamp = segmentationResultStamp(controller.m_analysis.currentApprovedSegmentation(), calculation);
-        QVERIFY(segmentationResultCurrent(stamp, controller.m_analysis.currentApprovedSegmentation(), calculation));
-        // Restoring a rejection removes it from the document; rejecting again stores it.
-        QVERIFY(controller.setSegmentProposalRejected(1, false));
-        QVERIFY(controller.m_analysis.storedRunValue(runId, "trackSegmentReview").isUndefined());
-        QVERIFY(controller.setSegmentProposalRejected(1, true));
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
-        QVERIFY(!controller.dirty());
-    }
-    {
-        AppController reopened(nullptr, recoveryPath);
-        reopened.requestOpenProject(QUrl::fromLocalFile(projectPath));
-        QTRY_COMPARE(reopened.vboLoadState(), QString("ready"));
-        QTRY_VERIFY(!reopened.outingLapsLoading());
-        openReview(reopened, lapIndex);
-        auto items = reopened.segmentReviewItems();
-        QCOMPARE(items[0].toMap().value("state").toString(), QString("approved"));
-        QCOMPARE(items[0].toMap().value("approvedSegmentId").toString(), firstId);
-        QCOMPARE(items[1].toMap().value("state").toString(), QString("rejected"));
-        const auto reopenedFirst = reopened.m_analysis.storedRunTrackSegments(runId).toArray().first().toObject();
-        QCOMPARE(reopenedFirst.value("name").toString(), firstName);
-        QCOMPARE(reopenedFirst.value("startProgressMeters").toDouble(), firstStart);
-        QCOMPARE(reopenedFirst.value("endProgressMeters").toDouble(), firstEnd);
-        QVERIFY(segmentationResultCurrent(stamp, reopened.m_analysis.currentApprovedSegmentation(), calculation));
-        QVERIFY(!segmentationResultCurrent(stamp, reopened.m_analysis.currentApprovedSegmentation(), "sector-times-test-v2"));
-
-        // Unsaved changes survive through the recovery snapshot, not the saved file.
-        QCOMPARE(reopened.approveSegmentProposal(2), QString());
-        QVERIFY(reopened.dirty());
-        reopened.m_document.writeRecoverySnapshot();
-        QVERIFY(QFileInfo::exists(recoveryPath));
-    }
-    {
-        AppController recovered(nullptr, recoveryPath);
-        QVERIFY(recovered.recoveryPending());
-        recovered.resolveStartupRecovery("recover");
-        QTRY_COMPARE(recovered.vboLoadState(), QString("ready"));
-        QTRY_VERIFY(!recovered.outingLapsLoading());
-        QVERIFY(recovered.dirty());
-        openReview(recovered, lapIndex);
-        const auto items = recovered.segmentReviewItems();
-        QCOMPARE(items[0].toMap().value("approvedSegmentId").toString(), firstId);
-        QCOMPARE(items[1].toMap().value("state").toString(), QString("rejected"));
-        QCOMPARE(items[2].toMap().value("state").toString(), QString("approved"));
-        QCOMPARE(recovered.m_analysis.storedRunTrackSegments(runId).toArray().size(), 2);
-        // The unsaved approval is a segment edit: the earlier stamp is stale.
-        QVERIFY(!segmentationResultCurrent(stamp, recovered.m_analysis.currentApprovedSegmentation(), calculation));
-        const auto recoveredStamp = segmentationResultStamp(recovered.m_analysis.currentApprovedSegmentation(), calculation);
-        QVERIFY(segmentationResultCurrent(recoveredStamp, recovered.m_analysis.currentApprovedSegmentation(), calculation));
-
-        // A layout change produces a different configuration: the stored segments are
-        // kept (IDs intact) but no longer apply, so no result stays current.
-        QVERIFY(recovered.setRunTrackConfiguration(runId, "Changed", "clockwise"));
-        QTRY_VERIFY(!recovered.outingLapsLoading() && recovered.m_analysis.m_outingLapRequestedKey == recovered.m_analysis.outingLapKey());
-        QString changedConfiguration;
-        for (const auto &row : recovered.outingLaps()) {
-            const auto map = row.toMap();
-            if (map.value("runId").toString() == runId && map.value("type") == "LAP")
-                changedConfiguration = map.value("compatibilityGroupId").toString();
-        }
-        QVERIFY(changedConfiguration != configuration);
-        const auto stored = recovered.m_analysis.storedRunTrackSegments(runId);
-        QCOMPARE(stored.toArray().size(), 2);
-        QCOMPARE(stored.toArray().first().toObject().value("id").toString(), firstId);
-        const auto afterLayout = approvedSegmentation(stored, changedConfiguration);
-        QCOMPARE(afterLayout.otherConfigurationSegments, 2);
-        QVERIFY(afterLayout.segments.isEmpty());
-        QVERIFY(!segmentationResultCurrent(recoveredStamp, afterLayout, calculation));
-    }
-}
-
-void TelemetryTests::timesApprovedSectorsForTheOpenLap()
-{
-    // KAN-51: approving every proposal and splitting the gate-crossing one at the
-    // gate tiles the lap; sector times then sum to the lap time within tolerance.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("session.vbo");
-    QVERIFY(writeBytes(path, EventProjectFixture::routeVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Sectors", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    int lapIndex = -1;
-    const auto rows = controller.outingLaps();
-    for (int i = 0; i < rows.size() && lapIndex < 0; ++i) {
-        const auto row = rows[i].toMap();
-        if (row.value("type") == "LAP" && !row.value("compatibilityGroupId").toString().isEmpty()) lapIndex = i;
-    }
-    QVERIFY(lapIndex >= 0);
-    QVERIFY(!controller.outingLapSectorTimes().value("valid").toBool()); // no review yet
-    QVERIFY(controller.selectOutingLap(lapIndex));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    controller.requestSegmentReview();
-    QTRY_COMPARE(controller.segmentReviewState(), QString("ready"));
-    const auto runId = controller.selectedOutingLap().value("runId").toString();
-
-    // Nothing approved: valid, no sectors, no revision.
-    auto times = controller.outingLapSectorTimes();
-    QVERIFY(times.value("valid").toBool());
-    QVERIFY(times.value("sectors").toList().isEmpty());
-    QVERIFY(times.value("revision").toString().isEmpty());
-
-    const auto count = controller.segmentReviewItems().size();
-    for (int i = 0; i < count; ++i) QCOMPARE(controller.approveSegmentProposal(i), QString());
-    QString wrappingId;
-    for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray()) {
-        const auto segment = value.toObject();
-        if (segment.value("endProgressMeters").toDouble() < segment.value("startProgressMeters").toDouble())
-            wrappingId = segment.value("id").toString();
-    }
-    if (!wrappingId.isEmpty()) {
-        // KAN-120: unsplit, the gate-crossing segment is timed within the lap
-        // and the approved set already tiles it; splitting keeps the same sum.
-        times = controller.outingLapSectorTimes();
-        QVERIFY(times.value("completePartition").toBool());
-        QVERIFY(times.contains("sumSeconds"));
-        QVERIFY(times.value("partitionErrorSeconds").toDouble() <= sectorSumToleranceSeconds);
-        QCOMPARE(controller.splitApprovedSegment(wrappingId, controller.segmentReviewAxisLength()), QString());
-    }
-
-    times = controller.outingLapSectorTimes();
-    QVERIFY(times.value("valid").toBool());
-    QVERIFY(times.value("completePartition").toBool());
-    QCOMPARE(times.value("revision").toString(), controller.segmentReviewApproved().value("revision").toString());
-    QCOMPARE(times.value("calculationAlgorithm").toString(), QString(sectorTimingAlgorithm));
-    const auto sectors = times.value("sectors").toList();
-    QCOMPARE(sectors.size(), controller.m_analysis.storedRunTrackSegments(runId).toArray().size());
-    for (const auto &value : sectors) {
-        const auto sector = value.toMap();
-        QVERIFY2(sector.contains("seconds"), qPrintable(sector.value("name").toString() + ": "
-            + sector.value("unavailableReason").toString()));
-        QVERIFY(sector.value("seconds").toDouble() > 0.0);
-    }
-    QVERIFY(times.contains("sumSeconds"));
-    const double lapSeconds = controller.selectedOutingLap().value("endTime").toDouble()
-        - controller.selectedOutingLap().value("startTime").toDouble();
-    QVERIFY(std::abs(times.value("lapSeconds").toDouble() - lapSeconds) < 1e-9);
-    QVERIFY(times.value("partitionErrorSeconds").toDouble() <= sectorSumToleranceSeconds);
-
-    // KAN-52: the route has no recorded speed channel, so corner speeds are
-    // explicitly unavailable rather than derived from GPS positions.
-    const auto corners = controller.outingLapCornerSpeeds();
-    QVERIFY(!corners.isEmpty());
-    for (const auto &value : corners) {
-        const auto corner = value.toMap();
-        QCOMPARE(corner.value("provenance").toString(), QString("unavailable"));
-        QCOMPARE(corner.value("calculationAlgorithm").toString(), QString(cornerSpeedsAlgorithm));
-        for (const auto *phase : {"entry", "apex", "minimum", "exit"}) {
-            QVERIFY(!corner.value(phase).toMap().contains("value"));
-            QCOMPARE(corner.value(phase).toMap().value("unavailableReason").toString(), QString(cornerPhaseSpeedChannelMissing));
-        }
-    }
-
-    // KAN-53: without brake or acceleration channels there is no braking point,
-    // and no distance or deceleration is invented.
-    const auto braking = controller.outingLapBrakingMetrics();
-    QCOMPARE(braking.size(), corners.size());
-    for (const auto &value : braking) {
-        const auto metrics = value.toMap();
-        QCOMPARE(metrics.value("unavailableReason").toString(), QString(brakingNoChannel));
-        QVERIFY(!metrics.contains("brakingPointMeters"));
-        QVERIFY(!metrics.contains("brakingDistanceMeters"));
-        QVERIFY(!metrics.contains("peakDeceleration"));
-        QCOMPARE(metrics.value("calculationAlgorithm").toString(), QString(brakingMetricsAlgorithm));
-    }
-
-    // KAN-54: no throttle or acceleration channel means no pickup; the following
-    // interval is still timed from the projection, without any speed values.
-    const auto exits = controller.outingLapExitMetrics();
-    QCOMPARE(exits.size(), corners.size());
-    bool timedInterval = false;
-    for (const auto &value : exits) {
-        const auto exit = value.toMap();
-        QCOMPARE(exit.value("pickup").toMap().value("unavailableReason").toString(), QString(exitNoChannel));
-        QVERIFY(!exit.value("pickup").toMap().contains("progressMeters"));
-        QVERIFY(!exit.contains("exitSpeed"));
-        QVERIFY(!exit.contains("intervalEndSpeed"));
-        timedInterval |= exit.contains("elapsedSeconds") && exit.value("elapsedSeconds").toDouble() > 0.0;
-    }
-    QVERIFY(timedInterval);
-}
-
-void TelemetryTests::showsCornerAnalyzerSegmentMetricsForBothLaps()
-{
-    // KAN-55: two laps of the SAME run/file share one run id, so approving
-    // segments once (via the ordinary single-lap review flow, on either lap)
-    // gives both comparison slots the identical approved revision -- this is
-    // the ordinary "compare two laps from one session" case, not the harder
-    // cross-run case where each run keeps its own independently-approved
-    // trackSegments and only a matching revision makes them comparable.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("session.vbo");
-    QVERIFY(writeBytes(path, EventProjectFixture::routeVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Corner Analyzer", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto candidates = controller.comparisonLaps(); QVERIFY(candidates.size() >= 2);
-    const auto a = candidates[0].toMap(), b = candidates[1].toMap();
-
-    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_VERIFY(controller.comparisonPairReady());
-
-    // No segments approved yet: nothing to show, not an empty-but-valid list.
-    QVERIFY(controller.comparisonApprovedSegments().isEmpty());
-    QVERIFY(controller.comparisonSegmentMetrics("anything").isEmpty());
-
-    // Approve every proposal on lap A's underlying run (shared with lap B).
-    int lapIndex = -1;
-    const auto rows = controller.outingLaps();
-    for (int i = 0; i < rows.size() && lapIndex < 0; ++i) {
-        const auto row = rows[i].toMap();
-        if (row.value("type") == "LAP" && !row.value("compatibilityGroupId").toString().isEmpty()) lapIndex = i;
-    }
-    QVERIFY(lapIndex >= 0);
-    QVERIFY(controller.selectOutingLap(lapIndex));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    controller.requestSegmentReview();
-    QTRY_COMPARE(controller.segmentReviewState(), QString("ready"));
-    const auto runId = controller.selectedOutingLap().value("runId").toString();
-    const auto count = controller.segmentReviewItems().size();
-    for (int i = 0; i < count; ++i) QCOMPARE(controller.approveSegmentProposal(i), QString());
-    QString wrappingId;
-    for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray()) {
-        const auto segment = value.toObject();
-        if (segment.value("endProgressMeters").toDouble() < segment.value("startProgressMeters").toDouble())
-            wrappingId = segment.value("id").toString();
-    }
-    if (!wrappingId.isEmpty())
-        QCOMPARE(controller.splitApprovedSegment(wrappingId, controller.segmentReviewAxisLength()), QString());
-    const auto approvedSegments = controller.m_analysis.storedRunTrackSegments(runId).toArray();
-    QVERIFY(!approvedSegments.isEmpty());
-    controller.closeOutingLap();
-
-    // Both slots resolve the same run's approved segmentation: available now.
-    const auto segments = controller.comparisonApprovedSegments();
-    QCOMPARE(segments.size(), approvedSegments.size());
-    QString cornerId, otherId;
-    for (const auto &value : segments) {
-        const auto segment = value.toMap();
-        QVERIFY(!segment.value("id").toString().isEmpty());
-        if (segment.value("type") == "corner" && cornerId.isEmpty()) cornerId = segment.value("id").toString();
-        else if (otherId.isEmpty()) otherId = segment.value("id").toString();
-    }
-
-    // A non-corner (or any) segment always reports sector time -- both laps
-    // took a real, positive amount of time through it, projected on the
-    // shared comparison axis, not each lap's own distance-into-lap.
-    const auto anyId = cornerId.isEmpty() ? otherId : cornerId;
-    QVERIFY(!anyId.isEmpty());
-    const auto metrics = controller.comparisonSegmentMetrics(anyId);
-    QCOMPARE(metrics.value("segmentId").toString(), anyId);
-    const auto sectorTime = metrics.value("sectorTime").toMap();
-    QVERIFY(!sectorTime.isEmpty());
-    for (const auto *side : {"a", "b"}) {
-        const auto value = sectorTime.value(side).toMap();
-        QVERIFY2(value.contains("value"), qPrintable(value.value("unavailableReason").toString()));
-        QCOMPARE(value.value("provenance").toString(), QString("calculated"));
-        QVERIFY(value.value("value").toDouble() > 0.0);
-    }
-    QVERIFY(sectorTime.value("delta").toMap().contains("value"));
-
-    // A corner segment: the route has no recorded speed channel, so every
-    // corner/braking/exit value is explicitly unavailable, never derived from
-    // GPS positions -- the same invariant outingLapCornerSpeeds already proves
-    // for the single-lap case, now also true through the A/B combination.
-    if (!cornerId.isEmpty()) {
-        const auto cornerMetrics = controller.comparisonSegmentMetrics(cornerId);
-        const auto corner = cornerMetrics.value("corner").toMap();
-        QVERIFY(!corner.isEmpty());
-        for (const auto *phase : {"entry", "apex", "minimum", "exit"}) {
-            const auto phaseMap = corner.value(phase).toMap();
-            for (const auto *side : {"a", "b"}) {
-                const auto value = phaseMap.value(side).toMap();
-                QVERIFY(!value.contains("value"));
-                QCOMPARE(value.value("unavailableReason").toString(), QString(cornerPhaseSpeedChannelMissing));
-                QCOMPARE(value.value("provenance").toString(), QString("unavailable"));
-            }
-        }
-        const auto braking = cornerMetrics.value("braking").toMap();
-        QVERIFY(!braking.isEmpty());
-        QCOMPARE(braking.value("point").toMap().value("a").toMap().value("unavailableReason").toString(), QString(brakingNoChannel));
-        const auto exitEffects = cornerMetrics.value("exitEffects").toMap();
-        QVERIFY(!exitEffects.isEmpty());
-        QCOMPARE(exitEffects.value("pickup").toMap().value("a").toMap().value("unavailableReason").toString(), QString(exitNoChannel));
-    }
-
-    // An unknown segment id is never fabricated into a result.
-    QVERIFY(controller.comparisonSegmentMetrics("not-a-real-id").isEmpty());
-}
-
-void TelemetryTests::calculatesOutingTheoreticalBestAcrossPopulation()
-{
-    // KAN-56: the fastest valid time per approved sector across every
-    // eligible lap of the current comparison group's population (here, one
-    // run's several laps -- routeVbo() has more than the two laps the
-    // comparison feature uses), not just a sum of each lap's own best.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("session.vbo");
-    QVERIFY(writeBytes(path, EventProjectFixture::routeVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Theoretical Best", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
-
-    // No run has approved segments yet: unavailable, not silently empty-but-ready.
-    controller.requestOutingTheoreticalBest();
-    QTRY_COMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("unavailable"));
-    QVERIFY(!controller.outingTheoreticalBest().value("message").toString().isEmpty());
-
-    // Approve every proposal on one lap's underlying run.
-    int lapIndex = -1;
-    const auto rows = controller.outingLaps();
-    for (int i = 0; i < rows.size() && lapIndex < 0; ++i) {
-        const auto row = rows[i].toMap();
-        if (row.value("type") == "LAP" && !row.value("compatibilityGroupId").toString().isEmpty()) lapIndex = i;
-    }
-    QVERIFY(lapIndex >= 0);
-    QVERIFY(controller.selectOutingLap(lapIndex));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    controller.requestSegmentReview();
-    QTRY_COMPARE(controller.segmentReviewState(), QString("ready"));
-    const auto runId = controller.selectedOutingLap().value("runId").toString();
-    const auto count = controller.segmentReviewItems().size();
-    for (int i = 0; i < count; ++i) QCOMPARE(controller.approveSegmentProposal(i), QString());
-    QString wrappingId;
-    for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray()) {
-        const auto segment = value.toObject();
-        if (segment.value("endProgressMeters").toDouble() < segment.value("startProgressMeters").toDouble())
-            wrappingId = segment.value("id").toString();
-    }
-    if (!wrappingId.isEmpty())
-        QCOMPARE(controller.splitApprovedSegment(wrappingId, controller.segmentReviewAxisLength()), QString());
-    const auto approvedSegments = controller.m_analysis.storedRunTrackSegments(runId).toArray();
-    QVERIFY(!approvedSegments.isEmpty());
-    controller.closeOutingLap();
-
-    controller.requestOutingTheoreticalBest();
-    QTRY_COMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("ready"));
-    const auto best = controller.outingTheoreticalBest();
-    const auto sectors = best.value("sectors").toList();
-    QCOMPARE(sectors.size(), approvedSegments.size());
-    bool anyTimed = false;
-    bool allTimed = true;
-    for (const auto &value : sectors) {
-        const auto sector = value.toMap();
-        QVERIFY(!sector.value("segmentId").toString().isEmpty());
-        if (sector.contains("seconds")) {
-            anyTimed = true;
-            QVERIFY(sector.value("seconds").toDouble() > 0.0);
-            QVERIFY(!sector.value("sourceLapLabel").toString().isEmpty());
-        } else {
-            allTimed = false;
-            QVERIFY(!sector.value("unavailableReason").toString().isEmpty());
-        }
-    }
-    QVERIFY(anyTimed);
-    QCOMPARE(best.contains("totalSeconds"), allTimed);
-}
-
 namespace {
-// A routeVbo() recording with every timestamp scaled: the same route and
-// gate (same compatibility group), uniformly faster when scale < 1.
-QByteArray scaledRouteVbo(const double scale)
-{
-    const auto lines = QString::fromUtf8(EventProjectFixture::routeVbo()).split('\n');
-    QStringList out;
-    bool data = false;
-    for (const auto &line : lines) {
-        if (!data || line.trimmed().isEmpty()) {
-            out << line;
-            data = data || line == "[data]";
-            continue;
-        }
-        auto fields = line.split(' ');
-        fields[0] = QString::number(fields[0].toDouble() * scale, 'f', 6);
-        out << fields.join(' ');
-    }
-    return out.join('\n').toUtf8();
-}
-
 // routeVbo() with each 48 s lap split into two halves of the revolution
 // driven at 0.9x and 1.1x the nominal time: every lap still takes exactly
 // 48 s, but one half is 10% quicker. `fastFirstHalf` picks which half.
@@ -2894,944 +1524,7 @@ QByteArray warpedRouteVbo(const bool fastFirstHalf, const int samplesPerLap = 24
     }
     return out.join('\n').toUtf8();
 }
-// routeVbo() with calculated acceleration columns: lateral = scale·sin(angle),
-// longitudinal = scale·0.5·cos(angle), so the peaks are known (scale lateral,
-// scale·0.5 braking and accelerating).
-QByteArray routeVboWithAccelerations(const double scale, const int samplesPerLap = 240)
-{
-    const auto lines = QString::fromUtf8(EventProjectFixture::routeVbo(samplesPerLap)).split('\n');
-    QStringList out;
-    bool data = false;
-    int index = 0;
-    for (const auto &line : lines) {
-        if (line == "time latitude longitude") { out << line + " longacc-calc latacc-calc"; continue; }
-        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
-        const double angle = -1.0 + 2 * std::numbers::pi * index / samplesPerLap;
-        out << line + QString(" %1 %2").arg(scale * 0.5 * std::cos(angle), 0, 'f', 5).arg(scale * std::sin(angle), 0, 'f', 5);
-        ++index;
-    }
-    return out.join('\n').toUtf8();
-}
-// routeVbo() with a coolant temperature column: three OBD placeholder zeros,
-// then 80 °C rising by 0.01 °C per sample.
-QByteArray routeVboWithCoolant(const int samplesPerLap = 240)
-{
-    const auto lines = QString::fromUtf8(EventProjectFixture::routeVbo(samplesPerLap)).split('\n');
-    QStringList out;
-    bool data = false;
-    int index = 0;
-    for (const auto &line : lines) {
-        if (line == "time latitude longitude") { out << line + " coolant_temp-obd"; continue; }
-        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
-        out << line + QString(" %1").arg(index < 3 ? 0.0 : 80.0 + 0.01 * index, 0, 'f', 3);
-        ++index;
-    }
-    return out.join('\n').toUtf8();
-}
-// routeVbo() with a heart-rate column held for five rows at a time (a strap
-// updates slower than the logger), at `level` bpm with one 255 bpm artifact.
-QByteArray routeVboWithHeartRate(const double level, const int samplesPerLap = 240)
-{
-    const auto lines = QString::fromUtf8(EventProjectFixture::routeVbo(samplesPerLap)).split('\n');
-    QStringList out;
-    bool data = false;
-    int index = 0;
-    for (const auto &line : lines) {
-        if (line == "time latitude longitude") { out << line + " heart_rate"; continue; }
-        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
-        const double value = index == 100 ? 255.0 : level + ((index / 5) % 2 == 0 ? -2.0 : 2.0);
-        out << line + QString(" %1").arg(value, 0, 'f', 1);
-        ++index;
-    }
-    return out.join('\n').toUtf8();
-}
-// `base` (a routeVbo()-style recording) with extra data columns: `names`
-// are appended to the column line, `values(row)` supplies each row's values.
-QByteArray withColumns(const QByteArray &base, const QStringList &names, const std::function<QStringList(int)> &values)
-{
-    const auto lines = QString::fromUtf8(base).split('\n');
-    QStringList out;
-    bool data = false;
-    int index = 0;
-    for (const auto &line : lines) {
-        if (line == "time latitude longitude") { out << line + " " + names.join(' '); continue; }
-        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
-        out << line + " " + values(index).join(' ');
-        ++index;
-    }
-    return out.join('\n').toUtf8();
-}
-// A complete M4 recording: warpedRouteVbo() with heart rate at `heartRate`
-// bpm, coolant from `coolantStart` rising 0.01 per row, and accelerations
-// with lateral peak `gScale` and braking/accelerating peaks gScale/2.
-// `vbo` with a constant 100 km/h velocity column appended (the route
-// fixtures have no speed channel).
-// KAN-103: a session recording with a non-periodic speed trace, optionally
-// an OBD coolant channel, and a speed bias for a disagreeing logger.
-QByteArray withSessionSpeed(const QByteArray &vbo, const bool coolant, const double speedBias = 0.0)
-{
-    QStringList out;
-    bool data = false;
-    for (const auto &line : QString::fromUtf8(vbo).split('\n')) {
-        if (line.startsWith("time latitude longitude")) { out << line + " velocity" + (coolant ? " coolant_temp-obd" : ""); continue; }
-        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
-        const double t = line.split(' ').first().toDouble();
-        const double speed = 90.0 + 25.0 * std::sin(0.11 * t) + 12.0 * std::sin(0.0007 * t * t) + speedBias;
-        out << line + QString(" %1").arg(speed, 0, 'f', 3) + (coolant ? QString(" %1").arg(88.0 + 0.02 * t, 0, 'f', 3) : "");
-    }
-    return out.join('\n').toUtf8();
-}
-QByteArray withVelocity(const QByteArray &vbo)
-{
-    QStringList out;
-    bool data = false;
-    for (const auto &line : QString::fromUtf8(vbo).split('\n')) {
-        if (line.startsWith("time latitude longitude")) { out << line + " velocity"; continue; }
-        if (!data || line.trimmed().isEmpty()) { out << line; data = data || line == "[data]"; continue; }
-        out << line + " 100.0";
-    }
-    return out.join('\n').toUtf8();
-}
-QByteArray fullM4Vbo(const bool fastFirstHalf, const double heartRate, const double coolantStart, const double gScale)
-{
-    return withColumns(warpedRouteVbo(fastFirstHalf), {"heart_rate", "coolant_temp-obd", "longacc-calc", "latacc-calc"},
-        [=](const int index) {
-            const double angle = -1.0 + 2 * std::numbers::pi * index / 240;
-            return QStringList{QString::number(heartRate, 'f', 1), QString::number(coolantStart + 0.01 * index, 'f', 3),
-                QString::number(gScale * 0.5 * std::cos(angle), 'f', 5), QString::number(gScale * std::sin(angle), 'f', 5)};
-        });
-}
 } // namespace
-
-// Approves every proposal on the first eligible lap of `runName`'s run and
-// splits a gate-crossing segment, returning the stored segments.
-QJsonArray TelemetryTests::approveAllSegmentsOnRun(AppController &controller, const QString &runName)
-{
-    int lapIndex = -1;
-    const auto rows = controller.outingLaps();
-    for (int i = 0; i < rows.size() && lapIndex < 0; ++i) {
-        const auto row = rows[i].toMap();
-        if (row.value("type") == "LAP" && row.value("runName").toString() == runName
-            && !row.value("compatibilityGroupId").toString().isEmpty()) lapIndex = i;
-    }
-    if (lapIndex < 0 || !controller.selectOutingLap(lapIndex)) return {};
-    if (!QTest::qWaitFor([&] { return controller.outingLapDetailState() == "ready"; }, 20000)) return {};
-    controller.requestSegmentReview();
-    if (!QTest::qWaitFor([&] { return controller.segmentReviewState() == "ready"; }, 20000)) return {};
-    const auto runId = controller.selectedOutingLap().value("runId").toString();
-    const auto count = controller.segmentReviewItems().size();
-    for (int i = 0; i < count; ++i) if (!controller.approveSegmentProposal(i).isEmpty()) return {};
-    for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray()) {
-        const auto segment = value.toObject();
-        if (segment.value("endProgressMeters").toDouble() < segment.value("startProgressMeters").toDouble()
-            && !controller.splitApprovedSegment(segment.value("id").toString(), controller.segmentReviewAxisLength()).isEmpty())
-            return {};
-    }
-    const auto approved = controller.m_analysis.storedRunTrackSegments(runId).toArray();
-    controller.closeOutingLap();
-    return approved;
-}
-
-void TelemetryTests::opensTheoreticalBestDonorFromAnotherRun()
-{
-    // KAN-57: segments approved only on the slower run; the other run is
-    // uniformly 10% faster, so every donor lap and the actual best come from
-    // a run with no approved segments of its own. The theoretical best still
-    // times them on the canonical axis, and opening a sector compares donor
-    // against actual best using that same, labelled segmentation.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto slow = directory.filePath("slow.vbo"), fast = directory.filePath("fast.vbo");
-    QVERIFY(writeBytes(slow, EventProjectFixture::routeVbo()));
-    QVERIFY(writeBytes(fast, scaledRouteVbo(0.9)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Donors", {QUrl::fromLocalFile(slow), QUrl::fromLocalFile(fast)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
-    QString slowName, fastName;
-    for (const auto &value : controller.outingLaps()) {
-        const auto row = value.toMap();
-        if (row.value("type") != "LAP") continue;
-        const auto seconds = row.value("endTime").toDouble() - row.value("startTime").toDouble();
-        (seconds > 45.0 ? slowName : fastName) = row.value("runName").toString();
-    }
-    QVERIFY(!slowName.isEmpty() && !fastName.isEmpty() && slowName != fastName);
-    const auto approved = approveAllSegmentsOnRun(controller, slowName);
-    QVERIFY(!approved.isEmpty());
-
-    controller.requestOutingTheoreticalBest();
-    QTRY_COMPARE_WITH_TIMEOUT(controller.outingTheoreticalBest().value("state").toString(), QString("ready"), 30000);
-    const auto best = controller.outingTheoreticalBest();
-    QCOMPARE(best.value("algorithm").toString(), QString("theoretical-best-v1"));
-    const auto actual = best.value("actualBest").toMap();
-    QVERIFY(actual.value("label").toString().startsWith(fastName));
-    const auto sectors = best.value("sectors").toList();
-    QCOMPARE(sectors.size(), approved.size());
-    QString timedId;
-    for (const auto &value : sectors) {
-        const auto sector = value.toMap();
-        if (!sector.contains("seconds")) continue;
-        if (timedId.isEmpty()) timedId = sector.value("segmentId").toString();
-        QVERIFY2(sector.value("sourceLapLabel").toString().startsWith(fastName),
-            qPrintable(sector.value("sourceLapLabel").toString()));
-        // The actual best is itself in the population: never faster than the theoretical sector.
-        QVERIFY(sector.contains("actualSeconds"));
-        QVERIFY(sector.value("lossSeconds").toDouble() >= -1e-9);
-    }
-    QVERIFY(!timedId.isEmpty());
-    if (best.contains("totalSeconds")) QVERIFY(best.value("differenceSeconds").toDouble() >= -1e-9);
-
-    QVERIFY(!controller.openTheoreticalBestSector("not-a-real-id"));
-    QVERIFY(controller.openTheoreticalBestSector(timedId));
-    QVERIFY(controller.comparisonViewOpen());
-    QCOMPARE(controller.comparisonFocusSegmentId(), timedId);
-    QTRY_VERIFY(controller.comparisonPairReady());
-    // Neither lap's own run has approved segments: the canonical segmentation applies, with a note.
-    const auto segments = controller.comparisonApprovedSegments();
-    QCOMPARE(segments.size(), approved.size());
-    QVERIFY(!controller.comparisonSegmentationNote().isEmpty());
-    const auto metrics = controller.comparisonSegmentMetrics(timedId);
-    QVERIFY(metrics.value("sectorTime").toMap().value("a").toMap().contains("value"));
-    QVERIFY(metrics.value("sectorTime").toMap().value("b").toMap().contains("value"));
-
-    // Closing the view drops the borrowed segmentation and the focus request.
-    controller.setComparisonViewOpen(false);
-    QVERIFY(controller.comparisonFocusSegmentId().isEmpty());
-    QVERIFY(controller.comparisonApprovedSegments().isEmpty());
-    QVERIFY(controller.comparisonSegmentationNote().isEmpty());
-}
-
-void TelemetryTests::acceptsM3SegmentationCornerAndTheoreticalBestWorkflow()
-{
-    // KAN-58 (M3 acceptance): proposal -> review -> correction -> save ->
-    // reopen -> corner comparison -> donor-sector navigation, with a
-    // known-time fixture, cache invalidation, a missing speed sensor and a
-    // changed layout. Two runs lap in exactly 48 s each, one 10% quicker in
-    // the first half of the revolution and the other in the second half, so
-    // the sector theoretical best must be clearly quicker than either lap
-    // and must take donors from both runs.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("fastfirst.vbo"), second = directory.filePath("fastsecond.vbo");
-    QVERIFY(writeBytes(first, warpedRouteVbo(true)));
-    QVERIFY(writeBytes(second, warpedRouteVbo(false)));
-    const auto projectPath = directory.filePath("m3.fetproject");
-    const auto ready = [](AppController &controller) {
-        controller.requestOutingTheoreticalBest();
-        return QTest::qWaitFor([&] { return controller.outingTheoreticalBest().value("state") != "loading"; }, 30000)
-            && controller.outingTheoreticalBest().value("state") == "ready";
-    };
-    QString revision;
-    double total = 0.0;
-    qsizetype sectorCount = 0;
-    {
-        AppController controller(nullptr, directory.filePath("recovery-first.json"));
-        QVERIFY(controller.importAnalysisRuns("M3 acceptance", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-        QTRY_VERIFY(!controller.outingLapsLoading());
-        QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
-
-        // Proposal and review: approve every proposal on one run only.
-        const auto approved = approveAllSegmentsOnRun(controller, "Session 1");
-        QVERIFY(approved.size() >= 3);
-
-        // Known-time sums.
-        QVERIFY2(ready(controller), qPrintable(controller.outingTheoreticalBest().value("message").toString()));
-        auto best = controller.outingTheoreticalBest();
-        const auto actual = best.value("actualBest").toMap();
-        QVERIFY(actual.value("coversWholeLap").toBool());
-        QVERIFY2(qAbs(actual.value("lapSeconds").toDouble() - 48.0) < 0.05, qPrintable(actual.value("lapSeconds").toString()));
-        QVERIFY(qAbs(actual.value("sectorSumSeconds").toDouble() - actual.value("lapSeconds").toDouble()) < 0.01);
-        QVERIFY(best.contains("totalSeconds"));
-        total = best.value("totalSeconds").toDouble();
-        QVERIFY2(total < 48.0 - 0.5 && total > 43.2 - 0.05, qPrintable(QString::number(total, 'f', 3)));
-        QVERIFY(qAbs(best.value("differenceSeconds").toDouble()
-            - (actual.value("sectorSumSeconds").toDouble() - total)) < 1e-6);
-        QSet<QString> donorRuns;
-        for (const auto &value : best.value("sectors").toList())
-            donorRuns.insert(value.toMap().value("sourceLapLabel").toString().section(" · ", 0, 0));
-        QVERIFY2(donorRuns.contains("Session 1") && donorRuns.contains("Session 2"),
-            qPrintable(QStringList(donorRuns.values()).join(", ")));
-        revision = best.value("revision").toString();
-        QVERIFY(!revision.isEmpty());
-
-        // Correction invalidates the cached result; a finer partition can only lower the sum.
-        int lapIndex = -1;
-        const auto rows = controller.outingLaps();
-        for (int i = 0; i < rows.size() && lapIndex < 0; ++i)
-            if (rows[i].toMap().value("type") == "LAP" && rows[i].toMap().value("runName") == "Session 1") lapIndex = i;
-        QVERIFY(controller.selectOutingLap(lapIndex));
-        QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-        controller.requestSegmentReview();
-        QTRY_COMPARE(controller.segmentReviewState(), QString("ready"));
-        QCOMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("ready"));
-        const auto runId = controller.selectedOutingLap().value("runId").toString();
-        QJsonObject splittable;
-        for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray())
-            if (splittable.isEmpty() && value.toObject().value("endProgressMeters").toDouble()
-                    > value.toObject().value("startProgressMeters").toDouble() + 40.0) splittable = value.toObject();
-        QVERIFY(!splittable.isEmpty());
-        QCOMPARE(controller.splitApprovedSegment(splittable.value("id").toString(),
-            (splittable.value("startProgressMeters").toDouble() + splittable.value("endProgressMeters").toDouble()) / 2.0), QString());
-        QTRY_COMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("idle"));
-        controller.closeOutingLap();
-        QVERIFY(ready(controller));
-        best = controller.outingTheoreticalBest();
-        QVERIFY(best.value("revision").toString() != revision);
-        QCOMPARE(best.value("sectors").toList().size(), approved.size() + 1);
-        QVERIFY(best.value("totalSeconds").toDouble() <= total + 1e-6);
-        revision = best.value("revision").toString();
-        total = best.value("totalSeconds").toDouble();
-        sectorCount = best.value("sectors").toList().size();
-
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
-        QVERIFY(!controller.dirty());
-    }
-    {
-        // Reopen: the same approved revision gives the same result.
-        AppController reopened(nullptr, directory.filePath("recovery-reopen.json"));
-        reopened.requestOpenProject(QUrl::fromLocalFile(projectPath));
-        QTRY_COMPARE(reopened.vboLoadState(), QString("ready"));
-        QTRY_VERIFY(!reopened.outingLapsLoading());
-        QTRY_VERIFY(!reopened.outingComparisonGroupId().isEmpty());
-        QVERIFY(ready(reopened));
-        const auto best = reopened.outingTheoreticalBest();
-        QCOMPARE(best.value("revision").toString(), revision);
-        QCOMPARE(best.value("sectors").toList().size(), sectorCount);
-        QVERIFY(qAbs(best.value("totalSeconds").toDouble() - total) < 1e-6);
-
-        // Donor-sector navigation into the corner comparison; the route has
-        // no speed channel, so corner speeds are unavailable, never derived.
-        QString cornerId;
-        for (const auto &value : best.value("sectors").toList())
-            if (cornerId.isEmpty() && value.toMap().value("type") == "corner" && value.toMap().contains("seconds"))
-                cornerId = value.toMap().value("segmentId").toString();
-        QVERIFY(!cornerId.isEmpty());
-        QVERIFY(reopened.openTheoreticalBestSector(cornerId));
-        QTRY_VERIFY(reopened.comparisonPairReady());
-        QCOMPARE(reopened.comparisonApprovedSegments().size(), sectorCount);
-        const auto metrics = reopened.comparisonSegmentMetrics(cornerId);
-        QVERIFY(metrics.value("sectorTime").toMap().value("a").toMap().contains("value"));
-        QVERIFY(metrics.value("sectorTime").toMap().value("b").toMap().contains("value"));
-        QCOMPARE(metrics.value("corner").toMap().value("entry").toMap().value("a").toMap().value("unavailableReason").toString(),
-            QString(cornerPhaseSpeedChannelMissing));
-        reopened.setComparisonViewOpen(false);
-
-        // A layout change: the approved segments no longer apply to the run.
-        QString runId;
-        for (const auto &value : reopened.outingLaps())
-            if (value.toMap().value("runName") == "Session 1") runId = value.toMap().value("runId").toString();
-        QVERIFY(reopened.setRunTrackConfiguration(runId, "Changed", "clockwise"));
-        QTRY_VERIFY(!reopened.outingLapsLoading() && reopened.m_analysis.m_outingLapRequestedKey == reopened.m_analysis.outingLapKey());
-        QTRY_COMPARE(reopened.outingTheoreticalBest().value("state").toString(), QString("idle"));
-        reopened.requestOutingTheoreticalBest();
-        QTRY_VERIFY(reopened.outingTheoreticalBest().value("state") != "loading");
-        QCOMPARE(reopened.outingTheoreticalBest().value("state").toString(), QString("unavailable"));
-    }
-}
-
-void TelemetryTests::derivesTimeLossObservationsForComparisonPair()
-{
-    // KAN-59: one loss window per approved segment for the comparison pair.
-    // Both runs lap in 48 s but are quick in opposite halves, so windows show
-    // real losses and gains that net to the lap-time difference, and the
-    // running delta is reported separately from each window's increment.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("fastfirst.vbo"), second = directory.filePath("fastsecond.vbo");
-    QVERIFY(writeBytes(first, warpedRouteVbo(true)));
-    QVERIFY(writeBytes(second, warpedRouteVbo(false)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Losses", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
-    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
-    QVERIFY(!controller.comparisonTimeLossObservations().value("valid").toBool()); // no pair yet
-
-    // A pair from different runs, measured against the canonical segments.
-    controller.requestOutingTheoreticalBest();
-    QTRY_COMPARE_WITH_TIMEOUT(controller.outingTheoreticalBest().value("state").toString(), QString("ready"), 30000);
-    const auto best = controller.outingTheoreticalBest();
-    const auto actualRun = best.value("actualBest").toMap().value("label").toString().section(" · ", 0, 0);
-    QString crossRunSector;
-    for (const auto &value : best.value("sectors").toList()) {
-        const auto sector = value.toMap();
-        if (crossRunSector.isEmpty() && sector.contains("seconds")
-            && sector.value("sourceLapLabel").toString().section(" · ", 0, 0) != actualRun)
-            crossRunSector = sector.value("segmentId").toString();
-    }
-    QVERIFY(!crossRunSector.isEmpty());
-    QVERIFY(controller.openTheoreticalBestSector(crossRunSector));
-    QTRY_VERIFY(controller.comparisonPairReady());
-
-    const auto losses = controller.comparisonTimeLossObservations();
-    QVERIFY(losses.value("valid").toBool());
-    QCOMPARE(losses.value("algorithm").toString(), QString("time-loss-windows-v1"));
-    const auto windows = losses.value("windows").toList();
-    QCOMPARE(windows.size(), controller.comparisonApprovedSegments().size());
-    QVERIFY(losses.value("allWindowsTimed").toBool());
-    QVERIFY2(std::abs(losses.value("timedIncrementSumSeconds").toDouble() - losses.value("lapDeltaSeconds").toDouble()) < 0.01,
-        qPrintable(QString("%1 vs %2").arg(losses.value("timedIncrementSumSeconds").toDouble())
-            .arg(losses.value("lapDeltaSeconds").toDouble())));
-    bool lost = false, gained = false;
-    double previousEnd = 0.0, previousCumulative = 0.0;
-    for (qsizetype i = 0; i < windows.size(); ++i) {
-        const auto window = windows[i].toMap();
-        const auto increment = window.value("incrementSeconds").toDouble();
-        lost |= increment > 0.5;
-        gained |= increment < -0.5;
-        QVERIFY(std::abs(increment - (window.value("cumulativeAtEndSeconds").toDouble()
-            - window.value("cumulativeAtStartSeconds").toDouble())) < 1e-6);
-        // Windows are in track order and never overlap; the running delta carries over.
-        if (i > 0) {
-            QVERIFY(window.value("startMeters").toDouble() >= previousEnd - 1e-6);
-            QVERIFY(std::abs(window.value("cumulativeAtStartSeconds").toDouble() - previousCumulative) < 0.01);
-        }
-        previousEnd = window.value("endMeters").toDouble();
-        previousCumulative = window.value("cumulativeAtEndSeconds").toDouble();
-        if (window.value("role") == "continuation")
-            QVERIFY(!window.value("cornerSegmentId").toString().isEmpty());
-    }
-    QVERIFY(lost && gained);
-}
-
-void TelemetryTests::reportsLapAndSectorConsistency()
-{
-    // KAN-62: every lap of both runs takes exactly 48 s, so the lap spread is
-    // ~0, while sectors differ between the runs' quick halves. Excluding laps
-    // below the minimum makes lap consistency unavailable, not a guess.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("fastfirst.vbo"), second = directory.filePath("fastsecond.vbo");
-    QVERIFY(writeBytes(first, warpedRouteVbo(true)));
-    QVERIFY(writeBytes(second, warpedRouteVbo(false)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Consistency", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
-
-    auto laps = controller.outingLapConsistency();
-    QCOMPARE(laps.value("algorithm").toString(), QString("consistency-iqr-v1"));
-    const auto day = laps.value("day").toMap();
-    const auto eligible = controller.outingRanking().value("eligibleLapCount").toInt();
-    QCOMPARE(day.value("count").toInt(), eligible); // the ranking's own population
-    QVERIFY(day.value("available").toBool());
-    QVERIFY(std::abs(day.value("median").toDouble() - 48.0) < 0.05);
-    QVERIFY(day.value("interquartileRange").toDouble() < 0.05);
-    QCOMPARE(laps.value("runs").toList().size(), 2);
-
-    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
-    controller.requestOutingTheoreticalBest();
-    QTRY_COMPARE_WITH_TIMEOUT(controller.outingTheoreticalBest().value("state").toString(), QString("ready"), 30000);
-    bool someSpread = false;
-    for (const auto &value : controller.outingTheoreticalBest().value("sectors").toList()) {
-        const auto consistency = value.toMap().value("consistency").toMap();
-        QVERIFY2(consistency.value("available").toBool(), qPrintable(value.toMap().value("name").toString()));
-        QCOMPARE(consistency.value("count").toInt(), eligible);
-        QVERIFY(consistency.value("q1").toDouble() <= consistency.value("median").toDouble());
-        QVERIFY(consistency.value("median").toDouble() <= consistency.value("q3").toDouble());
-        someSpread |= consistency.value("interquartileRange").toDouble() > 0.1;
-    }
-    QVERIFY(someSpread); // the runs' opposite quick halves show up per sector
-
-    // Exclude laps until fewer than the minimum remain.
-    int remaining = eligible;
-    for (const auto &value : controller.outingLaps()) {
-        if (remaining <= 2) break;
-        const auto row = value.toMap();
-        if (row.value("type") != "LAP" || !row.value("referenceEligible").toBool()) continue;
-        QVERIFY(controller.setOutingLapExcluded(row.value("reference").toMap(), true, "Test"));
-        --remaining;
-    }
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QTRY_COMPARE(controller.outingLapConsistency().value("day").toMap().value("count").toInt(), 2);
-    laps = controller.outingLapConsistency();
-    QVERIFY(!laps.value("day").toMap().value("available").toBool());
-    QCOMPARE(laps.value("day").toMap().value("unavailableReason").toString(), QString("tooFewSamples"));
-    QVERIFY(!laps.value("day").toMap().contains("median"));
-}
-
-void TelemetryTests::reportsCornerVariabilityWithGpsLimits()
-{
-    // KAN-63: both runs drive the identical path with no speed, brake,
-    // throttle or GPS-accuracy channel. The line spread is ~0 but never
-    // claimed resolvable (no stated accuracy); speed and braking metrics
-    // have no samples rather than being derived from GPS.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("fastfirst.vbo"), second = directory.filePath("fastsecond.vbo");
-    QVERIFY(writeBytes(first, warpedRouteVbo(true)));
-    QVERIFY(writeBytes(second, warpedRouteVbo(false)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Variability", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
-    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
-    controller.requestOutingTheoreticalBest();
-    QTRY_COMPARE_WITH_TIMEOUT(controller.outingTheoreticalBest().value("state").toString(), QString("ready"), 30000);
-    const auto best = controller.outingTheoreticalBest();
-    QCOMPARE(best.value("variabilityAlgorithm").toString(), QString("driving-variability-v1"));
-    const auto eligible = controller.outingRanking().value("eligibleLapCount").toInt();
-    int corners = 0;
-    for (const auto &value : best.value("sectors").toList()) {
-        const auto sector = value.toMap();
-        if (sector.value("type") != "corner") { QVERIFY(!sector.contains("variability")); continue; }
-        ++corners;
-        const auto variability = sector.value("variability").toMap();
-        const auto line = variability.value("lineOffset").toMap();
-        QVERIFY2(line.value("available").toBool(), qPrintable(sector.value("name").toString()));
-        QCOMPARE(line.value("count").toInt(), eligible);
-        QVERIFY(std::abs(line.value("median").toDouble()) < 1.0);
-        QVERIFY(line.value("interquartileRange").toDouble() < 0.5);
-        QVERIFY(!variability.contains("typicalGpsAccuracyMeters"));
-        QVERIFY(!variability.value("lineSpreadResolvable").toBool());
-        for (const auto *metric : {"apexSpeed", "minimumSpeed", "exitSpeed", "brakingPointMeasured", "brakingPointInferred"})
-            QCOMPARE(variability.value(metric).toMap().value("count").toInt(), 0);
-    }
-    QVERIFY(corners > 0);
-}
-
-void TelemetryTests::summarizesRecordedTemperaturesPerRunAndSection()
-{
-    // KAN-67: only recorded temperature channels are summarized (the second
-    // run has none); placeholder zeros are excluded and counted; every
-    // recorded section has its own summary with coverage.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("hot.vbo"), second = directory.filePath("plain.vbo");
-    QVERIFY(writeBytes(first, routeVboWithCoolant()));
-    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Temperatures", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    controller.requestOutingChannelSummaries();
-    QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 30000);
-    const auto summaries = controller.outingChannelSummaries();
-    QCOMPARE(summaries.value("algorithm").toString(), QString("channel-summary-v1"));
-    const auto runs = summaries.value("runs").toList();
-    QCOMPARE(runs.size(), 2);
-    QVariantMap hot, plain;
-    for (const auto &value : runs) (value.toMap().value("channels").toList().isEmpty() ? plain : hot) = value.toMap();
-    QVERIFY(!hot.isEmpty() && !plain.isEmpty()); // the run without a sensor lists none, invents none
-    const auto coolant = hot.value("channels").toList().first().toMap();
-    QCOMPARE(coolant.value("channel").toString(), QString("coolant_temp-obd"));
-    const auto run = coolant.value("run").toMap();
-    QVERIFY(run.value("valid").toBool());
-    QCOMPARE(run.value("excludedArtifacts").toInt(), 3);
-    QVERIFY(std::abs(run.value("minimum").toDouble() - 80.03) < 1e-3);
-    QVERIFY(run.value("maximum").toDouble() > run.value("mean").toDouble());
-    QVERIFY(run.value("coverage").toDouble() > 0.95);
-    const auto sections = coolant.value("sections").toList();
-    QVERIFY(sections.size() >= 3);
-    double previousMean = 0.0;
-    for (const auto &value : sections) {
-        const auto section = value.toMap();
-        QVERIFY(!section.value("type").toString().isEmpty());
-        if (!section.value("valid").toBool()) continue;
-        QVERIFY(section.value("coverage").toDouble() > 0.9);
-        QVERIFY(section.value("mean").toDouble() > previousMean); // the temperature only rises
-        previousMean = section.value("mean").toDouble();
-    }
-    // KAN-68: a bounded trend for the day view, in recording order, and no
-    // cooling found in a temperature that only rises.
-    const auto trace = coolant.value("trace").toList();
-    QCOMPARE(trace.size(), 120);
-    double previousTime = -1.0, previousValue = 0.0;
-    int drawn = 0;
-    for (const auto &value : trace) {
-        if (!value.isValid()) continue;
-        const auto point = value.toList();
-        QVERIFY(point.at(0).toDouble() > previousTime && point.at(1).toDouble() >= previousValue);
-        previousTime = point.at(0).toDouble(); previousValue = point.at(1).toDouble();
-        ++drawn;
-    }
-    QVERIFY(drawn > 100);
-    QVERIFY(coolant.value("cooling").toList().isEmpty());
-}
-
-void TelemetryTests::summarizesHeartRatePerRunSectionAndInterval()
-{
-    // KAN-69: heart rate from the recordings' own channel, per run, per
-    // section and for a selected interval of the comparison pair. The 255 bpm
-    // artifact is excluded and counted; a recording without heart rate has
-    // no summary rather than an invented one.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("calm.vbo"), second = directory.filePath("busy.vbo"), third = directory.filePath("none.vbo");
-    QVERIFY(writeBytes(first, routeVboWithHeartRate(140)));
-    QVERIFY(writeBytes(second, routeVboWithHeartRate(150)));
-    QVERIFY(writeBytes(third, EventProjectFixture::routeVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Heart rate", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second), QUrl::fromLocalFile(third)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    controller.requestOutingChannelSummaries();
-    QTRY_COMPARE_WITH_TIMEOUT(controller.outingChannelSummaries().value("state").toString(), QString("ready"), 30000);
-    int withHeartRate = 0;
-    for (const auto &value : controller.outingChannelSummaries().value("runs").toList()) {
-        const auto run = value.toMap();
-        if (!run.contains("heartRate")) continue;
-        ++withHeartRate;
-        const auto heartRate = run.value("heartRate").toMap();
-        QCOMPARE(heartRate.value("channel").toString(), QString("heart_rate"));
-        const auto whole = heartRate.value("run").toMap();
-        QVERIFY(whole.value("valid").toBool());
-        QCOMPARE(whole.value("excludedArtifacts").toInt(), 1);
-        QVERIFY(whole.value("maximum").toDouble() < 200.0);
-        const double level = run.value("runName") == "Session 1" ? 140.0 : 150.0;
-        QVERIFY2(std::abs(whole.value("mean").toDouble() - level) < 0.5, qPrintable(whole.value("mean").toString()));
-        QVERIFY(whole.value("coverage").toDouble() > 0.95);
-        QVERIFY(heartRate.value("sections").toList().size() >= 3);
-    }
-    QCOMPARE(withHeartRate, 2);
-
-    // A selected interval of the comparison pair.
-    QVariantMap a, b;
-    for (const auto &value : controller.comparisonLaps()) {
-        const auto row = value.toMap();
-        if (a.isEmpty() && row.value("runName") == "Session 1") a = row;
-        if (b.isEmpty() && row.value("runName") == "Session 2") b = row;
-    }
-    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_VERIFY(controller.comparisonPairReady());
-    const double length = controller.comparisonProgressAxisLength();
-    const auto pair = controller.comparisonHeartRate(0.0, length / 2).value("laps").toList();
-    QCOMPARE(pair.size(), 2);
-    QVERIFY(std::abs(pair[0].toMap().value("mean").toDouble() - 140.0) < 2.5);
-    QVERIFY(std::abs(pair[1].toMap().value("mean").toDouble() - 150.0) < 2.5);
-    QVERIFY(pair[0].toMap().value("coverage").toDouble() > 0.9);
-    // KAN-70: a range across start/finish combines the lap's end and start.
-    const auto wrapped = controller.comparisonHeartRate(length * 0.75, length * 0.25);
-    QVERIFY(wrapped.value("crossesStartFinish").toBool());
-    const auto wrappedLaps = wrapped.value("laps").toList();
-    QVERIFY(wrappedLaps[0].toMap().value("valid").toBool());
-    QVERIFY(std::abs(wrappedLaps[0].toMap().value("mean").toDouble() - 140.0) < 2.5);
-    QVERIFY(std::abs(wrappedLaps[1].toMap().value("mean").toDouble() - 150.0) < 2.5);
-    QVERIFY(wrappedLaps[0].toMap().value("coverage").toDouble() > 0.9);
-}
-
-void TelemetryTests::buildsDayReportWithProvenance()
-{
-    // KAN-71: the day report presents computed results with algorithm, range,
-    // status and evidence; results not yet computed say so; a changed
-    // analysis decision (a lap exclusion) never leaves an old value showing.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto slow = directory.filePath("slow.vbo"), fast = directory.filePath("fast.vbo");
-    QVERIFY(writeBytes(slow, routeVboWithHeartRate(140)));
-    QVERIFY(writeBytes(fast, scaledRouteVbo(0.9)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Day report", {QUrl::fromLocalFile(slow), QUrl::fromLocalFile(fast)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
-    const auto resultOf = [&](const QString &id) {
-        for (const auto &value : controller.outingDayReport().value("results").toList())
-            if (value.toMap().value("id") == id) return value.toMap();
-        return QVariantMap{};
-    };
-    QSignalSpy changed(&controller, &AppController::outingDayReportChanged);
-
-    // Before any background result: ranking-based results are available,
-    // the rest are "not computed" and carry no value.
-    auto report = controller.outingDayReport();
-    QCOMPARE(report.value("schema").toString(), QString(dayReportSchema));
-    QCOMPARE(report.value("groupId").toString(), controller.outingComparisonGroupId());
-    QCOMPARE(validateDayReport(QJsonObject::fromVariantMap(report)), QString());
-    const auto best = resultOf("bestLap");
-    QCOMPARE(best.value("status").toString(), QString("available"));
-    QCOMPARE(best.value("algorithm").toString(), QString(lapRankingAlgorithm));
-    const auto bestEvidence = best.value("evidence").toList();
-    QCOMPARE(bestEvidence.size(), 1);
-    QCOMPARE(bestEvidence.first().toMap().value("kind").toString(), QString("lap"));
-    QCOMPARE(controller.resolveOutingLapReference(bestEvidence.first().toMap().value("reference").toMap()).value("state").toString(),
-        QString("resolved"));
-    QVERIFY(best.value("range").toMap().value("eligibleLapCount").toInt() >= 2);
-    const auto consistency = resultOf("consistency");
-    QCOMPARE(consistency.value("status").toString(), QString("available"));
-    QCOMPARE(consistency.value("evidence").toList().size(), best.value("range").toMap().value("eligibleLapCount").toInt());
-    QCOMPARE(resultOf("progression").value("status").toString(), QString("available"));
-    for (const auto *id : {"theoreticalBest", "timeLosses", "sectionProgression", "temperatures", "heartRate"}) {
-        QCOMPARE(resultOf(id).value("status").toString(), QString("notComputed"));
-        QVERIFY(!resultOf(id).contains("value"));
-    }
-
-    // Computed: every result is available (or says why not) with evidence.
-    QString slowName;
-    for (const auto &value : controller.outingLaps()) {
-        const auto row = value.toMap();
-        if (row.value("type") == "LAP" && row.value("endTime").toDouble() - row.value("startTime").toDouble() > 45.0)
-            slowName = row.value("runName").toString();
-    }
-    QVERIFY(!approveAllSegmentsOnRun(controller, slowName).isEmpty());
-    controller.requestOutingDayReport();
-    QTRY_COMPARE_WITH_TIMEOUT(resultOf("theoreticalBest").value("status").toString(), QString("available"), 30000);
-    QTRY_COMPARE_WITH_TIMEOUT(resultOf("heartRate").value("status").toString(), QString("available"), 30000);
-    QVERIFY(changed.size() > 0);
-    report = controller.outingDayReport();
-    QCOMPARE(validateDayReport(QJsonObject::fromVariantMap(report)), QString());
-    const auto theoretical = resultOf("theoreticalBest");
-    QCOMPARE(theoretical.value("algorithm").toString(), QString(theoreticalBestAlgorithm));
-    QVERIFY(!theoretical.value("value").toMap().value("sectors").toList().isEmpty());
-    bool segmentEvidence = false;
-    for (const auto &value : theoretical.value("evidence").toList())
-        segmentEvidence = segmentEvidence || (value.toMap().value("kind") == "segment" && !value.toMap().value("segmentId").toString().isEmpty());
-    QVERIFY(segmentEvidence);
-    const auto losses = resultOf("timeLosses");
-    QVERIFY(losses.value("status") == "available" || losses.value("status") == "unavailable");
-    if (losses.value("status") == "available") {
-        QVERIFY(!losses.value("revision").toString().isEmpty());
-        QCOMPARE(losses.value("evidence").toList().size(), losses.value("value").toMap().value("losses").toList().size());
-    }
-    QCOMPARE(resultOf("sectionProgression").value("status").toString(), QString("available"));
-    const auto heart = resultOf("heartRate");
-    QCOMPARE(heart.value("evidence").toList().size(), 1); // one run recorded heart rate
-    QCOMPARE(heart.value("evidence").toList().first().toMap().value("channel").toString(), QString("heart_rate"));
-    const auto temperatures = resultOf("temperatures");
-    QCOMPARE(temperatures.value("status").toString(), QString("unavailable")); // none recorded, none invented
-    QCOMPARE(temperatures.value("reason").toString(), QString("No temperature recorded."));
-
-    // A changed decision: excluding the best lap changes the decisions key,
-    // and the theoretical best no longer shows its old value.
-    const auto decisions = report.value("decisionsKey").toString();
-    QVERIFY(controller.setOutingLapExcluded(bestEvidence.first().toMap().value("reference").toMap(), true, "Traffic"));
-    QTRY_VERIFY(controller.outingDayReport().value("decisionsKey").toString() != decisions);
-    QVERIFY(resultOf("theoreticalBest").value("status") != "available");
-    QVERIFY(!resultOf("theoreticalBest").contains("value"));
-    QVERIFY(resultOf("bestLap").value("value").toMap().value("label") != best.value("value").toMap().value("label"));
-}
-
-void TelemetryTests::acceptsM4ReportLossCornerEvidenceWorkflow()
-{
-    // KAN-74: the M4 workflow end to end on full and limited fixtures:
-    // report -> loss -> corner -> evidence, values checked against the
-    // generated source, absent heart rate / temperature / G on the limited
-    // run, an exclusion, a changed segmentation, and save/reopen. No video.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo"),
-               limited = directory.filePath("limited.vbo");
-    QVERIFY(writeBytes(fullA, fullM4Vbo(true, 140, 80, 1.0)));
-    QVERIFY(writeBytes(fullB, fullM4Vbo(false, 150, 85, 0.9)));
-    QVERIFY(writeBytes(limited, warpedRouteVbo(true)));
-    const int rows = QString::fromUtf8(warpedRouteVbo(true)).split('\n').size(); // upper bound of data rows
-    const auto projectPath = directory.filePath("m4.fetproject");
-    const auto resultIn = [](const QVariantMap &report, const QString &id) {
-        for (const auto &value : report.value("results").toList())
-            if (value.toMap().value("id") == id) return value.toMap();
-        return QVariantMap{};
-    };
-    const auto allSettled = [&](AppController &controller) {
-        for (const auto &value : controller.outingDayReport().value("results").toList()) {
-            const auto status = value.toMap().value("status").toString();
-            if (status == "notComputed" || status == "computing" || status == "stale") return false;
-        }
-        return true;
-    };
-    struct Snapshot { QString bestLabel; double bestSeconds = 0; double theoreticalTotal = 0; int sectors = 0;
-        QStringList focus; int consistencyLaps = 0; QString decisions; };
-    const auto snapshot = [&](AppController &controller) {
-        const auto report = controller.outingDayReport();
-        Snapshot result;
-        result.bestLabel = resultIn(report, "bestLap").value("value").toMap().value("label").toString();
-        result.bestSeconds = resultIn(report, "bestLap").value("value").toMap().value("seconds").toDouble();
-        const auto theoretical = resultIn(report, "theoreticalBest").value("value").toMap();
-        result.theoreticalTotal = theoretical.value("totalSeconds").toDouble();
-        result.sectors = theoretical.value("sectors").toList().size();
-        for (const auto &area : resultIn(report, "focusAreas").value("value").toMap().value("areas").toList())
-            result.focus << area.toMap().value("kind").toString() + "/" + area.toMap().value("segmentId").toString();
-        result.consistencyLaps = resultIn(report, "consistency").value("value").toMap().value("day").toMap().value("count").toInt();
-        result.decisions = report.value("decisionsKey").toString();
-        return result;
-    };
-    Snapshot saved;
-    QVariantMap excludedReference;
-    {
-        AppController controller(nullptr, directory.filePath("recovery.json"));
-        QVERIFY(controller.importAnalysisRuns("M4 acceptance",
-            {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB), QUrl::fromLocalFile(limited)}));
-        QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-        QTRY_VERIFY(!controller.outingLapsLoading());
-        QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
-        const auto approved = approveAllSegmentsOnRun(controller, "Session 1");
-        QVERIFY(!approved.isEmpty());
-        controller.requestOutingDayReport();
-        QTRY_VERIFY_WITH_TIMEOUT(allSettled(controller), 60000);
-        auto report = controller.outingDayReport();
-        QCOMPARE(validateDayReport(QJsonObject::fromVariantMap(report)), QString());
-
-        // Values agree with the source. Every warped lap takes 48 s.
-        const auto best = resultIn(report, "bestLap");
-        QVERIFY(std::abs(best.value("value").toMap().value("seconds").toDouble() - 48.0) < 0.01);
-        const auto theoretical = resultIn(report, "theoreticalBest").value("value").toMap();
-        QVERIFY(theoretical.value("totalSeconds").toDouble() < 47.5 && theoretical.value("totalSeconds").toDouble() > 43.2);
-        QVERIFY(std::abs(theoretical.value("differenceSeconds").toDouble()
-            - (48.0 - theoretical.value("totalSeconds").toDouble())) < 0.02);
-        QCOMPARE(theoretical.value("sectors").toList().size(), approved.size());
-        const auto heart = resultIn(report, "heartRate").value("value").toMap().value("runs").toList();
-        const auto temperatures = resultIn(report, "temperatures").value("value").toMap().value("runs").toList();
-        QCOMPARE(heart.size(), 3);
-        int withHeart = 0, withTemperature = 0;
-        for (const auto &value : heart) {
-            const auto run = value.toMap();
-            if (!run.contains("heartRate")) continue; // the limited run: absent, not zero
-            ++withHeart;
-            const auto mean = run.value("heartRate").toMap().value("run").toMap().value("mean").toDouble();
-            QVERIFY2(std::abs(mean - 140) < 1e-3 || std::abs(mean - 150) < 1e-3, qPrintable(QString::number(mean)));
-        }
-        for (const auto &value : temperatures) {
-            const auto channels = value.toMap().value("channels").toList();
-            if (channels.isEmpty()) continue;
-            ++withTemperature;
-            const auto whole = channels.first().toMap().value("run").toMap();
-            const double start = std::round(whole.value("minimum").toDouble());
-            QVERIFY(start == 80.0 || start == 85.0);
-            // Never beyond the generated source: start + 0.01 per row.
-            QVERIFY(whole.value("maximum").toDouble() <= start + 0.01 * rows + 1e-6);
-            QVERIFY(whole.value("maximum").toDouble() > start + 1.0);
-        }
-        QCOMPARE(withHeart, 2);
-        QCOMPARE(withTemperature, 2);
-        const auto focus = resultIn(report, "focusAreas");
-        QCOMPARE(focus.value("status").toString(), QString("available"));
-
-        // Loss -> corner -> evidence, no video: the first ranked loss opens
-        // the comparison with the Corner Analyzer on that segment.
-        const auto losses = resultIn(report, "timeLosses");
-        QCOMPARE(losses.value("status").toString(), QString("available"));
-        const auto lossEvidence = losses.value("evidence").toList().first().toMap();
-        QVERIFY(controller.openTimeLoss({{"segmentId", lossEvidence.value("segmentId")}, {"lapReference", lossEvidence.value("reference")}}));
-        QTRY_VERIFY(controller.comparisonPairReady());
-        QCOMPARE(controller.comparisonFocusSegmentId(), lossEvidence.value("segmentId").toString());
-        QVERIFY(!controller.comparisonSegmentMetrics(lossEvidence.value("segmentId").toString()).isEmpty());
-        // G agrees with the generated peaks; the limited run (Session 3,
-        // identical route, so it can tie with Session 1) has none.
-        const auto gg = controller.comparisonGgScatter(0.0, controller.comparisonProgressAxisLength(), 500).value("laps").toList();
-        const auto pairSlots = controller.comparisonSlots().toList();
-        for (int slot = 0; slot < 2; ++slot) {
-            const auto lap = gg[slot].toMap();
-            if (pairSlots[slot].toMap().value("lap").toMap().value("runName") == "Session 3") {
-                QVERIFY(!lap.value("valid").toBool());
-                continue;
-            }
-            QVERIFY(lap.value("valid").toBool());
-            const double lateral = lap.value("peaks").toMap().value("lateral").toMap().value("value").toDouble();
-            QVERIFY2(std::abs(lateral - 1.0) < 0.02 || std::abs(lateral - 0.9) < 0.02, qPrintable(QString::number(lateral)));
-        }
-        controller.setComparisonViewOpen(false);
-        // A limited lap against a full one: G and heart rate are absent for it, not zero.
-        QVariantMap limitedLap, fullLap;
-        for (const auto &value : controller.comparisonLaps()) {
-            const auto row = value.toMap();
-            if (limitedLap.isEmpty() && row.value("runName") == "Session 3") limitedLap = row;
-            if (fullLap.isEmpty() && row.value("runName") == "Session 1") fullLap = row;
-        }
-        QVERIFY(!limitedLap.isEmpty() && !fullLap.isEmpty());
-        QVERIFY(controller.selectComparisonLap(0, limitedLap.value("reference").toMap()));
-        QVERIFY(controller.selectComparisonLap(1, fullLap.value("reference").toMap()));
-        QTRY_VERIFY(controller.comparisonPairReady());
-        const double pairLength = controller.comparisonProgressAxisLength();
-        const auto limitedGg = controller.comparisonGgScatter(0.0, pairLength, 500).value("laps").toList();
-        QVERIFY(!limitedGg[0].toMap().value("valid").toBool());
-        QVERIFY(!limitedGg[0].toMap().value("unavailableReason").toString().isEmpty());
-        QVERIFY(limitedGg[1].toMap().value("valid").toBool());
-        const auto limitedHeart = controller.comparisonHeartRate(0.0, pairLength).value("laps").toList();
-        QVERIFY(!limitedHeart[0].toMap().value("valid").toBool());
-        QVERIFY(!limitedHeart[0].toMap().contains("mean"));
-        QVERIFY(limitedHeart[1].toMap().value("valid").toBool());
-        controller.setComparisonViewOpen(false);
-        // The focus area's evidence opens its pair; the best lap opens without video.
-        const auto area = focus.value("value").toMap().value("areas").toList().first().toMap();
-        QVERIFY(controller.openFocusArea(focus.value("evidence").toList()[area.value("evidenceIndex").toInt()].toMap()));
-        QTRY_VERIFY(controller.comparisonPairReady());
-        controller.setComparisonViewOpen(false);
-        QVERIFY(controller.selectOutingLapReference(best.value("evidence").toList().first().toMap().value("reference").toMap()));
-        QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-        controller.closeOutingLap();
-
-        // An exclusion changes the decisions: the old values never show,
-        // the best lap moves and the recomputed results leave the lap out.
-        const auto before = snapshot(controller);
-        excludedReference = best.value("evidence").toList().first().toMap().value("reference").toMap();
-        QVERIFY(controller.setOutingLapExcluded(excludedReference, true, "Traffic"));
-        QTRY_VERIFY(controller.outingDayReport().value("decisionsKey").toString() != before.decisions);
-        QVERIFY(!resultIn(controller.outingDayReport(), "theoreticalBest").contains("value"));
-        controller.requestOutingDayReport();
-        QTRY_VERIFY_WITH_TIMEOUT(allSettled(controller), 60000);
-        const auto excluded = snapshot(controller);
-        QVERIFY(excluded.bestLabel != before.bestLabel);
-        QCOMPARE(excluded.consistencyLaps, before.consistencyLaps - 1);
-        for (const auto &value : resultIn(controller.outingDayReport(), "theoreticalBest").value("evidence").toList())
-            QVERIFY(value.toMap().value("reference").toMap() != excludedReference);
-
-        // A changed segmentation: splitting a segment invalidates, and the
-        // recomputed report has one more sector.
-        int lapIndex = -1;
-        const auto lapRows = controller.outingLaps();
-        for (int i = 0; i < lapRows.size() && lapIndex < 0; ++i)
-            if (lapRows[i].toMap().value("type") == "LAP" && lapRows[i].toMap().value("runName") == "Session 1"
-                && lapRows[i].toMap().value("reference").toMap() != excludedReference) lapIndex = i;
-        QVERIFY(controller.selectOutingLap(lapIndex));
-        QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-        controller.requestSegmentReview();
-        QTRY_COMPARE(controller.segmentReviewState(), QString("ready"));
-        const auto runId = controller.selectedOutingLap().value("runId").toString();
-        QJsonObject splittable;
-        for (const auto &value : controller.m_analysis.storedRunTrackSegments(runId).toArray())
-            if (splittable.isEmpty() && value.toObject().value("endProgressMeters").toDouble()
-                    > value.toObject().value("startProgressMeters").toDouble() + 40.0) splittable = value.toObject();
-        QVERIFY(!splittable.isEmpty());
-        QCOMPARE(controller.splitApprovedSegment(splittable.value("id").toString(),
-            (splittable.value("startProgressMeters").toDouble() + splittable.value("endProgressMeters").toDouble()) / 2.0), QString());
-        controller.closeOutingLap();
-        QTRY_VERIFY(!resultIn(controller.outingDayReport(), "theoreticalBest").contains("value"));
-        controller.requestOutingDayReport();
-        QTRY_VERIFY_WITH_TIMEOUT(allSettled(controller), 60000);
-        saved = snapshot(controller);
-        QCOMPARE(saved.sectors, excluded.sectors + 1);
-        QVERIFY(saved.decisions != excluded.decisions);
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
-        QVERIFY(!controller.dirty());
-        // Saving to a new path re-derives the laps; unchanged recordings and
-        // decisions keep every computed result instead of discarding it.
-        QTest::qWait(50);
-        QTRY_VERIFY(!controller.outingLapsLoading());
-        QTest::qWait(50);
-        QCOMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("ready"));
-        QCOMPARE(controller.outingChannelSummaries().value("state").toString(), QString("ready"));
-        QVERIFY(allSettled(controller));
-        QCOMPARE(snapshot(controller).decisions, saved.decisions);
-    }
-    {
-        // Reopen: the same decisions give the same report.
-        AppController reopened(nullptr, directory.filePath("recovery-reopen.json"));
-        reopened.requestOpenProject(QUrl::fromLocalFile(projectPath));
-        QTRY_COMPARE(reopened.vboLoadState(), QString("ready"));
-        QTRY_VERIFY(!reopened.outingLapsLoading());
-        QTRY_VERIFY(!reopened.outingComparisonGroupId().isEmpty());
-        reopened.requestOutingDayReport();
-        QTRY_VERIFY_WITH_TIMEOUT(allSettled(reopened), 60000);
-        const auto again = snapshot(reopened);
-        QCOMPARE(again.decisions, saved.decisions);
-        QCOMPARE(again.bestLabel, saved.bestLabel);
-        QVERIFY(std::abs(again.bestSeconds - saved.bestSeconds) < 1e-9);
-        QVERIFY(std::abs(again.theoreticalTotal - saved.theoreticalTotal) < 1e-9);
-        QCOMPARE(again.sectors, saved.sectors);
-        QCOMPARE(again.focus, saved.focus);
-        QCOMPARE(again.consistencyLaps, saved.consistencyLaps);
-        // Navigation still works after reopening, without video.
-        const auto evidence = resultIn(reopened.outingDayReport(), "timeLosses").value("evidence").toList().first().toMap();
-        QVERIFY(reopened.openTimeLoss({{"segmentId", evidence.value("segmentId")}, {"lapReference", evidence.value("reference")}}));
-        QTRY_VERIFY(reopened.comparisonPairReady());
-        QCOMPARE(reopened.comparisonFocusSegmentId(), evidence.value("segmentId").toString());
-    }
-}
 
 void TelemetryTests::formatsElapsedTimes()
 {
@@ -3843,399 +1536,6 @@ void TelemetryTests::formatsElapsedTimes()
     QCOMPARE(AppController::formatElapsedTime(-2.5), QString("-2.500 s"));
     QCOMPARE(AppController::formatElapsedTime(3661.0), QString("61:01.000"));
     QCOMPARE(AppController::formatElapsedTime(std::numeric_limits<double>::quiet_NaN()), QString("—"));
-}
-
-void TelemetryTests::keepsAutomaticSegmentsWhenTheRunChangesDuringCreation()
-{
-    // KAN-142: automatic segments are created in the background after an
-    // import. A driver who switches the active run, or opens its video, at
-    // once must still get them, rather than lose them for good.
-    const QString ffmpeg = FfmpegTools::ffmpegPath();
-    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the automatic segments test.");
-    for (const QString &action : {QStringLiteral("switch run"), QStringLiteral("open video")}) {
-        QTemporaryDir directory; QVERIFY(directory.isValid());
-        QSettings settings; settings.clear(); settings.sync();
-        const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
-        QVERIFY(writeBytes(fullA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
-        QVERIFY(writeBytes(fullB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
-        const QString videoPath = directory.filePath(QStringLiteral("run.mp4"));
-        QProcess encoder;
-        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
-                               "color=c=black:s=32x32:r=30:d=5", "-c:v", "mpeg4", "-q:v", "3", videoPath});
-        QVERIFY(encoder.waitForFinished(30'000) && encoder.exitCode() == 0);
-        AppController controller(nullptr, directory.filePath("recovery.json"));
-        controller.setAutomaticSegments(true);
-        QSignalSpy committed(&controller, &AppController::batchImportCommitted);
-        QVERIFY(controller.importAnalysisRuns("At once", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
-        QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 60000);
-        QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QStringLiteral("ready"), 60000);
-        if (action == "switch run") {
-            const auto runs = controller.eventRuns();
-            const auto other = runs[controller.activeRunId() == runs[0].toMap().value("id").toString() ? 1 : 0].toMap().value("id").toString();
-            QVERIFY(controller.selectEventRun(other));
-            QTRY_COMPARE_WITH_TIMEOUT(controller.activeRunId(), other, 60000);
-        } else {
-            controller.loadVideo(QUrl::fromLocalFile(videoPath));
-            QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QStringLiteral("ready"), 60000);
-        }
-        QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 60000);
-        const auto bestRun = [&] { return controller.outingRanking().value("bestOfDay").toMap().value("runId").toString(); };
-        QTRY_VERIFY_WITH_TIMEOUT(!bestRun().isEmpty(), 60000);
-        const bool created = QTest::qWaitFor([&] {
-            return !controller.m_analysis.storedRunTrackSegments(bestRun()).toArray().isEmpty(); }, 20000);
-        qInfo().noquote() << action << (created ? "kept" : "LOST") << "·" << controller.statusText();
-        QVERIFY2(created, qPrintable(action));
-    }
-}
-
-void TelemetryTests::discardsDayResultsFromThePreviousDay()
-{
-    // KAN-151: a theoretical best or channel summary started on day A must
-    // not be published for day B. Day B's project is opened from day A, and
-    // day A's results complete (under test control) while B's laps still
-    // load: the window in which invalidation used to wait.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto dayA = directory.filePath("day-a.vbo"), dayB = directory.filePath("day-b.vbo");
-    QVERIFY(writeBytes(dayA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
-    QVERIFY(writeBytes(dayB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
-    const auto projectB = directory.filePath("day-b.fetproject"), projectA = directory.filePath("day-a.fetproject");
-    {
-        AppController other(nullptr, directory.filePath("recovery-b.json"));
-        QSignalSpy committed(&other, &AppController::batchImportCommitted);
-        QVERIFY(other.importAnalysisRuns("Day B", {QUrl::fromLocalFile(dayB)}));
-        QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 30000);
-        QTRY_VERIFY_WITH_TIMEOUT(other.vboLoadState() == "ready" && !other.outingLapsLoading(), 30000);
-        QVERIFY(other.saveProject(QUrl::fromLocalFile(projectB)));
-    }
-    QSettings().remove("project/path"); // start on day A, not the remembered day B
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    controller.setAutomaticSegments(true);
-    QSignalSpy committed(&controller, &AppController::batchImportCommitted);
-    QVERIFY(controller.importAnalysisRuns("Day A", {QUrl::fromLocalFile(dayA)}));
-    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 30000);
-    QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading()
-        && controller.statusText().contains("created automatically"), 60000);
-    QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectA))); // clean, so Open does not ask
-
-    controller.requestOutingTheoreticalBest();
-    controller.requestOutingChannelSummaries();
-    QCOMPARE(controller.outingTheoreticalBest().value("state").toString(), QString("loading"));
-    // Day A's results, held back until day B is opening.
-    auto &analysis = controller.m_analysis;
-    const auto staleBest = analysis.m_theoreticalBestRequest;
-    const auto staleSummaries = analysis.m_channelSummariesRequest;
-    QPromise<AnalysisController::TheoreticalBestResult> best; best.start();
-    QPromise<AnalysisController::ChannelSummariesResult> summaries; summaries.start();
-    analysis.m_theoreticalBestWatcher.setFuture(best.future());
-    analysis.m_channelSummariesWatcher.setFuture(summaries.future());
-
-    controller.requestOpenProject(QUrl::fromLocalFile(projectB));
-    QTRY_COMPARE_WITH_TIMEOUT(controller.eventName(), QString("Day B"), 30000);
-    AnalysisController::TheoreticalBestResult staleBestResult;
-    staleBestResult.request = staleBest;
-    staleBestResult.error = QStringLiteral("day A");
-    best.addResult(staleBestResult); best.finish();
-    AnalysisController::ChannelSummariesResult staleSummaryResult;
-    staleSummaryResult.request = staleSummaries;
-    staleSummaryResult.runs = {QVariantMap{{"runName", "Day A run"}}};
-    summaries.addResult(staleSummaryResult); summaries.finish();
-    // While B's laps load, and once they have loaded, nothing of day A shows.
-    const auto showsDayA = [&] {
-        const auto runs = controller.outingChannelSummaries().value("runs").toList();
-        return controller.outingTheoreticalBest().value("message").toString() == "day A"
-            || (!runs.isEmpty() && runs.first().toMap().value("runName") == "Day A run");
-    };
-    for (int step = 0; step < 40; ++step) {
-        QTest::qWait(25);
-        QVERIFY2(!showsDayA(), qPrintable(QString("day A's results shown for day B (laps loading: %1)").arg(controller.outingLapsLoading())));
-    }
-    QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 30000);
-    QVERIFY(!showsDayA());
-}
-
-void TelemetryTests::createsSegmentsAutomaticallyFromTheBestLap()
-{
-    // KAN-136: with automatic segments on (the Overlays app turns it on), a
-    // layout without approved segments gets the day's best lap's proposals
-    // approved without any review, so the theoretical best works straight
-    // after import; the segments stay editable. Set FLAPPEDEAR_REAL_DAY to a
-    // folder of private recordings to run the same on a real day as well.
-    QStringList days{QString()};
-    if (const auto real = qEnvironmentVariable("FLAPPEDEAR_REAL_DAY"); !real.isEmpty()) days.append(real);
-    for (const auto &day : days) {
-        QTemporaryDir directory; QVERIFY(directory.isValid());
-        QSettings settings; settings.clear(); settings.sync();
-        QList<QUrl> recordings;
-        if (day.isEmpty()) {
-            const auto fullA = directory.filePath("full-a.vbo"), fullB = directory.filePath("full-b.vbo");
-            QVERIFY(writeBytes(fullA, withVelocity(fullM4Vbo(true, 140, 80, 1.0))));
-            QVERIFY(writeBytes(fullB, withVelocity(fullM4Vbo(false, 150, 85, 0.9))));
-            recordings = {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)};
-        } else {
-            for (const auto &info : QDir(day).entryInfoList({"*.vbo", "*.VBO", "*.rcz", "*.RCZ"}, QDir::Files, QDir::Name))
-                recordings.append(QUrl::fromLocalFile(info.absoluteFilePath()));
-            QVERIFY(!recordings.isEmpty());
-        }
-        AppController controller(nullptr, directory.filePath("recovery.json"));
-        controller.setAutomaticSegments(true);
-        QVERIFY(controller.importAnalysisRuns("Automatic", recordings));
-        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == recordings.size() && !controller.outingLapsLoading(), 180000);
-        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingComparisonGroupId().isEmpty(), 60000);
-        // Every timed lap of the day belongs to an identified layout.
-        const auto allResolved = [&] {
-            for (const auto &value : controller.outingLaps()) {
-                const auto row = value.toMap();
-                if (row.value("type") == "LAP" && !row.value("compatibilityResolved").toBool()) return false;
-            }
-            return true;
-        };
-        if (!QTest::qWaitFor(allResolved, 60000)) {
-            for (const auto &value : controller.outingLaps())
-                if (value.toMap().value("type") == "LAP" && !value.toMap().value("compatibilityResolved").toBool())
-                    qInfo() << value.toMap().value("runName") << value.toMap().value("compatibilityReasons");
-            for (const auto &message : controller.outingLapMessages()) qInfo() << message;
-            QFAIL("A timed lap stayed on an unidentified layout.");
-        }
-        // No review: the best lap's run gets approved segments on its own.
-        const auto best = controller.outingRanking().value("bestOfDay").toMap();
-        const auto runId = best.value("runId").toString();
-        QTRY_VERIFY_WITH_TIMEOUT(!controller.m_analysis.storedRunTrackSegments(runId).toArray().isEmpty(), 60000);
-        const auto segments = controller.m_analysis.storedRunTrackSegments(runId).toArray();
-        QVERIFY(segments.size() >= 4);
-        QTRY_VERIFY(controller.statusText().contains("created automatically"));
-        controller.requestOutingTheoreticalBest();
-        QTRY_COMPARE_WITH_TIMEOUT(controller.outingTheoreticalBest().value("state").toString(), QString("ready"), 120000);
-        const auto theoretical = controller.outingTheoreticalBest();
-        qInfo().noquote() << QString("  %1: %2 automatic segments from %3; theoretical %4 of best %5")
-            .arg(day.isEmpty() ? "synthetic" : "real day").arg(segments.size())
-            .arg(best.value("runName").toString() + " LAP " + best.value("lapNumber").toString())
-            .arg(theoretical.value("totalSeconds").toDouble(), 0, 'f', 3).arg(best.value("durationSeconds").toDouble(), 0, 'f', 3);
-        // Once per layout and best lap: revoking them does not bring them back.
-        QVERIFY(controller.m_analysis.replaceRunTrackSegments(runId, {}));
-        QTest::qWait(1500);
-        QVERIFY(controller.m_analysis.storedRunTrackSegments(runId).toArray().isEmpty());
-    }
-}
-
-void TelemetryTests::sharesComparisonCacheAndRevalidatesSources()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("shared.vbo");
-    const auto bytes = EventProjectFixture::routeVbo(); QVERIFY(writeBytes(path, bytes));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Shared source", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto choices = controller.comparisonLaps(); QVERIFY(choices.size() >= 2);
-    const auto a = choices[0].toMap(), b = choices[1].toMap();
-    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
-    const auto session = controller.m_analysis.m_comparisonSlots[0].session;
-    const auto cost = controller.m_analysis.m_analysisSourceCache->usedBytes();
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_VERIFY(controller.comparisonPairReady());
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].session, session);
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].row.value("reference"), b.value("reference"));
-    QVERIFY(controller.inspectComparisonLap(1));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    QCOMPARE(controller.m_analysis.m_outingLapDetailSession, session);
-    QCOMPARE(controller.m_analysis.m_analysisSourceCache->usedBytes(), cost);
-    // The cache is source-wide; a different derivation cannot reuse its entry.
-    const auto source = controller.m_analysis.m_comparisonSlots[0].source;
-    auto revised = a; auto reference = a.value("reference").toMap();
-    reference.insert("derivationKey", QString(64, 'b')); revised.insert("reference", reference);
-    const auto token = std::make_shared<std::atomic_bool>(false);
-    const auto changedRevision = FlappedEar::loadOutingLapDetail(source, {}, revised, 1, token, controller.m_analysis.m_analysisSourceCache);
-    QVERIFY2(changedRevision.session != nullptr, qPrintable(changedRevision.error));
-    QVERIFY(changedRevision.session != session);
-    // Even a cached source must still exist and match its full content digest.
-    QVERIFY(QFile::remove(path));
-    const auto missing = FlappedEar::loadOutingLapDetail(source, {}, a, 2, token, controller.m_analysis.m_analysisSourceCache);
-    QVERIFY(!missing.session); QVERIFY(missing.track.isEmpty()); QVERIFY(!missing.error.isEmpty());
-    QVERIFY(writeBytes(path, bytes));
-    const auto restored = FlappedEar::loadOutingLapDetail(source, {}, a, 3, token, controller.m_analysis.m_analysisSourceCache);
-    QCOMPARE(restored.session, session);
-    auto changed = bytes; changed.replace("coordinate units = degrees", "coordinate units = degreeS");
-    QCOMPARE(changed.size(), bytes.size()); QVERIFY(changed != bytes); QVERIFY(writeBytes(path, changed));
-    const auto stale = FlappedEar::loadOutingLapDetail(source, {}, a, 4, token, controller.m_analysis.m_analysisSourceCache);
-    QVERIFY(!stale.session); QVERIFY(stale.track.isEmpty()); QVERIFY(stale.staleReference);
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session, session); // Read-only worker cannot mutate GUI state.
-}
-
-void TelemetryTests::rejectsComparisonBeyondSharedBudget()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
-    QVERIFY(writeBytes(first, EventProjectFixture::routeVbo(2400)));
-    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(6800)));
-    constexpr qint64 budget = 2 * 1024 * 1024;
-    QVERIFY(TelemetrySource::load(second, {}, budget).sampleCount > 0); // B fits alone.
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    controller.m_analysis.m_analysisSourceCache = std::make_shared<TelemetrySessionCache>(budget);
-    QVERIFY(controller.importAnalysisRuns("Shared budget", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto runA = controller.eventRuns()[0].toMap().value("id");
-    QVariantMap a, b;
-    for (const auto &value : controller.comparisonLaps()) {
-        const auto row = value.toMap();
-        if (row.value("runId") == runA) a = row; else b = row;
-    }
-    QVERIFY(!a.isEmpty() && !b.isEmpty());
-    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
-    const auto track = controller.m_analysis.m_comparisonSlots[0].track;
-    const auto retained = controller.m_analysis.m_comparisonSlots[0].session.get();
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("error"));
-    QVERIFY(controller.m_analysis.m_comparisonSlots[1].error.contains("memory budget"));
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].session.get(), retained);
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].track, track);
-    QVERIFY(controller.m_analysis.m_analysisSourceCache->usedBytes() <= budget);
-    controller.clearComparisonLap(0);
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("ready"));
-    QVERIFY(controller.m_analysis.m_analysisSourceCache->usedBytes() <= budget);
-}
-
-void TelemetryTests::cancelsSupersededComparisonWaitingForCache()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("source.vbo"); QVERIFY(writeBytes(path, EventProjectFixture::routeVbo()));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Rapid selections", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready")); QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto choices = controller.comparisonLaps(); QVERIFY(choices.size() >= 2);
-    const auto a = choices[0].toMap().value("reference").toMap();
-    const auto b = choices[1].toMap().value("reference").toMap();
-    QSemaphore entered, release;
-    std::thread blocker([&] {
-        (void)controller.m_analysis.m_analysisSourceCache->load("held-test-decoder", {}, [&](qint64) {
-            entered.release(); release.acquire(); return TelemetrySession{};
-        }, [](const TelemetrySession &) {});
-    });
-    const auto unblock = qScopeGuard([&] { release.release(); if (blocker.joinable()) blocker.join(); });
-    QVERIFY(entered.tryAcquire(1, 5000));
-    QVERIFY(controller.selectComparisonLap(0, a)); QTRY_VERIFY(controller.m_analysis.m_comparisonPending);
-    const auto obsolete = controller.m_analysis.m_comparisonCancellation;
-    QVERIFY(controller.selectComparisonLap(0, b)); QVERIFY(obsolete->load());
-    QVERIFY(controller.selectComparisonLap(0, a)); QVERIFY(controller.selectComparisonLap(0, b));
-    release.release(); blocker.join();
-    QTRY_COMPARE(controller.m_analysis.m_comparisonSlots[0].state, QString("ready"));
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[0].row.value("reference").toMap(), b);
-    QCOMPARE(controller.m_analysis.m_comparisonSlots[1].state, QString("empty"));
-    QVERIFY(controller.m_analysis.m_comparisonSlots[0].error.isEmpty());
-    QVERIFY(controller.m_analysis.m_analysisSourceCache->usedBytes() <= controller.m_analysis.m_analysisSourceCache->limitBytes());
-}
-
-void TelemetryTests::excludesChannelMissingFromOneComparisonSlot()
-{
-    // KAN-42: a comparison pair where only one lap's recording has a given
-    // channel (e.g. one logger was wired up for speed, the other was not)
-    // must never fabricate or borrow the missing side's values.
-    // comparisonAvailableChannels() excludes it, and requesting it directly
-    // on the lacking slot reports "channelMissing" rather than empty-but-silent
-    // or interpolated data.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto first = directory.filePath("morning.vbo"), second = directory.filePath("afternoon.vbo");
-    QVERIFY(writeBytes(first, withSyntheticSpeedChannel(EventProjectFixture::routeVbo())));
-    QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(130, -2, 2))); // no "speed" column
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Missing sensor", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto candidates = controller.comparisonLaps(); QVERIFY(candidates.size() >= 2);
-    QVariantMap a, b;
-    for (const auto &value : candidates) {
-        const auto row = value.toMap();
-        if (a.isEmpty()) a = row;
-        else if (b.isEmpty() && row.value("runId") != a.value("runId")
-            && row.value("compatibilityGroupId") == a.value("compatibilityGroupId")) b = row;
-    }
-    QVERIFY(!a.isEmpty() && !b.isEmpty());
-    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_VERIFY(controller.comparisonPairReady());
-
-    QVERIFY(controller.m_analysis.m_comparisonSlots[0].session->channels.contains("speed"));
-    QVERIFY(!controller.m_analysis.m_comparisonSlots[1].session->channels.contains("speed"));
-    const auto available = controller.comparisonAvailableChannels();
-    QVERIFY(available.contains("latitude"));
-    QVERIFY2(!available.contains("speed"), "a channel missing from one recording must not appear as shared");
-
-    const double axisLength = controller.comparisonProgressAxisLength();
-    QVERIFY(axisLength > 0.0);
-    const auto presentSide = controller.comparisonChannelSeriesByProgress(0, "speed", 0, axisLength, 50);
-    QVERIFY2(!presentSide.value("segments").toList().isEmpty(), "the recording that has speed must still serve it");
-    const auto missingSide = controller.comparisonChannelSeriesByProgress(1, "speed", 0, axisLength, 50);
-    QCOMPARE(missingSide.value("reason").toString(), QString("channelMissing"));
-    QVERIFY2(!missingSide.contains("segments"), "a missing channel must report a reason, not fabricated/borrowed segments");
-}
-
-void TelemetryTests::comparesKnownDeltaThroughFullComparisonPipeline()
-{
-    // KAN-42: elevate the known-delta guarantee already proven at the
-    // TrackProgress unit level (knownDelayHasCorrectSignAndFinishLineMagnitude)
-    // to the full AppController import -> comparison pipeline: two SEPARATE
-    // imported runs of the identical physical path, one uniformly 10% slower,
-    // must produce a comparison delta with the correct sign throughout and a
-    // finish-line magnitude approximating the true known lap-time difference.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto fastPath = directory.filePath("fast.vbo"), slowPath = directory.filePath("slow.vbo");
-    // Default turns (4) is required, not incidental: inferTrack() needs at
-    // least 2 complete laps to resolve a route (TelemetryTests::
-    // infersRoutesFromOrderedCompleteLaps asserts turns=1 is unsupported),
-    // and every other comparison test in this file relies on that default.
-    const auto fastBytes = EventProjectFixture::routeVbo(240, -1.0, 0, false, 300);
-    constexpr double slowdownFactor = 1.10;
-    QVERIFY(writeBytes(fastPath, fastBytes));
-    QVERIFY(writeBytes(slowPath, routeVboWithTimeScale(slowdownFactor, fastBytes)));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Known delta", {QUrl::fromLocalFile(fastPath), QUrl::fromLocalFile(slowPath)}));
-    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLapsLoading());
-    const auto runFast = controller.eventRuns()[0].toMap().value("id").toString();
-    QVariantMap a, b;
-    for (const auto &value : controller.comparisonLaps()) {
-        const auto row = value.toMap();
-        if (row.value("runId").toString() == runFast) { if (a.isEmpty()) a = row; }
-        else if (b.isEmpty()) b = row;
-    }
-    QVERIFY2(!a.isEmpty() && !b.isEmpty(), "fixture must resolve one lap from each run");
-    QCOMPARE(b.value("compatibilityGroupId"), a.value("compatibilityGroupId"));
-    const double durationA = a.value("durationSeconds").toDouble();
-    const double durationB = b.value("durationSeconds").toDouble();
-    QVERIFY2(std::abs(durationB - durationA * slowdownFactor) < 0.05,
-        "the slow run's lap must be the known 10% slower duration");
-
-    QVERIFY(controller.selectComparisonLap(0, a.value("reference").toMap()));
-    QVERIFY(controller.selectComparisonLap(1, b.value("reference").toMap()));
-    QTRY_VERIFY(controller.comparisonPairReady());
-
-    const double axisLength = controller.comparisonProgressAxisLength();
-    QVERIFY(axisLength > 0.0);
-    const auto deltaSeries = controller.comparisonDeltaSeriesByProgress(0, axisLength, 50);
-    QVERIFY2(!deltaSeries.value("segments").toList().isEmpty(), "time delta series should not be empty");
-    double lastDelta = 0.0;
-    bool sawClearlyAhead = false;
-    for (const auto &segmentValue : deltaSeries.value("segments").toList()) {
-        for (const auto &pointValue : segmentValue.toList()) {
-            const double delta = pointValue.toPointF().y();
-            // A (the fixed-pace run) must never read as meaningfully behind
-            // the known 10%-slower B.
-            QVERIFY(delta < 0.5);
-            if (delta < -0.2) sawClearlyAhead = true;
-            lastDelta = delta;
-        }
-    }
-    QVERIFY2(sawClearlyAhead, "A should read as clearly ahead of the known-slower B somewhere along the lap");
-    const double actualDurationDifference = durationA - durationB; // A - B, negative since B is slower
-    QVERIFY2(std::abs(lastDelta - actualDurationDifference) < 1.0,
-        "the delta near the finish line should approximate the true known lap-time difference");
 }
 
 void TelemetryTests::presentsBrakingUpInGForceWidgets()
@@ -5490,13 +2790,6 @@ void TelemetryTests::protectsEveryDaySourceFromExport()
     controller.loadVideo(QUrl::fromLocalFile(video));
     QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 20000);
 
-    // The day-analysis state a real day carries: approved segments and an exclusion.
-    QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading() && !controller.outingComparisonGroupId().isEmpty(), 20000);
-    QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
-    QVariantMap excluded;
-    for (const auto &value : controller.outingLaps())
-        if (value.toMap().value("type") == "LAP" && value.toMap().value("runName") == "Session 2") { excluded = value.toMap().value("reference").toMap(); break; }
-    QVERIFY(controller.setOutingLapExcluded(excluded, true, "Traffic"));
     const QString project = directory.filePath("day.fetproject");
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(project)));
     const QString activeTelemetry = QFileInfo(controller.m_telemetryPath).fileName();
@@ -5747,188 +3040,6 @@ QStringList TelemetryTests::unreachableControls(QQuickWindow *window)
     return problems;
 }
 
-void TelemetryTests::keepsACompleteDayThroughMoveRelinkAndRecovery()
-{
-    // KAN-82: one analysed day -- run notes, approved segments, an A/B pair
-    // with its range, and the computed report -- through Save, a move of the
-    // project with its recordings, a missing and relinked recording, a
-    // refused wrong relink, crash recovery and discard. The saved project
-    // stays the authoritative clean state throughout.
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const QString day = directory.filePath("TrackDay");
-    QVERIFY(QDir().mkpath(QDir(day).filePath("media")));
-    const auto fullA = QDir(day).filePath("media/full-a.vbo"), fullB = QDir(day).filePath("media/full-b.vbo");
-    QVERIFY(writeBytes(fullA, fullM4Vbo(true, 140, 80, 1.0)));
-    QVERIFY(writeBytes(fullB, fullM4Vbo(false, 150, 85, 0.9)));
-    const QString recovery = directory.filePath("recovery.json");
-    const auto result = [](const QVariantMap &report, const QString &id) {
-        for (const auto &value : report.value("results").toList())
-            if (value.toMap().value("id") == id) return value.toMap();
-        return QVariantMap{};
-    };
-    const auto settle = [&](AppController &controller) {
-        controller.requestOutingDayReport();
-        return QTest::qWaitFor([&] {
-            const auto results = controller.outingDayReport().value("results").toList();
-            if (results.isEmpty()) return false;
-            for (const auto &value : results) {
-                const auto status = value.toMap().value("status").toString();
-                if (status == "notComputed" || status == "computing" || status == "stale") return false;
-            }
-            return true;
-        }, 60000);
-    };
-    // What must survive: notes, segmentation, the pair and its range, the report.
-    struct Snapshot {
-        QString notes, decisions, bestLabel; double theoretical = 0; int sectors = 0;
-        QVariantMap lapA, lapB; double rangeStart = 0, rangeEnd = 0;
-        bool operator==(const Snapshot &other) const {
-            return notes == other.notes && decisions == other.decisions && bestLabel == other.bestLabel
-                && qFuzzyCompare(theoretical, other.theoretical) && sectors == other.sectors
-                && lapA == other.lapA && lapB == other.lapB
-                && qFuzzyCompare(rangeStart + 1, other.rangeStart + 1) && qFuzzyCompare(rangeEnd, other.rangeEnd);
-        }
-    };
-    const auto snapshot = [&](AppController &controller, const QString &runId) {
-        Snapshot s;
-        s.notes = controller.runMetadata(runId).value("notes").toString();
-        const auto report = controller.outingDayReport();
-        s.decisions = report.value("decisionsKey").toString();
-        s.bestLabel = result(report, "bestLap").value("value").toMap().value("label").toString();
-        s.theoretical = result(report, "theoreticalBest").value("value").toMap().value("totalSeconds").toDouble();
-        s.sectors = result(report, "theoreticalBest").value("value").toMap().value("sectors").toList().size();
-        s.lapA = controller.comparisonSlots()[0].toMap().value("lap").toMap().value("reference").toMap();
-        s.lapB = controller.comparisonSlots()[1].toMap().value("lap").toMap().value("reference").toMap();
-        s.rangeStart = controller.comparisonPersistedRangeMeters().value("startMeters").toDouble();
-        s.rangeEnd = controller.comparisonPersistedRangeMeters().value("endMeters").toDouble();
-        return s;
-    };
-    const auto describe = [](const Snapshot &s) {
-        return QString("notes=%1 decisions=%2 best=%3 theoretical=%4 sectors=%5 A=%6 B=%7 range=%8-%9")
-            .arg(s.notes, s.decisions.left(12), s.bestLabel).arg(s.theoretical).arg(s.sectors)
-            .arg(s.lapA.value("lapNumber").toInt()).arg(s.lapB.value("lapNumber").toInt()).arg(s.rangeStart).arg(s.rangeEnd);
-    };
-    const auto openDay = [&](AppController &controller, const QString &project) {
-        controller.requestOpenProject(QUrl::fromLocalFile(project));
-        return QTest::qWaitFor([&] { return controller.eventRuns().size() == 2 && !controller.projectLoading()
-            && !controller.outingLapsLoading(); }, 30000);
-    };
-
-    // 1. Analyse and save.
-    const QString project = QDir(day).filePath("day.fetproject");
-    QString runB;
-    Snapshot saved;
-    {
-        AppController controller(nullptr, recovery);
-        QVERIFY(controller.importAnalysisRuns("Complete day", {QUrl::fromLocalFile(fullA), QUrl::fromLocalFile(fullB)}));
-        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
-        QTRY_VERIFY(!controller.outingComparisonGroupId().isEmpty());
-        QVERIFY(!approveAllSegmentsOnRun(controller, "Session 1").isEmpty());
-        runB = controller.eventRuns()[1].toMap().value("id").toString();
-        const auto metadata = controller.runMetadata(runB);
-        QVERIFY(controller.updateRunMetadata(runB, metadata.value("editToken").toString(), metadata.value("name").toString(),
-            "Soft tyres, 1.9 bar hot", "Dry, 24 °C", "Front bar +1"));
-        QVERIFY(settle(controller));
-        const auto losses = result(controller.outingDayReport(), "timeLosses").value("evidence").toList();
-        QVERIFY(!losses.isEmpty());
-        QVERIFY(controller.openTimeLoss({{"segmentId", losses.first().toMap().value("segmentId")},
-                                         {"lapReference", losses.first().toMap().value("reference")}}));
-        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
-        controller.persistComparisonRange(100.0, 600.0);
-        QVERIFY(controller.saveProject(QUrl::fromLocalFile(project)));
-        QVERIFY(!controller.dirty());
-        // Save As keys the day to its new path: let the results settle again.
-        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 30000);
-        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
-        QVERIFY(settle(controller));
-        QVERIFY(!controller.dirty());
-        saved = snapshot(controller, runB);
-        QVERIFY2(!saved.lapA.isEmpty() && !saved.lapB.isEmpty() && saved.sectors > 0, qPrintable(describe(saved)));
-    }
-
-    // 2. Move the project with its recordings; reopen: clean and identical.
-    const QString archive = directory.filePath("Archive");
-    QVERIFY(QDir().mkpath(archive));
-    QVERIFY(QDir().rename(day, QDir(archive).filePath("TrackDay")));
-    const QString movedDay = QDir(archive).filePath("TrackDay"), movedProject = QDir(movedDay).filePath("day.fetproject");
-    {
-        AppController controller(nullptr, recovery);
-        QVERIFY(openDay(controller, movedProject));
-        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
-        QVERIFY(settle(controller));
-        QVERIFY(!controller.dirty());
-        const auto reopened = snapshot(controller, runB);
-        QVERIFY2(reopened == saved, qPrintable(describe(saved) + " vs " + describe(reopened)));
-    }
-
-    // 3. A recording goes missing; the other run stays usable. A wrong file is
-    // refused by identity; the right one relinks and the day is whole again.
-    const QString activeRecording = QDir(movedDay).filePath("media/full-a.vbo");
-    const QString renamed = QDir(movedDay).filePath("media/renamed.vbo");
-    QVERIFY(QFile::rename(activeRecording, renamed));
-    {
-        AppController controller(nullptr, recovery);
-        controller.requestOpenProject(QUrl::fromLocalFile(movedProject));
-        QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("missing"), 30000);
-        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 30000);
-        QVariantMap missingRun;
-        for (const auto &value : controller.outingAnalysisStatus().value("runs").toList())
-            if (value.toMap().value("state") != "ready") missingRun = value.toMap();
-        QCOMPARE(missingRun.value("state").toString(), QString("missing-source"));
-        QVERIFY(!controller.outingLaps().isEmpty()); // the other session remains inspectable
-        controller.relinkVbo(QUrl::fromLocalFile(QDir(movedDay).filePath("media/full-b.vbo")));
-        QTRY_COMPARE_WITH_TIMEOUT(controller.sourceMismatchType(), QString("telemetry"), 30000);
-        controller.resolveSourceMismatch(false);
-        QVERIFY(controller.vboLoadState() != "ready");
-        controller.relinkVbo(QUrl::fromLocalFile(renamed));
-        QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 30000);
-        QTRY_VERIFY_WITH_TIMEOUT(!controller.outingLapsLoading(), 30000);
-        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
-        QVERIFY(settle(controller));
-        QVERIFY(controller.dirty()); // the new location is a change to save
-        QVERIFY(controller.saveCurrentProject());
-        const auto relinked = snapshot(controller, runB);
-        QVERIFY2(relinked == saved, qPrintable(describe(saved) + " vs " + describe(relinked)));
-    }
-
-    // 4. Crash with an unsaved edit: recovery offers it back; discard keeps
-    // the saved project, which stays authoritative and clean.
-    {
-        AppController controller(nullptr, recovery);
-        QVERIFY(openDay(controller, movedProject));
-        const auto metadata = controller.runMetadata(runB);
-        QVERIFY(controller.updateRunMetadata(runB, metadata.value("editToken").toString(), metadata.value("name").toString(),
-            "Unsaved note", "Dry, 24 °C", "Front bar +1"));
-        QVERIFY(controller.dirty());
-        controller.m_document.writeRecoverySnapshot();
-        // The controller ends without saving, as after a crash.
-    }
-    {
-        AppController controller(nullptr, recovery);
-        QVERIFY(controller.recoveryPending());
-        controller.resolveStartupRecovery("recover");
-        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
-        QCOMPARE(controller.runMetadata(runB).value("notes").toString(), QString("Unsaved note"));
-        QVERIFY(controller.dirty());
-        QTRY_VERIFY_WITH_TIMEOUT(controller.comparisonPairReady(), 20000);
-        QVERIFY(settle(controller));
-        auto recovered = snapshot(controller, runB);
-        recovered.notes = saved.notes; // everything but the unsaved note is the saved day
-        QVERIFY2(recovered == saved, qPrintable(describe(saved) + " vs " + describe(recovered)));
-        controller.m_document.writeRecoverySnapshot();
-    }
-    {
-        AppController controller(nullptr, recovery);
-        QVERIFY(controller.recoveryPending());
-        controller.resolveStartupRecovery("discard");
-        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
-        QCOMPARE(controller.runMetadata(runB).value("notes").toString(), saved.notes);
-        QVERIFY(!controller.dirty());
-        QVERIFY(!controller.recoveryPending());
-    }
-}
-
 void TelemetryTests::keepsRecoveryWhenQuittingAtTheRecoveryPrompt()
 {
     // KAN-145: while "Recover unsaved changes?" is open, quitting must not
@@ -5983,6 +3094,7 @@ void TelemetryTests::offersRecoveryOfAnEventCreatedByImport()
     const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
     QVERIFY(writeBytes(first, EventProjectFixture::routeVbo()));
     QVERIFY(writeBytes(second, EventProjectFixture::routeVbo(130, -2, 2)));
+    qsizetype widgets = 0;
     {
         AppController controller(nullptr, recovery);
         controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
@@ -5992,13 +3104,12 @@ void TelemetryTests::offersRecoveryOfAnEventCreatedByImport()
         QSignalSpy committed(&controller, &AppController::batchImportCommitted);
         QVERIFY(controller.importAnalysisRuns("Imported day", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
         QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 30000);
-        QTRY_VERIFY_WITH_TIMEOUT(controller.vboLoadState() == "ready" && !controller.outingLapsLoading(), 30000);
+        QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 30000);
         // The untitled event no longer points at project A.
         QVERIFY(QSettings().value("project/path").toString().isEmpty());
-        const auto runId = controller.eventRuns().first().toMap().value("id").toString();
-        const auto metadata = controller.runMetadata(runId);
-        QVERIFY(controller.updateRunMetadata(runId, metadata.value("editToken").toString(), metadata.value("name").toString(),
-            "Unsaved note", "", ""));
+        widgets = controller.widgetModel()->addWidget("lapCurrent") >= 0
+            ? controller.currentProjectObject().value("scene").toObject().value("widgets").toArray().size() : -1;
+        QVERIFY(widgets > 0);
         QVERIFY(controller.dirty());
         controller.m_document.writeRecoverySnapshot();
         // The controller ends without saving, as after a crash.
@@ -6009,10 +3120,9 @@ void TelemetryTests::offersRecoveryOfAnEventCreatedByImport()
         AppController controller(nullptr, recovery);
         QVERIFY2(controller.recoveryPending(), "the imported event's recovery was not offered");
         controller.resolveStartupRecovery("recover");
-        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && !controller.outingLapsLoading(), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(controller.eventRuns().size() == 2 && controller.vboLoadState() == "ready", 30000);
         QCOMPARE(controller.eventName(), QStringLiteral("Imported day"));
-        QCOMPARE(controller.runMetadata(controller.eventRuns().first().toMap().value("id").toString()).value("notes").toString(),
-                 QStringLiteral("Unsaved note"));
+        QCOMPARE(controller.currentProjectObject().value("scene").toObject().value("widgets").toArray().size(), widgets);
     }
 }
 
@@ -7122,99 +4232,57 @@ void TelemetryTests::projectsWestPositiveTracksWithoutMirroring()
     QCOMPARE(marker.value("y").toDouble(), westMap.points[1].y());
 }
 
-void TelemetryTests::preservesLongitudeConventionInLapDetail()
-{
-    QTemporaryDir directory; QVERIFY(directory.isValid());
-    QSettings settings; settings.clear(); settings.sync();
-    const auto path = directory.filePath("west-positive.vbo");
-    const QByteArray recording =
-        "[comments]\nGenerated by RaceChrono Pro v10.2.4\n[column names]\ntime latitude longitude velocity\n[data]\n"
-        "0 3120 -1260 70\n1 3120 -1263.75 71\n2 3121.875 -1263.75 72\n3 3120.9375 -1260.9375 73\n";
-    QVERIFY(writeBytes(path, recording));
-    AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Map orientation", {QUrl::fromLocalFile(path)}));
-    QTRY_COMPARE(controller.outingLaps().size(), 1);
-    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-    const auto document = controller.currentProjectObject();
-    QVERIFY(controller.selectOutingLap(0));
-    QTRY_COMPARE(controller.outingLapDetailState(), QStringLiteral("ready"));
-    const auto track = controller.outingLapTrack();
-    QCOMPARE(track.size(), 1);
-    const auto points = track.first().toList();
-    QCOMPARE(points.size(), 4);
-    QVERIFY(points[1].toMap().value("x").toDouble() > points[0].toMap().value("x").toDouble());
-    QVERIFY(points[2].toMap().value("y").toDouble() < points[1].toMap().value("y").toDouble());
-    controller.setOutingLapCursor(1);
-    QCOMPARE(controller.outingLapTrackPoint(), points[1].toMap());
-    QCOMPARE(controller.currentTrackPoint().value("x").toDouble(), points[0].toMap().value("x").toDouble());
-    QCOMPARE(controller.outingLapTrack(), track);
-    QCOMPARE(controller.currentProjectObject(), document);
-    QCOMPARE(readBytes(path), recording);
-}
-
 void TelemetryTests::persistsAndInvalidatesRunTrackConfiguration()
 {
+    // A track configuration confirmed in FlappedEar Telemetry is kept by
+    // Overlays' save, and replacing the recording clears its assertions.
     QTemporaryDir directory; QVERIFY(directory.isValid());
     QSettings settings; settings.clear(); settings.sync();
     const auto path = directory.filePath("run.vbo");
     QVERIFY(writeBytes(path, EventProjectFixture::lapsVbo()));
+    const auto analysedPath = directory.filePath("analysed.fetproject");
+    QJsonObject imported;
+    {
+        TelemetryController reference(directory.filePath("reference.json"));
+        QVERIFY(importReferenceDay(reference, "Identity", {QUrl::fromLocalFile(path)}));
+        const auto runId = reference.document()->activeRunId();
+        imported = EventProjectCodec::trackConfiguration(EventProjectFixture::runs(reference.document()->analysisProject())[0].toObject());
+        QVERIFY(imported.value("layoutId").isNull());
+        QCOMPARE(imported.value("direction").toString(), QString("unknown"));
+        QVERIFY(reference.analysis()->setRunTrackConfiguration(runId, "jastrzab-full", "clockwise"));
+        QVERIFY(reference.document()->saveProject(QUrl::fromLocalFile(analysedPath)));
+    }
+    // A route inference as FlappedEar Telemetry stores it.
+    auto analysed = QJsonDocument::fromJson(readBytes(analysedPath)).object();
+    auto analysedRuns = EventProjectFixture::runs(analysed); auto analysedRun = analysedRuns[0].toObject();
+    const QJsonObject inference{{"algorithm", "gps-route-v1"}, {"sourceRevision", QString(64, 'a')},
+        {"gateRevision", imported.value("gateRevision")}, {"layoutId", "gps-route-v1:" + QString(64, 'c')},
+        {"direction", "clockwise"}};
+    analysedRun.insert("trackInference", inference); analysedRuns[0] = analysedRun;
+    EventProjectFixture::setRuns(analysed, analysedRuns);
+    QVERIFY(writeBytes(analysedPath, QJsonDocument(analysed).toJson()));
     AppController controller(nullptr, directory.filePath("recovery.json"));
-    QVERIFY(controller.importAnalysisRuns("Identity", {QUrl::fromLocalFile(path)}));
+    controller.requestOpenProject(QUrl::fromLocalFile(analysedPath));
     QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
-    QTRY_VERIFY(!controller.outingLaps().isEmpty());
-    const auto runId = controller.activeRunId();
-    auto run = EventProjectFixture::runs(controller.currentProjectObject())[0].toObject();
-    const auto imported = EventProjectCodec::trackConfiguration(run);
-    QVERIFY(imported.value("layoutId").isNull());
-    QCOMPARE(imported.value("direction").toString(), QString("unknown"));
     QCOMPARE(imported.value("gateRevision").toString(), timingGateRevision(*controller.m_session));
-    const auto before = controller.currentProjectObject();
-    QVERIFY(!controller.setRunTrackConfiguration("foreign-run", "layout", "clockwise"));
-    QVERIFY(!controller.setRunTrackConfiguration(runId, "layout", "forward"));
-    QCOMPARE(controller.currentProjectObject(), before);
-    QVERIFY(controller.selectOutingLap(0));
-    QTRY_COMPARE(controller.outingLapDetailState(), QString("ready"));
-    const auto generation = controller.m_document.m_sourceGeneration;
-    const auto oldKey = controller.m_analysis.outingLapKey();
-    QVERIFY(controller.setRunTrackConfiguration(runId, "jastrzab-full", "clockwise"));
-    QCOMPARE(controller.outingLapDetailState(), QString("idle"));
-    QVERIFY(controller.m_analysis.outingLapKey() != oldKey);
-    QCOMPARE(controller.m_document.m_sourceGeneration, generation); // Metadata edits do not reload the editor.
-    QTRY_VERIFY(!controller.outingLapsLoading() && !controller.outingLaps().isEmpty());
-    QVERIFY(controller.dirty());
-    const auto revision = controller.m_document.m_documentState.revision();
-    QVERIFY(controller.setRunTrackConfiguration(runId, "jastrzab-full", "clockwise"));
-    QCOMPARE(controller.m_document.m_documentState.revision(), revision);
+    QVERIFY(controller.widgetModel()->addWidget("lapCurrent") >= 0);
     const auto savedPath = directory.filePath("identity.fetproject");
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
-    const auto saved = QJsonDocument::fromJson(readBytes(savedPath)).object();
-    AppController reopened(nullptr, directory.filePath("reopened-recovery.json"));
-    QVERIFY(reopened.m_document.beginProjectLoad(savedPath, saved));
-    QTRY_COMPARE(reopened.vboLoadState(), QString("ready"));
-    run = EventProjectFixture::runs(reopened.currentProjectObject())[0].toObject();
+    auto run = EventProjectFixture::runs(QJsonDocument::fromJson(readBytes(savedPath)).object())[0].toObject();
     const auto config = EventProjectCodec::trackConfiguration(run);
     QCOMPARE(config.value("layoutId").toString(), QString("jastrzab-full"));
     QCOMPARE(config.value("direction").toString(), QString("clockwise"));
     QCOMPARE(config.value("gateRevision"), imported.value("gateRevision"));
-    // Simulate an asserted gate revision edit without changing the recording:
-    // cache identity changes and the worker must refuse stale gate metadata.
-    auto stale = reopened.currentProjectObject(); auto runs = EventProjectFixture::runs(stale);
-    run = runs[0].toObject(); auto staleConfig = config;
-    staleConfig.insert("gateRevision", "gates-v1:" + QString(64, '0'));
-    run.insert("trackConfiguration", staleConfig); runs[0] = run; EventProjectFixture::setRuns(stale, runs);
-    const auto oldGateKey = reopened.m_analysis.outingLapKey();
-    reopened.m_document.m_projectTemplate = stale; reopened.markPersistentChange();
-    QVERIFY(reopened.m_analysis.outingLapKey() != oldGateKey);
-    QTRY_VERIFY(!reopened.outingLapsLoading() && reopened.outingLapMessages().join(" ").contains("Timing-gate revision"));
-    QVERIFY(reopened.outingLaps().isEmpty());
+    QCOMPARE(run.value("trackInference").toObject(), inference); // kept as the analysis saved it
     // Replacing the source clears the source-bound assertions in the real editor path.
-    reopened.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
-    QTRY_COMPARE(reopened.vboLoadState(), QString("ready"));
-    run = EventProjectFixture::runs(reopened.currentProjectObject())[0].toObject();
+    controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    run = EventProjectFixture::runs(controller.currentProjectObject())[0].toObject();
     const auto unknown = EventProjectCodec::trackConfiguration(run);
     QVERIFY(unknown.value("layoutId").isNull()); QVERIFY(unknown.value("gateRevision").isNull());
     QCOMPARE(unknown.value("direction").toString(), QString("unknown"));
-    QString error; QVERIFY2(ProjectLimits::validateProject(reopened.currentProjectObject(), &error), qPrintable(error));
+    QVERIFY(!run.contains("trackInference"));
+    QString error; QVERIFY2(ProjectLimits::validateProject(controller.currentProjectObject(), &error), qPrintable(error));
 }
 
 void TelemetryTests::cachesStaticTrackGeometry()
@@ -8253,8 +5321,6 @@ void TelemetryTests::opensProjectsTransactionally()
     QCOMPARE(controller.syncOffset(), 4.0);
     QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(failedPath).canonicalFilePath());
     QVERIFY(!controller.dirty());
-    controller.setAnalysisVisible(true);
-    QVERIFY(controller.analysisVisible());
 
     const QJsonObject successProject{{"version", 2},
                                      {"scene", scene},
@@ -8269,7 +5335,6 @@ void TelemetryTests::opensProjectsTransactionally()
     QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(successPath).canonicalFilePath());
     QCOMPARE(controller.telemetryName(), QStringLiteral("basic.vbo"));
     QCOMPARE(controller.syncOffset(), 2.5);
-    QVERIFY(!controller.analysisVisible());
     QVERIFY(!controller.dirty());
     QVERIFY(controller.saveCurrentProject());
     const QJsonObject migrated = QJsonDocument::fromJson(readBytes(successPath)).object();
@@ -8766,7 +5831,6 @@ void TelemetryTests::restoresSavedProjectsAndPreservesUnknownFields()
     settings.setValue(QStringLiteral("project/path"), projectPath);
     settings.setValue(QStringLiteral("sync/offset"), 99.0);
     settings.setValue(QStringLiteral("editor/widgets"), QByteArray("legacy"));
-    settings.setValue(QStringLiteral("analysis/windowWidth"), 777);
     settings.sync();
 
     {
@@ -8774,12 +5838,6 @@ void TelemetryTests::restoresSavedProjectsAndPreservesUnknownFields()
         QTRY_VERIFY(!controller.projectLoading());
         QCOMPARE(controller.syncOffset(), 1.25);
         QVERIFY(!controller.dirty());
-        QVERIFY(!controller.analysisVisible());
-        controller.setAnalysisVisible(true);
-        QVERIFY(!controller.dirty());
-        controller.setAnalysisVisible(false);
-        QVERIFY(!controller.dirty());
-        QCOMPARE(controller.analysisWindowWidth(), 777);
         controller.setSyncOffset(2.5);
         QVERIFY(controller.saveCurrentProject());
         QVERIFY(!controller.dirty());
@@ -8895,7 +5953,6 @@ void TelemetryTests::discardsUnsavedStateForQuitNewAndOpen()
         QTRY_VERIFY(!controller.projectLoading());
         controller.widgetModel()->addWidget(QStringLiteral("customValue"));
         controller.setSyncOffset(8.0);
-        controller.setAnalysisVisible(false);
         controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
         QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
@@ -8910,7 +5967,6 @@ void TelemetryTests::discardsUnsavedStateForQuitNewAndOpen()
         QTRY_VERIFY(!controller.projectLoading());
         QCOMPARE(controller.syncOffset(), 1.0);
         QVERIFY(controller.telemetryName().isEmpty());
-        QVERIFY(!controller.analysisVisible());
         QVERIFY(!controller.dirty());
 
         controller.setSyncOffset(8.0);
@@ -8919,7 +5975,6 @@ void TelemetryTests::discardsUnsavedStateForQuitNewAndOpen()
         controller.resolveDestructiveAction(QStringLiteral("discard"));
         QCOMPARE(controller.syncOffset(), 0.0);
         QVERIFY(controller.projectPath().isEmpty());
-        QVERIFY(!controller.analysisVisible());
         QVERIFY(!controller.dirty());
         QVERIFY(!QFileInfo(recoveryPath).exists());
 

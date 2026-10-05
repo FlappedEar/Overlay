@@ -224,7 +224,6 @@ AppController::AppController(QObject *parent, QString recoveryPath,
         commitVboLoad(result, m_vboLoadMarksDocumentDirty);
     });
     initializeDocument();
-    initializeAnalysis();
     m_document.startup();
 }
 
@@ -232,18 +231,15 @@ AppController::~AppController()
 {
     m_document.cancelImport();
     cancelSourceJobs();
-    m_runVideoCancellation->store(true);
     QElapsedTimer sourceShutdown;
     sourceShutdown.start();
     while (sourceShutdown.elapsed() < 2'000
            && (m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning()
-               || m_document.projectLoadRunning() || m_syncWatcher.isRunning() || m_document.importRunning()
-               || m_analysis.workRunning())) {
+               || m_document.projectLoadRunning() || m_syncWatcher.isRunning() || m_document.importRunning())) {
         QThread::msleep(10);
     }
     if (m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning()
-        || m_document.projectLoadRunning() || m_syncWatcher.isRunning() || m_document.importRunning()
-        || m_analysis.workRunning()) {
+        || m_document.projectLoadRunning() || m_syncWatcher.isRunning() || m_document.importRunning()) {
         AppLog::warn(QStringLiteral("Source worker shutdown exceeded the bounded wait"));
     }
     bool exportStopped = true;
@@ -592,14 +588,6 @@ QVariantList AppController::lapNavigationSegments() const
     }
     return segments;
 }
-QStringList AppController::analysisChannels() const { return m_analysisChannels; }
-bool AppController::analysisVisible() const { return m_analysisVisible; }
-int AppController::analysisWindowX() const { return m_settings.value("analysis/windowX", -1).toInt(); }
-int AppController::analysisWindowY() const { return m_settings.value("analysis/windowY", -1).toInt(); }
-int AppController::analysisWindowWidth() const { return m_settings.value("analysis/windowWidth", 1240).toInt(); }
-int AppController::analysisWindowHeight() const { return m_settings.value("analysis/windowHeight", 760).toInt(); }
-int AppController::analysisSidebarWidth() const { return m_settings.value("analysis/sidebarWidth", 360).toInt(); }
-int AppController::analysisVideoHeight() const { return m_settings.value("analysis/videoHeight", 360).toInt(); }
 int AppController::windowX() const { return m_settings.value("window/x", -1).toInt(); }
 int AppController::windowY() const { return m_settings.value("window/y", -1).toInt(); }
 int AppController::windowWidth() const { return m_settings.value("window/width", 1440).toInt(); }
@@ -607,6 +595,11 @@ int AppController::windowHeight() const { return m_settings.value("window/height
 QString AppController::videoLoadState() const { return m_videoLoadState; }
 QString AppController::vboLoadState() const { return m_vboLoadState; }
 QString AppController::sourceMismatchType() const { return m_sourceMismatchType; }
+QString AppController::formatElapsedTime(const double seconds)
+{
+    return FlappedEar::formatElapsedTime(seconds);
+}
+
 QString AppController::sourceMismatchCandidateName() const
 {
     if (m_sourceMismatchType == QStringLiteral("video")) {
@@ -708,9 +701,6 @@ quint64 AppController::beginSourceReplacement(const bool replacingVideo)
 {
     const bool restartOther = (replacingVideo ? m_vboLoadState : m_videoLoadState) == QStringLiteral("loading");
     const auto request = replacingVideo ? m_vboLoadRequest : m_videoLoadRequest;
-    if (!replacingVideo) {
-        m_analysis.activeRunSourceReplaced(activeRunId());
-    }
     const quint64 generation = beginSourceGeneration(true);
     if (restartOther && !request.path.isEmpty()) {
         if (replacingVideo) startVboLoad(request.path, generation, request.markDocumentDirty,
@@ -721,11 +711,8 @@ quint64 AppController::beginSourceReplacement(const bool replacingVideo)
     return generation;
 }
 
-quint64 AppController::beginSourceGeneration(const bool preserveOuting)
+quint64 AppController::beginSourceGeneration(const bool /*preserveOuting: no analysis to keep since KAN-166*/)
 {
-    if (!preserveOuting) {
-        m_analysis.resetForNewSources();
-    }
     const quint64 generation = m_document.nextSourceGeneration();
     if (!m_sourceMismatchType.isEmpty()) {
         m_sourceMismatchType.clear();
@@ -735,7 +722,7 @@ quint64 AppController::beginSourceGeneration(const bool preserveOuting)
     }
     const bool replacing = m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning()
         || m_document.projectLoadRunning() || m_syncWatcher.isRunning();
-    cancelSourceJobs(!preserveOuting);
+    cancelSourceJobs();
     if (replacing) AppLog::info(QStringLiteral("Previous source load cancelled after replacement"));
     if (m_videoProbeWatcher.isRunning()) {
         m_videoLoadState = QStringLiteral("idle");
@@ -748,9 +735,8 @@ quint64 AppController::beginSourceGeneration(const bool preserveOuting)
     return generation;
 }
 
-void AppController::cancelSourceJobs(const bool cancelOutingDetail)
+void AppController::cancelSourceJobs()
 {
-    m_analysis.cancelWork(cancelOutingDetail);
     m_document.cancelProjectLoad();
     for (const auto &cancellation : {m_videoProbeCancellation, m_vboLoadCancellation, m_syncCancellation}) {
         if (cancellation) {
@@ -978,7 +964,8 @@ void AppController::commitVboLoad(const VboLoadResult &result, const bool markDo
     m_previewRenderContext.setTrackGeometry(&m_trackGeometry);
     if (markDocumentDirty && EventProjectCodec::isEvent(m_document.storedProject())) {
         // Replacement clears asserted layout/direction, then records the gates
-        // actually verified in the new source. This enables fresh inference.
+        // actually verified in the new source. This enables fresh inference;
+        // the old source's inference goes, as Overlays no longer derives one.
         auto project = currentProjectObject(); auto event = project.value("event").toObject();
         auto runs = event.value("runs").toArray();
         for (qsizetype i = 0; i < runs.size(); ++i) {
@@ -987,12 +974,11 @@ void AppController::commitVboLoad(const VboLoadResult &result, const bool markDo
             auto config = EventProjectCodec::trackConfiguration(run);
             const auto gates = timingGateRevision(result.session);
             config.insert("gateRevision", gates.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(gates));
-            run.insert("trackConfiguration", config); runs[i] = run;
+            run.insert("trackConfiguration", config); run.remove("trackInference"); runs[i] = run;
         }
         event.insert("runs", runs); project.insert("event", event); m_document.replaceStoredProject(project);
     }
-    m_analysis.refreshLapExclusionPolicy();
-    reconcileAnalysisChannels();
+    applyActiveLapExclusions();
     emit telemetryChanged();
     emit lapNavigationChanged();
     emit liveValuesChanged();
@@ -1232,17 +1218,6 @@ qint64 AppController::videoMillisecondsForTelemetryTime(const double telemetryTi
         return -1;
     }
     return static_cast<qint64>(std::llround(milliseconds));
-}
-
-void AppController::toggleAnalysisChannel(const QString &channelName)
-{
-    QStringList channels = m_analysisChannels;
-    if (channels.contains(channelName)) {
-        channels.removeAll(channelName);
-    } else if (!channelName.isEmpty() && channels.size() < 4) {
-        channels.append(channelName);
-    }
-    setAnalysisChannels(channels);
 }
 
 void AppController::startEditorSources(const ProjectLoadResult &result)
@@ -2144,23 +2119,6 @@ void AppController::saveWindowState(const int x, const int y, const int width, c
     m_settings.sync();
 }
 
-void AppController::saveAnalysisWindowState(
-    const int x,
-    const int y,
-    const int width,
-    const int height,
-    const int sidebarWidth,
-    const int videoHeight)
-{
-    m_settings.setValue("analysis/windowX", x);
-    m_settings.setValue("analysis/windowY", y);
-    m_settings.setValue("analysis/windowWidth", width);
-    m_settings.setValue("analysis/windowHeight", height);
-    m_settings.setValue("analysis/sidebarWidth", sidebarWidth);
-    m_settings.setValue("analysis/videoHeight", videoHeight);
-    m_settings.sync();
-}
-
 void AppController::setPlaybackTime(const double seconds)
 {
     if (qFuzzyCompare(m_playbackTime, seconds)) {
@@ -2193,7 +2151,7 @@ void AppController::setSyncOffset(const double seconds)
     emit syncChanged();
     emit lapNavigationChanged();
     emit liveValuesChanged();
-    markPersistentChange(); // also emits documentStateChanged, which refreshes outingLapVideoAvailable/Position
+    markPersistentChange();
 }
 
 void AppController::setTimeScale(const double scale)
@@ -2207,44 +2165,7 @@ void AppController::setTimeScale(const double scale)
     emit syncChanged();
     emit lapNavigationChanged();
     emit liveValuesChanged();
-    markPersistentChange(); // also emits documentStateChanged, which refreshes outingLapVideoAvailable/Position
-}
-
-void AppController::setAnalysisChannels(const QStringList &channels)
-{
-    // A channel choice made in the analysis is the only edit that rewrites
-    // analysis.channels on save (KAN-166 step 2).
-    m_analysisChannelsEdited = true;
-    applyAnalysisChannels(channels);
-}
-
-void AppController::applyAnalysisChannels(const QStringList &channels)
-{
-    QStringList normalized;
-    for (const QString &channel : channels) {
-        if (!channel.isEmpty() && !normalized.contains(channel)
-            && (!m_session || m_session->channels.contains(channel))) {
-            normalized.append(channel);
-        }
-        if (normalized.size() == 4) {
-            break;
-        }
-    }
-    if (normalized == m_analysisChannels) {
-        return;
-    }
-    m_analysisChannels = normalized;
-    emit analysisChanged();
     markPersistentChange();
-}
-
-void AppController::setAnalysisVisible(const bool visible)
-{
-    if (visible == m_analysisVisible) {
-        return;
-    }
-    m_analysisVisible = visible;
-    emit analysisChanged();
 }
 
 QVariant AppController::semanticValue(const QString &alias) const
@@ -2266,38 +2187,6 @@ void AppController::setStatus(QString status)
     AppLog::info(QStringLiteral("Status: %1").arg(status));
     m_statusText = std::move(status);
     emit statusTextChanged();
-}
-
-void AppController::reconcileAnalysisChannels()
-{
-    if (!m_session) {
-        return;
-    }
-    QStringList channels;
-    for (const QString &channel : std::as_const(m_analysisChannels)) {
-        if (m_session->channels.contains(channel) && !channels.contains(channel)) {
-            channels.append(channel);
-        }
-    }
-    for (const QString &alias : {QStringLiteral("speed"), QStringLiteral("rpm"),
-                                 QStringLiteral("throttle"), QStringLiteral("brake")}) {
-        const QString resolved = m_session->aliases.value(alias);
-        if (!resolved.isEmpty() && !channels.contains(resolved)) {
-            channels.append(resolved);
-        }
-        if (channels.size() >= 3) {
-            break;
-        }
-    }
-    for (const QString &channel : m_session->channelNames()) {
-        if (channels.size() >= 3) {
-            break;
-        }
-        if (!channels.contains(channel)) {
-            channels.append(channel);
-        }
-    }
-    applyAnalysisChannels(channels);
 }
 
 QString AppController::syncCandidateLevelName(const double confidence)
