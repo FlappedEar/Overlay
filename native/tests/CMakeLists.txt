@@ -44,6 +44,18 @@ qt_add_resources(flappedear_native_tests "flappedear_test_qml"
         ../qml/widgets/PedalsWidget.qml
         ../qml/widgets/TelemetryPanel.qml
         ../qml/widgets/TyresWidget.qml
+        ../qml/widgets/GForceData.qml
+        ../qml/widgets/tech/TechCustomValue.qml
+        ../qml/widgets/tech/TechGForce.qml
+        ../qml/widgets/tech/TechHeartRate.qml
+        ../qml/widgets/tech/TechLabel.qml
+        ../qml/widgets/tech/TechLapTime.qml
+        ../qml/widgets/tech/TechPanel.qml
+        ../qml/widgets/tech/TechPedals.qml
+        ../qml/widgets/tech/TechRadar.qml
+        ../qml/widgets/tech/TechSpeed.qml
+        ../qml/widgets/tech/TechTachometer.qml
+        ../qml/widgets/tech/TechTyres.qml
 )
 # The application's logo and fonts, so production QML loaded by tests (and the user-guide
 # capture) shows it as the application does.
@@ -59,6 +71,9 @@ qt_add_resources(flappedear_native_tests "flappedear_test_branding"
         ../resources/fonts/JetBrainsMono-500.ttf
         ../resources/fonts/JetBrainsMono-600.ttf
         ../resources/fonts/JetBrainsMono-700.ttf
+        ../resources/fonts/ChakraPetch-500.ttf
+        ../resources/fonts/ChakraPetch-600.ttf
+        ../resources/fonts/ChakraPetch-700.ttf
 )
 target_compile_definitions(flappedear_native_tests PRIVATE
     GUI_SESSION_LOCK_HELPER_PATH="$<TARGET_FILE:flappedear_gui_session_lock_helper>"

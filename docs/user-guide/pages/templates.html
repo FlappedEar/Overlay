@@ -3,15 +3,21 @@
 <p class="lead">A template is a complete overlay arrangement: widgets, positions, channel bindings, styles, cues and groups. Use templates to start quickly and to reuse a layout across projects.</p>
 
 <h2 id="built-in">Built-in templates</h2>
-<p>There is one built-in template, <em>Motorsport Broadcast HUD</em>, and a new project starts with it. It cannot be changed or deleted, but you can apply it and save the result as your own.</p>
+<p>There are two built-in templates. A new project starts with <em>Motorsport Broadcast HUD</em>. Built-in templates cannot be changed or deleted, but you can apply one and save the result as your own.</p>
 <table>
   <tr><th>Template</th><th>Description</th><th>Widgets</th></tr>
   <tr><td>Motorsport Broadcast HUD</td><td>Full modern motorsport broadcast HUD composition for visual review</td><td>Retro RPM, Speed, Pedals, three Retro Custom tiles (OIL, ATF, COOLANT), Heart rate, F1 G-Force Radar, G-Force Bar</td></tr>
+  <tr><td>Tech HUD</td><td>Bottom-strip HUD over the bonnet in the Tech style (KAN-193)</td><td>Retro RPM with speed inside, Current lap time, Pedals, three Retro Custom rows (OIL, ATF, COOLANT) with range bars, Tyres, Heart rate (top right), F1 G-Force Radar and G-Force Bar (bottom right), all in the <a href="widgets.html#styles">Tech style</a></td></tr>
 </table>
-<p>The OIL, ATF and COOLANT tiles read RaceChrono's OBD channels <code>engine_oil_temp-obd</code>, <code>gearbox_temp-obd</code> and <code>coolant_temp-obd</code>. With another logger they show <code>—</code> until you select your own channel in <strong>Source channel</strong>. The template has no lap timer: add <strong>Current lap time</strong> from the widget list if you want one.</p>
+<p>In the Tech HUD the OIL, ATF and COOLANT rows have these ranges, chosen as starting points rather than from your car's manual: OIL 60–150 °C, normal 90–125, warning at 128; ATF 40–140 °C, normal 70–110, warning at 118; COOLANT 60–120 °C, normal 85–104, warning at 105. Change them under the row's <strong>Minimum</strong>, <strong>Maximum</strong>, <strong>Normal from</strong>, <strong>Normal to</strong> and <strong>Warning at</strong>.</p>
+<p>In both templates the OIL, ATF and COOLANT widgets read RaceChrono's OBD channels <code>engine_oil_temp-obd</code>, <code>gearbox_temp-obd</code> and <code>coolant_temp-obd</code>. With another logger they show <code>—</code> until you select your own channel in <strong>Source channel</strong>. The Motorsport Broadcast HUD has no lap timer: add <strong>Current lap time</strong> from the widget list if you want one.</p>
 <figure>
   <img src="assets/screens/template-motorsport-broadcast-smoke.png" alt="Motorsport Broadcast HUD template" width="1280" height="720" loading="lazy">
   <figcaption>Motorsport Broadcast HUD over Session 5 at Jastrząb on 29 August 2026 (GoPro clip and RaceChrono Pro VBO), 38 s into the best lap.</figcaption>
+</figure>
+<figure>
+  <img src="assets/screens/template-tech-hud.png" alt="Tech HUD template" width="1280" height="720" loading="lazy">
+  <figcaption>Tech HUD on the review backdrop.</figcaption>
 </figure>
 <div class="note"><p>Earlier versions had nine more built-in templates (Track Day, Minimal, Broadcast, Performance, Circuit Pro, Endurance, Drag Strip, Clean HUD and 2000s Grand Prix). They were removed with the widgets they used. A custom template or project saved from one of them still opens, without the removed widgets; see <a href="widgets.html#removed">Removed widgets</a>.</p></div>
 
