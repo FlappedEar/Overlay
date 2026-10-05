@@ -29,6 +29,9 @@ class WidgetModel final : public QAbstractListModel {
     Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
     Q_PROPERTY(QVariantList templates READ templates NOTIFY templatesChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    // KAN-191: the user's "My widgets" library.
+    Q_PROPERTY(QVariantList libraryWidgets READ libraryWidgets NOTIFY libraryWidgetsChanged)
+    Q_PROPERTY(QString libraryError READ libraryError NOTIFY libraryErrorChanged)
 
 public:
     enum Role {
@@ -56,7 +59,11 @@ public:
     [[nodiscard]] int revision() const;
     [[nodiscard]] QVariantList templates() const;
     [[nodiscard]] QString lastError() const { return m_lastError; }
+    [[nodiscard]] QVariantList libraryWidgets() const;
+    [[nodiscard]] QString libraryError() const { return m_libraryError; }
     [[nodiscard]] const WidgetData *widgetAt(int index) const;
+    // Widgets of retired types (KAN-192) the last fromJson() left out.
+    [[nodiscard]] int retiredWidgetsDropped() const { return m_retiredWidgetsDropped; }
 
     Q_INVOKABLE int addWidget(const QString &type);
     Q_INVOKABLE void removeWidget(int index);
@@ -83,6 +90,18 @@ public:
     Q_INVOKABLE QString importTemplate(const QUrl &url);
     Q_INVOKABLE void reloadTemplates();
 
+    // My widgets: a saved widget (type, size, settings) reusable in any project.
+    Q_INVOKABLE QString saveWidgetToLibrary(int index, const QString &name);
+    Q_INVOKABLE bool updateLibraryWidget(const QString &libraryId, int index);
+    Q_INVOKABLE int addLibraryWidget(const QString &libraryId);
+    Q_INVOKABLE bool deleteLibraryWidget(const QString &libraryId);
+    Q_INVOKABLE bool renameLibraryWidget(const QString &libraryId, const QString &name);
+    Q_INVOKABLE bool exportLibraryWidget(const QString &libraryId, const QUrl &url);
+    Q_INVOKABLE QString importLibraryWidget(const QUrl &url);
+    Q_INVOKABLE void reloadLibrary();
+    // Replaces a designed widget's elements in one step (the widget editor's apply and undo).
+    Q_INVOKABLE void setElements(int index, const QVariant &elements);
+
     [[nodiscard]] QJsonArray toJson() const;
     bool fromJson(const QJsonArray &array);
 
@@ -91,6 +110,8 @@ signals:
     void revisionChanged();
     void templatesChanged();
     void lastErrorChanged();
+    void libraryWidgetsChanged();
+    void libraryErrorChanged();
 
 private:
     static WidgetData createWidget(const QString &type, int index);
@@ -99,14 +120,23 @@ private:
     void loadUserTemplates();
     bool saveUserTemplates();
     void setLastError(const QString &error);
+    void loadLibrary();
+    bool saveLibrary();
+    void setLibraryError(const QString &error);
+    [[nodiscard]] qsizetype libraryIndex(const QString &libraryId) const;
+    [[nodiscard]] QJsonObject libraryEntry(const QString &id, const QString &name, const WidgetData &widget) const;
     [[nodiscard]] qsizetype totalCueCount() const;
     [[nodiscard]] QJsonArray allTemplates() const;
 
     QList<WidgetData> m_widgets;
     QJsonArray m_userTemplates;
     QString m_lastError;
+    QJsonArray m_library;
+    QString m_libraryError;
+    bool m_libraryWritable = false;
     bool m_templateStoreWritable = false;
     int m_revision = 0;
+    int m_retiredWidgetsDropped = 0;
 };
 
 } // namespace FlappedEar

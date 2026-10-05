@@ -48,6 +48,10 @@ bool validateWidgets(const QJsonArray &widgets, QString *error)
         if (settingsValue.toObject().size() > maximumSettingsEntries) {
             return fail(error, QStringLiteral("Widget settings exceed %1 entries.").arg(maximumSettingsEntries));
         }
+        const QJsonValue elements = settingsValue.toObject().value(QStringLiteral("elements"));
+        if (elements.isArray() && elements.toArray().size() > maximumDesignElements) {
+            return fail(error, QStringLiteral("A designed widget has more than %1 elements.").arg(maximumDesignElements));
+        }
         const QJsonValue cuesValue = widget.value(QStringLiteral("cues"));
         if (!cuesValue.isUndefined() && !cuesValue.isArray()) return fail(error, QStringLiteral("Widget cues must be an array."));
         const qsizetype cues = cuesValue.toArray().size();
@@ -101,6 +105,42 @@ bool validateTemplateStore(const QJsonObject &store, QString *error)
     const QJsonArray templates = store.value(QStringLiteral("templates")).toArray();
     if (templates.size() > maximumTemplateCount) return fail(error, QStringLiteral("Template store exceeds %1 templates.").arg(maximumTemplateCount));
     for (const QJsonValue &value : templates) if (!value.isObject() || !validateTemplate(value.toObject(), error)) return false;
+    return true;
+}
+
+bool validateLibraryWidget(const QJsonObject &entry, QString *error)
+{
+    if (!validateValue(entry, 0, error)) return false;
+    const QString id = entry.value(QStringLiteral("id")).toString();
+    const QString name = entry.value(QStringLiteral("name")).toString();
+    const QString type = entry.value(QStringLiteral("type")).toString();
+    if (id.isEmpty() || id.size() > maximumIdCharacters || name.trimmed().isEmpty()
+        || name.size() > maximumTemplateNameCharacters || type.isEmpty() || type.size() > maximumIdCharacters) {
+        return fail(error, QStringLiteral("Library widget metadata is malformed or exceeds its limits."));
+    }
+    const QJsonValue settingsValue = entry.value(QStringLiteral("settings"));
+    if (!settingsValue.isObject()) return fail(error, QStringLiteral("Library widget settings must be an object."));
+    if (settingsValue.toObject().size() > maximumSettingsEntries) {
+        return fail(error, QStringLiteral("Widget settings exceed %1 entries.").arg(maximumSettingsEntries));
+    }
+    const QJsonValue elements = settingsValue.toObject().value(QStringLiteral("elements"));
+    if (elements.isArray() && elements.toArray().size() > maximumDesignElements) {
+        return fail(error, QStringLiteral("A designed widget has more than %1 elements.").arg(maximumDesignElements));
+    }
+    return true;
+}
+
+bool validateWidgetLibrary(const QJsonObject &library, QString *error)
+{
+    if (!validateValue(library, 0, error)) return false;
+    if (library.value(QStringLiteral("schemaVersion")).toInt() != 1 || !library.value(QStringLiteral("widgets")).isArray()) {
+        return fail(error, QStringLiteral("Unsupported widget library."));
+    }
+    const QJsonArray widgets = library.value(QStringLiteral("widgets")).toArray();
+    if (widgets.size() > maximumLibraryWidgets) {
+        return fail(error, QStringLiteral("The widget library exceeds %1 widgets.").arg(maximumLibraryWidgets));
+    }
+    for (const QJsonValue &value : widgets) if (!value.isObject() || !validateLibraryWidget(value.toObject(), error)) return false;
     return true;
 }
 

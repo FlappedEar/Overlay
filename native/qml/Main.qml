@@ -59,11 +59,6 @@ ApplicationWindow {
             "icon": "KM"
         },
         {
-            "label": "RPM",
-            "type": "rpm",
-            "icon": "RPM"
-        },
-        {
             "label": "Heart rate",
             "type": "heartRate",
             "icon": "♥"
@@ -72,11 +67,6 @@ ApplicationWindow {
             "label": "Pedals",
             "type": "pedals",
             "icon": "▥"
-        },
-        {
-            "label": "G-Force",
-            "type": "gForce",
-            "icon": "G"
         },
         {
             "label": "F1 G-Force Radar",
@@ -89,16 +79,6 @@ ApplicationWindow {
             "icon": "G="
         },
         {
-            "label": "Track",
-            "type": "track",
-            "icon": "⌁"
-        },
-        {
-            "label": "Custom",
-            "type": "customValue",
-            "icon": "123"
-        },
-        {
             "label": "Tyres",
             "type": "tyres",
             "icon": "◫"
@@ -109,79 +89,14 @@ ApplicationWindow {
             "icon": "R+"
         },
         {
-            "label": "Arc gauge",
-            "type": "arcGauge",
-            "icon": "◒"
-        },
-        {
-            "label": "Dial gauge",
-            "type": "dialGauge",
-            "icon": "◉"
-        },
-        {
-            "label": "Data strip",
-            "type": "telemetryOverlay",
-            "icon": "▤"
-        },
-        {
-            "label": "Best lap time",
-            "type": "lapBest",
-            "icon": "T★"
-        },
-        {
             "label": "Current lap time",
             "type": "lapCurrent",
             "icon": "NOW"
         },
         {
-            "label": "Lap delta",
-            "type": "lapDelta",
-            "icon": "ΔT"
-        },
-        {
-            "label": "Best-lap speed",
-            "type": "speedBest",
-            "icon": "V★"
-        },
-        {
-            "label": "Current speed",
-            "type": "speedCurrent",
-            "icon": "V"
-        },
-        {
-            "label": "Speed delta",
-            "type": "speedDelta",
-            "icon": "ΔV"
-        },
-        {
             "label": "Retro RPM",
             "type": "retroTachometer",
             "icon": "R"
-        },
-        {
-            "label": "Retro gear",
-            "type": "retroGear",
-            "icon": "G"
-        },
-        {
-            "label": "Retro pedal",
-            "type": "retroPedal",
-            "icon": "%"
-        },
-        {
-            "label": "Retro speed",
-            "type": "retroSpeedArc",
-            "icon": "S"
-        },
-        {
-            "label": "Nameplate",
-            "type": "retroNameplate",
-            "icon": "ID"
-        },
-        {
-            "label": "Logo",
-            "type": "brandLogo",
-            "icon": "FE"
         }
     ]
 
@@ -551,6 +466,39 @@ ApplicationWindow {
         }
         Menu {
             font.family: Theme.sans
+            title: qsTr("Widget")
+            Action {
+                text: qsTr("New Widget…")
+                shortcut: "Ctrl+Shift+N"
+                enabled: !widgetEditor.visible
+                onTriggered: window.newDesignedWidget()
+            }
+            Action {
+                text: qsTr("Edit Widget Design…")
+                enabled: !widgetEditor.visible && window.selectedWidgetType() === "designed"
+                onTriggered: widgetEditor.openFor(window.selectedWidgetIndex)
+            }
+            Action {
+                text: qsTr("Save Widget to My Widgets")
+                enabled: window.selectedWidgetIndex >= 0
+                onTriggered: {
+                    const settings = appController.widgetModel.widget(window.selectedWidgetIndex).settings || {};
+                    const id = settings.libraryId || "";
+                    const exists = appController.widgetModel.libraryWidgets.some(entry => entry.id === id);
+                    if (exists)
+                        appController.widgetModel.updateLibraryWidget(id, window.selectedWidgetIndex);
+                    else
+                        appController.widgetModel.saveWidgetToLibrary(window.selectedWidgetIndex,
+                            settings.name || window.selectedWidgetType());
+                }
+            }
+            Action {
+                text: qsTr("Import Widget…")
+                onTriggered: widgetImportDialog.open()
+            }
+        }
+        Menu {
+            font.family: Theme.sans
             title: qsTr("View")
             Action {
                 text: window.fullScreenPreview ? qsTr("Exit Full Screen") : qsTr("Enter Full Screen")
@@ -601,7 +549,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         contentItem: FeLabel {
             width: 390
-            text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
+            text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nCtrl/Cmd+Shift+N  New widget (widget editor)\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
             color: Theme.onSurface
             wrapMode: Text.WordWrap
             font.pixelSize: 12
@@ -676,7 +624,23 @@ ApplicationWindow {
         }
         return false;
     }
+    // KAN-191: a new designed widget, opened in the widget editor.
+    function newDesignedWidget() {
+        const index = appController.widgetModel.addWidget("designed");
+        if (index < 0)
+            return;
+        appController.widgetModel.setSetting(index, "name", qsTr("My widget"));
+        window.selectWidget(index, false);
+        widgetEditor.openFor(index);
+    }
+    function selectedWidgetType() {
+        appController.widgetModel.revision;
+        return selectedWidgetIndex >= 0 ? String(appController.widgetModel.widget(selectedWidgetIndex).type || "") : "";
+    }
     function playbackShortcutBlocked() {
+        // The widget editor owns the arrow and delete keys while it is open.
+        if (widgetEditor.visible)
+            return true;
         let item = activeFocusItem;
         while (item) {
             if (item instanceof TextInput || item instanceof TextEdit || item instanceof Button
@@ -771,7 +735,8 @@ ApplicationWindow {
             fullScreenControlsTimer.restart();
     }
     function deleteSelectedWidget() {
-        if (selectedWidgetIndex < 0 || selectedWidgetIndex >= appController.widgetModel.count || textEditorHasFocus())
+        if (selectedWidgetIndex < 0 || selectedWidgetIndex >= appController.widgetModel.count || textEditorHasFocus()
+                || widgetEditor.visible)
             return;
         appController.widgetModel.removeWidgets(selectedWidgetIndices.length ? selectedWidgetIndices : [selectedWidgetIndex]);
         selectedWidgetIndices = [];
@@ -872,25 +837,25 @@ ApplicationWindow {
     Shortcut {
         sequence: "Delete"
         context: Qt.WindowShortcut
-        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0
+        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0 && !widgetEditor.visible
         onActivated: window.deleteSelectedWidget()
     }
     Shortcut {
         sequence: "Ctrl+G"
         context: Qt.WindowShortcut
-        enabled: !window.welcomeVisible && window.selectedWidgetIndices.length >= 2 && !window.textEditorHasFocus()
+        enabled: !window.welcomeVisible && window.selectedWidgetIndices.length >= 2 && !window.textEditorHasFocus() && !widgetEditor.visible
         onActivated: window.groupSelectedWidgets()
     }
     Shortcut {
         sequence: "Ctrl+Shift+G"
         context: Qt.WindowShortcut
-        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0 && !window.textEditorHasFocus()
+        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0 && !window.textEditorHasFocus() && !widgetEditor.visible
         onActivated: window.ungroupSelectedWidgets()
     }
     Shortcut {
         sequence: "Backspace"
         context: Qt.WindowShortcut
-        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0
+        enabled: !window.welcomeVisible && window.selectedWidgetIndex >= 0 && !widgetEditor.visible
         onActivated: window.deleteSelectedWidget()
     }
 
@@ -910,6 +875,22 @@ ApplicationWindow {
         }
     }
     VideoChaptersDialog { id: videoChaptersDialog }
+    WidgetEditor { id: widgetEditor; objectName: "widgetEditor" }
+    property string libraryExportId: ""
+    FileDialog {
+        id: widgetImportDialog
+        title: qsTr("Import widget")
+        nameFilters: [qsTr("FlappedEar widgets (*.fetwidget *.json)")]
+        onAccepted: appController.widgetModel.importLibraryWidget(selectedFile)
+    }
+    FileDialog {
+        id: widgetExportDialog
+        title: qsTr("Export widget")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "fetwidget"
+        nameFilters: [qsTr("FlappedEar widgets (*.fetwidget)")]
+        onAccepted: appController.widgetModel.exportLibraryWidget(window.libraryExportId, selectedFile)
+    }
     FileDialog {
         id: vboDialog
         title: qsTr("Open telemetry")
@@ -2172,6 +2153,90 @@ ApplicationWindow {
                         }
                     }
 
+                    // KAN-191: design a new widget, or add one kept in My widgets.
+                    FeButton {
+                        Layout.fillWidth: true
+                        accent: true
+                        text: qsTr("New widget…")
+                        onClicked: window.newDesignedWidget()
+                    }
+                    SectionTitle {
+                        text: qsTr("My widgets · %1").arg(appController.widgetModel.libraryWidgets.length)
+                    }
+                    FeLabel {
+                        Layout.fillWidth: true
+                        visible: appController.widgetModel.libraryWidgets.length === 0
+                        text: qsTr("Widgets you save with Save to My widgets appear here, ready for any project.")
+                        color: Theme.onSurfaceVariant
+                        font.pixelSize: 10
+                        wrapMode: Text.WordWrap
+                    }
+                    FeLabel {
+                        Layout.fillWidth: true
+                        visible: appController.widgetModel.libraryError.length > 0
+                        text: appController.widgetModel.libraryError
+                        color: Theme.error
+                        font.pixelSize: 10
+                        wrapMode: Text.Wrap
+                    }
+                    Repeater {
+                        model: appController.widgetModel.libraryWidgets
+                        Rectangle {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            implicitHeight: 40
+                            radius: Theme.radius
+                            color: libraryMouse.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+                            border.color: libraryMouse.containsMouse ? Theme.outline : Theme.outlineVariant
+                            MouseArea {
+                                id: libraryMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: window.selectWidget(appController.widgetModel.addLibraryWidget(modelData.id), false)
+                            }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 4
+                                spacing: 4
+                                FeLabel {
+                                    Layout.fillWidth: true
+                                    text: modelData.name
+                                    color: Theme.onSurface
+                                    font.pixelSize: 11
+                                    elide: Text.ElideRight
+                                }
+                                FeButton {
+                                    implicitWidth: 34
+                                    compact: true
+                                    text: "⇪"
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: qsTr("Export…")
+                                    onClicked: {
+                                        window.libraryExportId = modelData.id;
+                                        widgetExportDialog.open();
+                                    }
+                                }
+                                FeButton {
+                                    implicitWidth: 34
+                                    compact: true
+                                    danger: true
+                                    text: "✕"
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: qsTr("Delete from My widgets")
+                                    onClicked: appController.widgetModel.deleteLibraryWidget(modelData.id)
+                                }
+                            }
+                        }
+                    }
+                    FeButton {
+                        Layout.fillWidth: true
+                        compact: true
+                        text: qsTr("Import widget…")
+                        onClicked: widgetImportDialog.open()
+                    }
+
                     SectionTitle {
                         text: qsTr("Layers · %1").arg(appController.widgetModel.count)
                     }
@@ -2579,6 +2644,7 @@ ApplicationWindow {
                 selectedIndex: window.selectedWidgetIndex
                 onSelectionCleared: window.clearWidgetSelection()
                 onSelectionRequested: index => window.selectWidget(index, false)
+                onEditDesignRequested: index => widgetEditor.openFor(index)
             }
         }
 

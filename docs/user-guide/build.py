@@ -32,7 +32,7 @@ REPOSITORY = "https://github.com/FlappedEar/Overlay"
 # Navigation groups and page order. Each entry is the page file stem.
 NAV: list[tuple[str, list[str]]] = [
     ("Start here", ["index", "installation", "quick-start"]),
-    ("Overlay editor", ["editor", "importing", "synchronization", "widgets", "templates", "export"]),
+    ("Overlay editor", ["editor", "importing", "synchronization", "widgets", "widget-editor", "templates", "export"]),
     ("Reference", ["projects", "telemetry-data", "shortcuts", "troubleshooting", "limitations"]),
 ]
 

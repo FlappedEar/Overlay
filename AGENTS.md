@@ -99,7 +99,7 @@
   [docs/telemetry-handover.md](docs/telemetry-handover.md). Do not add Telemetry or mobile app
   targets to this repository, and do not create code dependencies between the two repositories. The desktop app is FlappedEar Overlays (`com.flappedear.overlays`,
   KAN-125). On 5 October 2026 the owner approved removing its Lap Analysis window and analysis workflows
-  (KAN-166, done on 5 October 2026 in steps 1 to 7; the plan is on Confluence FEO). Remove nothing else without the owner's word, keep
+  (KAN-166, done on 5 October 2026 in steps 1 to 7; the plan is on Confluence FEO), and the same day reduced the widget list to the widgets of his track video plus Tyres and designed widgets (KAN-192). Remove nothing else without the owner's word, keep
   automatic best-lap selection (KAN-185), and keep every analysis field of day documents. Both
   apps read and write one `.fetproject` format, which must stay compatible between them (KAN-170).
   Keep `flappedear_telemetry_core` and `flappedear_telemetry_app` free of Gui, overlay, video and

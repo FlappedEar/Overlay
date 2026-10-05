@@ -192,8 +192,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QVERIFY(gap && gap->parentItem() && gap->parentItem()->parentItem());
     QQuickItem *viewport = gap->parentItem(), *stage = viewport->parentItem();
     const QRectF viewportArea = viewport->mapRectToItem(stage, viewport->boundingRect());
-    for (const QString id : {"track-day", "minimal", "broadcast", "motorsport-broadcast-smoke", "performance",
-                              "circuit-pro", "endurance", "drag-strip", "clean-hud", "2000s-grand-prix"}) {
+    for (const QString id : {"motorsport-broadcast-smoke"}) {
         QVERIFY2(controller.widgetModel()->applyTemplate(id), qPrintable(id));
         QVERIFY(shoot.item(stage, viewportArea, {1280, 720}, "template-" + id, 1200));
     }
@@ -208,18 +207,11 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
         QVariantMap settings;
     };
     const QList<GalleryWidget> gallery{
-        {"speed", "widget-speed"}, {"rpm", "widget-rpm", 0.22}, {"heartRate", "widget-heart-rate"},
-        {"pedals", "widget-pedals"}, {"gForce", "widget-gforce"}, {"f1GForceRadar", "widget-f1-radar"},
-        {"gForceMagnitudeBar", "widget-gforce-bar"}, {"track", "widget-track", 0.20, 0.30},
-        {"customValue", "widget-custom", 0, 0, {{"source", "engine_oil_temp-obd"}, {"label", "OIL"}, {"unit", "°C"}, {"decimals", 0}}},
-        {"tyres", "widget-tyres"},
+        {"speed", "widget-speed"}, {"heartRate", "widget-heart-rate"},
+        {"pedals", "widget-pedals"}, {"f1GForceRadar", "widget-f1-radar"},
+        {"gForceMagnitudeBar", "widget-gforce-bar"}, {"tyres", "widget-tyres"},
         {"retroCustomValue", "widget-retro-custom", 0, 0.06, {{"source", "coolant_temp-obd"}, {"label", "COOLANT"}, {"unit", "°C"}, {"decimals", 0}}},
-        {"arcGauge", "widget-arc-gauge"}, {"dialGauge", "widget-dial-gauge"}, {"telemetryOverlay", "widget-data-strip"},
-        {"lapBest", "widget-lap-best"}, {"lapCurrent", "widget-lap-current"}, {"lapDelta", "widget-lap-delta"},
-        {"speedBest", "widget-speed-best"}, {"speedCurrent", "widget-speed-current"}, {"speedDelta", "widget-speed-delta"},
-        {"retroTachometer", "widget-retro-rpm"}, {"retroGear", "widget-retro-gear", 0.16, 0.06},
-        {"retroPedal", "widget-retro-pedal", 0.16, 0.06, {{"showValue", true}}},
-        {"retroSpeedArc", "widget-retro-speed"}, {"retroNameplate", "widget-nameplate"}, {"brandLogo", "widget-logo"}};
+        {"lapCurrent", "widget-lap-current"}, {"retroTachometer", "widget-retro-rpm"}};
     auto *model = controller.widgetModel();
     for (const auto &entry : gallery) {
         while (model->count() > 0) model->removeWidget(model->count() - 1);
@@ -237,7 +229,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
         QVERIFY(shoot.item(stage, viewportArea, {1920, 1080}, QString::fromLatin1(entry.name), 1000));
         shoot.crop = {};
     }
-    QVERIFY(controller.widgetModel()->applyTemplate("track-day"));
+    QVERIFY(controller.widgetModel()->applyTemplate("motorsport-broadcast-smoke"));
 
     window->setProperty("fullScreenPreview", true);
     window->setProperty("fullScreenControlsVisible", true);

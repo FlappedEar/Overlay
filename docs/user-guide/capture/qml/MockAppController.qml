@@ -27,7 +27,7 @@ QtObject {
     property string batchImportState: "idle"
     property var eventRuns: []
     property string activeRunId: ""
-    property string selectedTemplateId: "track-day"
+    property string selectedTemplateId: "motorsport-broadcast-smoke"
 
     // Sources
     property string videoName: ""

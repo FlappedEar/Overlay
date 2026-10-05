@@ -104,8 +104,7 @@ Item {
             property bool rendererOwnsPanel: ["speed", "pedals", "heartRate",
                                                "retroCustomValue", "gForceMagnitudeBar",
                                                "f1GForceRadar", "retroTachometer",
-                                               "lapBest", "lapCurrent", "lapDelta",
-                                               "speedBest", "speedCurrent", "speedDelta"].indexOf(widgetType) >= 0
+                                               "lapCurrent", "designed"].indexOf(widgetType) >= 0
 
             function configuredFontSize() {
                 const value = Number(widgetSettings.fontSize ?? 0);
@@ -179,33 +178,16 @@ Item {
                 property var frame: widgetItem
                 readonly property string rendererSource: {
                     switch (widgetItem.widgetType) {
-                    case "brandLogo": return "widgets/BrandLogoWidget.qml";
                     case "speed": return "widgets/SpeedWidget.qml";
-                    case "rpm": return "widgets/RpmWidget.qml";
                     case "heartRate": return "widgets/HeartRateWidget.qml";
                     case "pedals": return "widgets/PedalsWidget.qml";
-                    case "gForce": return "widgets/GForceWidget.qml";
                     case "f1GForceRadar": return "widgets/F1GForceRadarWidget.qml";
                     case "gForceMagnitudeBar": return "widgets/GForceMagnitudeBarWidget.qml";
-                    case "arcGauge": return "widgets/ArcGaugeWidget.qml";
-                    case "dialGauge": return "widgets/DialGaugeWidget.qml";
-                    case "telemetryOverlay": return "widgets/TelemetryOverlayWidget.qml";
-                    case "lapBest":
-                    case "lapCurrent":
-                    case "lapDelta":
-                    case "speedBest":
-                    case "speedCurrent":
-                    case "speedDelta": return "widgets/ComparisonTileWidget.qml";
-                    case "retroGrandPrix": return "widgets/RetroGrandPrixWidget.qml";
+                    case "lapCurrent": return "widgets/LapTimeWidget.qml";
                     case "retroTachometer": return "widgets/RetroTachometerWidget.qml";
-                    case "retroGear": return "widgets/RetroGearWidget.qml";
-                    case "retroPedal": return "widgets/RetroPedalWidget.qml";
-                    case "retroSpeedArc": return "widgets/RetroSpeedArcWidget.qml";
-                    case "retroNameplate": return "widgets/RetroNameplateWidget.qml";
-                    case "customValue": return "widgets/CustomValueWidget.qml";
                     case "retroCustomValue": return "widgets/RetroCustomValueWidget.qml";
-                    case "track": return "widgets/TrackWidget.qml";
                     case "tyres": return "widgets/TyresWidget.qml";
+                    case "designed": return "widgets/DesignedWidget.qml";
                     default: return "";
                     }
                 }

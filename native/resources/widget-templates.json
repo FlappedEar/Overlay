@@ -36,14 +36,12 @@
       "clampValue": false
     },
     "speed": { "label": "Speed", "unit": "km/h", "maxValue": 300, "showGauge": false },
-    "rpm": { "label": "ENGINE", "unit": "RPM", "maxValue": 8000, "warningValue": 6500, "showBar": true },
     "heartRate": { "label": "HR", "unit": "bpm", "accentColor": "#e14b4b", "maxValue": 220, "showIcon": true },
     "pedals": {
       "acceleratorSource": "", "brakeSource": "", "acceleratorLabel": "Throttle", "brakeLabel": "Brake",
       "acceleratorColor": "#55d76a", "brakeColor": "#e14b4b", "acceleratorMin": 0, "acceleratorMax": 100,
       "brakeMin": 0, "brakeMax": 100, "showValues": true, "barRadius": 5
     },
-    "gForce": { "lateralSource": "", "longitudinalSource": "", "invertLateral": false, "invertLongitudinal": false, "gRange": 2, "gridColor": "#566477", "dotSize": 12, "showCombined": true, "decimals": 2 },
     "f1GForceRadar": {
       "showBackground": false, "showBorder": false, "padding": 0,
       "lateralSource": "", "longitudinalSource": "", "invertLateral": false, "invertLongitudinal": false,
@@ -59,8 +57,19 @@
       "barColor": "#f5a623", "barBackgroundColor": "#2b3a46", "textColor": "#f2f5f7",
       "backgroundOpacity": 0.78, "barRadius": 5
     },
-    "track": { "lineColor": "#55e6a5", "lineWidth": 3, "markerColor": "#ffffff", "markerSize": 10, "trackPadding": 10, "mirrorX": false, "mirrorY": false },
-    "customValue": { "label": "VALUE", "decimals": 1 },
+    "designed": {
+      "padding": 0, "cornerRadius": 10, "designName": "", "libraryId": "",
+      "elements": [
+        { "id": "label", "kind": "text", "name": "Label", "text": "SPEED", "x": 0.06, "y": 0.08, "w": 0.88, "h": 0.24,
+          "color": "#c0cad2", "fontScale": 0.8, "align": "left", "bold": true },
+        { "id": "value", "kind": "value", "name": "Speed", "source": "speed", "decimals": 0, "suffix": "",
+          "x": 0.06, "y": 0.30, "w": 0.62, "h": 0.52, "color": "#f2f5f7", "fontScale": 0.9, "align": "left", "bold": true },
+        { "id": "unit", "kind": "text", "name": "Unit", "text": "km/h", "x": 0.68, "y": 0.50, "w": 0.26, "h": 0.26,
+          "color": "#55d76a", "fontScale": 0.8, "align": "right", "bold": true },
+        { "id": "bar", "kind": "bar", "name": "Bar", "source": "speed", "minValue": 0, "maxValue": 250,
+          "x": 0.06, "y": 0.84, "w": 0.88, "h": 0.07, "fillColor": "#55d76a", "trackColor": "#2b3a46", "radius": 3 }
+      ]
+    },
     "tyres": {
       "label": "TYRES", "showLabel": true, "showTemperature": true, "showPressure": true,
       "pressureUnit": "bar", "pressureDecimals": 2, "coldBelow": 0, "hotAbove": 0
@@ -70,129 +79,19 @@
       "fallbackText": "—", "panelColor": "#16232d", "valueColor": "#f2f5f7", "labelColor": "#c0cad2",
       "icon": "", "stackPosition": "single", "showSeparator": true
     },
-    "arcGauge": {
-      "label": "SPEED", "unit": "km/h", "minValue": 0, "maxValue": 300, "decimals": 0,
-      "startAngle": 155, "endAngle": 385, "arcWidth": 12, "trackColor": "#263442",
-      "showMinMax": true, "showValue": true
-    },
-    "dialGauge": {
-      "label": "RPM", "unit": "RPM", "minValue": 0, "maxValue": 8000, "decimals": 0,
-      "startAngle": 140, "endAngle": 400, "majorTicks": 8, "minorTicks": 4,
-      "needleColor": "#ff5b63", "tickColor": "#8290a0", "showTicks": true, "showValue": true
-    },
-    "telemetryOverlay": {
-      "columns": 4, "showSeparators": true, "separatorColor": "#314052",
-      "source1": "", "label1": "SPEED", "unit1": "km/h", "decimals1": 0,
-      "source2": "", "label2": "RPM", "unit2": "RPM", "decimals2": 0,
-      "source3": "", "label3": "THROTTLE", "unit3": "%", "decimals3": 0,
-      "source4": "", "label4": "BRAKE", "unit4": "%", "decimals4": 0
-    },
-    "lapBest": {
-      "label": "Best", "showBorder": false,
-      "backgroundColor": "#343941", "backgroundOpacity": 0.76,
-      "accentColor": "#20d05a", "accentColor2": "#ef4f5f", "timingDecimals": 2
-    },
     "lapCurrent": {
       "label": "Current", "showBorder": false,
       "backgroundColor": "#343941", "backgroundOpacity": 0.76,
       "accentColor": "#20d05a", "accentColor2": "#ef4f5f", "timingDecimals": 2
-    },
-    "lapDelta": {
-      "label": "Delta", "showBorder": false,
-      "backgroundColor": "#343941", "backgroundOpacity": 0.76,
-      "accentColor": "#20d05a", "accentColor2": "#ef4f5f",
-      "deltaDecimals": 2, "deltaRangeSeconds": 10
-    },
-    "speedBest": {
-      "label": "Best", "unit": "km/h", "showBorder": false,
-      "backgroundColor": "#343941", "backgroundOpacity": 0.76,
-      "accentColor": "#20d05a", "accentColor2": "#ef4f5f", "speedDecimals": 0
-    },
-    "speedCurrent": {
-      "label": "Current", "unit": "km/h", "showBorder": false,
-      "backgroundColor": "#343941", "backgroundOpacity": 0.76,
-      "accentColor": "#20d05a", "accentColor2": "#ef4f5f", "speedDecimals": 0
-    },
-    "speedDelta": {
-      "label": "Delta", "unit": "km/h", "showBorder": false,
-      "backgroundColor": "#343941", "backgroundOpacity": 0.76,
-      "accentColor": "#20d05a", "accentColor2": "#ef4f5f",
-      "speedDeltaDecimals": 1, "speedDeltaRangeKmh": 30
-    },
-    "retroGrandPrix": {
-      "showBackground": false, "showBorder": false, "padding": 0,
-      "rpmSource": "", "speedSource": "", "gearSource": "", "throttleSource": "", "brakeSource": "", "timingSource": "",
-      "rpmMin": 0, "rpmMax": 8000, "speedMax": 360,
-      "driverName": "DRIVER", "timingText": "39.4", "timingDecimals": 1,
-      "gearLabel": "Gear", "throttleLabel": "Throttle", "brakeLabel": "Brake",
-      "panelColor": "#111111", "panelOpacity": 0.58, "dialColor": "#f4f4f4",
-      "needleColor": "#d73737", "throttleColor": "#00c839", "brakeColor": "#575244", "brakeActiveColor": "#d23737",
-      "speedLowColor": "#00bd31", "speedMidColor": "#f2e920", "speedHighColor": "#ff9124"
     },
     "retroTachometer": {
       "showBackground": false, "showBorder": false, "padding": 0, "source": "rpm-obd",
       "label": "RPM", "minValue": 0, "maxValue": 9000, "warningValue": 7500, "dialColor": "#f2f5f7",
       "needleColor": "#e14b4b", "warningColor": "#e14b4b", "rimColor": "#8895a3",
       "valuePlateColor": "#111a22", "panelColor": "#111a22", "panelOpacity": 0.86
-    },
-    "retroGear": {
-      "showBackground": false, "showBorder": false, "padding": 0, "source": "",
-      "label": "Gear", "fallbackText": "—", "decimals": 0, "panelColor": "#f4f4f4",
-      "valueColor": "#111111"
-    },
-    "retroPedal": {
-      "showBackground": false, "showBorder": false, "padding": 0, "source": "accelerator_pos-obd",
-      "label": "Throttle", "minValue": 0, "maxValue": 100, "fillColor": "#00c839",
-      "emptyColor": "#3d433c", "showValue": false, "decimals": 0
-    },
-    "retroSpeedArc": {
-      "showBackground": false, "showBorder": false, "padding": 0, "source": "velocity-obd",
-      "label": "SPEED", "unit": "Km/h", "minValue": 0, "maxValue": 360,
-      "lowColor": "#00bd31", "midColor": "#f2e920", "highColor": "#ff9124",
-      "emptyColor": "#d8d8d8", "segments": 19
-    },
-    "retroNameplate": {
-      "showBackground": false, "showBorder": false, "padding": 0,
-      "topSource": "", "bottomSource": "", "topText": "DRIVER", "bottomText": "39.4",
-      "topDecimals": 0, "bottomDecimals": 1, "topColor": "#111111", "bottomColor": "#f4f4f4"
-    },
-    "brandLogo": {
-      "showBackground": false, "showBorder": false, "padding": 0,
-      "logoOpacity": 0.85, "logoScale": 1
     }
   },
   "templates": [
-    {
-      "id": "track-day",
-      "name": "Track Day",
-      "description": "Balanced driving data for review and export",
-      "widgets": [
-        { "type": "speed", "x": 0.04, "y": 0.06, "width": 0.15, "height": 0.16 },
-        { "type": "rpm", "x": 0.04, "y": 0.24, "width": 0.23, "height": 0.09 },
-        { "type": "pedals", "x": 0.04, "y": 0.35, "width": 0.25, "height": 0.13 },
-        { "type": "gForce", "x": 0.82, "y": 0.06, "width": 0.14, "height": 0.19 },
-        { "type": "track", "x": 0.76, "y": 0.68, "width": 0.20, "height": 0.27 }
-      ]
-    },
-    {
-      "id": "minimal",
-      "name": "Minimal",
-      "description": "Clean speed and RPM treatment with transparent panels",
-      "widgets": [
-        { "type": "speed", "x": 0.06, "y": 0.72, "width": 0.17, "height": 0.17, "settings": { "showBackground": false, "showBorder": false, "valueFontScale": 1.25 } },
-        { "type": "rpm", "x": 0.24, "y": 0.76, "width": 0.27, "height": 0.09, "settings": { "showBackground": false, "showBorder": false } }
-      ]
-    },
-    {
-      "id": "broadcast",
-      "name": "Broadcast",
-      "description": "High-contrast lower-third telemetry presentation",
-      "widgets": [
-        { "type": "speed", "x": 0.04, "y": 0.73, "width": 0.18, "height": 0.18, "settings": { "backgroundColor": "#07111e", "accentColor": "#42a5ff", "cornerRadius": 4 } },
-        { "type": "rpm", "x": 0.23, "y": 0.78, "width": 0.28, "height": 0.10, "settings": { "backgroundColor": "#07111e", "accentColor": "#42a5ff", "cornerRadius": 4 } },
-        { "type": "gForce", "x": 0.82, "y": 0.68, "width": 0.14, "height": 0.21, "settings": { "backgroundColor": "#07111e", "accentColor": "#42a5ff", "cornerRadius": 4 } }
-      ]
-    },
     {
       "id": "motorsport-broadcast-smoke",
       "name": "Motorsport Broadcast HUD",
@@ -202,78 +101,11 @@
         { "type": "speed", "x": 0.21, "y": 0.26, "width": 0.09, "height": 0.15, "settings": { "source": "speed", "label": "Speed", "unit": "km/h" } },
         { "type": "pedals", "x": 0.31, "y": 0.26, "width": 0.16, "height": 0.135, "settings": { "acceleratorSource": "throttle", "brakeSource": "brake" } },
         { "type": "retroCustomValue", "x": 0.48, "y": 0.26, "width": 0.18, "height": 0.045, "settings": { "source": "engine_oil_temp-obd", "label": "OIL", "unit": "°C", "decimals": 0, "icon": "◒", "stackPosition": "top" } },
-        { "type": "retroCustomValue", "x": 0.48, "y": 0.305, "width": 0.18, "height": 0.045, "settings": { "source": "atf", "label": "ATF", "unit": "°C", "decimals": 0, "icon": "⚙", "stackPosition": "middle" } },
+        { "type": "retroCustomValue", "x": 0.48, "y": 0.305, "width": 0.18, "height": 0.045, "settings": { "source": "gearbox_temp-obd", "label": "ATF", "unit": "°C", "decimals": 0, "icon": "⚙", "stackPosition": "middle" } },
         { "type": "retroCustomValue", "x": 0.48, "y": 0.35, "width": 0.18, "height": 0.045, "settings": { "source": "coolant_temp-obd", "label": "COOLANT", "unit": "°C", "decimals": 0, "icon": "♨", "stackPosition": "bottom" } },
         { "type": "heartRate", "x": 0.675, "y": 0.26, "width": 0.095, "height": 0.15, "settings": { "source": "heartRate", "label": "HR", "unit": "bpm" } },
         { "type": "f1GForceRadar", "x": 0.815, "y": 0.105, "width": 0.145, "height": 0.265, "settings": { "lateralSource": "", "longitudinalSource": "" } },
         { "type": "gForceMagnitudeBar", "x": 0.80, "y": 0.385, "width": 0.17, "height": 0.105, "settings": { "lateralSource": "", "longitudinalSource": "", "labelText": "G-Force" } }
-      ]
-    },
-    {
-      "id": "performance",
-      "name": "Performance",
-      "description": "Arc speed, analog RPM and a compact four-channel data strip",
-      "widgets": [
-        { "type": "arcGauge", "x": 0.04, "y": 0.62, "width": 0.20, "height": 0.25 },
-        { "type": "dialGauge", "x": 0.76, "y": 0.60, "width": 0.20, "height": 0.27 },
-        { "type": "telemetryOverlay", "x": 0.29, "y": 0.80, "width": 0.42, "height": 0.12 }
-      ]
-    },
-    {
-      "id": "circuit-pro",
-      "name": "Circuit Pro",
-      "description": "Dense circuit analysis with gauges, pedals, G-force and track position",
-      "widgets": [
-        { "type": "arcGauge", "x": 0.03, "y": 0.62, "width": 0.18, "height": 0.24 },
-        { "type": "dialGauge", "x": 0.79, "y": 0.60, "width": 0.18, "height": 0.25 },
-        { "type": "pedals", "x": 0.03, "y": 0.86, "width": 0.25, "height": 0.11 },
-        { "type": "gForce", "x": 0.83, "y": 0.04, "width": 0.14, "height": 0.20 },
-        { "type": "track", "x": 0.77, "y": 0.70, "width": 0.20, "height": 0.27 },
-        { "type": "telemetryOverlay", "x": 0.31, "y": 0.86, "width": 0.38, "height": 0.10 }
-      ]
-    },
-    {
-      "id": "endurance",
-      "name": "Endurance",
-      "description": "Long-session essentials with heart rate, track and compact vehicle data",
-      "widgets": [
-        { "type": "speed", "x": 0.04, "y": 0.73, "width": 0.15, "height": 0.16, "settings": { "accentColor": "#f5b942" } },
-        { "type": "heartRate", "x": 0.04, "y": 0.90, "width": 0.20, "height": 0.07 },
-        { "type": "track", "x": 0.78, "y": 0.68, "width": 0.18, "height": 0.27, "settings": { "lineColor": "#f5b942" } },
-        { "type": "telemetryOverlay", "x": 0.29, "y": 0.87, "width": 0.42, "height": 0.10, "settings": { "accentColor": "#f5b942" } }
-      ]
-    },
-    {
-      "id": "drag-strip",
-      "name": "Drag Strip",
-      "description": "Large RPM dial, acceleration speed arc and pedal trace for straight-line runs",
-      "widgets": [
-        { "type": "dialGauge", "x": 0.04, "y": 0.58, "width": 0.24, "height": 0.32, "settings": { "valueFontScale": 1.15 } },
-        { "type": "arcGauge", "x": 0.72, "y": 0.61, "width": 0.24, "height": 0.30, "settings": { "accentColor": "#42a5ff", "valueFontScale": 1.15 } },
-        { "type": "pedals", "x": 0.34, "y": 0.83, "width": 0.32, "height": 0.12 }
-      ]
-    },
-    {
-      "id": "clean-hud",
-      "name": "Clean HUD",
-      "description": "Minimal transparent heads-up display for footage that should stay dominant",
-      "widgets": [
-        { "type": "arcGauge", "x": 0.04, "y": 0.70, "width": 0.18, "height": 0.23, "settings": { "showBackground": false, "showBorder": false, "trackColor": "#405064", "arcWidth": 8 } },
-        { "type": "telemetryOverlay", "x": 0.28, "y": 0.84, "width": 0.44, "height": 0.09, "settings": { "showBackground": false, "showBorder": false } },
-        { "type": "track", "x": 0.80, "y": 0.70, "width": 0.16, "height": 0.23, "settings": { "showBackground": false, "showBorder": false, "lineWidth": 2 } }
-      ]
-    },
-    {
-      "id": "2000s-grand-prix",
-      "name": "2000s Grand Prix",
-      "description": "Period-inspired onboard graphic with circular RPM dial, pedal states, speed arc and driver timing bar",
-      "widgets": [
-        { "type": "retroTachometer", "x": 0.05, "y": 0.35, "width": 0.25, "height": 0.36 },
-        { "type": "retroGear", "x": 0.26, "y": 0.49, "width": 0.14, "height": 0.055 },
-        { "type": "retroPedal", "x": 0.26, "y": 0.545, "width": 0.14, "height": 0.055, "settings": { "source": "accelerator_pos-obd", "label": "Throttle", "fillColor": "#00c839", "emptyColor": "#31523a" } },
-        { "type": "retroPedal", "x": 0.26, "y": 0.60, "width": 0.14, "height": 0.055, "settings": { "source": "brake_pos-obd", "label": "Brake", "fillColor": "#d23737", "emptyColor": "#575244", "maxValue": 100 } },
-        { "type": "retroSpeedArc", "x": 0.05, "y": 0.62, "width": 0.28, "height": 0.27 },
-        { "type": "retroNameplate", "x": 0.25, "y": 0.83, "width": 0.24, "height": 0.10 }
       ]
     }
   ]

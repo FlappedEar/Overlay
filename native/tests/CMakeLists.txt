@@ -37,11 +37,9 @@ qt_add_resources(flappedear_native_tests "flappedear_test_qml"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/../qml"
     FILES
         ../qml/TelemetryScene.qml
-        ../qml/widgets/ArcGaugeWidget.qml
-        ../qml/widgets/ComparisonTileWidget.qml
-        ../qml/widgets/DialGaugeWidget.qml
-        ../qml/widgets/RetroGrandPrixWidget.qml
-        ../qml/widgets/RetroSpeedArcWidget.qml
+        ../qml/widgets/LapTimeWidget.qml
+        ../qml/widgets/DesignedElements.qml
+        ../qml/widgets/DesignedWidget.qml
         ../qml/widgets/RetroTachometerWidget.qml
         ../qml/widgets/PedalsWidget.qml
         ../qml/widgets/TelemetryPanel.qml
@@ -66,7 +64,6 @@ target_compile_definitions(flappedear_native_tests PRIVATE
     GUI_SESSION_LOCK_HELPER_PATH="$<TARGET_FILE:flappedear_gui_session_lock_helper>"
     TEST_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/basic.vbo"
     QML_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../qml"
-    TRACK_WIDGET_QML_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../qml/widgets/TrackWidget.qml"
     RAW_TRANSPORT_CONSUMER_PATH="$<TARGET_FILE:flappedear_raw_transport_consumer>"
     PROBE_TEST_HELPER_PATH="$<TARGET_FILE:flappedear_probe_test_helper>"
     FLAPPEDEAR_NATIVE_PATH="$<TARGET_FILE:flappedear_native>"

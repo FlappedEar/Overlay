@@ -91,7 +91,7 @@ def main() -> None:
     clip = placeholder_clip(app, work, duration)
 
     model = harness.SampleWidgetModel()
-    model.set_widgets(harness.template_widgets("track-day"))
+    model.set_widgets(harness.template_widgets("motorsport-broadcast-smoke"))
     context = harness.real_context(recording, moment)
     handle = 6.0
     lap_in, lap_out = best["start"] - handle, best["end"] + handle
