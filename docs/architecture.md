@@ -29,7 +29,8 @@ product split (`docs/product-split-plan.md`, epic KAN-121, now KAN-165):
   and cooling, the computed day report (`DayReport`, KAN-71), the event
   document and recovery. It links **Qt Core and zlib only**, so it can be built for
   all four target platforms, including iOS and Android. The `flappedear_telemetry_core_boundary` test fails if a
-  file there includes overlay, video, export, app or Gui headers. Video
+  file there reaches, directly or through other headers, a project file outside the
+  library's own sources, or a Gui header. Video
   fingerprints are built on the overlay side (`export/VideoFingerprint`)
   from the document layer's video-free helpers. An event (v3) document may
   omit the overlay `scene` (an analysis-only day); a scene that is present
@@ -45,7 +46,7 @@ product split (`docs/product-split-plan.md`, epic KAN-121, now KAN-165):
 
   It links the telemetry core with **Qt Core and Concurrent only** (no
   Gui). The `flappedear_telemetry_app_boundary` test fails if these files
-  include overlay, video, export, editor or Gui headers.
+  reach a project file outside this library and the core, or a Gui header.
   `flappedear_telemetry_app_tests` drives a whole day through
   `TelemetryController` with `QTEST_GUILESS_MAIN`: import, laps, segments,
   the day report, save and reopen.

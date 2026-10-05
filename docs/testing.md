@@ -1053,12 +1053,20 @@ target (`rcz`, `import`, `source_cache`, `lap_eligibility`, `track_*`,
 `braking_onset`) links only that library. They therefore prove the analysis
 code builds and runs without Gui.
 
-`flappedear_telemetry_core_boundary` (a CMake script test,
-`native/tests/CheckTelemetryCoreBoundary.cmake`) fails when a file under
-`src/telemetry` or `src/project` includes `export/`, `gopro/`, `sync/` (the
-sync engine itself now lives in `src/telemetry`, KAN-101),
-`widgets/` or `app/`, or a Gui, Qml, Quick, Multimedia, QProcess or QRhi
-header. It was checked to fail on an injected violation.
+`flappedear_telemetry_core_boundary` and `flappedear_telemetry_app_boundary`
+run `native/tests/CheckLibraryBoundary.cmake` (KAN-154). It starts from the
+library's own `SOURCES`, written at generate time, and follows every quoted
+include the way the compiler resolves it: the including file's folder first,
+then `native/src`. Each project file reached must be in the library's
+`SOURCES` or in the `SOURCES` of a library it links (the allowlist), so a
+relative include such as `"../export/X.h"` or one reached through another
+header fails. A Qt Gui, Qml, Quick, Multimedia, Widgets, QProcess or QRhi
+header fails anywhere along the way. Two must-fail fixtures in
+`native/tests/fixtures/boundary/` keep the check honest:
+`flappedear_boundary_rejects_relative-transitive` (a `../export/` include two
+headers deep) and `flappedear_boundary_rejects_gui-header` (`<QPainter>`).
+The first run found `telemetry/TelemetrySessionCache.h` missing from the
+core's source list; it is listed now.
 
 `EventProjectTests::acceptsAnalysisOnlyEventDocuments` checks that a v3
 event document without `scene`, `exportSettings` and `mapSettings`

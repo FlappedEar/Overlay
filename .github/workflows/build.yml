@@ -111,6 +111,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ffmpeg -version | Tee-Object ci-logs/ffmpeg-version.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # KAN-154: Homebrew's FFmpeg floats, so range-test it. 8.1 added the
+          # setparams alpha_mode the export needs; the macOS runners had 9.0.1
+          # on 5 October 2026. A new major is a deliberate, reviewed
+          # bump of this range (docs/development-workflow.md).
+          $ffmpegLine = (Get-Content ci-logs/ffmpeg-version.txt -TotalCount 1)
+          if ($ffmpegLine -notmatch '^ffmpeg version n?(\d+)\.(\d+)') { throw "Cannot read the FFmpeg version from: $ffmpegLine" }
+          $ffmpegVersion = [version]"$($Matches[1]).$($Matches[2])"
+          if ($ffmpegVersion -lt [version]'8.1' -or $ffmpegVersion -ge [version]'10.0') {
+            throw "FFmpeg $ffmpegVersion is outside the tested range 8.1 to 9.x"
+          }
           ffprobe -version | Tee-Object ci-logs/ffprobe-version.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $encoders = ffmpeg -hide_banner -encoders 2>&1 | Out-String
@@ -208,7 +218,7 @@ jobs:
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
       # The editor, its startup and the export integrations need a display,
       # a GPU and FFmpeg 8.1; macOS runs them. The boundary checks are scripts.
-      EXCLUDED_TESTS: flappedear_native_tests|flappedear_startup_smoke|flappedear_command_line_usage|flappedear_telemetry_core_boundary|flappedear_telemetry_app_boundary
+      EXCLUDED_TESTS: flappedear_native_tests|flappedear_startup_smoke|flappedear_command_line_usage|flappedear_telemetry_core_boundary|flappedear_telemetry_app_boundary|flappedear_boundary_rejects_relative-transitive|flappedear_boundary_rejects_gui-header
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
