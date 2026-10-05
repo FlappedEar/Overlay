@@ -105,6 +105,7 @@ Item {
                                                "retroCustomValue", "gForceMagnitudeBar",
                                                "f1GForceRadar", "retroTachometer",
                                                "lapCurrent", "designed"].indexOf(widgetType) >= 0
+                                           || (widgetType === "tyres" && widgetSettings.style === "tech")
 
             function configuredFontSize() {
                 const value = Number(widgetSettings.fontSize ?? 0);
@@ -176,7 +177,24 @@ Item {
                 anchors.fill: parent
                 anchors.margins: widgetItem.rendererOwnsPanel ? 0 : widgetItem.pad
                 property var frame: widgetItem
+                readonly property string techSource: {
+                    // KAN-193: the Tech style has its own renderer per type.
+                    switch (widgetItem.widgetType) {
+                    case "speed": return "widgets/tech/TechSpeed.qml";
+                    case "heartRate": return "widgets/tech/TechHeartRate.qml";
+                    case "pedals": return "widgets/tech/TechPedals.qml";
+                    case "f1GForceRadar": return "widgets/tech/TechRadar.qml";
+                    case "gForceMagnitudeBar": return "widgets/tech/TechGForce.qml";
+                    case "lapCurrent": return "widgets/tech/TechLapTime.qml";
+                    case "retroTachometer": return "widgets/tech/TechTachometer.qml";
+                    case "retroCustomValue": return "widgets/tech/TechCustomValue.qml";
+                    case "tyres": return "widgets/tech/TechTyres.qml";
+                    default: return "";
+                    }
+                }
                 readonly property string rendererSource: {
+                    if (widgetItem.widgetSettings.style === "tech" && techSource)
+                        return techSource;
                     switch (widgetItem.widgetType) {
                     case "speed": return "widgets/SpeedWidget.qml";
                     case "heartRate": return "widgets/HeartRateWidget.qml";

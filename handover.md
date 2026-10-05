@@ -52,7 +52,12 @@ that check over this file.
   Radar, G-Force Bar, Retro Custom, Current lap time, Retro RPM), plus Tyres and
   designed widgets. Eighteen types and nine built-in templates were removed;
   saved documents holding them open without those widgets. Motorsport Broadcast
-  HUD is the only built-in template and the default scene.
+  HUD is the default scene.
+- **Tech style (owner choice, 5 October 2026, KAN-193):** each widget has a
+  Style setting, Classic (default) or Tech, and the Tech HUD built-in template
+  uses Tech throughout. Tech renderers live in `native/qml/widgets/tech/`; the
+  radar trail uses `telemetryValueAgo`, so it is deterministic. Saved projects
+  keep Classic.
 - `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
   `docs/product-delivery.md` and Jira are the only status records.
 

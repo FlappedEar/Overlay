@@ -13,6 +13,7 @@ Rectangle {
     property var settings: selectedWidget.settings || ({})
     readonly property bool isGForceWidget: ["f1GForceRadar", "gForceMagnitudeBar"].includes(selectedWidget.type)
     readonly property bool isLapTimeTile: selectedWidget.type === "lapCurrent"
+    readonly property bool isTech: settings.style === "tech"
     // Widgets that read one channel through the shared value settings.
     readonly property bool hasValueSource: ["speed", "heartRate", "retroCustomValue", "retroTachometer"].includes(selectedWidget.type)
     property int currentTab: 0
@@ -224,6 +225,21 @@ Rectangle {
                             text: qsTr("Show title")
                             checked: root.settings.showTitle ?? false
                             onToggled: root.setSetting("showTitle", checked)
+                        }
+                        // KAN-193: Classic is the original look, Tech the bottom-strip HUD look.
+                        FeLabel {
+                            visible: root.selectedIndex >= 0 && root.selectedWidget.type !== "designed"
+                            text: qsTr("Style")
+                            color: Theme.onSurfaceVariant
+                            font.pixelSize: 11
+                        }
+                        FeComboBox {
+                            objectName: "widgetStyle"
+                            visible: root.selectedIndex >= 0 && root.selectedWidget.type !== "designed"
+                            Layout.fillWidth: true
+                            model: [qsTr("Classic"), qsTr("Tech")]
+                            currentIndex: root.settings.style === "tech" ? 1 : 0
+                            onActivated: index => root.setSetting("style", index === 1 ? "tech" : "classic")
                         }
 
                         SectionTitle {
@@ -517,6 +533,8 @@ Rectangle {
                                 FeTextField { Layout.fillWidth: true; text: Number(root.settings.maxG ?? 1.5).toString(); onEditingFinished: root.setSetting("maxG", Number(text)) }
                                 FeLabel { text: qsTr("Ring step"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
                                 FeTextField { Layout.fillWidth: true; text: Number(root.settings.ringStepG ?? 0.25).toString(); onEditingFinished: root.setSetting("ringStepG", Number(text)) }
+                                FeLabel { visible: root.isTech; text: qsTr("Trail (s)"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeTextField { visible: root.isTech; Layout.fillWidth: true; text: Number(root.settings.trailSeconds ?? 1).toString(); onEditingFinished: root.setSetting("trailSeconds", Number(text)) }
                             }
                             FeCheckBox { text: qsTr("Show crosshair"); checked: root.settings.showCrosshair ?? true; onToggled: root.setSetting("showCrosshair", checked) }
                             FeCheckBox { text: qsTr("Show center box"); checked: root.settings.showCenterBox ?? true; onToggled: root.setSetting("showCenterBox", checked) }
@@ -1054,6 +1072,51 @@ Rectangle {
                             text: qsTr("Show heart icon")
                             checked: root.settings.showIcon ?? true
                             onToggled: root.setSetting("showIcon", checked)
+                        }
+                        // KAN-193: settings only the Tech style uses.
+                        FeCheckBox {
+                            visible: root.isTech && root.selectedWidget.type === "heartRate"
+                            text: qsTr("Show heart-rate zones (from Max value)")
+                            checked: root.settings.showZones ?? false
+                            onToggled: root.setSetting("showZones", checked)
+                        }
+                        FeCheckBox {
+                            visible: root.isTech && root.selectedWidget.type === "lapCurrent"
+                            text: qsTr("Show best lap")
+                            checked: root.settings.showBest ?? true
+                            onToggled: root.setSetting("showBest", checked)
+                        }
+                        FeCheckBox {
+                            visible: root.isTech && root.selectedWidget.type === "retroTachometer"
+                            text: qsTr("Show speed inside the gauge")
+                            checked: root.settings.showSpeed ?? true
+                            onToggled: root.setSetting("showSpeed", checked)
+                        }
+                        FeComboBox {
+                            visible: root.isTech && root.selectedWidget.type === "retroTachometer" && (root.settings.showSpeed ?? true)
+                            Layout.fillWidth: true
+                            model: root.channelModel()
+                            currentIndex: Math.max(0, model.indexOf(root.settings.speedSource || qsTr("Automatic")))
+                            onActivated: root.setSetting("speedSource", currentIndex === 0 ? "" : currentText)
+                        }
+                        FeCheckBox {
+                            visible: root.isTech && root.selectedWidget.type === "retroCustomValue"
+                            text: qsTr("Show range bar (Min to Max value)")
+                            checked: root.settings.showRange ?? false
+                            onToggled: root.setSetting("showRange", checked)
+                        }
+                        GridLayout {
+                            visible: root.isTech && root.selectedWidget.type === "retroCustomValue"
+                            Layout.fillWidth: true
+                            columns: 2
+                            columnSpacing: 8
+                            rowSpacing: 6
+                            FeLabel { text: qsTr("Normal from"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeTextField { Layout.fillWidth: true; text: Number(root.settings.normalLow ?? 0).toString(); onEditingFinished: root.setSetting("normalLow", Number(text)) }
+                            FeLabel { text: qsTr("Normal to"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeTextField { Layout.fillWidth: true; text: Number(root.settings.normalHigh ?? 0).toString(); onEditingFinished: root.setSetting("normalHigh", Number(text)) }
+                            FeLabel { text: qsTr("Warning at"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeTextField { Layout.fillWidth: true; text: Number(root.settings.warningValue ?? 0).toString(); onEditingFinished: root.setSetting("warningValue", Number(text)) }
                         }
 
                         SectionTitle {

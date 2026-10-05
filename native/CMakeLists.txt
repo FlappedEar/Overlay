@@ -333,7 +333,8 @@ qt_add_resources(flappedear_native "flappedear_branding"
 )
 
 # Sora and JetBrains Mono, SIL Open Font License 1.1 (resources/fonts/OFL-*.txt),
-# the fonts of FlappedEar Telemetry's design language; registered in main.cpp.
+# the fonts of FlappedEar Telemetry's design language, and Chakra Petch (OFL 1.1)
+# for the Tech widget style (KAN-193); registered in main.cpp.
 qt_add_resources(flappedear_native "flappedear_fonts"
     PREFIX "/flappedear"
     FILES
@@ -344,8 +345,12 @@ qt_add_resources(flappedear_native "flappedear_fonts"
         resources/fonts/JetBrainsMono-500.ttf
         resources/fonts/JetBrainsMono-600.ttf
         resources/fonts/JetBrainsMono-700.ttf
+        resources/fonts/ChakraPetch-500.ttf
+        resources/fonts/ChakraPetch-600.ttf
+        resources/fonts/ChakraPetch-700.ttf
         resources/fonts/OFL-Sora.txt
         resources/fonts/OFL-JetBrainsMono.txt
+        resources/fonts/OFL-ChakraPetch.txt
 )
 
 qt_add_qml_module(flappedear_native
@@ -383,6 +388,17 @@ qt_add_qml_module(flappedear_native
         qml/widgets/RetroTachometerWidget.qml
         qml/widgets/SpeedWidget.qml
         qml/widgets/TelemetryPanel.qml
+        qml/widgets/tech/TechCustomValue.qml
+        qml/widgets/tech/TechGForce.qml
+        qml/widgets/tech/TechHeartRate.qml
+        qml/widgets/tech/TechLabel.qml
+        qml/widgets/tech/TechLapTime.qml
+        qml/widgets/tech/TechPanel.qml
+        qml/widgets/tech/TechPedals.qml
+        qml/widgets/tech/TechRadar.qml
+        qml/widgets/tech/TechSpeed.qml
+        qml/widgets/tech/TechTachometer.qml
+        qml/widgets/tech/TechTyres.qml
     RESOURCES
         qml/assets/change-car-oil-svgrepo-com.svg
         qml/assets/temperature-transmission.svg

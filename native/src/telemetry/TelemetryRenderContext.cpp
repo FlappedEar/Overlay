@@ -358,6 +358,17 @@ QVariant TelemetryRenderContext::telemetryValue(const QString &channelName) cons
     return value ? QVariant(*value) : QVariant();
 }
 
+QVariant TelemetryRenderContext::telemetryValueAgo(const QString &channelName, const double secondsAgo) const
+{
+    if (!m_session || channelName.isEmpty() || !std::isfinite(secondsAgo) || secondsAgo < 0.0) {
+        return {};
+    }
+    const auto time = videoToTelemetryTime(m_time - secondsAgo, m_sync);
+    if (!time) return {};
+    const auto value = presentationValueAt(*m_session, channelName, *time);
+    return value ? QVariant(*value) : QVariant();
+}
+
 QString TelemetryRenderContext::valueText(const QString &channelName, const int decimals) const
 {
     const QVariant value = telemetryValue(channelName);

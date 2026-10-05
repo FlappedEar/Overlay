@@ -160,6 +160,7 @@ private slots:
     void routesNewDocumentSaveAsThroughPendingQuit();
     void mapsLapStartTelemetryTimesBackToVideoBounds();
     void rendersLapTimeTileInProductionScene();
+    void rendersTechStyleWidgets();
     void rendersTyresInExportScene();
     void normalizesDesignedWidgetElements();
     void persistsWidgetLibrary();
@@ -2180,6 +2181,13 @@ void TelemetryTests::filtersOverlayPresentationValues()
     QVERIFY(context.telemetryValue("lateralAcceleration").isValid());
     QVERIFY(context.telemetryValue("longitudinalAcceleration").isValid());
 
+    // KAN-193: the value a moment ago is the value at that earlier time.
+    QCOMPARE(context.telemetryValueAgo("speed", 0.2).toDouble(), 0.0);
+    QCOMPARE(context.telemetryValueAgo("speed", 0.0), context.telemetryValue("speed"));
+    QVERIFY(!context.telemetryValueAgo("speed", -1.0).isValid());
+    QVERIFY(!context.telemetryValueAgo("speed", qQNaN()).isValid());
+    QVERIFY(!context.telemetryValueAgo("missing", 0.1).isValid());
+
     context.setTime(1.1);
     QVERIFY(!context.telemetryValue("speed").isValid());
     QCOMPARE(context.valueText("speed"), QStringLiteral("—"));
@@ -3585,7 +3593,7 @@ void TelemetryTests::rejectsNonFiniteWidgetGeometryAndDuplicateIds()
 void TelemetryTests::loadsVisualTemplates()
 {
     WidgetModel model;
-    QCOMPARE(model.templates().size(), 1);
+    QCOMPARE(model.templates().size(), 2);
     QVERIFY(model.applyTemplate("motorsport-broadcast-smoke"));
     QCOMPARE(model.count(), 9);
     QCOMPARE(model.widget(0).value("type").toString(), QString("retroTachometer"));
@@ -3597,6 +3605,16 @@ void TelemetryTests::loadsVisualTemplates()
     QCOMPARE(model.widget(5).value("settings").toMap().value("stackPosition").toString(), QString("bottom"));
     // KAN-192: ATF reads RaceChrono's gearbox temperature channel.
     QCOMPARE(model.widget(4).value("settings").toMap().value("source").toString(), QString("gearbox_temp-obd"));
+    // Classic is every widget's default style.
+    for (int index = 0; index < model.count(); ++index)
+        QCOMPARE(model.widget(index).value("settings").toMap().value("style").toString(), QString("classic"));
+    // KAN-193: the Tech HUD is the same widget set in the Tech style.
+    QVERIFY(model.applyTemplate("tech-hud"));
+    QCOMPARE(model.count(), 10);
+    for (int index = 0; index < model.count(); ++index)
+        QCOMPARE(model.widget(index).value("settings").toMap().value("style").toString(), QString("tech"));
+    QCOMPARE(model.widget(0).value("type").toString(), QString("retroTachometer"));
+    QCOMPARE(model.widget(8).value("settings").toMap().value("trailSeconds").toDouble(), 1.0);
     QVERIFY(!model.applyTemplate("missing-template"));
     // Retired built-ins are gone.
     for (const QString id : {"track-day", "minimal", "performance", "2000s-grand-prix"})
@@ -7686,6 +7704,47 @@ void TelemetryTests::rendersTyresInExportScene()
         if (!shots.isEmpty()) static_cast<void>(frame.save(QDir(shots).filePath("tyres-export-real.png")));
         break;
     }
+}
+
+namespace {
+QStringList *capturedSceneWarnings = nullptr;
+void captureSceneWarning(QtMsgType type, const QMessageLogContext &, const QString &message)
+{
+    if (capturedSceneWarnings && type != QtDebugMsg && type != QtInfoMsg) capturedSceneWarnings->append(message);
+}
+} // namespace
+
+void TelemetryTests::rendersTechStyleWidgets()
+{
+    // KAN-193: every Tech renderer loads and draws in the production scene
+    // without QML warnings.
+    QVERIFY(FlappedEar::registerBundledFonts());
+    TelemetrySession session = speedSession(0.0, 4.0, 0.0);
+    WidgetModel widgets;
+    QVERIFY(widgets.applyTemplate(QStringLiteral("tech-hud")));
+    // An unknown style falls back to the default, Classic, like other invalid settings.
+    widgets.setSetting(0, QStringLiteral("style"), QStringLiteral("neon"));
+    QCOMPARE(widgets.widget(0).value("settings").toMap().value("style").toString(), QString("classic"));
+    widgets.setSetting(0, QStringLiteral("style"), QStringLiteral("tech"));
+    widgets.setSetting(8, QStringLiteral("trailSeconds"), 99);
+    QCOMPARE(widgets.widget(8).value("settings").toMap().value("trailSeconds").toDouble(), 5.0);
+    QStringList warnings;
+    capturedSceneWarnings = &warnings;
+    const auto previous = qInstallMessageHandler(captureSceneWarning);
+    QImage image;
+    {
+        TelemetryFrameRenderer renderer;
+        QVERIFY2(renderer.initialize(&widgets, &session, nullptr, SyncTransform{}, QSize(1280, 720)),
+                 qPrintable(renderer.errorString()));
+        renderer.renderFrame(1.0);
+        image = renderer.renderFrame(2.0);
+    }
+    qInstallMessageHandler(previous);
+    capturedSceneWarnings = nullptr;
+    QVERIFY(!image.isNull());
+    QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
+    // The lap tile's plate is drawn at the centre of its box.
+    QVERIFY(image.pixelColor(static_cast<int>(0.24 * image.width()), static_cast<int>(0.9 * image.height())).alpha() > 80);
 }
 
 void TelemetryTests::rendersLapTimeTileInProductionScene()
