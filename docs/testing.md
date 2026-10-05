@@ -2362,3 +2362,41 @@ passes final validation with 75 frames.
 Checked on Linux with Qt 6.8.3 (Debug) and conda-forge FFmpeg 8.1.2: before
 the fix the worker failed final validation with "Video packet count expected=90
 actual=75"; after it, the test passes.
+
+## KAN-155: parser fuzzing
+
+`native/fuzz/` holds one libFuzzer harness per untrusted input format. Each
+feeds the input to the decoder Overlays uses and accepts any `std::exception`
+as a rejection; running out of memory (`std::bad_alloc`), a sanitizer report, a
+timeout or the RSS limit is a finding.
+
+| Harness | Decoder | Input |
+| --- | --- | --- |
+| `flappedear_fuzz_vbo` | `VboParser::parse` | the bytes as UTF-8 text |
+| `flappedear_fuzz_rcz` | `RczParser::parseFile` | the bytes written to one scratch file |
+| `flappedear_fuzz_gpmf` | `GoProTelemetrySource::decodeGpsPackets` | byte 0 picks one to four packets; the rest is split between them |
+
+The seeds in `native/fuzz/seeds/` are synthetic: the two VBO test fixtures, the
+RCZ test archive compressed and stored, and a GPS9 and a GPS5 packet. The
+harnesses need Clang with the libFuzzer runtime (`libclang-rt-18-dev` on
+Ubuntu); `FLAPPEDEAR_BUILD_FUZZERS=ON` builds the whole project with coverage,
+ASan and UBSan:
+
+```bash
+cmake -S . -B build-fuzz -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DFLAPPEDEAR_BUILD_FUZZERS=ON
+cmake --build build-fuzz --target flappedear_fuzz_vbo flappedear_fuzz_rcz flappedear_fuzz_gpmf
+mkdir -p corpus/vbo && cp native/fuzz/seeds/vbo/* corpus/vbo/
+build-fuzz/native/fuzz/flappedear_fuzz_vbo corpus/vbo -max_total_time=600 -max_len=65536 \
+  -timeout=30 -rss_limit_mb=2560
+```
+
+Native CI's `Linux x64 / Fuzz parsers / Qt 6.8.3` job runs each harness for
+60 seconds from the seeds and uploads any crash input with its logs.
+
+Checked on Linux with Qt 6.8.3, clang 18 and ASan, UBSan and leak detection,
+10 minutes per harness on 5 October 2026: no finding. VBO ran 666,735 inputs
+(peak RSS 488 MB), RCZ 1,386,886 (337 MB) and GPMF 2,862,813 (551 MB).
+libFuzzer grows the input length slowly, so the VBO inputs stayed near the
+seed size (414 bytes); the size limits themselves stay with the existing
+limit tests, such as `boundsVboHeaderAndDecodedValues`.

@@ -25,6 +25,17 @@ function(flappedear_enable_warnings target)
     endif()
 endfunction()
 
+# KAN-155: libFuzzer harnesses for the VBO, RCZ and GPMF decoders. Clang only;
+# the whole build gets coverage and ASan/UBSan so the parsers are instrumented.
+option(FLAPPEDEAR_BUILD_FUZZERS "Build the libFuzzer parser harnesses (Clang)" OFF)
+if(FLAPPEDEAR_BUILD_FUZZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "FLAPPEDEAR_BUILD_FUZZERS needs Clang (libFuzzer)")
+    endif()
+    add_compile_options(-fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
+
 # Bounded streaming ZIP inflation for native RCZ input. Pin source and integrity.
 include(FetchContent)
 set(ZLIB_BUILD_TESTING OFF CACHE BOOL "" FORCE)
@@ -422,3 +433,6 @@ qt_deploy_runtime_dependencies(
 endif()
 
 add_subdirectory(tests)
+if(FLAPPEDEAR_BUILD_FUZZERS)
+    add_subdirectory(fuzz)
+endif()
