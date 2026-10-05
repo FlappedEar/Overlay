@@ -77,7 +77,7 @@ Sources: [`handover.md`](../handover.md) "Owner direction and preferences", the 
 
 **Times**
 - **Format.** From one minute, times read `m:ss.mmm` ("1:49.898"); below a minute, "28.662 s"; a non-finite value is "—".
-- **Rounding.** Round before splitting minutes, so a time never reads "x:60" (KAN-149). Overlays formats times in three places: [`AnalysisControllerComparison.cpp`](../native/src/app/AnalysisControllerComparison.cpp), [`LapTiming.cpp`](../native/src/telemetry/LapTiming.cpp) and [`OutingProgressionDialog.qml`](../native/qml/OutingProgressionDialog.qml).
+- **Rounding.** Round before splitting minutes, so a time never reads "x:60" (KAN-149). Overlays formats times in three places: [`AnalysisControllerComparison.cpp`](../native/src/app/AnalysisControllerComparison.cpp), [`LapTiming.cpp`](../native/src/telemetry/LapTiming.cpp) and [`OutingProgressionDialog.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/OutingProgressionDialog.qml).
 
 **Results are observations**
 - **Missing results.** A missing result says why and is never shown as zero.
@@ -399,7 +399,7 @@ The modules below are in dependency order. Code: `native/src/telemetry/`; tests:
 Telemetry never has video. These parts of this repository are for Overlays only:
 
 **Video and overlays**
-- **Video features of the analysis window:** the lap-detail video and its follow mode, and the comparison video column ([`ComparisonVideoPane.qml`](../native/qml/ComparisonVideoPane.qml), `AnalysisControllerComparisonVideo.cpp`). "Lap A here…" and coasting episodes keep their cursor jump; only the video follow goes.
+- **Video features of the analysis window:** the lap-detail video and its follow mode, and the comparison video column ([`ComparisonVideoPane.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/ComparisonVideoPane.qml), `AnalysisControllerComparisonVideo.cpp`). "Lap A here…" and coasting episodes keep their cursor jump; only the video follow goes.
 - **Video synchronization:** `SyncTransform` and the video↔telemetry time transforms in `TelemetrySession.h`, and the per-run `sync` written at import.
 - **Overlay presentation rules:** value hold, smoothing and GoPro GPMF ([telemetry semantics](telemetry-semantics.md#overlay-presentation)). Also the export pipeline, widgets, templates and video fingerprints.
 
@@ -463,7 +463,9 @@ new app whatever its architecture.
 owner has the final say.
 
 The checklist lists capabilities, not screens; the mobile interface will differ.
-Each line names the current QML view and the controller entry point:
+Each line names the QML view and the controller entry point. KAN-166 step 4 deleted the
+analysis QML from `main`, so the view links point at commit `7eae6cd`, the last one with
+the full analysis (KAN-169):
 
 - **A:** `AnalysisController` ([header](../native/src/app/AnalysisController.h));
 - **D:** `DocumentController` ([header](../native/src/app/DocumentController.h)).
@@ -475,7 +477,7 @@ separately because Telemetry never has video.
 
 - [ ] **Start an outing.**
     - **Flow:** the user names it and adds VBO/RCZ files or a folder (optionally with subfolders), or drops files. Progress has Cancel and import notes.
-    - **Code:** [`AnalysisStartPanel.qml`](../native/qml/AnalysisStartPanel.qml); D `importAnalysisRuns`, `importAnalysisFolder`, `importAnalysisSources`, `cancelBatchImport`.
+    - **Code:** [`AnalysisStartPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/AnalysisStartPanel.qml); D `importAnalysisRuns`, `importAnalysisFolder`, `importAnalysisSources`, `cancelBatchImport`.
     - **Guide:** [importing](user-guide/pages/importing.html).
 - [ ] **Pairing and naming.**
     - **Behaviour:** the VBO and RCZ of one session become one run. Runs are named "Session N" in recording-time order.
@@ -484,7 +486,7 @@ separately because Telemetry never has video.
     - **Behaviour:** per file, Import, Skip or "Same run as"; the user chooses a new event or appending.
     - **Code:** [`BatchImportDialog.qml`](../native/qml/BatchImportDialog.qml); D `confirmBatchImport`.
 
-**Day results** ([`OutingLapPanel.qml`](../native/qml/OutingLapPanel.qml); [analysis guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/analysis.html))
+**Day results** ([`OutingLapPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/OutingLapPanel.qml); [analysis guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/analysis.html))
 
 - [ ] **Compatibility groups:** an automatic choice, a picker, and a card per group with its best lap and the best lap of each run. A `outingCompatibilityGroups`, `selectOutingComparisonGroup`.
 - [ ] **Best of the day:** "Best day · 1:49.898 · Session 5 · LAP 2" opens that lap. A `outingRanking`, `selectOutingLapReference`.
@@ -497,7 +499,7 @@ separately because Telemetry never has video.
     - **Code:** A `runTrackConfiguration`, `confirmRunTrackConfiguration`.
 - [ ] **Analysis status:** notices and a retry. A `outingAnalysisStatus`, `retryOutingAnalysis`.
 
-**Lap detail** ([`OutingLapDetailPanel.qml`](../native/qml/OutingLapDetailPanel.qml), [`TrackMapPanel.qml`](../native/qml/TrackMapPanel.qml), [`AnalysisPanel.qml`](../native/qml/AnalysisPanel.qml))
+**Lap detail** ([`OutingLapDetailPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/OutingLapDetailPanel.qml), [`TrackMapPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/TrackMapPanel.qml), [`AnalysisPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/AnalysisPanel.qml))
 
 - [ ] **Lap header:** "LAP 2 · 1:49.898" with the run name; back to all laps. A `selectedOutingLap`, `closeOutingLap`.
 - [ ] **Exclude or restore a lap** with a reason. A `setOutingLapExcluded`.
@@ -507,9 +509,9 @@ separately because Telemetry never has video.
     - **Code:** A `outingLapSeries`, `outingLapChannels`, `outingLapCursor`.
 - [ ] **Coasting:**
     - **Behaviour:** a summary per lap and per segment, measured from the pedals or inferred. Episodes are shown on the map and move the cursor.
-    - **Code:** [`CoastingPanel.qml`](../native/qml/CoastingPanel.qml); A `outingLapCoasting`.
+    - **Code:** [`CoastingPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/CoastingPanel.qml); A `outingLapCoasting`.
 
-**Segments** ([`SegmentReviewPanel.qml`](../native/qml/SegmentReviewPanel.qml); [segments guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/segments.html))
+**Segments** ([`SegmentReviewPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/SegmentReviewPanel.qml); [segments guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/segments.html))
 
 - [ ] **Automatic segments** from the day's best lap. A `setAutomaticSegments`. Overlays switched this on until KAN-166 step 2 (October 2026); it no longer does, so only Telemetry writes automatic segments (see [the shared contract](#the-shared-contract-fetproject)).
 - [ ] **Proposals:**
@@ -524,39 +526,39 @@ separately because Telemetry never has video.
 
 - [ ] **Choose laps:**
     - **Rule:** A and B come from the same compatibility group. The user can swap them, or set B to the best of A's run or the best of the group.
-    - **Code:** [`ComparisonLapDialog.qml`](../native/qml/ComparisonLapDialog.qml); A `selectComparisonLap`, `useBestComparisonLap`.
+    - **Code:** [`ComparisonLapDialog.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/ComparisonLapDialog.qml); A `selectComparisonLap`, `useBestComparisonLap`.
 - [ ] **Charts:**
     - **Behaviour:** on a shared track-position axis, up to four channels that both laps recorded, plus Δ time; values for A, B and A−B; zoom and pan. The pair, the zoom and the channels are saved in the document.
-    - **Code:** [`ComparisonDetailPanel.qml`](../native/qml/ComparisonDetailPanel.qml); A `comparisonChannelSeriesByProgress`, `comparisonDeltaSeriesByProgress`.
+    - **Code:** [`ComparisonDetailPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/ComparisonDetailPanel.qml); A `comparisonChannelSeriesByProgress`, `comparisonDeltaSeriesByProgress`.
 - [ ] **Overlay map:**
     - **Behaviour:** both traces to scale with A/B markers. Colour layers: speed, Δ time, lateral and longitudinal G, throttle, measured brake, recorded temperatures.
     - **Code:** A `comparisonMapLayerOptions`, `comparisonMapLayer`.
 - [ ] **Corner Analyzer:**
     - **Behaviour:** per segment, A/B/Δ sector time, speeds, braking point, throttle pickup, heart rate and trail braking.
-    - **Code:** [`ComparisonSegmentPanel.qml`](../native/qml/ComparisonSegmentPanel.qml); A `comparisonSegmentMetrics`, `comparisonTrailBraking`, `comparisonHeartRate`.
-- [ ] **G-G:** a scatter over the zoomed range, with peaks and sample counts. [`ComparisonGgPanel.qml`](../native/qml/ComparisonGgPanel.qml); A `comparisonGgScatter`.
+    - **Code:** [`ComparisonSegmentPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/ComparisonSegmentPanel.qml); A `comparisonSegmentMetrics`, `comparisonTrailBraking`, `comparisonHeartRate`.
+- [ ] **G-G:** a scatter over the zoomed range, with peaks and sample counts. [`ComparisonGgPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/ComparisonGgPanel.qml); A `comparisonGgScatter`.
 
 **Day views** ([day report guide](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/docs/user-guide/pages/day-report.html))
 
 - [ ] **Theoretical best:**
     - **Behaviour:** best lap, theoretical best, laps today and the time available. A map coloured by loss per segment. "Where the time is" opens the Corner Analyzer. Variability.
-    - **Code:** [`TheoreticalBestDialog.qml`](../native/qml/TheoreticalBestDialog.qml); A `requestOutingTheoreticalBest`, `openTheoreticalBestSector`.
-- [ ] **Ranked time losses:** each loss opens its comparison. [`TimeLossDialog.qml`](../native/qml/TimeLossDialog.qml); A `outingTimeLossRanking`, `openTimeLoss`.
+    - **Code:** [`TheoreticalBestDialog.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/TheoreticalBestDialog.qml); A `requestOutingTheoreticalBest`, `openTheoreticalBestSector`.
+- [ ] **Ranked time losses:** each loss opens its comparison. [`TimeLossDialog.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/TimeLossDialog.qml); A `outingTimeLossRanking`, `openTimeLoss`.
 - [ ] **Progression:**
-    - **Laps by run:** run cards, distributions, change against the previous run, notes, conditions and setup. [`OutingProgressionDialog.qml`](../native/qml/OutingProgressionDialog.qml); A `outingProgression`.
-    - **By section:** a section × session grid. [`SectionProgressionView.qml`](../native/qml/SectionProgressionView.qml); A `outingSectorProgression`.
-    - **Car and driver:** heart-rate and temperature trends, and temperature against lap time. [`CarDriverView.qml`](../native/qml/CarDriverView.qml); A `outingChannelSummaries`, `outingTemperatureAssociations`.
+    - **Laps by run:** run cards, distributions, change against the previous run, notes, conditions and setup. [`OutingProgressionDialog.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/OutingProgressionDialog.qml); A `outingProgression`.
+    - **By section:** a section × session grid. [`SectionProgressionView.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/SectionProgressionView.qml); A `outingSectorProgression`.
+    - **Car and driver:** heart-rate and temperature trends, and temperature against lap time. [`CarDriverView.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/CarDriverView.qml); A `outingChannelSummaries`, `outingTemperatureAssociations`.
 - [ ] **Day report:**
     - **Cards:** best lap and what is left, where to look next, losses, sessions, consistency, car, heart rate. Each card opens its evidence.
-    - **Code:** [`DayReportDialog.qml`](../native/qml/DayReportDialog.qml); A `outingDayReport`, `openFocusArea`.
+    - **Code:** [`DayReportDialog.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/DayReportDialog.qml); A `outingDayReport`, `openFocusArea`.
 - [ ] **Run details:**
     - **Fields:** name, notes, conditions, setup changes.
     - **Recordings:** attach, make primary, check the clock, fuse.
-    - **Code:** [`RunDetailsDialog.qml`](../native/qml/RunDetailsDialog.qml); A `updateRunMetadata`; D `attachRunRecording`, `reviewRunFusion`.
+    - **Code:** [`RunDetailsDialog.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/RunDetailsDialog.qml); A `updateRunMetadata`; D `attachRunRecording`, `reviewRunFusion`.
 
 **Owner to decide**
 
-- [ ] **Single-recording mode:** one recording without an event, shown as map, charts and a lap-timing table ([`LapTimingPanel.qml`](../native/qml/LapTimingPanel.qml)). It runs on the editor's controller, not on `AnalysisController`. Whether Telemetry needs it is open.
+- [ ] **Single-recording mode:** one recording without an event, shown as map, charts and a lap-timing table ([`LapTimingPanel.qml`](https://github.com/FlappedEar/Overlay/blob/7eae6cd36bea97e96b29854b5cdc21ecbee6a32a/native/qml/LapTimingPanel.qml)). It runs on the editor's controller, not on `AnalysisController`. Whether Telemetry needs it is open.
 
 **Computed but not shown.** The controller exposes `outingLapSectorTimes`, `outingLapCornerSpeeds`, `outingLapBrakingMetrics`, `outingLapExitMetrics`, `comparisonTimeLossObservations` and `approveCertainSegmentProposals`, but no QML calls them.
 
@@ -601,7 +603,8 @@ Most tests build their recordings and documents in code: [`RczFixture.h`](../nat
 **Reproducing the figures here.** Build this repository (see [testing](testing.md)), then run:
 
 ```bash
-FLAPPEDEAR_REAL_DAY=/path/to/day ./build-native/native/tests/flappedear_native_tests analyzesPrivateTrackDayCorners
+# analyzesPrivateTrackDayCorners exists up to Overlays commit 7eae6cd (KAN-169); KAN-166 step 4 removed it.
+git checkout 7eae6cd && FLAPPEDEAR_REAL_DAY=/path/to/day ./build-native/native/tests/flappedear_native_tests analyzesPrivateTrackDayCorners
 FLAPPEDEAR_REAL_DAY=/path/to/day ./build-native/native/tests/flappedear_telemetry_app_tests measuresAPrivateFullDay
 ```
 

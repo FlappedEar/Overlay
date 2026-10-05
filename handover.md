@@ -268,6 +268,12 @@ Split rules already in force after KAN-123:
 
 ## Real data
 
+Since KAN-166 step 4 (5 October 2026) the Lap Analysis QML and its UI tests are gone from
+`main`; they remain at commit `7eae6cd` (KAN-169). The real-day checks on `main` are
+`TelemetryTests::automaticallyGroupsPrivateTrackDay` (grouping, ranking and the editor's
+automatic best lap, Session 5 lap 2, 1:49.898) and `TelemetryAppTests::measuresAPrivateFullDay`.
+The record below describes `analyzesPrivateTrackDayCorners` at that commit.
+
 ```bash
 FLAPPEDEAR_REAL_DAY="$PWD/jastrzab" FLAPPEDEAR_CORNER_REVIEW_DIR=/some/scratch/dir \
   ./build-native/native/tests/flappedear_native_tests analyzesPrivateTrackDayCorners
