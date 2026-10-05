@@ -24,15 +24,9 @@ NATIVE = REPO / "native"
 CATALOG = json.loads((NATIVE / "resources" / "widget-templates.json").read_text(encoding="utf-8"))
 
 DEFAULT_SIZES = {
-    "rpm": (0.20, 0.09), "heartRate": (0.12, 0.13), "pedals": (0.25, 0.13), "gForce": (0.14, 0.19),
-    "f1GForceRadar": (0.15, 0.20), "gForceMagnitudeBar": (0.24, 0.10), "track": (0.20, 0.28),
-    "customValue": (0.20, 0.13), "retroCustomValue": (0.20, 0.13), "arcGauge": (0.20, 0.24),
-    "dialGauge": (0.20, 0.24), "telemetryOverlay": (0.42, 0.12), "lapBest": (0.17, 0.14),
-    "lapCurrent": (0.17, 0.14), "lapDelta": (0.17, 0.14), "speedBest": (0.17, 0.14),
-    "speedCurrent": (0.17, 0.14), "speedDelta": (0.17, 0.14), "retroGrandPrix": (0.42, 0.61),
-    "retroTachometer": (0.25, 0.36), "retroGear": (0.14, 0.055), "retroPedal": (0.14, 0.055),
-    "retroSpeedArc": (0.28, 0.27), "retroNameplate": (0.24, 0.10), "brandLogo": (0.12, 0.16),
-    "tyres": (0.17, 0.20),
+    "heartRate": (0.12, 0.13), "pedals": (0.25, 0.13), "f1GForceRadar": (0.15, 0.20),
+    "gForceMagnitudeBar": (0.24, 0.10), "retroCustomValue": (0.20, 0.13), "lapCurrent": (0.17, 0.14),
+    "retroTachometer": (0.25, 0.36), "tyres": (0.17, 0.20), "designed": (0.20, 0.13),
 }
 
 

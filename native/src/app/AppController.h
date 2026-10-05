@@ -11,6 +11,7 @@
 #include "telemetry/TelemetrySession.h"
 #include "telemetry/TelemetryRenderContext.h"
 #include "telemetry/TrackGeometry.h"
+#include <utility>
 #include "export/MediaProbe.h"
 #include "export/ExportDiagnostics.h"
 #include "export/ExportOutputTransaction.h"
@@ -405,7 +406,11 @@ private:
     [[nodiscard]] QByteArray loadedTelemetryRevision() const override;
     [[nodiscard]] QJsonObject withVerifiedAnalysis(const QJsonObject &project) const override;
     void editorProjectSaved(const QJsonObject &project) override;
-    void showStatus(const QString &status) override { setStatus(status); }
+    // A notice from the scene just applied (KAN-192) rides on the next status.
+    void showStatus(const QString &status) override
+    {
+        setStatus(m_sceneNotice.isEmpty() ? status : status + QLatin1Char(' ') + std::exchange(m_sceneNotice, {}));
+    }
     // Overlays has no analysis view since KAN-166; a day import has nothing to reveal.
     void revealAnalysis() override {}
     void initializeDocument();
@@ -422,6 +427,7 @@ private:
     ProjectSourceReference m_vboReference;
     QString m_statusText = QStringLiteral("Open a video and VBO to begin.");
     QString m_startupNotice;
+    QString m_sceneNotice;
     std::unique_ptr<TelemetrySession> m_session;
     LapSession m_lapSession;
     WidgetModel m_widgetModel;

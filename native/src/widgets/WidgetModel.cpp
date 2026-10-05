@@ -61,25 +61,24 @@ QVariantMap defaultSettings(const QString &type)
 }
 
 const QStringList widgetTypes = {
-    "speed",          "rpm",       "heartRate",       "pedals", "gForce",
-    "f1GForceRadar",  "gForceMagnitudeBar", "track", "customValue", "retroCustomValue", "arcGauge", "dialGauge",
-    "telemetryOverlay", "lapBest", "lapCurrent", "lapDelta", "speedBest", "speedCurrent",
-    "speedDelta", "retroGrandPrix", "retroTachometer", "retroGear",
-    "retroPedal", "retroSpeedArc", "retroNameplate", "brandLogo", "tyres", "designed"};
+    "speed", "heartRate", "pedals", "f1GForceRadar", "gForceMagnitudeBar", "retroCustomValue",
+    "lapCurrent", "retroTachometer", "tyres", "designed"};
+
+// KAN-192: types the owner retired on 5 October 2026. A saved project or
+// template that still holds one opens without it; the editor reports how many
+// were left out. Any other unknown type still makes the document invalid.
+const QStringList retiredWidgetTypes = {
+    "rpm", "gForce", "track", "customValue", "arcGauge", "dialGauge", "telemetryOverlay",
+    "lapBest", "lapDelta", "speedBest", "speedCurrent", "speedDelta", "retroGrandPrix",
+    "retroGear", "retroPedal", "retroSpeedArc", "retroNameplate", "brandLogo"};
 
 QPair<double, double> defaultSize(const QString &type)
 {
-    if (type == "rpm") {
-        return {0.20, 0.09};
-    }
     if (type == "heartRate") {
         return {0.12, 0.13};
     }
     if (type == "pedals") {
         return {0.25, 0.13};
-    }
-    if (type == "gForce") {
-        return {0.14, 0.19};
     }
     if (type == "f1GForceRadar") {
         return {0.15, 0.20};
@@ -87,39 +86,14 @@ QPair<double, double> defaultSize(const QString &type)
     if (type == "gForceMagnitudeBar") {
         return {0.24, 0.10};
     }
-    if (type == "track") {
-        return {0.20, 0.28};
-    }
-    if (type == "customValue" || type == "retroCustomValue") {
+    if (type == "retroCustomValue") {
         return {0.20, 0.13};
     }
-    if (type == "arcGauge" || type == "dialGauge") {
-        return {0.20, 0.24};
-    }
-    if (type == "telemetryOverlay") {
-        return {0.42, 0.12};
-    }
-    if (type == "lapBest" || type == "lapCurrent" || type == "lapDelta"
-        || type == "speedBest" || type == "speedCurrent" || type == "speedDelta") {
+    if (type == "lapCurrent") {
         return {0.17, 0.14};
-    }
-    if (type == "retroGrandPrix") {
-        return {0.42, 0.61};
     }
     if (type == "retroTachometer") {
         return {0.25, 0.36};
-    }
-    if (type == "retroGear" || type == "retroPedal") {
-        return {0.14, 0.055};
-    }
-    if (type == "retroSpeedArc") {
-        return {0.28, 0.27};
-    }
-    if (type == "retroNameplate") {
-        return {0.24, 0.10};
-    }
-    if (type == "brandLogo") {
-        return {0.12, 0.16};
     }
     if (type == "tyres") {
         return {0.17, 0.20};
@@ -181,9 +155,9 @@ bool validTemplateObject(const QJsonObject &item)
         return false;
     }
     for (const QJsonValue &value : item.value("widgets").toArray()) {
-        if (!value.isObject() || !widgetTypes.contains(value.toObject().value("type").toString())) {
-            return false;
-        }
+        if (!value.isObject()) return false;
+        const QString type = value.toObject().value("type").toString();
+        if (!widgetTypes.contains(type) && !retiredWidgetTypes.contains(type)) return false;
     }
     return true;
 }
@@ -484,10 +458,11 @@ bool validPersistedWidgetId(const QString &id)
 
 bool normalizeTemplateObject(QJsonObject *templateObject)
 {
-    QJsonArray widgets = templateObject->value(QStringLiteral("widgets")).toArray();
-    for (QJsonValueRef value : widgets) {
+    QJsonArray widgets;
+    for (const QJsonValue &value : templateObject->value(QStringLiteral("widgets")).toArray()) {
         QJsonObject widgetObject = value.toObject();
         const QString type = widgetObject.value(QStringLiteral("type")).toString();
+        if (retiredWidgetTypes.contains(type)) continue;
         WidgetData widget;
         widget.type = type;
         const auto [defaultWidth, defaultHeight] = defaultSize(type);
@@ -513,7 +488,7 @@ bool normalizeTemplateObject(QJsonObject *templateObject)
             cues.append(QJsonObject::fromVariantMap(normalizeCue(cue.toObject().toVariantMap())));
         }
         widgetObject.insert(QStringLiteral("cues"), cues);
-        value = widgetObject;
+        widgets.append(widgetObject);
     }
     templateObject->insert(QStringLiteral("widgets"), widgets);
     return true;
@@ -913,11 +888,12 @@ QVariantMap WidgetModel::widget(const int index) const
 
 void WidgetModel::resetDefaults()
 {
-    if (applyTemplate(QStringLiteral("track-day"))) {
+    // KAN-192: a new scene starts as the Motorsport Broadcast HUD.
+    if (applyTemplate(QStringLiteral("motorsport-broadcast-smoke"))) {
         return;
     }
     beginResetModel();
-    m_widgets = {createWidget("speed", 0), createWidget("rpm", 1),
+    m_widgets = {createWidget("speed", 0), createWidget("lapCurrent", 1),
                  createWidget("heartRate", 2)};
     endResetModel();
     ++m_revision;
@@ -936,6 +912,7 @@ bool WidgetModel::applyTemplate(const QString &templateId)
         for (const QJsonValue &widgetValue : item.value("widgets").toArray()) {
             const QJsonObject object = widgetValue.toObject();
             const QString type = object.value("type").toString();
+            if (retiredWidgetTypes.contains(type)) continue;
             if (!validType(type)) {
                 return false;
             }
@@ -1203,9 +1180,14 @@ bool WidgetModel::fromJson(const QJsonArray &array)
     if (!ProjectLimits::validateProject(document)) return false;
     QList<WidgetData> widgets;
     QSet<QString> ids;
+    int retired = 0;
     for (const QJsonValue &entry : array) {
         const QJsonObject object = entry.toObject();
         const QString type = object.value("type").toString();
+        if (retiredWidgetTypes.contains(type)) {
+            ++retired;
+            continue;
+        }
         if (!validType(type)) {
             return false;
         }
@@ -1229,6 +1211,7 @@ bool WidgetModel::fromJson(const QJsonArray &array)
     beginResetModel();
     m_widgets = std::move(widgets);
     endResetModel();
+    m_retiredWidgetsDropped = retired;
     ++m_revision;
     emit countChanged();
     emit revisionChanged();
@@ -1483,6 +1466,8 @@ void WidgetModel::loadLibrary()
     QJsonArray library;
     for (const QJsonValue &value : root.value(QStringLiteral("widgets")).toArray()) {
         QJsonObject entry = value.toObject();
+        // A retired type cannot be placed any more; it leaves the library.
+        if (retiredWidgetTypes.contains(entry.value(QStringLiteral("type")).toString())) continue;
         if (!normalizeLibraryEntry(&entry)) {
             m_library = {};
             setLibraryError(tr("My widgets contains an unsupported widget. "

@@ -11,9 +11,10 @@ Rectangle {
         return selectedIndex >= 0 ? appController.widgetModel.widget(selectedIndex) : ({});
     }
     property var settings: selectedWidget.settings || ({})
-    readonly property bool isGForceWidget: ["gForce", "f1GForceRadar", "gForceMagnitudeBar"].includes(selectedWidget.type)
-    readonly property bool isComparisonTile: ["lapBest", "lapCurrent", "lapDelta",
-                                               "speedBest", "speedCurrent", "speedDelta"].includes(selectedWidget.type)
+    readonly property bool isGForceWidget: ["f1GForceRadar", "gForceMagnitudeBar"].includes(selectedWidget.type)
+    readonly property bool isLapTimeTile: selectedWidget.type === "lapCurrent"
+    // Widgets that read one channel through the shared value settings.
+    readonly property bool hasValueSource: ["speed", "heartRate", "retroCustomValue", "retroTachometer"].includes(selectedWidget.type)
     property int currentTab: 0
     signal selectionCleared
     signal selectionRequested(int index)
@@ -170,7 +171,7 @@ Rectangle {
                         }
 
                         RowLayout {
-                            visible: ["speed", "rpm", "heartRate", "customValue", "retroCustomValue", "arcGauge", "dialGauge", "retroGear", "retroPedal", "retroSpeedArc", "retroTachometer", "retroNameplate", "gForceMagnitudeBar", "tyres"].includes(root.selectedWidget.type)
+                            visible: ["speed", "heartRate", "retroCustomValue", "retroTachometer", "gForceMagnitudeBar", "tyres"].includes(root.selectedWidget.type)
                             Layout.fillWidth: true
                             FeLabel {
                                 text: qsTr("Font size")
@@ -206,37 +207,37 @@ Rectangle {
                             onEditingFinished: root.setSetting("name", text)
                         }
                         FeLabel {
-                            visible: !root.isComparisonTile
+                            visible: !root.isLapTimeTile
                             text: qsTr("Title")
                             color: Theme.onSurfaceVariant
                             font.pixelSize: 11
                         }
                         FeTextField {
-                            visible: !root.isComparisonTile
+                            visible: !root.isLapTimeTile
                             Layout.fillWidth: true
                             text: root.settings.title || ""
                             placeholderText: qsTr("Optional heading")
                             onEditingFinished: root.setSetting("title", text)
                         }
                         FeCheckBox {
-                            visible: !root.isComparisonTile
+                            visible: !root.isLapTimeTile
                             text: qsTr("Show title")
                             checked: root.settings.showTitle ?? false
                             onToggled: root.setSetting("showTitle", checked)
                         }
 
                         SectionTitle {
-                            visible: root.selectedWidget.type !== "brandLogo" && !root.isComparisonTile && root.selectedWidget.type !== "designed"
+                            visible: !root.isLapTimeTile && root.selectedWidget.type !== "designed"
                             text: qsTr("Telemetry & format")
                         }
                         FeLabel {
-                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres" && root.selectedWidget.type !== "designed"
+                            visible: root.hasValueSource
                             text: qsTr("Source channel")
                             color: Theme.onSurfaceVariant
                             font.pixelSize: 11
                         }
                         FeComboBox {
-                            visible: root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "track" && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres" && root.selectedWidget.type !== "designed"
+                            visible: root.hasValueSource
                             Layout.fillWidth: true
                             model: root.channelModel()
                             currentIndex: Math.max(0, model.indexOf(root.settings.source || qsTr("Automatic")))
@@ -244,7 +245,7 @@ Rectangle {
                         }
 
                         GridLayout {
-                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres" && root.selectedWidget.type !== "designed"
+                            visible: root.hasValueSource
                             Layout.fillWidth: true
                             columns: 2
                             columnSpacing: 8
@@ -342,7 +343,7 @@ Rectangle {
                             }
                         }
                         RowLayout {
-                            visible: root.selectedWidget.type !== "track" && root.selectedWidget.type !== "pedals" && !root.isGForceWidget && root.selectedWidget.type !== "telemetryOverlay" && !root.isComparisonTile && root.selectedWidget.type !== "retroGrandPrix" && root.selectedWidget.type !== "retroNameplate" && root.selectedWidget.type !== "brandLogo" && root.selectedWidget.type !== "tyres" && root.selectedWidget.type !== "designed"
+                            visible: root.hasValueSource
                             FeCheckBox {
                                 text: qsTr("Show unit")
                                 checked: root.settings.showUnit ?? true
@@ -355,32 +356,6 @@ Rectangle {
                             }
                         }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "lapDelta" || root.selectedWidget.type === "speedDelta"
-                            Layout.fillWidth: true
-                            spacing: 6
-                            SectionTitle {
-                                text: qsTr("Comparison range")
-                            }
-                            FeLabel {
-                                text: root.selectedWidget.type === "lapDelta"
-                                    ? qsTr("Gauge range (seconds)") : qsTr("Gauge range (km/h)")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            FeSpinBox {
-                                Layout.fillWidth: true
-                                from: 1
-                                to: root.selectedWidget.type === "lapDelta" ? 60 : 300
-                                value: root.selectedWidget.type === "lapDelta"
-                                    ? Number(root.settings.deltaRangeSeconds ?? 10)
-                                    : Number(root.settings.speedDeltaRangeKmh ?? 30)
-                                onValueModified: root.setSetting(
-                                    root.selectedWidget.type === "lapDelta"
-                                        ? "deltaRangeSeconds" : "speedDeltaRangeKmh",
-                                    value)
-                            }
-                        }
 
                         ColumnLayout {
                             visible: root.selectedWidget.type === "pedals"
@@ -513,93 +488,6 @@ Rectangle {
                             }
                         }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "gForce"
-                            Layout.fillWidth: true
-                            spacing: 6
-                            FeLabel {
-                                text: qsTr("Lateral channel")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            FeComboBox {
-                                Layout.fillWidth: true
-                                model: root.channelModel()
-                                currentIndex: Math.max(0, model.indexOf(root.settings.lateralSource || qsTr("Automatic")))
-                                onActivated: root.setSetting("lateralSource", currentIndex === 0 ? "" : currentText)
-                            }
-                            FeCheckBox {
-                                text: qsTr("Invert lateral axis")
-                                checked: root.settings.invertLateral ?? false
-                                onToggled: root.setSetting("invertLateral", checked)
-                            }
-                            FeLabel {
-                                text: qsTr("Longitudinal channel")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            FeComboBox {
-                                Layout.fillWidth: true
-                                model: root.channelModel()
-                                currentIndex: Math.max(0, model.indexOf(root.settings.longitudinalSource || qsTr("Automatic")))
-                                onActivated: root.setSetting("longitudinalSource", currentIndex === 0 ? "" : currentText)
-                            }
-                            FeCheckBox {
-                                text: qsTr("Invert longitudinal axis")
-                                checked: root.settings.invertLongitudinal ?? false
-                                onToggled: root.setSetting("invertLongitudinal", checked)
-                            }
-                            GridLayout {
-                                Layout.fillWidth: true
-                                columns: 2
-                                FeLabel {
-                                    text: qsTr("G range")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.gRange ?? 2).toString()
-                                    onEditingFinished: root.setSetting("gRange", Number(text))
-                                }
-                                FeLabel {
-                                    text: qsTr("Dot size")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.dotSize ?? 12).toString()
-                                    onEditingFinished: root.setSetting("dotSize", Number(text))
-                                }
-                                FeLabel {
-                                    text: qsTr("Decimals")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeSpinBox {
-                                    from: 0
-                                    to: 6
-                                    value: Number(root.settings.decimals ?? 2)
-                                    onValueModified: root.setSetting("decimals", value)
-                                }
-                            }
-                            FeLabel {
-                                text: qsTr("Grid color")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            ColorField {
-                                Layout.fillWidth: true
-                                colorValue: root.settings.gridColor || "#566477"
-                                onEdited: value => root.setSetting("gridColor", value)
-                            }
-                            FeCheckBox {
-                                text: qsTr("Show combined G")
-                                checked: root.settings.showCombined ?? true
-                                onToggled: root.setSetting("showCombined", checked)
-                            }
-                        }
 
                         ColumnLayout {
                             visible: root.selectedWidget.type === "f1GForceRadar"
@@ -719,509 +607,9 @@ Rectangle {
                             }
                         }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "track"
-                            Layout.fillWidth: true
-                            spacing: 6
-                            FeLabel {
-                                text: qsTr("Track line")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            ColorField {
-                                Layout.fillWidth: true
-                                colorValue: root.settings.lineColor || "#55e6a5"
-                                onEdited: value => root.setSetting("lineColor", value)
-                            }
-                            FeLabel {
-                                text: qsTr("Current-position marker")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            ColorField {
-                                Layout.fillWidth: true
-                                colorValue: root.settings.markerColor || "#ffffff"
-                                onEdited: value => root.setSetting("markerColor", value)
-                            }
-                            GridLayout {
-                                Layout.fillWidth: true
-                                columns: 2
-                                FeLabel {
-                                    text: qsTr("Line width")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.lineWidth ?? 3).toString()
-                                    onEditingFinished: root.setSetting("lineWidth", Number(text))
-                                }
-                                FeLabel {
-                                    text: qsTr("Marker size")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.markerSize ?? 10).toString()
-                                    onEditingFinished: root.setSetting("markerSize", Number(text))
-                                }
-                                FeLabel {
-                                    text: qsTr("Track padding")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.trackPadding ?? 10).toString()
-                                    onEditingFinished: root.setSetting("trackPadding", Number(text))
-                                }
-                            }
-                            RowLayout {
-                                FeCheckBox {
-                                    text: qsTr("Mirror X")
-                                    checked: root.settings.mirrorX ?? false
-                                    onToggled: root.setSetting("mirrorX", checked)
-                                }
-                                FeCheckBox {
-                                    text: qsTr("Mirror Y")
-                                    checked: root.settings.mirrorY ?? false
-                                    onToggled: root.setSetting("mirrorY", checked)
-                                }
-                            }
-                        }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "arcGauge" || root.selectedWidget.type === "dialGauge"
-                            Layout.fillWidth: true
-                            spacing: 6
-                            SectionTitle {
-                                text: root.selectedWidget.type === "arcGauge" ? qsTr("Arc geometry") : qsTr("Dial geometry")
-                            }
-                            GridLayout {
-                                Layout.fillWidth: true
-                                columns: 2
-                                FeLabel {
-                                    text: qsTr("Start angle")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.startAngle ?? 150).toString()
-                                    onEditingFinished: root.setSetting("startAngle", Number(text))
-                                }
-                                FeLabel {
-                                    text: qsTr("End angle")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.endAngle ?? 390).toString()
-                                    onEditingFinished: root.setSetting("endAngle", Number(text))
-                                }
-                                FeLabel {
-                                    visible: root.selectedWidget.type === "arcGauge"
-                                    text: qsTr("Arc width")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeTextField {
-                                    visible: root.selectedWidget.type === "arcGauge"
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.arcWidth ?? 12).toString()
-                                    onEditingFinished: root.setSetting("arcWidth", Number(text))
-                                }
-                                FeLabel {
-                                    visible: root.selectedWidget.type === "dialGauge"
-                                    text: qsTr("Major ticks")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeSpinBox {
-                                    visible: root.selectedWidget.type === "dialGauge"
-                                    from: 2
-                                    to: 30
-                                    value: Number(root.settings.majorTicks ?? 8)
-                                    onValueModified: root.setSetting("majorTicks", value)
-                                }
-                                FeLabel {
-                                    visible: root.selectedWidget.type === "dialGauge"
-                                    text: qsTr("Minor ticks")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeSpinBox {
-                                    visible: root.selectedWidget.type === "dialGauge"
-                                    from: 0
-                                    to: 10
-                                    value: Number(root.settings.minorTicks ?? 4)
-                                    onValueModified: root.setSetting("minorTicks", value)
-                                }
-                            }
-                            FeLabel {
-                                visible: root.selectedWidget.type === "arcGauge"
-                                text: qsTr("Inactive track")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            ColorField {
-                                visible: root.selectedWidget.type === "arcGauge"
-                                Layout.fillWidth: true
-                                colorValue: root.settings.trackColor || "#263442"
-                                onEdited: value => root.setSetting("trackColor", value)
-                            }
-                            FeLabel {
-                                visible: root.selectedWidget.type === "dialGauge"
-                                text: qsTr("Needle color")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            ColorField {
-                                visible: root.selectedWidget.type === "dialGauge"
-                                Layout.fillWidth: true
-                                colorValue: root.settings.needleColor || "#ff5b63"
-                                onEdited: value => root.setSetting("needleColor", value)
-                            }
-                            FeLabel {
-                                visible: root.selectedWidget.type === "dialGauge"
-                                text: qsTr("Tick color")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            ColorField {
-                                visible: root.selectedWidget.type === "dialGauge"
-                                Layout.fillWidth: true
-                                colorValue: root.settings.tickColor || "#8290a0"
-                                onEdited: value => root.setSetting("tickColor", value)
-                            }
-                            RowLayout {
-                                FeCheckBox {
-                                    text: qsTr("Show value")
-                                    checked: root.settings.showValue ?? true
-                                    onToggled: root.setSetting("showValue", checked)
-                                }
-                                FeCheckBox {
-                                    visible: root.selectedWidget.type === "arcGauge"
-                                    text: qsTr("Min / max")
-                                    checked: root.settings.showMinMax ?? true
-                                    onToggled: root.setSetting("showMinMax", checked)
-                                }
-                                FeCheckBox {
-                                    visible: root.selectedWidget.type === "dialGauge"
-                                    text: qsTr("Ticks")
-                                    checked: root.settings.showTicks ?? true
-                                    onToggled: root.setSetting("showTicks", checked)
-                                }
-                            }
-                        }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "telemetryOverlay"
-                            Layout.fillWidth: true
-                            spacing: 7
-                            SectionTitle {
-                                text: qsTr("Overlay channels")
-                            }
-                            RowLayout {
-                                FeLabel {
-                                    text: qsTr("Columns")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
-                                }
-                                FeSpinBox {
-                                    from: 1
-                                    to: 4
-                                    value: Number(root.settings.columns ?? 4)
-                                    onValueModified: root.setSetting("columns", value)
-                                }
-                                FeCheckBox {
-                                    text: qsTr("Separators")
-                                    checked: root.settings.showSeparators ?? true
-                                    onToggled: root.setSetting("showSeparators", checked)
-                                }
-                            }
-                            FeLabel {
-                                text: qsTr("Separator color")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            ColorField {
-                                Layout.fillWidth: true
-                                colorValue: root.settings.separatorColor || "#314052"
-                                onEdited: value => root.setSetting("separatorColor", value)
-                            }
-                            Repeater {
-                                model: 4
-                                Rectangle {
-                                    required property int index
-                                    Layout.fillWidth: true
-                                    implicitHeight: slotLayout.implicitHeight + 18
-                                    radius: Theme.radius
-                                    color: Theme.surfaceContainer
-                                    border.color: "transparent"
-                                    property int slot: index + 1
-                                    ColumnLayout {
-                                        id: slotLayout
-                                        anchors.fill: parent
-                                        anchors.margins: 9
-                                        spacing: 5
-                                        FeLabel {
-                                            text: qsTr("CHANNEL %1").arg(parent.parent.slot)
-                                            color: Theme.primary
-                                            font.pixelSize: 9
-                                            font.weight: Font.DemiBold
-                                        }
-                                        FeComboBox {
-                                            Layout.fillWidth: true
-                                            model: root.channelModel()
-                                            currentIndex: Math.max(0, model.indexOf(root.settings["source" + parent.parent.slot] || qsTr("Automatic")))
-                                            onActivated: root.setSetting("source" + parent.parent.slot, currentIndex === 0 ? "" : currentText)
-                                        }
-                                        GridLayout {
-                                            Layout.fillWidth: true
-                                            columns: 2
-                                            FeLabel {
-                                                text: qsTr("Label")
-                                                color: Theme.onSurfaceVariant
-                                                font.pixelSize: 10
-                                            }
-                                            FeTextField {
-                                                Layout.fillWidth: true
-                                                text: root.settings["label" + parent.parent.parent.slot] || ""
-                                                onEditingFinished: root.setSetting("label" + parent.parent.parent.slot, text)
-                                            }
-                                            FeLabel {
-                                                text: qsTr("Unit")
-                                                color: Theme.onSurfaceVariant
-                                                font.pixelSize: 10
-                                            }
-                                            FeTextField {
-                                                Layout.fillWidth: true
-                                                text: root.settings["unit" + parent.parent.parent.slot] || ""
-                                                onEditingFinished: root.setSetting("unit" + parent.parent.parent.slot, text)
-                                            }
-                                            FeLabel {
-                                                text: qsTr("Decimals")
-                                                color: Theme.onSurfaceVariant
-                                                font.pixelSize: 10
-                                            }
-                                            FeSpinBox {
-                                                from: 0
-                                                to: 6
-                                                value: Number(root.settings["decimals" + parent.parent.parent.slot] ?? 0)
-                                                onValueModified: root.setSetting("decimals" + parent.parent.parent.slot, value)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "retroGrandPrix"
-                            Layout.fillWidth: true
-                            spacing: 7
-                            SectionTitle {
-                                text: qsTr("2000s onboard channels")
-                            }
-                            Repeater {
-                                model: [
-                                    {
-                                        "key": "rpmSource",
-                                        "label": qsTr("RPM")
-                                    },
-                                    {
-                                        "key": "speedSource",
-                                        "label": qsTr("Speed")
-                                    },
-                                    {
-                                        "key": "gearSource",
-                                        "label": qsTr("Gear")
-                                    },
-                                    {
-                                        "key": "throttleSource",
-                                        "label": qsTr("Throttle")
-                                    },
-                                    {
-                                        "key": "brakeSource",
-                                        "label": qsTr("Brake")
-                                    },
-                                    {
-                                        "key": "timingSource",
-                                        "label": qsTr("Timing value (optional)")
-                                    }
-                                ]
-                                ColumnLayout {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    spacing: 3
-                                    FeLabel {
-                                        text: modelData.label
-                                        color: Theme.onSurfaceVariant
-                                        font.pixelSize: 10
-                                    }
-                                    FeComboBox {
-                                        Layout.fillWidth: true
-                                        model: root.channelModel()
-                                        currentIndex: Math.max(0, model.indexOf(root.settings[modelData.key] || qsTr("Automatic")))
-                                        onActivated: root.setSetting(modelData.key, currentIndex === 0 ? "" : currentText)
-                                    }
-                                }
-                            }
-                            SectionTitle {
-                                text: qsTr("Names & scale")
-                            }
-                            GridLayout {
-                                Layout.fillWidth: true
-                                columns: 2
-                                columnSpacing: 8
-                                rowSpacing: 6
-                                FeLabel {
-                                    text: qsTr("Driver name")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 10
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: root.settings.driverName || ""
-                                    onEditingFinished: root.setSetting("driverName", text)
-                                }
-                                FeLabel {
-                                    text: qsTr("Fallback timing")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 10
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: root.settings.timingText || ""
-                                    onEditingFinished: root.setSetting("timingText", text)
-                                }
-                                FeLabel {
-                                    text: qsTr("Gear label")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 10
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: root.settings.gearLabel || "Gear"
-                                    onEditingFinished: root.setSetting("gearLabel", text)
-                                }
-                                FeLabel {
-                                    text: qsTr("Throttle label")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 10
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: root.settings.throttleLabel || "Throttle"
-                                    onEditingFinished: root.setSetting("throttleLabel", text)
-                                }
-                                FeLabel {
-                                    text: qsTr("Brake label")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 10
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: root.settings.brakeLabel || "Brake"
-                                    onEditingFinished: root.setSetting("brakeLabel", text)
-                                }
-                                FeLabel {
-                                    text: qsTr("RPM minimum")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 10
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.rpmMin ?? 0).toString()
-                                    onEditingFinished: root.setSetting("rpmMin", Number(text))
-                                }
-                                FeLabel {
-                                    text: qsTr("RPM maximum")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 10
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.rpmMax ?? 8000).toString()
-                                    onEditingFinished: root.setSetting("rpmMax", Number(text))
-                                }
-                                FeLabel {
-                                    text: qsTr("Speed maximum")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 10
-                                }
-                                FeTextField {
-                                    Layout.fillWidth: true
-                                    text: Number(root.settings.speedMax ?? 360).toString()
-                                    onEditingFinished: root.setSetting("speedMax", Number(text))
-                                }
-                            }
-                            SectionTitle {
-                                text: qsTr("Period colors")
-                            }
-                            Repeater {
-                                model: [
-                                    {
-                                        "key": "dialColor",
-                                        "label": qsTr("Dial & text"),
-                                        "fallback": "#f4f4f4"
-                                    },
-                                    {
-                                        "key": "needleColor",
-                                        "label": qsTr("Needle"),
-                                        "fallback": "#d73737"
-                                    },
-                                    {
-                                        "key": "throttleColor",
-                                        "label": qsTr("Throttle"),
-                                        "fallback": "#00c839"
-                                    },
-                                    {
-                                        "key": "brakeColor",
-                                        "label": qsTr("Brake idle"),
-                                        "fallback": "#575244"
-                                    },
-                                    {
-                                        "key": "brakeActiveColor",
-                                        "label": qsTr("Brake active"),
-                                        "fallback": "#d23737"
-                                    },
-                                    {
-                                        "key": "speedLowColor",
-                                        "label": qsTr("Speed low"),
-                                        "fallback": "#00bd31"
-                                    },
-                                    {
-                                        "key": "speedMidColor",
-                                        "label": qsTr("Speed middle"),
-                                        "fallback": "#f2e920"
-                                    },
-                                    {
-                                        "key": "speedHighColor",
-                                        "label": qsTr("Speed high"),
-                                        "fallback": "#ff9124"
-                                    }
-                                ]
-                                ColumnLayout {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    spacing: 3
-                                    FeLabel {
-                                        text: modelData.label
-                                        color: Theme.onSurfaceVariant
-                                        font.pixelSize: 10
-                                    }
-                                    ColorField {
-                                        Layout.fillWidth: true
-                                        colorValue: root.settings[modelData.key] || modelData.fallback
-                                        onEdited: value => root.setSetting(modelData.key, value)
-                                    }
-                                }
-                            }
-                        }
 
                         ColumnLayout {
                             visible: root.selectedWidget.type === "retroTachometer"
@@ -1274,44 +662,6 @@ Rectangle {
                             }
                         }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "retroGear"
-                            Layout.fillWidth: true
-                            spacing: 7
-                            SectionTitle {
-                                text: qsTr("Gear display")
-                            }
-                            FeLabel {
-                                text: qsTr("Text when channel is unavailable")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
-                            }
-                            FeTextField {
-                                Layout.fillWidth: true
-                                text: root.settings.fallbackText || "—"
-                                onEditingFinished: root.setSetting("fallbackText", text)
-                            }
-                            FeLabel {
-                                text: qsTr("Panel color")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
-                            }
-                            ColorField {
-                                Layout.fillWidth: true
-                                colorValue: root.settings.panelColor || "#f4f4f4"
-                                onEdited: value => root.setSetting("panelColor", value)
-                            }
-                            FeLabel {
-                                text: qsTr("Value color")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
-                            }
-                            ColorField {
-                                Layout.fillWidth: true
-                                colorValue: root.settings.valueColor || "#111111"
-                                onEdited: value => root.setSetting("valueColor", value)
-                            }
-                        }
 
                         ColumnLayout {
                             visible: root.selectedWidget.type === "retroCustomValue"
@@ -1362,201 +712,9 @@ Rectangle {
                             }
                         }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "retroPedal"
-                            Layout.fillWidth: true
-                            spacing: 7
-                            SectionTitle {
-                                text: qsTr("Pedal bar")
-                            }
-                            FeCheckBox {
-                                text: qsTr("Show percentage")
-                                checked: root.settings.showValue ?? false
-                                onToggled: root.setSetting("showValue", checked)
-                            }
-                            FeLabel {
-                                text: qsTr("Fill color")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
-                            }
-                            ColorField {
-                                Layout.fillWidth: true
-                                colorValue: root.settings.fillColor || "#00c839"
-                                onEdited: value => root.setSetting("fillColor", value)
-                            }
-                            FeLabel {
-                                text: qsTr("Empty color")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
-                            }
-                            ColorField {
-                                Layout.fillWidth: true
-                                colorValue: root.settings.emptyColor || "#3d433c"
-                                onEdited: value => root.setSetting("emptyColor", value)
-                            }
-                        }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "retroSpeedArc"
-                            Layout.fillWidth: true
-                            spacing: 7
-                            SectionTitle {
-                                text: qsTr("Segmented speed arc")
-                            }
-                            RowLayout {
-                                FeLabel {
-                                    text: qsTr("Segments")
-                                    color: Theme.onSurfaceVariant
-                                    font.pixelSize: 10
-                                }
-                                FeSpinBox {
-                                    from: 5
-                                    to: 40
-                                    value: Number(root.settings.segments ?? 19)
-                                    onValueModified: root.setSetting("segments", value)
-                                }
-                            }
-                            Repeater {
-                                model: [
-                                    {
-                                        "key": "lowColor",
-                                        "label": qsTr("Low"),
-                                        "fallback": "#00bd31"
-                                    },
-                                    {
-                                        "key": "midColor",
-                                        "label": qsTr("Middle"),
-                                        "fallback": "#f2e920"
-                                    },
-                                    {
-                                        "key": "highColor",
-                                        "label": qsTr("High"),
-                                        "fallback": "#ff9124"
-                                    },
-                                    {
-                                        "key": "emptyColor",
-                                        "label": qsTr("Empty"),
-                                        "fallback": "#d8d8d8"
-                                    }
-                                ]
-                                ColumnLayout {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    FeLabel {
-                                        text: modelData.label
-                                        color: Theme.onSurfaceVariant
-                                        font.pixelSize: 10
-                                    }
-                                    ColorField {
-                                        Layout.fillWidth: true
-                                        colorValue: root.settings[modelData.key] || modelData.fallback
-                                        onEdited: value => root.setSetting(modelData.key, value)
-                                    }
-                                }
-                            }
-                        }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "retroNameplate"
-                            Layout.fillWidth: true
-                            spacing: 7
-                            SectionTitle {
-                                text: qsTr("Nameplate fields")
-                            }
-                            Repeater {
-                                model: [
-                                    {
-                                        "source": "topSource",
-                                        "text": "topText",
-                                        "decimals": "topDecimals",
-                                        "label": qsTr("Top field")
-                                    },
-                                    {
-                                        "source": "bottomSource",
-                                        "text": "bottomText",
-                                        "decimals": "bottomDecimals",
-                                        "label": qsTr("Bottom field")
-                                    }
-                                ]
-                                Rectangle {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    implicitHeight: nameplateField.implicitHeight + 16
-                                    radius: Theme.radius
-                                    color: Theme.surfaceContainer
-                                    ColumnLayout {
-                                        id: nameplateField
-                                        anchors.fill: parent
-                                        anchors.margins: 8
-                                        FeLabel {
-                                            text: modelData.label
-                                            color: Theme.primary
-                                            font.pixelSize: 10
-                                        }
-                                        FeComboBox {
-                                            Layout.fillWidth: true
-                                            model: root.channelModel()
-                                            currentIndex: Math.max(0, model.indexOf(root.settings[modelData.source] || qsTr("Automatic")))
-                                            onActivated: root.setSetting(modelData.source, currentIndex === 0 ? "" : currentText)
-                                        }
-                                        FeTextField {
-                                            Layout.fillWidth: true
-                                            placeholderText: qsTr("Fallback text")
-                                            text: root.settings[modelData.text] || ""
-                                            onEditingFinished: root.setSetting(modelData.text, text)
-                                        }
-                                        RowLayout {
-                                            FeLabel {
-                                                text: qsTr("Decimals")
-                                                color: Theme.onSurfaceVariant
-                                                font.pixelSize: 10
-                                            }
-                                            FeSpinBox {
-                                                from: 0
-                                                to: 6
-                                                value: Number(root.settings[modelData.decimals] ?? 0)
-                                                onValueModified: root.setSetting(modelData.decimals, value)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
 
-                        ColumnLayout {
-                            visible: root.selectedWidget.type === "brandLogo"
-                            Layout.fillWidth: true
-                            spacing: 7
-                            SectionTitle {
-                                text: qsTr("Logo")
-                            }
-                            FeLabel {
-                                text: qsTr("Logo opacity  %1%").arg((Number(root.settings.logoOpacity ?? 0.85) * 100).toFixed(0))
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            FeSlider {
-                                Layout.fillWidth: true
-                                from: 0
-                                to: 1
-                                stepSize: 0.01
-                                value: Number(root.settings.logoOpacity ?? 0.85)
-                                onMoved: root.setSetting("logoOpacity", value)
-                            }
-                            FeLabel {
-                                text: qsTr("Logo scale  %1%").arg((Number(root.settings.logoScale ?? 1) * 100).toFixed(0))
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            FeSlider {
-                                Layout.fillWidth: true
-                                from: 0.1
-                                to: 1
-                                stepSize: 0.01
-                                value: Number(root.settings.logoScale ?? 1)
-                                onMoved: root.setSetting("logoScale", value)
-                            }
-                        }
 
                         SectionTitle {
                             text: qsTr("Geometry")
@@ -1831,28 +989,9 @@ Rectangle {
                             checked: root.settings.showGauge ?? true
                             onToggled: root.setSetting("showGauge", checked)
                         }
-                        FeCheckBox {
-                            visible: root.selectedWidget.type === "rpm"
-                            text: qsTr("Show RPM bar")
-                            checked: root.settings.showBar ?? true
-                            onToggled: root.setSetting("showBar", checked)
-                        }
-                        RowLayout {
-                            visible: root.selectedWidget.type === "rpm"
-                            FeLabel {
-                                text: qsTr("Warning RPM")
-                                color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
-                            }
-                            FeTextField {
-                                Layout.fillWidth: true
-                                text: Number(root.settings.warningValue ?? 6500).toString()
-                                onEditingFinished: root.setSetting("warningValue", Number(text))
-                            }
-                        }
                         // Lap time precision: tenths, hundredths or thousandths.
                         RowLayout {
-                            visible: root.selectedWidget.type === "lapCurrent" || root.selectedWidget.type === "lapBest"
+                            visible: root.selectedWidget.type === "lapCurrent"
                             FeLabel {
                                 text: qsTr("Lap time decimals")
                                 color: Theme.onSurfaceVariant

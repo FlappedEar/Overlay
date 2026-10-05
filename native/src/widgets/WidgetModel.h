@@ -62,6 +62,8 @@ public:
     [[nodiscard]] QVariantList libraryWidgets() const;
     [[nodiscard]] QString libraryError() const { return m_libraryError; }
     [[nodiscard]] const WidgetData *widgetAt(int index) const;
+    // Widgets of retired types (KAN-192) the last fromJson() left out.
+    [[nodiscard]] int retiredWidgetsDropped() const { return m_retiredWidgetsDropped; }
 
     Q_INVOKABLE int addWidget(const QString &type);
     Q_INVOKABLE void removeWidget(int index);
@@ -134,6 +136,7 @@ private:
     bool m_libraryWritable = false;
     bool m_templateStoreWritable = false;
     int m_revision = 0;
+    int m_retiredWidgetsDropped = 0;
 };
 
 } // namespace FlappedEar

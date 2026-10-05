@@ -47,6 +47,12 @@ that check over this file.
   tests, `AnalysisController` from `AppController`, and day import (KAN-186);
   step 7 cleans up. Overlays opens days saved by Telemetry and keeps every
   analysis field. Both apps keep one `.fetproject` format (KAN-170).
+- **Widget list reduced (owner decision, 5 October 2026, KAN-192):** only the
+  widgets of the owner's track video stay (Speed, Heart rate, Pedals, F1 G-Force
+  Radar, G-Force Bar, Retro Custom, Current lap time, Retro RPM), plus Tyres and
+  designed widgets. Eighteen types and nine built-in templates were removed;
+  saved documents holding them open without those widgets. Motorsport Broadcast
+  HUD is the only built-in template and the default scene.
 - `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
   `docs/product-delivery.md` and Jira are the only status records.
 

@@ -686,10 +686,10 @@ int main(int argc, char *argv[])
             FlappedEar::WidgetModel *widgets = controller.widgetModel();
             widgets->addWidget(QStringLiteral("f1GForceRadar"));
             widgets->addWidget(QStringLiteral("gForceMagnitudeBar"));
-            const int automaticGear = widgets->addWidget(QStringLiteral("retroGear"));
-            const int explicitGear = widgets->addWidget(QStringLiteral("retroGear"));
-            widgets->setSetting(automaticGear, QStringLiteral("fontSize"), 0);
-            widgets->setSetting(explicitGear, QStringLiteral("fontSize"), 42);
+            const int automaticValue = widgets->addWidget(QStringLiteral("retroCustomValue"));
+            const int explicitValue = widgets->addWidget(QStringLiteral("retroCustomValue"));
+            widgets->setSetting(automaticValue, QStringLiteral("fontSize"), 0);
+            widgets->setSetting(explicitValue, QStringLiteral("fontSize"), 42);
         }
         // KAN-166 step 2: Overlays no longer creates track segments on its own
         // (KAN-136 moved to FlappedEar Telemetry); segments saved by Telemetry
