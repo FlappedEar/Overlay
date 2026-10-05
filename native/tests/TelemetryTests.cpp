@@ -5270,13 +5270,16 @@ void TelemetryTests::opensProjectsTransactionally()
     QSettings settings;
     settings.clear();
     settings.sync();
-    AppController controller;
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    // Its own recovery file: a snapshot an earlier test left in the shared
+    // default would hold Open behind "Recover unsaved changes?".
+    AppController controller(nullptr, directory.filePath(QStringLiteral("recovery.json")));
+    QVERIFY(!controller.recoveryPending());
     controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
     QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
     QVERIFY(controller.dirty());
 
-    QTemporaryDir directory;
-    QVERIFY(directory.isValid());
     const QJsonObject scene{{"widgets", controller.widgetModel()->toJson()}};
     const QJsonObject failedProject{{"version", 2},
                                     {"scene", scene},
