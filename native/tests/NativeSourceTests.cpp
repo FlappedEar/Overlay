@@ -76,6 +76,7 @@ private slots:
     void cancelsSynchronizationDeterministically();
     void reportsAmbiguousGpsSpeed();
     void retainsGlobalSyncAmbiguity();
+    void countsANearbyFalseSyncPeak();
     void rejectsAutomaticSyncWithShortOverlap();
     void synchronizesWhenTheRecordingsOnlyPartlyOverlap();
     void neverAutoAppliesAnotherLapOfPeriodicLaps();
@@ -2380,6 +2381,47 @@ void SourceTests::retainsGlobalSyncAmbiguity()
     QVERIFY(candidate.diagnostics.peakUniqueness < 0.01);
     QVERIFY(candidate.confidence < kAutomaticSyncConfidenceThreshold);
     QVERIFY(!shouldAutoApplySyncCandidate(candidate));
+}
+
+void SourceTests::countsANearbyFalseSyncPeak()
+{
+    // KAN-214: the telemetry speed holds the video's trace twice, 3 s apart
+    // (an echo of equal strength), so offsets 100 s and 103 s match about
+    // equally. Only offsets at least 5 s away used to count as competitors.
+    const auto knot = [](double second) {
+        const double hashed = std::sin(second * 12.9898 + 78.233) * 43758.5453;
+        return 40.0 + 120.0 * (hashed - std::floor(hashed));
+    };
+    const auto world = [&](double time) {
+        const double base = std::floor(time), fraction = time - base;
+        return knot(base) + (knot(base + 1.0) - knot(base)) * fraction;
+    };
+    const auto session = [](const auto &value, double from, double to) {
+        TelemetrySession result;
+        TelemetryChannel speed;
+        speed.name = QStringLiteral("speed");
+        for (double time = from; time <= to + 1e-9; time += 0.2) {
+            speed.timestamps.append(time);
+            speed.values.append(static_cast<float>(value(time)));
+        }
+        result.channels.insert(speed.name, speed);
+        result.aliases.insert(QStringLiteral("speed"), speed.name);
+        return result;
+    };
+    const auto video = session(world, 0.0, 300.0);
+    const auto echoed = session([&](double time) { return world(time - 100.0) + world(time - 103.0); }, 50.0, 450.0);
+    const auto candidate = TelemetrySyncEngine::synchronize(video, echoed);
+    QVERIFY2(qAbs(candidate.offset - 100.0) <= 0.11 || qAbs(candidate.offset - 103.0) <= 0.11,
+             qPrintable(QString::number(candidate.offset)));
+    QVERIFY2(candidate.diagnostics.peakUniqueness < 0.2,
+             qPrintable(QString::number(candidate.diagnostics.peakUniqueness)));
+    QVERIFY(!shouldAutoApplySyncCandidate(candidate));
+
+    // Without the echo the same trace is unique and applied automatically.
+    const auto clean = TelemetrySyncEngine::synchronize(video, session([&](double time) { return world(time - 100.0); }, 50.0, 450.0));
+    QVERIFY(qAbs(clean.offset - 100.0) <= 0.11);
+    QVERIFY2(clean.diagnostics.peakUniqueness > 0.9, qPrintable(QString::number(clean.diagnostics.peakUniqueness)));
+    QVERIFY(shouldAutoApplySyncCandidate(clean));
 }
 
 void SourceTests::rejectsAutomaticSyncWithShortOverlap()

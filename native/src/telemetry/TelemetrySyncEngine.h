@@ -17,6 +17,8 @@ struct SyncDiagnostics {
 
 struct SyncCandidate {
     double offset = 0.0;
+    // Always 1.0 from synchronize(): it solves the offset only, assuming both
+    // clocks run at the same rate (a documented limitation, KAN-214).
     double timeScale = 1.0;
     double confidence = 0.0;
     QString strategy = QStringLiteral("GPS speed");

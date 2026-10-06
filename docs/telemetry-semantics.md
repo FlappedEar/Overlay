@@ -276,7 +276,8 @@ checked during validation, each offset, sampling and correlation.
 - **Ranking.** Offsets with less than 20 s of overlap are ranked only when no offset has that much. A near-perfect correlation over a few samples is accidental.
 - **Global choice.** The coarse search ranks offsets by the evidence for the match: Fisher z of the correlation times the square root of the sample count minus 3. A strong match over a long overlap beats a perfect one over a short stretch.
 - **Refinement.** The ±5 s refinement at 10 Hz ranks by correlation alone, because its overlap is nearly constant.
-- **Uniqueness.** It compares the best offset with the strongest offset at least 5 s away, anywhere in that full range. Laps a whole lap apart therefore make a periodic result ambiguous rather than automatic.
+- **Uniqueness.** It compares the best offset with the strongest competing offset anywhere in that full range: any offset at least 5 s away, or a nearer separate peak, where the correlation dips by at least 0.1 between it and the best (KAN-214). The best peak's own shoulders do not compete. Laps a whole lap apart, or a false peak 2 to 4 s away, therefore make the result ambiguous rather than automatic.
+- **Time scale.** Automatic synchronization solves the offset only; the candidate's time scale is always 1.
 - **Correlation floor.** A candidate is applied automatically only when the speed traces correlate at 0.8 or more.
 - **Real check (private), Jastrząb day:**
   - GoPro GX010089 with Session 5 still syncs automatically: offset 74.976 s, correlation 1.000, confidence 0.82. Before the change it was 74.953 s at 0.81. The two offsets differ by less than one 0.1 s refinement step, because the coarse grid now starts at a different fractional point.
