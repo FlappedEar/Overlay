@@ -3,6 +3,7 @@
 #include "app/PreviewPlayback.h"
 #include "export/ExportFormat.h"
 #include "export/ExportEngine.h"
+#include "export/ChapterSource.h"
 #include "export/VideoFingerprint.h"
 #include "export/ExportCancellation.h"
 #include "export/ExportMediaProfile.h"
@@ -802,10 +803,10 @@ void AppController::startVideoProbe(
                     return info.videoDuration > 0.0 ? info.videoDuration : info.duration;
                 };
                 result.chapters.append({ProjectSourceReferenceCodec::forLoadedSource(path, result.fingerprint), path,
-                    videoDuration(result.mediaInfo), true, {}});
+                    videoDuration(result.mediaInfo), true, {}, result.mediaInfo});
                 for (const auto &input : chapters) {
                     if (cancellation->load()) break;
-                    VideoChapterState chapter{input.reference, input.path, input.durationSeconds, false, {}};
+                    VideoChapterState chapter{input.reference, input.path, input.durationSeconds, false, {}, {}};
                     if (input.path.isEmpty()) {
                         chapter.problem = QStringLiteral("missing");
                     } else {
@@ -820,6 +821,7 @@ void AppController::startVideoProbe(
                                 chapter.reference = ProjectSourceReferenceCodec::forLoadedSource(input.path, fingerprint);
                                 chapter.durationSeconds = videoDuration(info);
                                 chapter.available = true;
+                                chapter.mediaInfo = info;
                             }
                         } catch (const OperationCancelled &) {
                             throw;
@@ -952,6 +954,32 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     if (gaps > 0)
         m_videoChapterNotice = tr("%n chapter(s) are missing or changed and play as a gap. Choose the recording's chapters again to fill it.",
                                   nullptr, gaps);
+    // KAN-106: export reads every chapter as one source, so its frame domain
+    // and timecodes cover the whole timeline. A gap cannot be exported.
+    m_exportChapterPaths.clear();
+    m_exportChapterProblem.clear();
+    if (videoChaptered()) {
+        if (gaps > 0) {
+            m_exportChapterProblem = tr("Some chapters of this recording are missing or changed. "
+                                        "Choose the recording's chapters again before exporting.");
+        } else {
+            QVector<MediaInfo> chapters;
+            QStringList paths;
+            for (const auto &chapter : m_videoChapterStates) {
+                chapters.append(chapter.mediaInfo);
+                paths.append(chapter.path);
+            }
+            const auto combination = ChapterSource::combine(chapters);
+            if (combination.info) {
+                m_exportSourceInfo = *combination.info;
+                m_exportChapterPaths = paths;
+            } else {
+                m_exportChapterProblem = combination.error;
+            }
+        }
+        if (!m_exportChapterProblem.isEmpty())
+            AppLog::warn(QStringLiteral("Chaptered video cannot be exported: %1").arg(m_exportChapterProblem));
+    }
     emit videoChaptersChanged();
     m_videoLoadState = QStringLiteral("ready");
     m_pendingVideoPath.clear();
@@ -1385,11 +1413,11 @@ bool AppController::startExport(
         emit exportChanged();
         return false;
     }
-    if (videoChaptered()) {
-        // KAN-105: exporting across chapter files is KAN-106. Never export
-        // the first chapter alone as if it were the whole recording.
-        m_exportError = QStringLiteral("Exporting a video made of several chapters is not available yet. "
-                                       "Open a single video file to export.");
+    if (videoChaptered() && m_exportChapterPaths.isEmpty()) {
+        // KAN-106: never export the first chapter alone as if it were the
+        // whole recording.
+        m_exportError = m_exportChapterProblem.isEmpty()
+            ? QStringLiteral("The chapters of this recording cannot be exported together.") : m_exportChapterProblem;
         m_exportState = QStringLiteral("failed");
         AppLog::error(QStringLiteral("Export failed: %1").arg(m_exportError));
         emit exportChanged();
@@ -1453,6 +1481,7 @@ bool AppController::startExport(
     }
     m_exportOutputTransaction = std::make_unique<ExportOutputTransaction>();
     QStringList protectedPaths{m_telemetryPath};
+    protectedPaths += m_exportChapterPaths; // every chapter is a source (KAN-106)
     if (EventProjectCodec::isEvent(m_document.storedProject())) {
         protectedPaths.append(m_document.documentPath());
         protectedPaths.append(EventProjectCodec::referencedPaths(currentProjectObject(), m_document.documentPath()));
@@ -1509,8 +1538,13 @@ bool AppController::startExport(
     m_exportSupervisionReadyPath = m_exportConfig->fileName() + QStringLiteral(".supervision-ready");
     QFile::remove(m_exportCancelPath);
     QFile::remove(m_exportSupervisionReadyPath);
+    QJsonArray chapterDurationTicks;
+    if (!m_exportChapterPaths.isEmpty())
+        for (const auto &chapter : m_videoChapterStates) chapterDurationTicks.append(chapter.mediaInfo.videoDurationTicks);
     const QJsonObject config = {
         {"inputPath", inputPath},
+        {"chapterPaths", QJsonArray::fromStringList(m_exportChapterPaths)},
+        {"chapterDurationTicks", chapterDurationTicks},
         {"outputPath", m_exportOutputTransaction->stagingPath()},
         {"vboPath", m_telemetryPath},
         {"lapBinding", activeLapBinding()},
