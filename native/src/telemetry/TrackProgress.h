@@ -96,7 +96,7 @@ struct ProjectedSample {
     double speedMetersPerSecond, const QPointF &movementDirection, ProjectionContext &context);
 
 struct ProgressSegment {
-    QVector<ProjectedSample> samples; // strictly increasing telemetryTime and progressMeters
+    QVector<ProjectedSample> samples; // strictly increasing telemetryTime, non-decreasing progressMeters
 };
 
 // Projects every valid latitude/longitude sample of the session in
@@ -107,9 +107,9 @@ struct ProgressSegment {
 //
 // Progress is unwrapped within the lap (KAN-152): a fix taken just after the
 // lap's timed start that projects just before progress 0 is stored as a small
-// negative value, and fixes past the finish continue beyond lengthMeters, so
-// progress rises strictly within each segment. A sample that does not move
-// forward within its segment is left out.
+// negative value, and fixes past the finish continue beyond lengthMeters. A
+// fix projecting slightly behind the previous one in its segment is held at
+// the previous progress, so progress never falls within a segment.
 [[nodiscard]] QVector<ProgressSegment> projectLapTrace(
     const ProgressAxis &axis, const TelemetrySession &session, double startTime, double endTime,
     const CancellationCheck &cancelled = {});

@@ -173,7 +173,7 @@ with the route fixture's gate turned 45 degrees, its midpoint about 10 m off
 the line. `anchorsProgressZeroWhereTheGateCrossesTheAxis` checks progress 0 is
 where the reference lap crosses the gate (it was 6 m away, at the point nearest
 the midpoint). `obliqueOffLineGateKeepsEveryLapsSectors` checks every lap's
-progress rises strictly and all four quarter sectors are timed, summing to the
+progress never falls and all four quarter sectors are timed, summing to the
 lap time. `unwrapsAFirstFixJustBeforeTheGate` checks a lap's first fix just
 before progress 0 is stored as a small negative value, so the gate crossing is
 interpolated. `deltaAtTheFinishEqualsTheLapTimeDifference` checks the timed

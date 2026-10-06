@@ -426,10 +426,12 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
                 progress += std::ceil((*lastProgress - backwardToleranceMeters - progress) / axis.lengthMeters)
                     * axis.lengthMeters;
             }
-            // Not forward within this segment: kept out so its progress rises
-            // strictly. A segment after a gap may start a little behind the
-            // last one, as before.
-            if (!current.samples.isEmpty() && progress <= current.samples.last().progressMeters) continue;
+            // A fix projecting up to the backward tolerance behind the last one
+            // in this segment (GPS jitter, often while stopped) is held at the
+            // last progress, so progress never falls within a segment and the
+            // segment still covers the fix's time. A segment after a gap may
+            // start a little behind the last one, as before.
+            if (!current.samples.isEmpty()) progress = std::max(progress, current.samples.last().progressMeters);
             lastProgress = progress;
             current.samples.append(projectedSample);
         }

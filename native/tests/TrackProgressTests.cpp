@@ -407,8 +407,8 @@ void TrackProgressTests::obliqueOffLineGateKeepsEveryLapsSectors()
         QVERIFY(!trace.isEmpty());
         for (const auto &segment : trace)
             for (qsizetype i = 1; i < segment.samples.size(); ++i)
-                QVERIFY2(segment.samples[i].progressMeters > segment.samples[i - 1].progressMeters,
-                    "progress must increase strictly within a lap, across the gate too");
+                QVERIFY2(segment.samples[i].progressMeters >= segment.samples[i - 1].progressMeters,
+                    "progress must never fall within a segment, across the gate too");
         const auto times = computeLapSectorTimes(approved, fixture.axis.lengthMeters, trace,
             lap.startTelemetryTime, lap.endTelemetryTime, {});
         QVERIFY(times.valid);
