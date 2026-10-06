@@ -21,13 +21,15 @@ struct GateCrossing {
     QPointF point;
 };
 
-// Where a closed path (last point == first) crosses the gate segment [a, b]:
-// the crossing nearest the gate midpoint when there are several, or none.
+// Where a closed path (last point == first) crosses the gate segment [a, b],
+// or none. When it crosses several times (a long gate over the start straight
+// and a return road), the crossing nearest the lap's first point is the one
+// the lap was timed at (KAN-212).
 GateCrossing gateCrossing(const QVector<QPointF> &closed, const QPointF &a, const QPointF &b)
 {
     GateCrossing result;
     const QPointF gate = b - a;
-    const QPointF midpoint = (a + b) / 2.0;
+    const QPointF lapStart = closed.first();
     double bestDistance = std::numeric_limits<double>::infinity();
     for (qsizetype i = 0; i + 1 < closed.size(); ++i) {
         const QPointF edge = closed[i + 1] - closed[i];
@@ -38,13 +40,23 @@ GateCrossing gateCrossing(const QVector<QPointF> &closed, const QPointF &a, cons
         const double alongGate = cross(offset, edge) / denominator;
         if (alongEdge < 0.0 || alongEdge >= 1.0 || alongGate < 0.0 || alongGate > 1.0) continue;
         const QPointF point = closed[i] + edge * alongEdge;
-        const double distance = pointDistance(point, midpoint);
+        const double distance = pointDistance(point, lapStart);
         if (distance < bestDistance) {
             bestDistance = distance;
             result = {i, point};
         }
     }
     return result;
+}
+
+double distanceToSegment(const QPointF &point, const QPointF &a, const QPointF &b)
+{
+    const QPointF segment = b - a;
+    const double lengthSquared = segment.x() * segment.x() + segment.y() * segment.y();
+    const double along = lengthSquared > 0.0
+        ? std::clamp(((point.x() - a.x()) * segment.x() + (point.y() - a.y()) * segment.y()) / lengthSquared, 0.0, 1.0)
+        : 0.0;
+    return pointDistance(point, a + segment * along);
 }
 
 // Resamples an ordered point sequence into `count` points evenly spaced by
@@ -234,8 +246,20 @@ ProgressAxis buildProgressAxis(
         rotated = resampleByArcLength(restarted, pointCount);
         if (rotated.size() != pointCount) return axis;
     } else {
-        // The path never crosses the gate's segment: rotate so index 0 is
-        // the resampled point nearest the gate midpoint.
+        // The path never crosses the gate's segment. A gate that misses the
+        // path by GPS noise is still this lap's line; one farther away is on
+        // another road or misplaced, and gives no axis (KAN-212).
+        const QPointF a(gateA.eastMeters, gateA.northMeters);
+        const QPointF b(gateB.eastMeters, gateB.northMeters);
+        double gateDistance = std::numeric_limits<double>::infinity();
+        for (const QPointF &point : std::as_const(points))
+            gateDistance = std::min(gateDistance, distanceToSegment(point, a, b));
+        if (!(gateDistance <= gateCoverageToleranceMeters)) {
+            axis.problem = QStringLiteral("The start/finish line does not cross the lap's path; it is %1 m away.")
+                               .arg(gateDistance, 0, 'f', 0);
+            return axis;
+        }
+        // Rotate so index 0 is the resampled point nearest the gate midpoint.
         const QVector<QPointF> resampled = resampleByArcLength(points, pointCount);
         if (resampled.size() != pointCount) return axis;
         const GeoCoordinate gateMidpoint{

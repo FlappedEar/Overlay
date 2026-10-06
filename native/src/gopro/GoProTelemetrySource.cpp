@@ -9,6 +9,7 @@
 #include <QJsonObject>
 #include <QElapsedTimer>
 #include <QProcess>
+#include <QSet>
 #include <QtEndian>
 #include <algorithm>
 #include <cmath>
@@ -33,6 +34,8 @@ struct GpsSample {
     float latitude = 0.0F;
     float longitude = 0.0F;
     float speedKmh = 0.0F;
+    int fix = 0;
+    qsizetype packet = 0;
 };
 
 struct ProbePacket {
@@ -46,6 +49,8 @@ struct DecodeState {
     qsizetype recordCount = 0;
     qsizetype packetIndex = 0;
     CancellationCheck cancelled;
+    // GPS5 samples dropped because their stream had no GPSF fix record.
+    qsizetype samplesWithoutFix = 0;
 };
 
 [[noreturn]] void fail(const QString &message)
@@ -225,13 +230,18 @@ void appendGpsStream(
     if (gpsIt->size != expectedSize || gpsIt->repeat <= 0 || scale.size() < dimensions) {
         return;
     }
-    int gps5Fix = 3;
+    // KAN-211: a GPS5 stream without a GPSF record has unknown fix quality.
+    // Unknown is not trusted: its samples are no data.
+    int gps5Fix = 0;
     if (!isGps9) {
         const auto fixIt = std::find_if(streamRecords.cbegin(), streamRecords.cend(), [](const Record &item) {
             return item.key == "GPSF";
         });
         if (fixIt != streamRecords.cend() && fixIt->data.size() >= 4) {
             gps5Fix = signed32(fixIt->data.constData());
+        } else {
+            state.samplesWithoutFix += gpsIt->repeat;
+            return;
         }
     }
     QVector<GpsSample> &destination = isGps9 ? gps9 : gps5;
@@ -252,6 +262,8 @@ void appendGpsStream(
             static_cast<float>(latitude),
             static_cast<float>(longitude),
             static_cast<float>(speed * 3.6),
+            fix,
+            state.packetIndex,
         });
     }
 }
@@ -443,11 +455,23 @@ GoProTelemetryResult GoProTelemetrySource::decodeGpsPackets(
         state.packetIndex = packetIndex;
         visitContainers(packet.data, packet.pts, packet.duration, gps5, gps9, state, 0);
     }
-    const bool useGps9 = !gps9.isEmpty();
-    QVector<GpsSample> samples = useGps9 ? std::move(gps9) : std::move(gps5);
-    const QString streamName = useGps9 ? QStringLiteral("GPS9") : QStringLiteral("GPS5");
+    // KAN-211: GPS9 is preferred packet by packet, not for the whole file, so
+    // a sparse GPS9 stream does not discard GPS5 where GPS9 has no samples.
+    QSet<qsizetype> gps9Packets;
+    for (const GpsSample &sample : std::as_const(gps9)) gps9Packets.insert(sample.packet);
+    QVector<GpsSample> samples = std::move(gps9);
+    qsizetype gps5Used = 0;
+    for (const GpsSample &sample : std::as_const(gps5)) {
+        if (gps9Packets.contains(sample.packet)) continue;
+        samples.append(sample);
+        ++gps5Used;
+    }
+    const QString streamName = gps9Packets.isEmpty() ? QStringLiteral("GPS5")
+        : gps5Used == 0 ? QStringLiteral("GPS9") : QStringLiteral("GPS9+GPS5");
     if (samples.isEmpty()) {
-        fail("The GPMF track contains no usable GPS speed samples.");
+        fail(state.samplesWithoutFix > 0
+            ? "The GPMF track's GPS has no fix information (GPSF), so its samples are not used."
+            : "The GPMF track contains no usable GPS speed samples.");
     }
     throwIfCancelled(cancelled);
     for (qsizetype index = 0; index < samples.size(); ++index) {
@@ -456,8 +480,9 @@ GoProTelemetryResult GoProTelemetrySource::decodeGpsPackets(
             fail("The GPMF track contains invalid sample timestamps.");
         }
     }
+    // Equal timestamps: the better fix sorts first and is the one kept.
     std::stable_sort(samples.begin(), samples.end(), [](const GpsSample &left, const GpsSample &right) {
-        return left.time < right.time;
+        return left.time < right.time || (left.time == right.time && left.fix > right.fix);
     });
     const auto uniqueEnd = std::unique(samples.begin(), samples.end(), [](const GpsSample &left, const GpsSample &right) {
         return left.time == right.time;
@@ -474,6 +499,9 @@ GoProTelemetryResult GoProTelemetrySource::decodeGpsPackets(
     session.startTime = 0.0;
     session.metadata.insert("source", "GoPro GPMF");
     session.metadata.insert("gpsStream", streamName);
+    if (state.samplesWithoutFix > 0)
+        session.warnings.append(QStringLiteral("%1 GPS5 sample(s) without fix information (GPSF) were not used.")
+                                    .arg(state.samplesWithoutFix));
     session.sampleCount = samples.size();
     session.channels.insert(
         "GoPro latitude", channel("GoPro latitude", "deg", samples, [](const GpsSample &item) {

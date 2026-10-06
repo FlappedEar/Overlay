@@ -87,6 +87,7 @@ private slots:
     void cancelsVboParsingDeterministically();
     void cachesTelemetryChannelCadence();
     void readsAnUnwarmedSessionFromManyThreads();
+    void keepsEverySegmentWhenDownsampling();
     void enforcesVboResourceLimits();
     void boundsVboHeaderAndDecodedValues();
     void normalizesVboHeaderEdgeCases();
@@ -724,6 +725,39 @@ void TelemetryCoreTests::readsAnUnwarmedSessionFromManyThreads()
     QCOMPARE(speed.cadence.computations(), qsizetype(1));
 }
 
+void TelemetryCoreTests::keepsEverySegmentWhenDownsampling()
+{
+    // KAN-210: 20 one- or two-sample bursts on a 10 Hz grid, separated by
+    // missing values, competing for a small point budget.
+    TelemetryChannel channel;
+    channel.name = QStringLiteral("brake");
+    QVector<double> burstStarts;
+    for (int index = 0; index < 200; ++index) {
+        channel.timestamps.append(index / 10.0);
+        const int burst = index / 10;
+        const int offset = index % 10;
+        const bool sampled = offset == 0 || (offset == 1 && burst % 2 == 0);
+        channel.values.append(sampled ? float(burst + offset) : std::numeric_limits<float>::quiet_NaN());
+        if (offset == 0) burstStarts.append(index / 10.0);
+    }
+    TelemetrySession session;
+    session.channels.insert(channel.name, channel);
+
+    SampledSegmentsStatus status = SampledSegmentsStatus::Ok;
+    const auto everySegment = session.sampledSegments("brake", 0.0, 19.9, 10, &status);
+    QCOMPARE(status, SampledSegmentsStatus::Ok);
+    QCOMPARE(everySegment.size(), 20);
+    for (qsizetype index = 0; index < everySegment.size(); ++index)
+        QCOMPARE(everySegment[index].front().x(), burstStarts[index]);
+
+    const auto truncated = session.sampledSegments("brake", 0.0, 19.9, 4, &status);
+    QCOMPARE(status, SampledSegmentsStatus::SegmentsTruncated);
+    QCOMPARE(truncated.size(), 8);
+    QCOMPARE(truncated.front().front().x(), burstStarts.front());
+    QCOMPARE(truncated.back().front().x(), burstStarts.back());
+    for (const auto &segment : truncated) QCOMPARE(segment.size(), 1);
+}
+
 void TelemetryCoreTests::enforcesVboResourceLimits()
 {
     QTemporaryDir directory;
@@ -1241,6 +1275,24 @@ void TelemetryCoreTests::derivesDirectionalPassesAndCompleteLaps()
     const LapSession directional = detectLaps(reverseCrossing, startGate);
     QCOMPARE(directional.acceptedPasses.size(), qsizetype(1));
     QCOMPARE(directional.diagnostics.rejectedOppositeDirectionClusters, qsizetype(1));
+
+    // KAN-213: the recording starts with one wrong-way crossing (west to east,
+    // say leaving the paddock), then laps run east to west. The majority wins.
+    QVector<double> times{0.0, 1.0, 2.0, 3.0};
+    QVector<float> latitudes{northLatitude, midLatitude, midLatitude, northLatitude};
+    QVector<float> longitudes{westLongitude, westLongitude, eastLongitude, eastLongitude};
+    const auto lapChannel = laps.channels.value(QStringLiteral("latitude"));
+    for (qsizetype index = 0; index < lapChannel.timestamps.size(); ++index) {
+        times.append(lapChannel.timestamps[index] + 10.0);
+        latitudes.append(lapChannel.values[index]);
+        longitudes.append(laps.channels.value(QStringLiteral("longitude")).values[index]);
+    }
+    const LapSession majority = detectLaps(sessionFor(times, latitudes, longitudes), startGate);
+    QCOMPARE(majority.status, LapSessionStatus::Available);
+    QCOMPARE(majority.acceptedPasses.size(), qsizetype(4));
+    QCOMPARE(majority.timedLaps.size(), qsizetype(3));
+    QCOMPARE(majority.diagnostics.rejectedOppositeDirectionClusters, qsizetype(1));
+    for (const auto &pass : majority.acceptedPasses) QCOMPARE(pass.direction, detected.acceptedPasses.front().direction);
 }
 
 void TelemetryCoreTests::finalizesGatePassWhenTelemetryEndsInsideCorridor()

@@ -18,7 +18,9 @@ enum class InterpolationMode { Nearest, Previous, Linear };
 // sampledSegments() used to return the same empty result for an invalid range,
 // a missing channel, a malformed channel, and a genuinely empty overlap,
 // making a real problem indistinguishable from an ordinary telemetry gap.
-enum class SampledSegmentsStatus { Ok, InvalidRange, ChannelMissing, ChannelMalformed };
+// SegmentsTruncated: more separate segments than the point budget; a uniform
+// choice of whole segments is returned, one point each (KAN-210).
+enum class SampledSegmentsStatus { Ok, InvalidRange, ChannelMissing, ChannelMalformed, SegmentsTruncated };
 
 // The cadence statistic behind the gap rule (KAN-157), cached with its channel.
 // It is safe to read from several threads at once, and it is recomputed when the
@@ -87,7 +89,8 @@ public:
     [[nodiscard]] QStringList channelNames() const;
     // Analysis uses actual samples, split at every missing value. Each time
     // bucket contributes its ordered minimum/maximum, so the result is bounded
-    // to approximately twice maximumPoints while retaining short extrema.
+    // to approximately twice maximumPoints while retaining short extrema. Every
+    // segment keeps at least one point unless the status is SegmentsTruncated.
     [[nodiscard]] QVector<QVector<QPointF>> sampledSegments(
         const QString &channelName,
         double startTime,
