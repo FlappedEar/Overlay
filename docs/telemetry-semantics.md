@@ -30,7 +30,7 @@ The parser also normalises these header cases:
 - **Line endings.** A file is read exactly as its text is parsed, CRLF included.
 - **Out-of-range values.** A value beyond float range is no data.
 
-GoPro GPMF input is likewise bounded independently by packet count, aggregate metadata bytes, parsed KLV-header work, and container depth. The KLV counter includes structural/container and non-GPS sensor headers as well as GPS records; it is not a GPS sample count. Limit failures report the reached count, configured limit, packet, and parse context, while cancellation remains a distinct outcome.
+GoPro GPMF input is likewise bounded independently by packet count, bytes per packet, aggregate metadata bytes, parsed KLV-header work, and container depth. Nested containers are parsed in place, so depth never multiplies memory (KAN-197). The KLV counter includes structural/container and non-GPS sensor headers as well as GPS records; it is not a GPS sample count. Limit failures report the reached count, configured limit, packet, and parse context, while cancellation remains a distinct outcome.
 
 ## Missing values and lookup
 
