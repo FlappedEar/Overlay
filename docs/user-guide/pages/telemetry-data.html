@@ -76,7 +76,7 @@
   <li><strong>IN</strong>: from the last crossing to the end of the recording.</li>
   <li><strong>UNKNOWN</strong>: the whole recording, when no crossing could be found.</li>
 </ul>
-<p>Lap timing needs exactly one valid start gate and usable GPS. Manual start/finish placement is not available. If laps are missing, see <a href="troubleshooting.html#laps">No laps found</a>.</p>
+<p>Lap timing needs exactly one valid start gate and usable GPS. Laps run in the direction most start-line crossings share, so a single crossing the other way (leaving the paddock, for example) is ignored rather than deciding the direction. Manual start/finish placement is not available. If laps are missing, see <a href="troubleshooting.html#laps">No laps found</a>.</p>
 
 <h2 id="display">Display smoothing</h2>
 <p>To keep the overlay readable, displayed values are averaged over a short time window (about 0.1 to 0.25 seconds, depending on the channel; gear is not smoothed) and the last value is held for up to 0.75 seconds (2 seconds for heart rate) across a missing sample. Lap timing always uses the raw samples.</p>

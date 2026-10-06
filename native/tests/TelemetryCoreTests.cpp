@@ -1275,6 +1275,24 @@ void TelemetryCoreTests::derivesDirectionalPassesAndCompleteLaps()
     const LapSession directional = detectLaps(reverseCrossing, startGate);
     QCOMPARE(directional.acceptedPasses.size(), qsizetype(1));
     QCOMPARE(directional.diagnostics.rejectedOppositeDirectionClusters, qsizetype(1));
+
+    // KAN-213: the recording starts with one wrong-way crossing (west to east,
+    // say leaving the paddock), then laps run east to west. The majority wins.
+    QVector<double> times{0.0, 1.0, 2.0, 3.0};
+    QVector<float> latitudes{northLatitude, midLatitude, midLatitude, northLatitude};
+    QVector<float> longitudes{westLongitude, westLongitude, eastLongitude, eastLongitude};
+    const auto lapChannel = laps.channels.value(QStringLiteral("latitude"));
+    for (qsizetype index = 0; index < lapChannel.timestamps.size(); ++index) {
+        times.append(lapChannel.timestamps[index] + 10.0);
+        latitudes.append(lapChannel.values[index]);
+        longitudes.append(laps.channels.value(QStringLiteral("longitude")).values[index]);
+    }
+    const LapSession majority = detectLaps(sessionFor(times, latitudes, longitudes), startGate);
+    QCOMPARE(majority.status, LapSessionStatus::Available);
+    QCOMPARE(majority.acceptedPasses.size(), qsizetype(4));
+    QCOMPARE(majority.timedLaps.size(), qsizetype(3));
+    QCOMPARE(majority.diagnostics.rejectedOppositeDirectionClusters, qsizetype(1));
+    for (const auto &pass : majority.acceptedPasses) QCOMPARE(pass.direction, detected.acceptedPasses.front().direction);
 }
 
 void TelemetryCoreTests::finalizesGatePassWhenTelemetryEndsInsideCorridor()

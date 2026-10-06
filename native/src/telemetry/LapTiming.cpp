@@ -376,119 +376,144 @@ LapSession detectLaps(
         std::max(longitude->timestamps.size(), longitude->values.size()));
     const double gapThreshold = std::max(
         telemetryGapThreshold(*latitude), telemetryGapThreshold(*longitude));
-    std::optional<GpsSample> previous;
-    PassageCluster cluster;
-    bool armed = false;
-    int acceptedDirection = 0;
-    std::optional<double> lastAcceptedTime;
+    // KAN-213: the direction of travel is the one most valid crossings agree
+    // on, not the first crossing's. A first pass collects every valid crossing
+    // regardless of direction; the second accepts only the majority direction
+    // (on a tie, the first crossing's), so one wrong-way excursion at the start
+    // cannot reject every later lap.
+    const auto scan = [&](const int forcedDirection, QVector<int> *votes) {
+        std::optional<GpsSample> previous;
+        PassageCluster cluster;
+        bool armed = false;
+        int acceptedDirection = forcedDirection;
+        std::optional<double> lastAcceptedTime;
 
-    const auto discardContinuity = [&] {
-        if (cluster.active) ++result.diagnostics.discardedGapClusters;
-        cluster = {};
-        previous.reset();
-        armed = false;
-    };
+        const auto discardContinuity = [&] {
+            if (cluster.active) ++result.diagnostics.discardedGapClusters;
+            cluster = {};
+            previous.reset();
+            armed = false;
+        };
 
-    const auto finalizeCluster = [&] {
-        if (!cluster.active) return;
-        ++result.diagnostics.candidateClusters;
-        const double duration = cluster.lastTime - cluster.firstTime;
-        const Vector2 displacement = subtract(cluster.lastPoint, cluster.firstPoint);
-        const double groundSpeed = duration > 0.0 ? length(displacement) / duration : 0.0;
-        const double normalSpeed = duration > 0.0 ? dot(displacement, gateNormal) / duration : 0.0;
-        const double normalRatio = groundSpeed > 0.0 ? std::abs(normalSpeed) / groundSpeed : 0.0;
-        if (!std::isfinite(duration) || duration <= 0.0
-            || duration > options.maximumClusterSeconds) {
-            ++result.diagnostics.rejectedLongClusters;
-        } else if (!std::isfinite(groundSpeed)
-                   || groundSpeed < options.minimumGroundSpeedMetersPerSecond) {
-            ++result.diagnostics.rejectedSlowClusters;
-        } else if (!std::isfinite(normalSpeed)
-                   || std::abs(normalSpeed) < options.minimumNormalSpeedMetersPerSecond
-                   || !std::isfinite(normalRatio)
-                   || normalRatio < options.minimumNormalMotionRatio) {
-            ++result.diagnostics.rejectedParallelClusters;
-        } else {
-            const int direction = normalSpeed > 0.0 ? 1 : -1;
-            if (acceptedDirection != 0 && direction != acceptedDirection) {
-                ++result.diagnostics.rejectedOppositeDirectionClusters;
+        const auto finalizeCluster = [&] {
+            if (!cluster.active) return;
+            ++result.diagnostics.candidateClusters;
+            const double duration = cluster.lastTime - cluster.firstTime;
+            const Vector2 displacement = subtract(cluster.lastPoint, cluster.firstPoint);
+            const double groundSpeed = duration > 0.0 ? length(displacement) / duration : 0.0;
+            const double normalSpeed = duration > 0.0 ? dot(displacement, gateNormal) / duration : 0.0;
+            const double normalRatio = groundSpeed > 0.0 ? std::abs(normalSpeed) / groundSpeed : 0.0;
+            if (!std::isfinite(duration) || duration <= 0.0
+                || duration > options.maximumClusterSeconds) {
+                ++result.diagnostics.rejectedLongClusters;
+            } else if (!std::isfinite(groundSpeed)
+                       || groundSpeed < options.minimumGroundSpeedMetersPerSecond) {
+                ++result.diagnostics.rejectedSlowClusters;
+            } else if (!std::isfinite(normalSpeed)
+                       || std::abs(normalSpeed) < options.minimumNormalSpeedMetersPerSecond
+                       || !std::isfinite(normalRatio)
+                       || normalRatio < options.minimumNormalMotionRatio) {
+                ++result.diagnostics.rejectedParallelClusters;
             } else {
-                if (acceptedDirection == 0) acceptedDirection = direction;
-                if (result.acceptedPasses.size() >= options.maximumAcceptedPasses) {
-                    throw ResourceLimitError("Lap detector produced too many accepted passes.");
+                const int direction = normalSpeed > 0.0 ? 1 : -1;
+                if (acceptedDirection != 0 && direction != acceptedDirection) {
+                    ++result.diagnostics.rejectedOppositeDirectionClusters;
+                } else {
+                    if (votes) {
+                        if (votes->size() >= options.maximumAcceptedPasses)
+                            throw ResourceLimitError("Lap detector produced too many accepted passes.");
+                        votes->append(direction);
+                        lastAcceptedTime = cluster.candidateTime;
+                        cluster = {};
+                        armed = false;
+                        return;
+                    }
+                    if (acceptedDirection == 0) acceptedDirection = direction;
+                    if (result.acceptedPasses.size() >= options.maximumAcceptedPasses) {
+                        throw ResourceLimitError("Lap detector produced too many accepted passes.");
+                    }
+                    result.acceptedPasses.append({
+                        cluster.candidateTime,
+                        cluster.candidateDistance,
+                        direction,
+                        cluster.candidateGateFraction,
+                        groundSpeed,
+                        normalSpeed,
+                    });
+                    lastAcceptedTime = cluster.candidateTime;
                 }
-                result.acceptedPasses.append({
-                    cluster.candidateTime,
-                    cluster.candidateDistance,
-                    direction,
-                    cluster.candidateGateFraction,
-                    groundSpeed,
-                    normalSpeed,
-                });
-                lastAcceptedTime = cluster.candidateTime;
             }
-        }
-        cluster = {};
-        armed = false;
-    };
+            cluster = {};
+            armed = false;
+        };
 
-    for (qsizetype index = 0; index < sampleCount; ++index) {
-        if ((index & 0xff) == 0) throwIfCancelled(cancelled);
-        const auto current = gpsSampleAt(*latitude, *longitude, index, origin);
-        if (!current) {
-            discardContinuity();
-            continue;
-        }
-        if (!previous) {
-            previous = current;
-            continue;
-        }
-        const double interval = current->time - previous->time;
-        if (!std::isfinite(interval) || interval <= 0.0 || gapThreshold <= 0.0
-            || interval > gapThreshold) {
-            discardContinuity();
-            previous = current;
-            continue;
-        }
-        ++result.diagnostics.usableGpsSegments;
-        const ClosestSegments closest = closestSegments(
-            previous->point, current->point, gateA, gateB);
-        if (!std::isfinite(closest.distanceMeters)) {
-            discardContinuity();
-            previous = current;
-            continue;
-        }
-        const bool outsideOuter = closest.distanceMeters > options.outerCorridorMeters;
-        if (cluster.active && outsideOuter) {
-            finalizeCluster();
-        }
-        if (!cluster.active && outsideOuter) {
-            const bool refractoryComplete = !lastAcceptedTime
-                || current->time - *lastAcceptedTime >= options.refractorySeconds;
-            if (refractoryComplete) armed = true;
-        }
-        if (armed && !cluster.active
-            && closest.distanceMeters <= options.innerCorridorMeters) {
-            cluster.active = true;
-            cluster.firstTime = previous->time;
-            cluster.lastTime = current->time;
-            cluster.firstPoint = previous->point;
-            cluster.lastPoint = current->point;
-            cluster.candidateTime = previous->time + closest.vehicleFraction * interval;
-            cluster.candidateDistance = closest.distanceMeters;
-            cluster.candidateGateFraction = closest.gateFraction;
-        } else if (cluster.active && !outsideOuter) {
-            cluster.lastTime = current->time;
-            cluster.lastPoint = current->point;
-            if (closest.distanceMeters < cluster.candidateDistance) {
+        for (qsizetype index = 0; index < sampleCount; ++index) {
+            if ((index & 0xff) == 0) throwIfCancelled(cancelled);
+            const auto current = gpsSampleAt(*latitude, *longitude, index, origin);
+            if (!current) {
+                discardContinuity();
+                continue;
+            }
+            if (!previous) {
+                previous = current;
+                continue;
+            }
+            const double interval = current->time - previous->time;
+            if (!std::isfinite(interval) || interval <= 0.0 || gapThreshold <= 0.0
+                || interval > gapThreshold) {
+                discardContinuity();
+                previous = current;
+                continue;
+            }
+            ++result.diagnostics.usableGpsSegments;
+            const ClosestSegments closest = closestSegments(
+                previous->point, current->point, gateA, gateB);
+            if (!std::isfinite(closest.distanceMeters)) {
+                discardContinuity();
+                previous = current;
+                continue;
+            }
+            const bool outsideOuter = closest.distanceMeters > options.outerCorridorMeters;
+            if (cluster.active && outsideOuter) {
+                finalizeCluster();
+            }
+            if (!cluster.active && outsideOuter) {
+                const bool refractoryComplete = !lastAcceptedTime
+                    || current->time - *lastAcceptedTime >= options.refractorySeconds;
+                if (refractoryComplete) armed = true;
+            }
+            if (armed && !cluster.active
+                && closest.distanceMeters <= options.innerCorridorMeters) {
+                cluster.active = true;
+                cluster.firstTime = previous->time;
+                cluster.lastTime = current->time;
+                cluster.firstPoint = previous->point;
+                cluster.lastPoint = current->point;
                 cluster.candidateTime = previous->time + closest.vehicleFraction * interval;
                 cluster.candidateDistance = closest.distanceMeters;
                 cluster.candidateGateFraction = closest.gateFraction;
+            } else if (cluster.active && !outsideOuter) {
+                cluster.lastTime = current->time;
+                cluster.lastPoint = current->point;
+                if (closest.distanceMeters < cluster.candidateDistance) {
+                    cluster.candidateTime = previous->time + closest.vehicleFraction * interval;
+                    cluster.candidateDistance = closest.distanceMeters;
+                    cluster.candidateGateFraction = closest.gateFraction;
+                }
             }
+            previous = current;
         }
-        previous = current;
-    }
-    finalizeCluster();
+        finalizeCluster();
+    };
+    QVector<int> votes;
+    const LapDetectionDiagnostics cleanDiagnostics = result.diagnostics;
+    scan(0, &votes);
+    result.diagnostics = cleanDiagnostics;
+    const auto forward = std::count(votes.cbegin(), votes.cend(), 1);
+    const auto backward = votes.size() - forward;
+    const int majority = forward > backward ? 1 : backward > forward ? -1
+        : votes.isEmpty() ? 0 : votes.front();
+    scan(majority, nullptr);
     throwIfCancelled(cancelled);
     if (result.diagnostics.usableGpsSegments == 0) {
         result.status = LapSessionStatus::NoUsableGps;
