@@ -782,7 +782,7 @@ void EditorTests::benchmarksCachedOptionalRealVboPresentationLookups()
     context.setSession(&session);
     context.setTime((channel->timestamps.front() + channel->timestamps[1]) / 2.0);
     QVERIFY(context.telemetryValue(QStringLiteral("speed")).isValid());
-    QCOMPARE(channel->cadenceStatisticComputationCount, qsizetype(1));
+    QCOMPARE(channel->cadence.computations(), qsizetype(1));
     constexpr int lookups = 10'000;
     QElapsedTimer elapsed;
     elapsed.start();
@@ -795,8 +795,8 @@ void EditorTests::benchmarksCachedOptionalRealVboPresentationLookups()
     qInfo().noquote() << QStringLiteral(
         "real VBO cached presentation benchmark: %1 lookups in %2 ms, cadence computations=%3")
                              .arg(lookups).arg(elapsed.elapsed())
-                             .arg(channel->cadenceStatisticComputationCount);
-    QCOMPARE(channel->cadenceStatisticComputationCount, qsizetype(1));
+                             .arg(channel->cadence.computations());
+    QCOMPARE(channel->cadence.computations(), qsizetype(1));
 }
 
 void EditorTests::preservesPartialOverlapInAnalysisSeries()

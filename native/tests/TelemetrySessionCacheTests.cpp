@@ -49,10 +49,10 @@ void TelemetrySessionCacheTests::sharesVerifiedSessionsAndSeparatesRevisions()
     const auto cost = cache.usedBytes();
     QCOMPARE(cache.load("fingerprint-a/revision-1", {}, decode, validate), a);
     QCOMPARE(decodes, 1); QCOMPARE(validations, 2); QCOMPARE(cache.usedBytes(), cost);
-    QVERIFY(a->channels["speed"].cadenceStatisticsValid);
-    const auto computations = a->channels["speed"].cadenceStatisticComputationCount;
+    QVERIFY(a->channels["speed"].cadence.isCurrent(a->channels["speed"].timestamps));
+    const auto computations = a->channels["speed"].cadence.computations();
     QVERIFY(a->valueAt("speed", .5).has_value());
-    QCOMPARE(a->channels["speed"].cadenceStatisticComputationCount, computations);
+    QCOMPARE(a->channels["speed"].cadence.computations(), computations);
     const auto b = cache.load("fingerprint-b/revision-1", {}, decode, validate);
     const auto revised = cache.load("fingerprint-b/revision-2", {}, decode, validate);
     QVERIFY(a != b && b != revised); QCOMPARE(decodes, 3);
