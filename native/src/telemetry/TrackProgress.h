@@ -108,8 +108,8 @@ struct ProgressSegment {
 // Progress is unwrapped within the lap (KAN-152): a fix taken just after the
 // lap's timed start that projects just before progress 0 is stored as a small
 // negative value, and fixes past the finish continue beyond lengthMeters, so
-// progress rises strictly across the whole lap. A sample that does not move
-// forward is left out.
+// progress rises strictly within each segment. A sample that does not move
+// forward within its segment is left out.
 [[nodiscard]] QVector<ProgressSegment> projectLapTrace(
     const ProgressAxis &axis, const TelemetrySession &session, double startTime, double endTime,
     const CancellationCheck &cancelled = {});

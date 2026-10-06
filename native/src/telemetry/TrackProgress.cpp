@@ -425,8 +425,11 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
             } else {
                 progress += std::ceil((*lastProgress - backwardToleranceMeters - progress) / axis.lengthMeters)
                     * axis.lengthMeters;
-                if (progress <= *lastProgress) continue; // not forward: kept out so progress rises strictly
             }
+            // Not forward within this segment: kept out so its progress rises
+            // strictly. A segment after a gap may start a little behind the
+            // last one, as before.
+            if (!current.samples.isEmpty() && progress <= current.samples.last().progressMeters) continue;
             lastProgress = progress;
             current.samples.append(projectedSample);
         }
