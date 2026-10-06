@@ -22,7 +22,6 @@ TelemetrySession interiorGapFixture()
         const auto values = channel.values;
         channel.timestamps.clear();
         channel.values.clear();
-        channel.cadenceStatisticsValid = false;
         for (qsizetype index = 1; index < times.size(); ++index) {
             for (double time = times[index - 1]; time < times[index]; time += 0.25) {
                 const double fraction = (time - times[index - 1]) / (times[index] - times[index - 1]);

@@ -3,31 +3,96 @@
 #include <QRegularExpression>
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <utility>
 
 namespace FlappedEar {
 
+namespace {
+
+quint64 bitsOf(const double value)
+{
+    return std::bit_cast<quint64>(value);
+}
+
+double medianInterval(const QVector<double> &timestamps)
+{
+    QVector<double> intervals;
+    intervals.reserve(std::max<qsizetype>(0, timestamps.size() - 1));
+    for (qsizetype index = 1; index < timestamps.size(); ++index) {
+        const double interval = timestamps[index] - timestamps[index - 1];
+        if (std::isfinite(interval) && interval > 0.0) intervals.append(interval);
+    }
+    if (intervals.isEmpty()) return 0.0;
+    const auto middle = intervals.begin() + intervals.size() / 2;
+    std::nth_element(intervals.begin(), middle, intervals.end());
+    return *middle;
+}
+
+} // namespace
+
+ChannelCadenceCache::ChannelCadenceCache(const ChannelCadenceCache &other)
+{
+    const std::lock_guard lock(other.m_mutex);
+    m_entry = other.m_entry;
+}
+
+ChannelCadenceCache &ChannelCadenceCache::operator=(const ChannelCadenceCache &other)
+{
+    if (this == &other) return *this;
+    Entry copy;
+    {
+        const std::lock_guard lock(other.m_mutex);
+        copy = other.m_entry;
+    }
+    const std::lock_guard lock(m_mutex);
+    m_entry = copy;
+    return *this;
+}
+
+bool ChannelCadenceCache::matches(const Entry &entry, const QVector<double> &timestamps)
+{
+    return entry.valid && entry.data == timestamps.constData() && entry.size == timestamps.size()
+        && (timestamps.isEmpty()
+            || (entry.firstBits == bitsOf(timestamps.front()) && entry.lastBits == bitsOf(timestamps.back())));
+}
+
+double ChannelCadenceCache::baseInterval(const QVector<double> &timestamps) const
+{
+    const std::lock_guard lock(m_mutex);
+    if (!matches(m_entry, timestamps)) {
+        m_entry.interval = medianInterval(timestamps);
+        m_entry.data = timestamps.constData();
+        m_entry.size = timestamps.size();
+        m_entry.firstBits = timestamps.isEmpty() ? 0 : bitsOf(timestamps.front());
+        m_entry.lastBits = timestamps.isEmpty() ? 0 : bitsOf(timestamps.back());
+        m_entry.valid = true;
+        ++m_entry.computations;
+    }
+    return m_entry.interval;
+}
+
+bool ChannelCadenceCache::isCurrent(const QVector<double> &timestamps) const
+{
+    const std::lock_guard lock(m_mutex);
+    return matches(m_entry, timestamps);
+}
+
+qsizetype ChannelCadenceCache::computations() const
+{
+    const std::lock_guard lock(m_mutex);
+    return m_entry.computations;
+}
+
+double telemetryBaseInterval(const TelemetryChannel &channel)
+{
+    return channel.cadence.baseInterval(channel.timestamps);
+}
+
 double telemetryGapThreshold(const TelemetryChannel &channel, const double minimumSeconds)
 {
-    if (!channel.cadenceStatisticsValid) {
-        QVector<double> intervals;
-        intervals.reserve(std::max<qsizetype>(0, channel.timestamps.size() - 1));
-        for (qsizetype index = 1; index < channel.timestamps.size(); ++index) {
-            const double interval = channel.timestamps[index] - channel.timestamps[index - 1];
-            if (std::isfinite(interval) && interval > 0.0) intervals.append(interval);
-        }
-        if (!intervals.isEmpty()) {
-            const auto middle = intervals.begin() + intervals.size() / 2;
-            std::nth_element(intervals.begin(), middle, intervals.end());
-            channel.cachedBaseIntervalSeconds = *middle;
-        } else {
-            channel.cachedBaseIntervalSeconds = 0.0;
-        }
-        channel.cadenceStatisticsValid = true;
-        ++channel.cadenceStatisticComputationCount;
-    }
-    return std::max(std::max(0.0, minimumSeconds), channel.cachedBaseIntervalSeconds * 3.0);
+    return std::max(std::max(0.0, minimumSeconds), telemetryBaseInterval(channel) * 3.0);
 }
 
 void freezeCachedStatistics(const TelemetrySession &session, const CancellationCheck &cancelled)
