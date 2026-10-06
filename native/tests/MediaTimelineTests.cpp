@@ -1,7 +1,10 @@
 // Multi-chapter media timeline (native/src/export/MediaTimeline.*, KAN-105):
 // continuous time across chapters, exact boundaries, gaps for unavailable
-// chapters, and malformed input.
+// chapters, and malformed input; chapters combined into one export source
+// (native/src/export/ChapterSource.*, KAN-106).
 
+#include "export/ChapterSource.h"
+#include "export/ExportEngine.h"
 #include "export/MediaTimeline.h"
 
 #include <QtTest>
@@ -17,6 +20,9 @@ private slots:
     void mapsTimeAcrossChapters();
     void keepsUnavailableChaptersAsGaps();
     void rejectsMalformedChapters();
+    void combinesChaptersIntoOneExportSource();
+    void refusesChaptersThatDiffer();
+    void writesExactConcatScripts();
 };
 
 void MediaTimelineTests::mapsTimeAcrossChapters()
@@ -80,6 +86,126 @@ void MediaTimelineTests::rejectsMalformedChapters()
     const MediaTimeline empty;
     QVERIFY(!empty.locate(0.0));
     QCOMPARE(empty.durationSeconds(), 0.0);
+}
+
+namespace {
+// A GoPro-like chapter: 59.94 fps, 1/60000 time base, AAC audio.
+MediaInfo chapter(const QString &path, const qint64 frames)
+{
+    MediaInfo info;
+    info.path = path;
+    info.videoCodec = QStringLiteral("hevc");
+    info.videoCodecProfile = QStringLiteral("Main");
+    info.videoSize = info.codedVideoSize = QSize(3840, 2160);
+    info.frameRate = info.averageFrameRate = {60000, 1001};
+    info.timeBase = {1, 60000};
+    info.pixelFormat = QStringLiteral("yuv420p");
+    info.bitDepth = 8;
+    info.colorPrimaries = info.colorTransfer = info.colorSpace = QStringLiteral("bt709");
+    info.colorRange = QStringLiteral("tv");
+    info.sourceColorClass = SourceColorClass::Sdr;
+    info.videoStartKnown = true;
+    info.videoFrameCount = frames;
+    info.videoDurationTicks = frames * 1001;
+    info.videoDuration = info.duration = static_cast<double>(frames) * 1001.0 / 60000.0;
+    info.audioCodecs = {QStringLiteral("aac")};
+    info.audioSampleRate = 48000;
+    info.audioDuration = info.videoDuration;
+    return info;
+}
+}
+
+void MediaTimelineTests::combinesChaptersIntoOneExportSource()
+{
+    // Two full GoPro chapters (8:51.53 each) and a short last one.
+    const auto combination = ChapterSource::combine(
+        {chapter("/v/GX010091.MP4", 31860), chapter("/v/GX020091.MP4", 31860), chapter("/v/GX030091.MP4", 600)});
+    QVERIFY2(combination.info, qPrintable(combination.error));
+    const MediaInfo &info = *combination.info;
+    QCOMPARE(info.videoFrameCount, qsizetype(64320));
+    QCOMPARE(info.videoDurationTicks, qint64(64320) * 1001);
+    QVERIFY(std::abs(info.videoDuration - 64320 * 1001.0 / 60000.0) < 1e-9);
+    QCOMPARE(info.videoStartTicks, 0);
+    QCOMPARE(info.audioStartTime, 0.0);
+    QVERIFY(std::abs(info.audioDuration - info.videoDuration) < 1e-9);
+    // The frame domain covers every chapter, matching the chapter timeline.
+    const auto range = ExportEngine::fullVideoFrameRange(info, {60000, 1001});
+    QVERIFY(range);
+    QCOMPARE(range->lastFrame, 64319);
+    const auto timeline = MediaTimeline::fromChapters({{"a", chapter("a", 31860).videoDuration},
+        {"b", chapter("b", 31860).videoDuration}, {"c", chapter("c", 600).videoDuration}});
+    QVERIFY(std::abs(timeline.durationSeconds() - info.videoDuration) < 1e-9);
+    // Audio that ends early in the last chapter ends the combined track there.
+    auto shortAudio = chapter("/v/GX030091.MP4", 600);
+    shortAudio.audioDuration = 5.0;
+    const auto shorter = ChapterSource::combine({chapter("/v/GX010091.MP4", 31860), shortAudio});
+    QVERIFY(shorter.info);
+    QVERIFY(std::abs(shorter.info->audioDuration - (31860 * 1001.0 / 60000.0 + 5.0)) < 1e-9);
+}
+
+void MediaTimelineTests::refusesChaptersThatDiffer()
+{
+    const auto first = chapter("/v/GX010091.MP4", 31860);
+    QVERIFY(!ChapterSource::combine({first}).info);
+    auto other = chapter("/v/GX020091.MP4", 600);
+    other.frameRate = other.averageFrameRate = {30000, 1001};
+    auto result = ChapterSource::combine({first, other});
+    QVERIFY(!result.info);
+    QVERIFY(result.error.contains(QStringLiteral("frame rate")));
+    other = chapter("/v/GX020091.MP4", 600);
+    other.videoSize = other.codedVideoSize = QSize(1920, 1080);
+    QVERIFY(ChapterSource::combine({first, other}).error.contains(QStringLiteral("picture size")));
+    other = chapter("/v/GX020091.MP4", 600);
+    other.audioCodecs.clear();
+    other.audioDuration = 0.0;
+    QVERIFY(ChapterSource::combine({first, other}).error.contains(QStringLiteral("audio")));
+    other = chapter("/v/GX020091.MP4", 600);
+    other.videoDurationTicks = 0;
+    QVERIFY(ChapterSource::combine({first, other}).error.contains(QStringLiteral("exact video duration")));
+    other = chapter("/v/GX020091.MP4", 600);
+    other.colorTransfer = QStringLiteral("arib-std-b67");
+    QVERIFY(ChapterSource::combine({first, other}).error.contains(QStringLiteral("colour")));
+}
+
+void MediaTimelineTests::writesExactConcatScripts()
+{
+    auto second = chapter("/v/it's GX020091.MP4", 600);
+    second.videoStartTicks = 1001;
+    second.videoStartTime = 1001.0 / 60000.0;
+    const QString script = ChapterSource::concatScript({chapter("/v/GX010091.MP4", 31860), second});
+    QCOMPARE(script, QStringLiteral(
+        "ffconcat version 1.0\n"
+        "file 'file:/v/GX010091.MP4'\n"
+        "outpoint 531.531000000\nduration 531.531000000\n"
+        "file 'file:/v/it'\\''s GX020091.MP4'\n"
+        "inpoint 0.016683333\n"
+        "outpoint 10.026683333\nduration 10.010000000\n"));
+    const QString url = ChapterSource::inputUrl({chapter("/v/GX010091.MP4", 31860), second});
+    QVERIFY(url.startsWith(QStringLiteral("data:text/plain;base64,")));
+    QCOMPARE(QString::fromUtf8(QByteArray::fromBase64(url.mid(23).toLatin1())), script);
+
+    // A seek into the second chapter starts the script there, with an inpoint
+    // after its own video start; the first chapter is left out.
+    const QVector<MediaInfo> pair{chapter("/v/GX010091.MP4", 31860), second};
+    const qint64 firstTicks = qint64(31860) * 1001;
+    QCOMPARE(ChapterSource::concatScript(pair, firstTicks + 2002), QStringLiteral(
+        "ffconcat version 1.0\n"
+        "file 'file:/v/it'\\''s GX020091.MP4'\n"
+        "inpoint 0.050050000\n"
+        "outpoint 10.026683333\nduration 9.976633333\n"));
+    QVERIFY(ChapterSource::concatScript(pair, firstTicks + 600 * 1001).isEmpty()); // past the end
+    // A seek in the first chapter keeps both chapters and needs no first inpoint at zero.
+    QVERIFY(ChapterSource::concatScript(pair, 0) == script);
+    // The input reads from the seek point, rounded down to a tick, with
+    // timestamps back on the chapter timeline and no concat seek.
+    const QStringList arguments = ChapterSource::inputArguments(pair, QStringLiteral("531.55"));
+    QCOMPARE(arguments.mid(0, 8), QStringList({"-copyts", "-itsoffset", "531.550000000", "-f", "concat", "-safe", "0", "-i"}));
+    QVERIFY(!arguments.contains(QStringLiteral("-ss")));
+    QCOMPARE(QString::fromUtf8(QByteArray::fromBase64(arguments.last().mid(23).toLatin1())),
+             ChapterSource::concatScript(pair, firstTicks + 1140));
+    QCOMPARE(ChapterSource::inputArguments(pair, QStringLiteral("0")).at(2), QStringLiteral("0.000000000"));
+    QVERIFY(ChapterSource::inputArguments(pair, QStringLiteral("-1")).isEmpty());
+    QVERIFY(ChapterSource::inputArguments(pair, QStringLiteral("9999")).isEmpty());
 }
 
 QTEST_GUILESS_MAIN(MediaTimelineTests)

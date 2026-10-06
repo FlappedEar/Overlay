@@ -1097,7 +1097,8 @@ void SourceTests::keepsVideoChaptersAsOneTimeline()
 {
     // KAN-105: chapters form one continuous timeline, are saved with their
     // durations, reopen as chapters, and a missing chapter keeps its time as
-    // a gap. Export of a chaptered video is refused, never truncated.
+    // a gap. Export reads every chapter (KAN-106); a gap is refused, never
+    // closed up.
     const QString ffmpeg = FfmpegTools::ffmpegPath();
     if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the chapter timeline test.");
     QTemporaryDir directory; QVERIFY(directory.isValid());
@@ -1127,11 +1128,16 @@ void SourceTests::keepsVideoChaptersAsOneTimeline()
         QCOMPARE(QFileInfo(controller.videoChapterSource().toLocalFile()).fileName(), QString("GX030200.MP4"));
         QCOMPARE(controller.videoChapterStartMilliseconds(), 5000);
         QVERIFY(!controller.setVideoChapter(3));
-        // Export is refused rather than cut to the first chapter.
+        // Export covers all three chapters, which it protects.
         controller.loadVbo(QUrl::fromLocalFile(QFINDTESTDATA("fixtures/basic.vbo")));
         QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 30000);
-        QVERIFY(!controller.startExport(QUrl::fromLocalFile(directory.filePath("out.mp4")), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, false));
-        QVERIFY(controller.exportError().contains("several chapters"));
+        QCOMPARE(controller.m_exportChapterPaths.size(), 3);
+        QVERIFY(!controller.startExport(file("GX020200.MP4"), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, true));
+        QVERIFY2(controller.startExport(QUrl::fromLocalFile(directory.filePath("out.mp4")), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, false),
+                 qPrintable(controller.exportError()));
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.exporting(), 120000); // the worker exited and the output was committed
+        QVERIFY2(controller.exportState() == "complete", qPrintable(controller.exportError() + controller.exportDiagnosticLog().right(3000)));
+        QCOMPARE(MediaProbe::probe(directory.filePath("out.mp4"), {}, true).videoFrameCount, qsizetype(210));
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
     }
     const auto saved = QJsonDocument::fromJson(readBytes(projectPath)).object();
@@ -1157,6 +1163,8 @@ void SourceTests::keepsVideoChaptersAsOneTimeline()
         if (removeMiddle) {
             QVERIFY(reopened.locateVideoTimeline(4000).value("gap").toBool());
             QVERIFY(reopened.statusText().contains("gap"));
+            QVERIFY(!reopened.startExport(QUrl::fromLocalFile(directory.filePath("gap.mp4")), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, false));
+            QVERIFY(reopened.exportError().contains("missing or changed"));
             // Saving keeps the missing chapter's reference and duration.
             QVERIFY(reopened.saveProject(QUrl::fromLocalFile(projectPath)));
             const auto again = QJsonDocument::fromJson(readBytes(projectPath)).object()
