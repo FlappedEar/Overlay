@@ -1603,9 +1603,12 @@ ApplicationWindow {
                 clip: true
                 ScrollBar.vertical: ScrollBar {
                     id: verboseBar
+                    objectName: "verboseExportScrollBar"
+                    // Dragging the bar detaches from the tail, even to the very end:
+                    // only Jump to latest resumes following (AGENTS.md, KAN-153).
                     onPositionChanged: {
                         if (pressed && !verboseText.programmaticScroll)
-                            verboseText.followTail = position + size >= 0.98;
+                            verboseText.followTail = false;
                     }
                 }
                 Connections {
@@ -1613,10 +1616,6 @@ ApplicationWindow {
                     function onMovementStarted() {
                         if (!verboseText.programmaticScroll)
                             verboseText.followTail = false;
-                    }
-                    function onMovementEnded() {
-                        if (!verboseText.programmaticScroll && verboseText.followTail)
-                            verboseText.followTail = verboseBar.position + verboseBar.size >= 0.98;
                     }
                 }
                 TextArea {
@@ -2688,6 +2687,7 @@ ApplicationWindow {
 
             InspectorPanel {
                 id: inspector
+                objectName: "inspector"
                 visible: !window.fullScreenPreview
                 Layout.preferredWidth: 350
                 Layout.fillHeight: true

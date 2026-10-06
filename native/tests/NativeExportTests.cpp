@@ -1713,6 +1713,26 @@ void ExportTests::showsVeryVerboseDiagnosticsLive()
     QTRY_VERIFY(std::abs(flickable->property("contentY").toDouble()
                          - lineTop(QStringLiteral("entry 600\n"))) < 1.0);
     QVERIFY(!log->property("followTail").toBool());
+
+    // KAN-153: dragging the scroll bar to the very end does not resume
+    // following; only Jump to latest does (AGENTS.md).
+    auto *bar = window->findChild<QQuickItem *>("verboseExportScrollBar");
+    QVERIFY(bar);
+    auto *handle = bar->property("contentItem").value<QQuickItem *>();
+    QVERIFY(handle && handle->height() > 0);
+    const QPoint grab = handle->mapToScene(QPointF(handle->width() / 2, handle->height() / 2)).toPoint();
+    const QPoint end = bar->mapToScene(QPointF(bar->width() / 2, bar->height() + 40)).toPoint();
+    QTest::mousePress(window, Qt::LeftButton, {}, grab);
+    for (int step = 1; step <= 10; ++step)
+        QTest::mouseMove(window, grab + (end - grab) * step / 10);
+    QTest::mouseRelease(window, Qt::LeftButton, {}, end);
+    QTRY_VERIFY(bar->property("position").toDouble() + bar->property("size").toDouble() > 0.999);
+    QVERIFY(!log->property("followTail").toBool());
+    controller.appendExportDiagnostic(QStringLiteral("after the drag"));
+    QTRY_VERIFY(log->property("text").toString().endsWith(QStringLiteral("after the drag")));
+    QVERIFY(!log->property("followTail").toBool());
+    QVERIFY(QMetaObject::invokeMethod(log, "jumpToLatest"));
+    QVERIFY(log->property("followTail").toBool());
 }
 
 void ExportTests::persistsExportDiagnosticsAndRetainsKnownLogs()
