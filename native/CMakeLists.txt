@@ -255,6 +255,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/export/ExportTargetIdentity.h
     src/export/FfmpegTools.cpp
     src/export/FfmpegTools.h
+    src/export/ChapterSource.cpp
+    src/export/ChapterSource.h
     src/export/MediaProbe.cpp
     src/export/MediaTimeline.cpp
     src/export/MediaTimeline.h

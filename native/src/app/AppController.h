@@ -337,6 +337,7 @@ private:
         double durationSeconds = 0.0;
         bool available = false;
         QString problem;                   // why it is a gap
+        MediaInfo mediaInfo;               // probed, when available (KAN-106)
     };
     struct VideoProbeResult {
         bool success = false;
@@ -448,6 +449,9 @@ private:
     QFutureWatcher<VideoProbeResult> m_videoProbeWatcher;
     VideoChapterReview m_videoChapters;
     QVector<VideoChapterState> m_videoChapterStates; // empty for an ordinary video
+    // KAN-106: the chapters an export reads as one source, or why it cannot.
+    QStringList m_exportChapterPaths;
+    QString m_exportChapterProblem;
     MediaTimeline m_videoTimeline;
     int m_videoChapterIndex = 0;
     QString m_videoChapterNotice;

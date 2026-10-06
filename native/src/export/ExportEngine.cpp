@@ -1,4 +1,5 @@
 #include "export/ExportEngine.h"
+#include "export/ChapterSource.h"
 #include "export/BoundedProcessOutput.h"
 
 #include "export/EncoderDetector.h"
@@ -579,11 +580,16 @@ double ExportEngine::audioStartForRange(const MediaInfo &source, const double st
         ? std::max(0.0, source.audioStartTime - (source.videoStartTime + start)) : 0.0;
 }
 
-QString ExportEngine::stageBAudioFilterGraph(const StageBSourceAccess &access)
+QString ExportEngine::stageBAudioFilterGraph(const StageBSourceAccess &access, const bool chaptered)
 {
+    // Chapters (KAN-106): each chapter's audio keeps its own timestamps on the
+    // chapter timeline. A chapter whose audio ends before its video would
+    // otherwise pull every later chapter's audio early; aresample fills such
+    // gaps with silence and drops overlaps at the joins.
+    const QString joins = chaptered ? QStringLiteral("aresample=async=1:min_hard_comp=0.001,") : QString();
     // Subtract the selected VIDEO origin, retaining a real track-relative delay.
-    return QStringLiteral("[0:a]atrim=start=%1:end=%2,asetpts=PTS-(%1)/TB[audio]")
-        .arg(access.trimStartTimestamp, access.trimEndTimestamp);
+    return QStringLiteral("[0:a]%3atrim=start=%1:end=%2,asetpts=PTS-(%1)/TB[audio]")
+        .arg(access.trimStartTimestamp, access.trimEndTimestamp, joins);
 }
 
 double ExportEngine::framePresentationTime(
@@ -745,14 +751,27 @@ ExportResult ExportEngine::exportVideo(
         }
         observe(settings, QStringLiteral("status"), QStringLiteral("preparing"),
                 QStringLiteral("probeInput"), QStringLiteral("Reading input metadata with ffprobe"));
-        const MediaInfo source = MediaProbe::probe(
-            settings.inputPath, {}, false, -1,
-            probeObservations(settings, QStringLiteral("preparing"), QStringLiteral("probeInput")),
-            [&settings] { return isCancelled(settings); });
+        // KAN-106: a chaptered recording is read as one source through the
+        // concat demuxer; its timeline is the chapters end to end.
+        if (settings.chapterPaths.size() > 1 && settings.chapterPaths.first() != settings.inputPath) {
+            result.error = QStringLiteral("The export's first chapter is not its input video.");
+            return result;
+        }
+        QVector<MediaInfo> chapters;
+        const MediaInfo source = [&] {
+            const auto observations = probeObservations(settings, QStringLiteral("preparing"), QStringLiteral("probeInput"));
+            const auto cancelled = [&settings] { return isCancelled(settings); };
+            if (settings.chapterPaths.size() < 2)
+                return MediaProbe::probe(settings.inputPath, {}, false, -1, observations, cancelled);
+            auto chaptered = ChapterSource::probe(settings.chapterPaths, settings.chapterDurationTicks, observations, cancelled);
+            chapters = chaptered.chapters;
+            return chaptered.info;
+        }();
         observe(settings, QStringLiteral("log"), QStringLiteral("preparing"),
                 QStringLiteral("probeInput"), QStringLiteral("Input probed"), QStringLiteral("ffprobe"),
                 {{"codec", source.videoCodec}, {"width", source.videoSize.width()},
-                 {"height", source.videoSize.height()}, {"duration", source.duration}});
+                 {"height", source.videoSize.height()}, {"duration", source.duration},
+                 {"chapters", std::max<qsizetype>(1, settings.chapterPaths.size())}});
         if (source.videoStartTicks < 0) {
             // Frame-correct trimming assumes a source that starts at or after
             // zero; refuse rather than cut at the wrong frame (KAN-148).
@@ -1409,7 +1428,16 @@ ExportResult ExportEngine::exportVideo(
         QStringList compositionArguments = {
             "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-y",
         };
-        compositionArguments += stageBInputArguments(*sourceAccess, settings.inputPath);
+        if (chapters.isEmpty()) {
+            compositionArguments += stageBInputArguments(*sourceAccess, settings.inputPath);
+        } else {
+            const QStringList chapterInput = ChapterSource::inputArguments(chapters, sourceAccess->inputSeekTimestamp);
+            if (chapterInput.isEmpty()) {
+                result.error = QStringLiteral("Could not express the export range across the video's chapters exactly.");
+                return result;
+            }
+            compositionArguments += chapterInput;
+        }
         compositionArguments += QStringList{
             "-i", temporaryOverlayPath,
             "-filter_complex", timeRangeFilter,
@@ -1451,7 +1479,7 @@ ExportResult ExportEngine::exportVideo(
         }
         if (settings.audioEnabled && !source.audioCodecs.isEmpty()
             && audioDurationForRange(source, sourceRangeStart, sourceRangeEnd) > 0.0) {
-            compositionArguments[compositionArguments.indexOf("-filter_complex") + 1] += ";" + stageBAudioFilterGraph(*sourceAccess);
+            compositionArguments[compositionArguments.indexOf("-filter_complex") + 1] += ";" + stageBAudioFilterGraph(*sourceAccess, !chapters.isEmpty());
             compositionArguments.append({"-map", "[audio]", "-c:a", "aac", "-b:a", QString::number(settings.audioBitrate)});
         } else {
             compositionArguments.append("-an");

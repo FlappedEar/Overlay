@@ -7,6 +7,7 @@
 #include "app/LegacyStorageMigration.h"
 #include "export/TelemetryFrameRenderer.h"
 #include "export/ExportEngine.h"
+#include "export/ChapterSource.h"
 #include "export/ExportFormat.h"
 #include "export/ExportDiagnostics.h"
 #include "export/ExportProgress.h"
@@ -344,8 +345,14 @@ int exportWorker(const QString &configPath)
         currentOperation = QStringLiteral("probeInput");
         currentMessage = QStringLiteral("Reading input metadata with ffprobe");
         emitEvent({{"type", "status"}, {"operation", currentOperation}, {"message", currentMessage}});
-        const FlappedEar::MediaInfo input = FlappedEar::MediaProbe::probe(
-            config.value("inputPath").toString(), {}, false, -1, emitProbeEvent, cancelled);
+        // KAN-106: a chaptered recording is probed as its chapters end to end.
+        QStringList chapterPaths;
+        for (const auto &chapter : config.value("chapterPaths").toArray()) chapterPaths.append(chapter.toString());
+        QVector<qint64> chapterDurationTicks;
+        for (const auto &ticks : config.value("chapterDurationTicks").toArray()) chapterDurationTicks.append(ticks.toInteger(-1));
+        const FlappedEar::MediaInfo input = chapterPaths.size() > 1
+            ? FlappedEar::ChapterSource::probe(chapterPaths, chapterDurationTicks, emitProbeEvent, cancelled).info
+            : FlappedEar::MediaProbe::probe(config.value("inputPath").toString(), {}, false, -1, emitProbeEvent, cancelled);
         emitEvent({{"type", "log"}, {"level", "info"}, {"component", "ffprobe"},
                    {"message", "Input probed"},
                    {"details", QJsonObject{{"codec", input.videoCodec},
@@ -368,6 +375,8 @@ int exportWorker(const QString &configPath)
                                             {"height", outputSize.height()}}}});
         FlappedEar::ExportSettings settings;
         settings.inputPath = config.value("inputPath").toString();
+        settings.chapterPaths = chapterPaths;
+        settings.chapterDurationTicks = chapterDurationTicks;
         settings.outputPath = config.value("outputPath").toString();
         settings.encoder = config.value("encoder").toString();
         settings.outputSize = outputSize;

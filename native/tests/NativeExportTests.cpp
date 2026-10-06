@@ -4,6 +4,7 @@
 #include "app/AppController.h"
 #include "export/EncoderDetector.h"
 #include "export/BoundedProcessOutput.h"
+#include "export/ChapterSource.h"
 #include "export/ExportEngine.h"
 #include "export/FinalOutputValidation.h"
 #include "export/ExportFormat.h"
@@ -38,6 +39,7 @@ private slots:
     void exportsSyntheticRczThroughWorker();
     void workerRefusesPathsOutsideItsManifest();
     void exportsEditListSourceThroughWorker();
+    void exportsChapteredSourceThroughWorker();
     void protectsEveryDaySourceFromExport();
     void keepsOutputSafeWhenTheDestinationFills_data();
     void keepsOutputSafeWhenTheDestinationFills();
@@ -1506,6 +1508,116 @@ void ExportTests::exportsEditListSourceThroughWorker()
     QVERIFY2(worker.exitCode() == 0, (failures.isEmpty() ? events.right(4000) : failures.left(4000)).constData());
     QVERIFY2(transaction.commit(&error), qPrintable(error));
     QCOMPARE(MediaProbe::probe(output, {}, true).videoFrameCount, qsizetype(75));
+}
+
+// KAN-106: three chapter files export as one source. A range that crosses
+// both joins keeps its exact frame count, each frame comes from the right
+// chapter, audio follows the video, and every chapter is protected.
+void ExportTests::exportsChapteredSourceThroughWorker()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    QVERIFY2(!ffmpeg.isEmpty(), "FFmpeg is required for the chaptered export regression.");
+    const auto source = directory.filePath("synthetic.rcz");
+    const auto output = directory.filePath("output.mp4");
+    const auto config = directory.filePath("worker.json");
+    QVERIFY(writeBytes(source, RczFixture::zip(RczFixture::members())));
+    const auto runFfmpeg = [&ffmpeg](const QStringList &arguments, QByteArray *standardOutput = nullptr) {
+        QProcess process;
+        process.start(ffmpeg, arguments);
+        QVERIFY2(process.waitForFinished(60'000), qPrintable(process.errorString()));
+        QVERIFY2(process.exitCode() == 0, process.readAllStandardError().constData());
+        if (standardOutput) *standardOutput = process.readAllStandardOutput();
+    };
+    // 60 frames each at 29.97 fps, solid red, green and blue. Chapters 1 and
+    // 2 are silent, and chapter 2's audio ends 0.5 s before its video; chapter
+    // 3 carries a tone, which must start exactly where chapter 3 does.
+    QStringList chapters;
+    const QStringList colours{"red", "green", "blue"};
+    const QStringList sounds{"anullsrc=r=48000:cl=mono", "anullsrc=r=48000:cl=mono", "sine=frequency=1000:sample_rate=48000"};
+    const QStringList soundLengths{"2.002", "1.5", "2.002"};
+    for (int index = 0; index < 3; ++index) {
+        chapters.append(directory.filePath(QStringLiteral("GX0%10091.MP4").arg(index + 1)));
+        runFfmpeg({"-hide_banner", "-loglevel", "error", "-y",
+                   "-f", "lavfi", "-i", QStringLiteral("color=%1:s=320x240:r=30000/1001").arg(colours[index]),
+                   "-f", "lavfi", "-t", soundLengths[index], "-i", sounds[index],
+                   "-frames:v", "60", "-c:v", "libx264", "-g", "30", "-pix_fmt", "yuv420p",
+                   "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
+                   "-c:a", "aac", "-video_track_timescale", "30000", chapters.last()});
+    }
+    const auto combined = ChapterSource::probe(chapters, {60060, 60060, 60060}).info;
+    QCOMPARE(combined.videoFrameCount, qsizetype(180));
+    QCOMPARE(ExportEngine::fullVideoFrameRange(combined, {30000, 1001})->lastFrame, 179);
+    // A chapter that differs from what the editor loaded is refused.
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(ChapterSource::probe(chapters, {60060, 60060, 30030})));
+
+    // An output onto any chapter is refused.
+    ExportOutputTransaction refused;
+    QVERIFY(refused.prepare(chapters[1], chapters[0], {source, chapters[1], chapters[2]}, true).status
+            == ExportOutputTransaction::PreparationStatus::Error);
+    ExportOutputTransaction transaction;
+    QCOMPARE(transaction.prepare(output, chapters[0], {source, chapters[1], chapters[2]}, false).status,
+             ExportOutputTransaction::PreparationStatus::Ready);
+    const auto id = transaction.transactionId();
+    const auto overlay = QDir::temp().filePath(QStringLiteral("flappedear-overlay-%1.mkv").arg(id));
+    const auto manifestPath = ExportArtifactManifest::manifestPathFor(id);
+    QString error;
+    QVERIFY2(ExportArtifactManifest::create({id, QDateTime::currentMSecsSinceEpoch(), overlay,
+        transaction.stagingPath(), output, QCoreApplication::applicationPid(), "preparing"}, &error), qPrintable(error));
+    const auto cleanup = qScopeGuard([&] { static_cast<void>(ExportArtifactManifest::cleanupOwned(manifestPath)); });
+    WidgetModel widgets;
+    // Frames 50..129: the last 10 of chapter 1, all of chapter 2, the first 10 of chapter 3.
+    const QJsonObject settings{{"vboPath", source}, {"inputPath", chapters[0]},
+        {"chapterPaths", QJsonArray::fromStringList(chapters)},
+        {"chapterDurationTicks", QJsonArray{60060, 60060, 60060}}, {"outputPath", transaction.stagingPath()},
+        {"manifestPath", manifestPath}, {"temporaryOverlayPath", overlay},
+        {"widgets", widgets.toJson()}, {"sync", QJsonObject{{"offset", .1}, {"timeScale", 1.0}}},
+        {"frameRateNumerator", 30000}, {"frameRateDenominator", 1001}, {"firstFrame", 50}, {"lastFrame", 129},
+        {"audioEnabled", true}, {"encoder", "libx265"}};
+    QVERIFY(writeBytes(config, QJsonDocument(settings).toJson()));
+    QProcess worker;
+    worker.start(QStringLiteral(FLAPPEDEAR_NATIVE_PATH), {"--export-worker", config});
+    QVERIFY(worker.waitForStarted());
+    QVERIFY2(worker.waitForFinished(120'000), qPrintable(worker.errorString()));
+    const auto events = worker.readAllStandardOutput() + worker.readAllStandardError();
+    QCOMPARE(worker.exitStatus(), QProcess::NormalExit);
+    QByteArray failures;
+    for (const auto &line : events.split('\n'))
+        if (line.contains("\"passed\":false") || line.contains("\"state\":\"failed\"")) failures += line + '\n';
+    QVERIFY2(worker.exitCode() == 0, (failures.isEmpty() ? events.right(4000) : failures.left(4000)).constData());
+    QVERIFY2(transaction.commit(&error), qPrintable(error));
+
+    const MediaInfo result = MediaProbe::probe(output, {}, true);
+    QCOMPARE(result.videoFrameCount, qsizetype(80));
+    QVERIFY(!result.audioCodecs.isEmpty());
+    QVERIFY2(std::abs(result.audioDuration - 80 * 1001.0 / 30000.0) < 0.05,
+             qPrintable(QString::number(result.audioDuration)));
+    // The tone starts at output frame 70, where chapter 3 starts, not 0.5 s
+    // early because chapter 2's audio was short.
+    QByteArray silence;
+    {
+        QProcess process;
+        process.start(ffmpeg, {"-hide_banner", "-nostats", "-i", output, "-vn", "-af", "silencedetect=n=-40dB:d=0.05", "-f", "null", "-"});
+        QVERIFY(process.waitForFinished(30'000));
+        silence = process.readAllStandardError();
+    }
+    const auto silenceEnd = QRegularExpression(QStringLiteral("silence_end: ([0-9.]+)")).match(QString::fromUtf8(silence));
+    QVERIFY2(silenceEnd.hasMatch(), silence.constData());
+    QVERIFY2(std::abs(silenceEnd.captured(1).toDouble() - 70 * 1001.0 / 30000.0) < 0.03, qPrintable(silenceEnd.captured(1)));
+    // One 1x1 average per frame: the colour changes exactly at both joins.
+    QByteArray pixels;
+    runFfmpeg({"-hide_banner", "-loglevel", "error", "-i", output, "-vf", "scale=1:1:flags=area",
+               "-f", "rawvideo", "-pix_fmt", "rgb24", "-"}, &pixels);
+    QCOMPARE(pixels.size(), 80 * 3);
+    const auto dominant = [&pixels](const int frame) {
+        const auto *rgb = reinterpret_cast<const unsigned char *>(pixels.constData()) + frame * 3;
+        return rgb[0] > 150 && rgb[1] < 100 && rgb[2] < 100 ? 0
+             : rgb[1] > 80 && rgb[0] < 100 && rgb[2] < 100 ? 1
+             : rgb[2] > 150 && rgb[0] < 100 && rgb[1] < 100 ? 2 : -1;
+    };
+    for (int frame = 0; frame < 80; ++frame)
+        QVERIFY2(dominant(frame) == (frame < 10 ? 0 : frame < 70 ? 1 : 2), qPrintable(QString::number(frame)));
 }
 
 void ExportTests::tracksExportStageElapsedTime()

@@ -52,6 +52,11 @@ struct ExportPipelineProgress {
 
 struct ExportSettings {
     QString inputPath;
+    // KAN-106: every chapter of a chaptered recording, inputPath first; the
+    // chapters are exported as one source. Empty for one video file.
+    QStringList chapterPaths;
+    // Each chapter's video duration_ts as the editor probed it.
+    QVector<qint64> chapterDurationTicks;
     QString outputPath;
     QSize outputSize;
     MediaRational frameRate;
@@ -147,7 +152,7 @@ public:
         const MediaInfo &source, const ExportFrameRange &range,
         const MediaRational &frameRate, qint64 prerollSeconds = 5);
     [[nodiscard]] static double audioStartForRange(const MediaInfo &source, double start, double end);
-    [[nodiscard]] static QString stageBAudioFilterGraph(const StageBSourceAccess &access);
+    [[nodiscard]] static QString stageBAudioFilterGraph(const StageBSourceAccess &access, bool chaptered = false);
     [[nodiscard]] static QStringList stageBInputArguments(const StageBSourceAccess &access, const QString &path);
     // Empty on success; runs the actual composition graph before rendering telemetry.
     [[nodiscard]] static QString verifyCompositionFilters(

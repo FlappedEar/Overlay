@@ -102,8 +102,10 @@
   <tr><td>Non-square pixels</td><td>Export does not yet support non-square pixel aspect ratio</td></tr>
   <tr><td>Unknown bit depth</td><td>Source bit depth is unknown …</td></tr>
   <tr><td>Bit depth other than 8 or 10 (for example 12-bit)</td><td>…-bit source preservation is not supported by the current HEVC export policy.</td></tr>
-  <tr><td>Video made of several chapters</td><td>Exporting a video made of several chapters is not available yet.</td></tr>
+  <tr><td>Chapters of one recording that differ in codec, size, frame rate, colour or audio</td><td>Chapter … has a different … from the first chapter, so the chapters cannot be exported as one video.</td></tr>
+  <tr><td>A recording with a missing or changed chapter</td><td>Some chapters of this recording are missing or changed.</td></tr>
 </table>
 <p>To export such material, convert it first with another tool to a single SDR, 8- or 10-bit, unrotated MP4 or MOV file.</p>
+<p>A GoPro recording opened as chapters exports as one video: the range, timecodes and telemetry run across the chapter files, and none of them can be chosen as the output file.</p>
 <p>A video trimmed by another tool without re-encoding can be exported. Such a file still holds a few frames from before the cut that players never show; the export counts and uses only the frames that are shown.</p>
 <p>Other export errors are listed in <a href="troubleshooting.html#export">Troubleshooting</a>.</p>
