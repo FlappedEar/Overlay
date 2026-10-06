@@ -76,12 +76,14 @@ void AppController::applyEditorProject(const ProjectLoadResult &result)
         EventProjectCodec::editorProjection(result.project).value("sources").toObject().value("video").toObject());
     QVector<TimelineChapter> timelineChapters;
     for (const auto &chapter : chapters) {
-        m_videoChapterStates.append({chapter.reference, {}, chapter.durationSeconds, false, QStringLiteral("loading")});
+        m_videoChapterStates.append({chapter.reference, {}, chapter.durationSeconds, false, QStringLiteral("loading"), {}});
         timelineChapters.append({{}, chapter.durationSeconds, false});
     }
     m_videoTimeline = MediaTimeline::fromChapters(timelineChapters);
     m_videoChapterIndex = 0;
     m_exportSourceInfo = {};
+    m_exportChapterPaths.clear();
+    m_exportChapterProblem.clear();
     m_videoLoadState = result.videoReference.isEmpty() ? QStringLiteral("idle")
         : result.resolvedVideoPath.isEmpty() ? QStringLiteral("missing")
                                              : QStringLiteral("loading");
@@ -132,6 +134,8 @@ void AppController::clearEditor()
     m_videoTimeline = {};
     m_videoChapterIndex = 0;
     m_exportSourceInfo = {};
+    m_exportChapterPaths.clear();
+    m_exportChapterProblem.clear();
     m_exportMetrics.clear();
     m_exportDiagnosticLog.clear();
     m_exportDiagnosticNotifier.stop();

@@ -280,7 +280,7 @@ Synchronization, telemetry time, lap seeking and the analysis video link all use
 **Limitations.**
 - Auto sync reads GoPro GPS from the first chapter only. Its offset is valid for the whole timeline, because the first chapter's time is the timeline's start.
 - Relink moves the first chapter; to fill a missing chapter, choose the recording's chapters again.
-- Exporting a chaptered video is refused with an explicit message until KAN-106, never cut to its first chapter.
+- Export reads every chapter as one source (KAN-106, [export-pipeline.md](export-pipeline.md#chaptered-sources-kan-106)). Chapters that differ, or a gap, are refused with an explicit message, never cut to the first chapter.
 
 ### Side-by-side A/B video (KAN-107)
 

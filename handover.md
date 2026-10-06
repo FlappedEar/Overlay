@@ -152,19 +152,24 @@ Merged later on 27 September 2026 (M6 analysis, source fusion and video):
 | KAN-103 | Fusion review, approval and reopen in Run details (`run.fusion`) | #115 |
 | KAN-104 | GoPro chapter groups reviewed before loading (`GoProChapters.h`) | #116 |
 | KAN-105 | Chapters played as one timeline (`MediaTimeline.h`, `video.chapters`) | #117 |
+| KAN-106 | Chapters exported as one source (`ChapterSource.h`) | this change |
 | KAN-107 | Side-by-side A/B lap video from each run's verified footage | #118 |
 | KAN-133 | No compiler warnings in a clean build | #119 |
 
-**KAN-106 (export across chapters) is paused, deliberately.** Exporting a
-chaptered video is refused with an explicit message, so the first chapter is
-never exported alone. The Jira scoping note lists what a safe version needs:
-- exact per-chapter tick counts, passed to the worker instead of re-probing;
-- a concat list as a new owned manifest artifact;
-- an audio policy at chapter joins;
-- export protection of chapters 2..N in single-video projects.
-
-It changes the protected staged export, so it waits for the owner and for
-KAN-81.
+**KAN-106 (export across chapters) is done.** A chaptered recording exports
+as one source through FFmpeg's concat demuxer, given as a `data:` URL
+(`ChapterSource.h`; [export-pipeline.md](docs/export-pipeline.md#chaptered-sources-kan-106)).
+What the old scoping note asked for, and how it is met:
+- exact per-chapter tick counts: the editor passes each chapter's
+  `duration_ts`; the worker re-probes and refuses a chapter that changed;
+- the concat list: a `data:` URL, so no list file exists to own or clean up;
+- audio at joins: `aresample=async=1` keeps each chapter's audio on the
+  chapter timeline (silence where a chapter's audio is short);
+- protection: every chapter is a protected source.
+Trap: never put `-ss` on the concat input. FFmpeg's concat seek skips the
+first chapter's first keyframe when its DTS is negative; the script starts at
+the seek chapter with an `inpoint` and `-itsoffset` instead. Validated on
+generated chapters only; real GoPro chapters wait for KAN-81's footage.
 
 Fusion (KAN-101–103) and chapters/side-by-side video (KAN-104–107) are
 validated on synthetic data only. The private day has one VBO per session
@@ -185,7 +190,6 @@ and no video.
 - KAN-113, KAN-114 and KAN-115 are owner-marked "backlog only".
 - KAN-94–96 (realistic potential) and KAN-108–109 (Explain this lap) depend
   on KAN-86. KAN-98–99 (comparable visits) depend on KAN-89.
-- KAN-106 (chapter export) is paused; see above.
 - KAN-132 (tyre data) is done: the source is RaceChrono's CAN tyre channels in the VBO (merged in #125).
 
 KAN-124 (split phase 2) steps 1–11 are merged (#85, #87–#92, #94–#97):

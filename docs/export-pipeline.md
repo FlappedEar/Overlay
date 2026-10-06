@@ -98,6 +98,42 @@ changed destination is preserved and commit fails.
 
 Audio is included only when its source interval overlaps the selected video interval. `atrim` uses absolute source timestamps and `asetpts` subtracts the selected video origin, preserving delayed audio rather than resetting each track independently. Validation compares start against that expected delay and duration against the audio/video-range intersection. The tolerance is one AAC access unit (1024 samples at the reported sample rate, or the audio time base when larger), with floating-point epsilon. Ranges before or after the audio track export without audio.
 
+## Chaptered sources (KAN-106)
+
+A GoPro recording split into chapter files exports as one source on the chapter timeline of
+KAN-105: each chapter starts where the previous chapter's video stream ended.
+
+- **One source.** `ChapterSource::combine` joins the chapters' probes into one `MediaInfo` that
+  starts at zero, with the summed `duration_ts` and frame count, so the frame domain, timecodes,
+  range and telemetry mapping cover the whole timeline. Chapters must match the first in codec
+  and profile, size, frame rate and time base, pixel format and bit depth, colour description,
+  orientation and pixel shape, and audio track (present or not, codec, sample rate); each needs an
+  exact `duration_ts` and a known video start. Otherwise export is refused and names the chapter
+  and what differs. A missing or changed chapter (a gap) is refused too.
+- **Reading.** Stage B reads the chapters through FFmpeg's concat demuxer, given as a
+  `data:` URL, so no list file is written and nothing new needs cleanup. Each entry is an
+  absolute `file:` URL cut to its video stream with `inpoint`, `outpoint` and `duration` in exact
+  ticks. FFmpeg's seek inside a concat input skips the first chapter's first keyframe when its
+  decode timestamp is negative (every B-frame stream), so frames would be lost. The input is
+  therefore never sought: the script starts at the chapter holding the preroll seek point, with an
+  `inpoint` there, and `-copyts -itsoffset <seek>` puts its timestamps back on the chapter
+  timeline. `trim`, `atrim` and everything after them are unchanged.
+- **Audio at joins.** Each chapter's audio keeps its own timestamps on the chapter timeline. For
+  chaptered sources only, `aresample=async=1:min_hard_comp=0.001` runs before `atrim`: a chapter
+  whose audio ends before its video leaves silence instead of pulling every later chapter's audio
+  early, and overlaps at a join are dropped. Chapters must all have audio or all have none.
+- **Checks.** The editor passes every chapter's path and `duration_ts` to the worker. The worker
+  and the engine probe each chapter again and refuse one whose `duration_ts` changed after loading.
+  Every chapter is a protected source ([export-output-safety.md](export-output-safety.md)).
+
+Tests: `MediaTimelineTests` (combining, refusals, exact scripts and seek arguments);
+`ExportTests::exportsChapteredSourceThroughWorker` (three 29.97 fps chapters, a range across both
+joins: 80 frames, each from the right chapter, the third chapter's tone at its first frame even
+though the second chapter's audio is 0.5 s short, a changed chapter refused, chapter targets
+refused); `SourceTests::keepsVideoChaptersAsOneTimeline` (the editor exports all three chapters,
+210 frames, and refuses a gap). Real GoPro chapters are still to be checked with the owner's
+footage (KAN-81).
+
 ## CFR and VFR status
 
 Every final export is CFR at the effective exact rational export rate. Authoritative scheduling uses the inclusive integer range `[firstFrame, lastFrame]`, so `expectedFrames = lastFrame - firstFrame + 1`. Full video comes from `nb_frames` when available, with exact `duration_ts/time_base` as fallback; container/decimal duration never chooses the count. When `nb_frames` is more than the stream's `duration_ts` can hold at the nominal rate, as in an MP4 trimmed without re-encoding whose edit list hides the frames before the cut, `MediaProbe::probe` counts the video packets that FFmpeg does not flag as discarded and uses that as the frame count ([KAN-175](https://kozucharkadiusz.atlassian.net/browse/KAN-175)). Other sources pay nothing extra. Custom IN and OUT are C++-parsed `HH:MM:SS:FF` values and both are included; QML carries strings only. Presentation seconds are derived only after this decision for rendering and FFmpeg diagnostics.
