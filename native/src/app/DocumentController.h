@@ -23,6 +23,7 @@
 
 class ProjectTests;
 class SourceTests;
+class TelemetryAppTests;
 
 namespace FlappedEar {
 
@@ -143,7 +144,13 @@ public:
     [[nodiscard]] QJsonObject currentProjectObject(const QString &projectPath = {},
                                                     std::optional<quint64> savedRevision = std::nullopt) const;
     [[nodiscard]] QString documentPath() const { return m_documentState.projectPath(); }
-    [[nodiscard]] quint64 nextSourceGeneration() { return ++m_sourceGeneration; }
+    // A new source generation also cancels recording work, whose result
+    // belongs to the generation it started in (KAN-196).
+    [[nodiscard]] quint64 nextSourceGeneration()
+    {
+        if (m_recordingCancellation) m_recordingCancellation->store(true);
+        return ++m_sourceGeneration;
+    }
     [[nodiscard]] bool projectLoadRunning() const { return m_projectLoadWatcher.isRunning(); }
     void cancelProjectLoad();
     [[nodiscard]] bool importRunning() const { return m_batchWatcher.isRunning() || m_folderScanWatcher.isRunning() || m_recordingWatcher.isRunning(); }
@@ -194,6 +201,7 @@ signals:
 private:
     friend class ::ProjectTests; // Controlled asynchronous completion in regression tests.
     friend class ::SourceTests;
+    friend class ::TelemetryAppTests;
     struct BatchImportResult {
         std::shared_ptr<TelemetryImportPlan> plan;
         QHash<QString, QJsonObject> fingerprints;
@@ -294,6 +302,7 @@ private:
     QStringList m_analysisImportMessages;
     QFutureWatcher<RecordingWork> m_recordingWatcher;
     std::shared_ptr<std::atomic_bool> m_recordingCancellation;
+    quint64 m_recordingGeneration = 0;
     QVariantMap m_recordingReview;
     RecordingWork m_recordingCandidate;
     QString m_recordingRunId;

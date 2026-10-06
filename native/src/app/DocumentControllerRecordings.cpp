@@ -133,6 +133,7 @@ bool DocumentController::attachRunRecording(const QString &runId, const QUrl &ur
     m_recordingSources = eventSourcesSignature();
     m_recordingDocumentId = m_documentId;
     m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
+    m_recordingGeneration = m_sourceGeneration;
     const auto cancellation = m_recordingCancellation;
     setRecordingReview({{"state", "checking"}, {"runId", runId}, {"message", tr("Comparing the recording with this run…")}});
     const QString candidatePath = url.toLocalFile();
@@ -194,6 +195,7 @@ bool DocumentController::confirmRunRecording()
     }
     const auto candidate = m_recordingCandidate;
     m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
+    m_recordingGeneration = m_sourceGeneration;
     const auto cancellation = m_recordingCancellation;
     setRecordingReview({{"state", "attaching"}, {"runId", m_recordingRunId}, {"message", tr("Checking the recording before adding it…")}});
     m_recordingWatcher.setFuture(QtConcurrent::run([candidate, cancellation] {
@@ -241,6 +243,7 @@ bool DocumentController::setRunPrimarySource(const QString &runId, const QString
     m_recordingSources = eventSourcesSignature();
     m_recordingDocumentId = m_documentId;
     m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
+    m_recordingGeneration = m_sourceGeneration;
     const auto cancellation = m_recordingCancellation;
     const auto expectedSha = EventProjectCodec::sourceContentRevision(chosen);
     setRecordingReview({{"state", "switching"}, {"runId", runId}, {"message", tr("Reading the recording…")}});
@@ -305,6 +308,7 @@ bool DocumentController::checkRunRecordingAlignment(const QString &runId, const 
     m_recordingSources = eventSourcesSignature();
     m_recordingDocumentId = m_documentId;
     m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
+    m_recordingGeneration = m_sourceGeneration;
     const auto cancellation = m_recordingCancellation;
     setRecordingReview({{"state", "aligning"}, {"runId", runId}, {"sourceId", sourceId},
         {"message", tr("Comparing the recordings' clocks…")}});
@@ -357,6 +361,7 @@ bool DocumentController::reviewRunFusion(const QString &runId, const QString &so
     m_recordingSources = eventSourcesSignature();
     m_recordingDocumentId = m_documentId;
     m_recordingCancellation = std::make_shared<std::atomic_bool>(false);
+    m_recordingGeneration = m_sourceGeneration;
     const auto cancellation = m_recordingCancellation;
     setRecordingReview({{"state", "aligning"}, {"runId", runId}, {"sourceId", sourceId},
         {"message", tr("Comparing the recordings and their channels…")}});
@@ -498,7 +503,9 @@ void DocumentController::initializeRunRecordings()
     connect(&m_recordingWatcher, &QFutureWatcher<RecordingWork>::finished, this, [this] {
         auto work = m_recordingWatcher.future().takeResult();
         const auto runId = m_recordingRunId;
-        if (work.cancelled) { setRecordingReview({}); return; }
+        // An Open, New or source change since the work started: its result
+        // belongs to a document that is no longer current.
+        if (work.cancelled || m_recordingGeneration != m_sourceGeneration) { setRecordingReview({}); return; }
         if (m_recordingDocumentId != m_documentId || m_recordingSources != eventSourcesSignature()) {
             setRecordingReview({{"state", "error"}, {"runId", runId},
                 {"message", tr("The project changed meanwhile. Try again.")}});
