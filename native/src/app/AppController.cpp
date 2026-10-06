@@ -75,8 +75,14 @@ AppController::AppController(QObject *parent, QString recoveryPath,
 {
     connect(&m_export, &ExportController::statusMessage, this, &AppController::setStatus);
     connect(&m_export, &ExportController::quitRequested, this, &AppController::requestQuit);
-    m_sync = {};
-    m_previewRenderContext.setSyncTransform(m_sync);
+    m_previewRenderContext.setSyncTransform(m_syncController.transform());
+    connect(&m_syncController, &SyncController::statusMessage, this, &AppController::setStatus);
+    connect(&m_syncController, &SyncController::edited, this, [this] {
+        m_previewRenderContext.setSyncTransform(m_syncController.transform());
+        emit lapNavigationChanged();
+        emit liveValuesChanged();
+        markPersistentChange();
+    });
     // KAN-104: a reviewed chapter group.
     connect(&m_videoChapters, &VideoChapterReview::groupChosen, this, [this](const QList<QUrl> &files, bool) {
         // KAN-105: several chapters play as one timeline.
@@ -99,62 +105,6 @@ AppController::AppController(QObject *parent, QString recoveryPath,
         }
     });
     reconcileTemplateSelection();
-    connect(&m_syncWatcher, &QFutureWatcher<AutoSyncResult>::finished, this, [this] {
-        const AutoSyncResult result = m_syncWatcher.result();
-        emit syncingChanged();
-        if (result.generation != m_document.sourceGeneration()
-            || result.syncRevision != m_syncRevision
-            || result.videoPath != normalizedSourcePath(m_videoSource.toLocalFile())
-            || result.vboPath != normalizedSourcePath(m_telemetryPath)) {
-            AppLog::warn(QStringLiteral("Stale auto-sync result rejected"));
-            return;
-        }
-        if (!result.success) {
-            if (result.cancelled) {
-                AppLog::warn(QStringLiteral("Auto-sync cancelled"));
-                setStatus(QStringLiteral("Auto sync cancelled."));
-                return;
-            }
-            AppLog::error(QStringLiteral("Auto-sync failed: %1").arg(result.error));
-            m_syncCandidate.clear();
-            emit syncCandidateChanged();
-            setStatus(QStringLiteral("Auto sync failed: %1").arg(result.error));
-            return;
-        }
-        const bool automaticallyApplied = shouldAutoApplySyncCandidate(result.candidate);
-        if (automaticallyApplied) {
-            setSyncOffset(result.candidate.offset);
-            setTimeScale(result.candidate.timeScale);
-        }
-        m_syncCandidate = {
-            {"offset", result.candidate.offset},
-            {"timeScale", result.candidate.timeScale},
-            {"confidence", result.candidate.confidence},
-            {"correlation", result.candidate.diagnostics.correlation},
-            {"peakUniqueness", result.candidate.diagnostics.peakUniqueness},
-            {"validSamples", result.candidate.diagnostics.validSamples},
-            {"coarseOffset", result.candidate.diagnostics.coarseOffset},
-            {"packetCount", result.packetCount},
-            {"gpsSampleCount", result.gpsSampleCount},
-            {"gpsStream", result.gpsStream},
-            {"level", syncCandidateLevelName(result.candidate.confidence)},
-            {"automaticallyApplied", automaticallyApplied},
-            {"canApply", true},
-        };
-        emit syncCandidateChanged();
-        AppLog::info(QStringLiteral("Auto-sync result: offset=%1 s, confidence=%2%, %3")
-                         .arg(result.candidate.offset, 0, 'f', 3)
-                         .arg(result.candidate.confidence * 100.0, 0, 'f', 0)
-                         .arg(automaticallyApplied ? QStringLiteral("applied")
-                                                   : QStringLiteral("review required")));
-        setStatus(QStringLiteral("Auto sync %1: %2 s · correlation %3 · confidence %4% · %5 GPS samples")
-                      .arg(automaticallyApplied ? QStringLiteral("applied")
-                                                : QStringLiteral("candidate requires review"))
-                      .arg(result.candidate.offset, 0, 'f', 3)
-                      .arg(result.candidate.diagnostics.correlation, 0, 'f', 3)
-                      .arg(result.candidate.confidence * 100.0, 0, 'f', 0)
-                      .arg(result.gpsSampleCount));
-    });
     connect(&m_videoProbeWatcher, &QFutureWatcher<VideoProbeResult>::finished, this, [this] {
         const VideoProbeResult result = m_videoProbeWatcher.result();
         if (result.generation != m_document.sourceGeneration()) {
@@ -274,11 +224,11 @@ AppController::~AppController()
     sourceShutdown.start();
     while (sourceShutdown.elapsed() < 2'000
            && (m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning() || m_videoHashWatcher.isRunning()
-               || m_document.projectLoadRunning() || m_syncWatcher.isRunning() || m_document.importRunning())) {
+               || m_document.projectLoadRunning() || m_syncController.running() || m_document.importRunning())) {
         QThread::msleep(10);
     }
     if (m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning()
-        || m_document.projectLoadRunning() || m_syncWatcher.isRunning() || m_document.importRunning()) {
+        || m_document.projectLoadRunning() || m_syncController.running() || m_document.importRunning()) {
         AppLog::warn(QStringLiteral("Source worker shutdown exceeded the bounded wait"));
     }
     // m_export stops a running export when it is destroyed, after the sources.
@@ -301,9 +251,6 @@ QStringList AppController::channelNames() const { return m_session ? m_session->
 qsizetype AppController::sampleCount() const { return m_session ? m_session->sampleCount : 0; }
 double AppController::telemetryDuration() const { return m_session ? m_session->duration : 0.0; }
 double AppController::playbackTime() const { return m_playbackTime; }
-double AppController::syncOffset() const { return m_sync.offset; }
-double AppController::timeScale() const { return m_sync.timeScale; }
-bool AppController::syncing() const { return m_syncWatcher.isRunning(); }
 bool AppController::documentBusy() const { return m_export.exporting(); }
 QVariantMap AppController::exportSourceInfo() const
 {
@@ -474,7 +421,6 @@ QString AppController::fixedFontFamily() const
 {
     return QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
 }
-QVariantMap AppController::syncCandidate() const { return m_syncCandidate; }
 QVariant AppController::speed() const { return semanticValue("speed"); }
 QVariant AppController::rpm() const { return semanticValue("rpm"); }
 QVariant AppController::heartRate() const { return semanticValue("heartRate"); }
@@ -732,7 +678,7 @@ quint64 AppController::beginSourceGeneration(const bool /*preserveOuting: no ana
         emit sourceMismatchChanged();
     }
     const bool replacing = m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning()
-        || m_document.projectLoadRunning() || m_syncWatcher.isRunning();
+        || m_document.projectLoadRunning() || m_syncController.running();
     cancelSourceJobs();
     if (replacing) AppLog::info(QStringLiteral("Previous source load cancelled after replacement"));
     // A load whose job has ended but whose result is not yet delivered is also
@@ -773,8 +719,8 @@ void AppController::resumeInterruptedSources()
 void AppController::cancelSourceJobs()
 {
     m_document.cancelProjectLoad();
-    for (const auto &cancellation : {m_videoProbeCancellation, m_vboLoadCancellation, m_syncCancellation,
-                                     m_videoHashCancellation}) {
+    m_syncController.cancel();
+    for (const auto &cancellation : {m_videoProbeCancellation, m_vboLoadCancellation, m_videoHashCancellation}) {
         if (cancellation) {
             cancellation->store(true);
         }
@@ -999,12 +945,12 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     emit videoChaptersChanged();
     m_videoLoadState = QStringLiteral("ready");
     m_pendingVideoPath.clear();
-    m_syncCandidate.clear();
+    m_syncController.clearCandidate();
     emit videoSourceChanged();
     emit previewMetadataChanged();
     emit lapNavigationChanged();
     emit exportChanged();
-    emit syncCandidateChanged();
+    emit m_syncController.candidateChanged();
     emit sourceLoadStateChanged();
     if (markDocumentDirty) {
         markPersistentChange();
@@ -1050,7 +996,7 @@ void AppController::commitVboLoad(const VboLoadResult &result, const bool markDo
         result.path, result.fingerprint, QString::fromLatin1(result.contentRevision));
     m_vboLoadState = QStringLiteral("ready");
     m_pendingVboPath.clear();
-    m_syncCandidate.clear();
+    m_syncController.clearCandidate();
     m_previewRenderContext.setSession(m_session.get());
     m_previewRenderContext.setTrackGeometry(&m_trackGeometry);
     if (markDocumentDirty && EventProjectCodec::isEvent(m_document.storedProject())) {
@@ -1073,7 +1019,7 @@ void AppController::commitVboLoad(const VboLoadResult &result, const bool markDo
     emit telemetryChanged();
     emit lapNavigationChanged();
     emit liveValuesChanged();
-    emit syncCandidateChanged();
+    emit m_syncController.candidateChanged();
     emit sourceLoadStateChanged();
     if (markDocumentDirty) {
         markPersistentChange();
@@ -1260,7 +1206,7 @@ QString AppController::valueText(const QString &channelName, const int decimals)
     if (!m_session) {
         return QStringLiteral("—");
     }
-    const auto time = videoToTelemetryTime(m_playbackTime, m_sync);
+    const auto time = videoToTelemetryTime(m_playbackTime, m_syncController.transform());
     if (!time) return QStringLiteral("—");
     const auto value = m_session->valueAt(channelName, *time);
     return value ? QString::number(*value, 'f', qBound(0, decimals, 6)) : QStringLiteral("—");
@@ -1271,7 +1217,7 @@ QVariant AppController::telemetryValue(const QString &channelName) const
     if (!m_session || channelName.isEmpty()) {
         return {};
     }
-    const auto time = videoToTelemetryTime(m_playbackTime, m_sync);
+    const auto time = videoToTelemetryTime(m_playbackTime, m_syncController.transform());
     if (!time) return {};
     const auto value = m_session->valueAt(channelName, *time);
     return value ? QVariant(*value) : QVariant();
@@ -1287,15 +1233,15 @@ QVariantMap AppController::telemetrySeries(
         || !std::isfinite(videoEnd) || maximumPoints < 2) {
         return {};
     }
-    const auto telemetryStart = videoToTelemetryTime(videoStart, m_sync);
-    const auto telemetryEnd = videoToTelemetryTime(videoEnd, m_sync);
+    const auto telemetryStart = videoToTelemetryTime(videoStart, m_syncController.transform());
+    const auto telemetryEnd = videoToTelemetryTime(videoEnd, m_syncController.transform());
     if (!telemetryStart || !telemetryEnd) return {};
     return channelSeries(*m_session, channelName, *telemetryStart, *telemetryEnd, maximumPoints);
 }
 
 int AppController::lapNumberAtPlayback() const
 {
-    const auto telemetry = FlappedEar::videoToTelemetryTime(m_playbackTime, m_sync);
+    const auto telemetry = FlappedEar::videoToTelemetryTime(m_playbackTime, m_syncController.transform());
     if (!telemetry) return 0;
     for (const auto &lap : m_lapSession.timedLaps)
         if (*telemetry >= lap.startTelemetryTime && *telemetry < lap.endTelemetryTime) return lap.number;
@@ -1305,7 +1251,7 @@ int AppController::lapNumberAtPlayback() const
 qint64 AppController::videoMillisecondsForTelemetryTime(const double telemetryTime) const
 {
     if (!m_exportSourceInfo.videoSize.isValid()) return -1;
-    const auto videoTime = telemetryToVideoTime(telemetryTime, m_sync);
+    const auto videoTime = telemetryToVideoTime(telemetryTime, m_syncController.transform());
     if (!videoTime || *videoTime < 0.0) return -1;
     const double milliseconds = *videoTime * 1'000.0;
     if (!std::isfinite(milliseconds) || milliseconds >= 0x1p63
@@ -1338,97 +1284,21 @@ void AppController::startEditorSources(const ProjectLoadResult &result)
 
 void AppController::autoSync()
 {
-    AppLog::info(QStringLiteral("Auto-sync requested"));
-    if (m_syncWatcher.isRunning()) {
+    if (m_syncController.running()) {
         return;
     }
-    const QString videoPath = m_videoSource.toLocalFile();
-    if (videoPath.isEmpty() || !m_session) {
+    if (m_videoSource.toLocalFile().isEmpty() || !m_session) {
+        AppLog::info(QStringLiteral("Auto-sync requested"));
         setStatus("Open both a GoPro video and telemetry before auto sync.");
         return;
     }
-    const TelemetrySession telemetry = *m_session;
-    const quint64 generation = m_document.sourceGeneration();
-    const quint64 syncRevision = m_syncRevision;
-    const QString normalizedVideoPath = normalizedSourcePath(videoPath);
-    const QString normalizedVboPath = normalizedSourcePath(m_telemetryPath);
-    m_syncCancellation = std::make_shared<std::atomic_bool>(false);
-    const std::shared_ptr<std::atomic_bool> cancellation = m_syncCancellation;
-    m_syncCandidate.clear();
-    emit syncCandidateChanged();
-    setStatus("Indexing GoPro telemetry and matching GPS speed…");
-    m_syncWatcher.setFuture(QtConcurrent::run(
-        [normalizedVideoPath, normalizedVboPath, telemetry, generation, syncRevision, cancellation] {
-        AutoSyncResult result;
-        result.generation = generation;
-        result.syncRevision = syncRevision;
-        result.videoPath = normalizedVideoPath;
-        result.vboPath = normalizedVboPath;
-        try {
-            if (cancellation->load()) {
-                result.cancelled = true;
-                return result;
-            }
-            const auto cancelled = [cancellation] { return cancellation->load(); };
-            const GoProTelemetryResult videoTelemetry = GoProTelemetrySource::load(
-                normalizedVideoPath, cancelled);
-            if (cancellation->load()) {
-                result.cancelled = true;
-                return result;
-            }
-            result.candidate = TelemetrySyncEngine::synchronize(
-                videoTelemetry.session, telemetry, cancelled);
-            if (cancellation->load()) {
-                result.cancelled = true;
-                return result;
-            }
-            result.packetCount = videoTelemetry.packetCount;
-            result.gpsSampleCount = videoTelemetry.session.sampleCount;
-            result.gpsStream = videoTelemetry.gpsStream;
-            result.success = true;
-        } catch (const OperationCancelled &) {
-            result.cancelled = true;
-            result.error = QStringLiteral("Auto sync was cancelled.");
-        } catch (const std::exception &error) {
-            result.error = QString::fromUtf8(error.what());
-        }
-        return result;
-    }));
-    emit syncingChanged();
+    m_syncController.start(*m_session, currentSyncSources());
 }
 
-void AppController::applySyncCandidate()
+SyncController::Sources AppController::currentSyncSources() const
 {
-    if (m_syncCandidate.isEmpty()) {
-        return;
-    }
-    const QVariantMap candidate = m_syncCandidate;
-    const double offset = candidate.value("offset").toDouble();
-    const double scale = m_syncCandidate.value("timeScale", 1.0).toDouble();
-    if (!std::isfinite(offset) || !std::isfinite(scale) || scale <= 0.0) {
-        setStatus("Synchronization candidate is invalid and cannot be applied.");
-        return;
-    }
-    setSyncOffset(offset);
-    setTimeScale(scale);
-    AppLog::info(QStringLiteral("Auto-sync candidate applied: offset=%1 s, scale=%2")
-                     .arg(offset, 0, 'f', 3).arg(scale, 0, 'g', 12));
-    m_syncCandidate = candidate;
-    m_syncCandidate.insert("automaticallyApplied", true);
-    m_syncCandidate.insert("appliedManually", true);
-    emit syncCandidateChanged();
-    setStatus(QStringLiteral("Synchronization candidate applied: %1 s.").arg(offset, 0, 'f', 3));
-}
-
-void AppController::ignoreSyncCandidate()
-{
-    if (m_syncCandidate.isEmpty()) {
-        return;
-    }
-    AppLog::info(QStringLiteral("Auto-sync candidate rejected"));
-    m_syncCandidate.clear();
-    emit syncCandidateChanged();
-    setStatus("Synchronization candidate ignored; existing timing was retained.");
+    return {m_document.sourceGeneration(), normalizedSourcePath(m_videoSource.toLocalFile()),
+            normalizedSourcePath(m_telemetryPath)};
 }
 
 bool AppController::startExport(
@@ -1472,7 +1342,7 @@ bool AppController::startExport(
     job.lapBinding = activeLapBinding();
     job.lapExclusions = currentProjectObject().value("event").toObject().value("lapExclusions").toArray();
     job.widgets = m_widgetModel.toJson();
-    job.sync = m_sync;
+    job.sync = m_syncController.transform();
     job.source = m_exportSourceInfo;
     return m_export.start(job, {outputPath, QSize(outputWidth, outputHeight),
                                 MediaRational{frameRateNumerator, frameRateDenominator}, videoBitrate,
@@ -1503,8 +1373,8 @@ QVariantMap AppController::lapExportRange(
     });
     if (lap == m_lapSession.timedLaps.cend()) return {{QStringLiteral("valid"), false}};
 
-    const auto videoStart = telemetryToVideoTime(lap->startTelemetryTime, m_sync);
-    const auto videoEnd = telemetryToVideoTime(lap->startTelemetryTime + lap->durationSeconds, m_sync);
+    const auto videoStart = telemetryToVideoTime(lap->startTelemetryTime, m_syncController.transform());
+    const auto videoEnd = telemetryToVideoTime(lap->startTelemetryTime + lap->durationSeconds, m_syncController.transform());
     if (!videoStart || !videoEnd || *videoEnd < *videoStart) {
         return {{QStringLiteral("valid"), false}};
     }
@@ -1560,50 +1430,12 @@ void AppController::setPlaybackTime(const double seconds)
     emit liveValuesChanged();
 }
 
-void AppController::invalidateSyncForTimingEdit()
-{
-    ++m_syncRevision;
-    if (m_syncCancellation) m_syncCancellation->store(true);
-    if (!m_syncCandidate.isEmpty()) {
-        m_syncCandidate.clear();
-        emit syncCandidateChanged();
-    }
-}
-
-void AppController::setSyncOffset(const double seconds)
-{
-    if (!std::isfinite(seconds) || qFuzzyCompare(m_sync.offset, seconds)) {
-        return;
-    }
-    invalidateSyncForTimingEdit();
-    m_sync.offset = seconds;
-    m_previewRenderContext.setSyncTransform(m_sync);
-    emit syncChanged();
-    emit lapNavigationChanged();
-    emit liveValuesChanged();
-    markPersistentChange();
-}
-
-void AppController::setTimeScale(const double scale)
-{
-    if (!std::isfinite(scale) || scale <= 0.0 || qFuzzyCompare(m_sync.timeScale, scale)) {
-        return;
-    }
-    invalidateSyncForTimingEdit();
-    m_sync.timeScale = scale;
-    m_previewRenderContext.setSyncTransform(m_sync);
-    emit syncChanged();
-    emit lapNavigationChanged();
-    emit liveValuesChanged();
-    markPersistentChange();
-}
-
 QVariant AppController::semanticValue(const QString &alias) const
 {
     if (!m_session) {
         return {};
     }
-    const auto time = videoToTelemetryTime(m_playbackTime, m_sync);
+    const auto time = videoToTelemetryTime(m_playbackTime, m_syncController.transform());
     if (!time) return {};
     const auto value = m_session->valueAt(alias, *time);
     return value ? QVariant(*value) : QVariant();
@@ -1617,19 +1449,6 @@ void AppController::setStatus(QString status)
     AppLog::info(QStringLiteral("Status: %1").arg(status));
     m_statusText = std::move(status);
     emit statusTextChanged();
-}
-
-QString AppController::syncCandidateLevelName(const double confidence)
-{
-    switch (syncConfidenceLevel(confidence)) {
-    case SyncConfidenceLevel::High:
-        return QStringLiteral("high");
-    case SyncConfidenceLevel::Medium:
-        return QStringLiteral("medium");
-    case SyncConfidenceLevel::Low:
-        return QStringLiteral("low");
-    }
-    return QStringLiteral("low");
 }
 
 } // namespace FlappedEar

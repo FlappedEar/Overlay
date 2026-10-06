@@ -43,10 +43,15 @@ QtObject {
 
     // Playback and timing
     property real playbackTime: 0
-    property real syncOffset: 0
-    property real timeScale: 1.0
-    property bool syncing: false
-    property var syncCandidate: ({})
+    // Synchronization (KAN-215: appController.sync)
+    property QtObject sync: QtObject {
+        property real offset: 0
+        property real timeScale: 1.0
+        property bool running: false
+        property var candidate: ({})
+        function applyCandidate() {}
+        function ignoreCandidate() {}
+    }
     property int previewEndPositionMilliseconds: 0
     property string previewEndTimecode: ""
     property int sampleCount: 0

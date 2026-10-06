@@ -167,6 +167,14 @@ and its manifest, runs and supervises the worker, follows its progress and
 diagnostics, and commits or cleans up. Status lines and the quit after a
 cancelled export come back to `AppController` as signals.
 
+Step 3 moved synchronization into `SyncController` (`appController.sync`): the
+transform (offset and time scale), the auto-sync worker and its candidate, and
+the rule that a timing edit cancels a running auto-sync and rejects its result.
+`AppController::autoSync` checks that a video and telemetry are open and passes
+the sources the result must still match. A user edit reaches `AppController` as
+`edited()`, which updates the preview's transform and marks the document dirty;
+a project's saved transform is restored without marking it.
+
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
 ## Project

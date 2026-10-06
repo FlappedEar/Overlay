@@ -6,6 +6,7 @@
 #include "app/DocumentController.h"
 #include "app/DocumentHost.h"
 #include "app/ExportController.h"
+#include "app/SyncController.h"
 #include "telemetry/TelemetrySessionCache.h"
 
 #include "telemetry/LapTiming.h"
@@ -60,15 +61,12 @@ class AppController final : public QObject, private DocumentHost {
     Q_PROPERTY(qsizetype sampleCount READ sampleCount NOTIFY telemetryChanged)
     Q_PROPERTY(double telemetryDuration READ telemetryDuration NOTIFY telemetryChanged)
     Q_PROPERTY(double playbackTime READ playbackTime WRITE setPlaybackTime NOTIFY playbackTimeChanged)
-    Q_PROPERTY(double syncOffset READ syncOffset WRITE setSyncOffset NOTIFY syncChanged)
-    Q_PROPERTY(double timeScale READ timeScale WRITE setTimeScale NOTIFY syncChanged)
-    Q_PROPERTY(bool syncing READ syncing NOTIFY syncingChanged)
     // The open video as the export reads it.
     Q_PROPERTY(QVariantMap exportSourceInfo READ exportSourceInfo NOTIFY exportChanged)
     // KAN-215: the export run, its progress and its diagnostics.
     Q_PROPERTY(FlappedEar::ExportController *exporter READ exporter CONSTANT)
+    Q_PROPERTY(FlappedEar::SyncController *sync READ syncController CONSTANT)
     Q_PROPERTY(QString fixedFontFamily READ fixedFontFamily CONSTANT)
-    Q_PROPERTY(QVariantMap syncCandidate READ syncCandidate NOTIFY syncCandidateChanged)
     Q_PROPERTY(QVariant speed READ speed NOTIFY liveValuesChanged)
     Q_PROPERTY(QVariant rpm READ rpm NOTIFY liveValuesChanged)
     Q_PROPERTY(QVariant heartRate READ heartRate NOTIFY liveValuesChanged)
@@ -133,17 +131,14 @@ public:
     [[nodiscard]] qsizetype sampleCount() const;
     [[nodiscard]] double telemetryDuration() const;
     [[nodiscard]] double playbackTime() const;
-    [[nodiscard]] double syncOffset() const;
-    [[nodiscard]] double timeScale() const;
-    [[nodiscard]] bool syncing() const;
     // KAN-124: the document is busy with an operation that must not be
     // interleaved with document edits (today: an export). The document's
     // guards use this, not the overlay's export state.
     [[nodiscard]] bool documentBusy() const override;
     [[nodiscard]] QVariantMap exportSourceInfo() const;
     [[nodiscard]] ExportController *exporter() { return &m_export; }
+    [[nodiscard]] SyncController *syncController() { return &m_syncController; }
     [[nodiscard]] QString fixedFontFamily() const;
-    [[nodiscard]] QVariantMap syncCandidate() const;
     [[nodiscard]] QVariant speed() const;
     [[nodiscard]] QVariant rpm() const;
     [[nodiscard]] QVariant heartRate() const;
@@ -218,8 +213,6 @@ public:
     Q_INVOKABLE bool saveProject(const QUrl &url) { return m_document.saveProject(url); }
     Q_INVOKABLE void resolveStartupRecovery(const QString &decision) { m_document.resolveStartupRecovery(decision); }
     Q_INVOKABLE void autoSync();
-    Q_INVOKABLE void applySyncCandidate();
-    Q_INVOKABLE void ignoreSyncCandidate();
     Q_INVOKABLE bool startExport(
         const QUrl &output,
         int outputWidth, int outputHeight, qint64 frameRateNumerator, qint64 frameRateDenominator,
@@ -258,8 +251,6 @@ public:
 
 public slots:
     void setPlaybackTime(double seconds);
-    void setSyncOffset(double seconds);
-    void setTimeScale(double scale);
 
 signals:
     void dayBestLapChanged();
@@ -269,10 +260,7 @@ signals:
     void lapNavigationChanged();
     void statusTextChanged();
     void playbackTimeChanged();
-    void syncChanged();
-    void syncingChanged();
     void exportChanged();
-    void syncCandidateChanged();
     void liveValuesChanged();
     void documentStateChanged();
     void destructiveActionChanged();
@@ -289,20 +277,8 @@ private:
     friend class ::ExportTests; // Controlled asynchronous completion in regression tests.
     friend class ::ProjectTests;
     friend class ::SourceTests;
-    void invalidateSyncForTimingEdit();
-    struct AutoSyncResult {
-        bool success = false;
-        bool cancelled = false;
-        QString error;
-        SyncCandidate candidate;
-        qsizetype packetCount = 0;
-        qsizetype gpsSampleCount = 0;
-        QString gpsStream;
-        quint64 generation = 0;
-        quint64 syncRevision = 0;
-        QString videoPath;
-        QString vboPath;
-    };
+    // The sources an auto-sync result must still match.
+    [[nodiscard]] SyncController::Sources currentSyncSources() const;
 
     // KAN-105: a chapter after the first, as asked for and as found.
     struct VideoChapterInput {
@@ -387,7 +363,6 @@ private:
     [[nodiscard]] static QString normalizedSourcePath(const QString &path) { return DocumentController::normalizedSourcePath(path); }
     [[nodiscard]] static QVariantList trackPointsFor(const TrackGeometry &geometry);
     void clearActiveTemplate();
-    [[nodiscard]] static QString syncCandidateLevelName(double confidence);
 
     QSettings m_settings;
     // DocumentHost: the active run's editor state in the project document.
@@ -430,10 +405,9 @@ private:
     WidgetModel m_widgetModel;
     TrackGeometry m_trackGeometry;
     TelemetryRenderContext m_previewRenderContext;
+    SyncController m_syncController{[this] { return currentSyncSources(); }};
     QVariantList m_trackPoints;
     double m_playbackTime = 0.0;
-    SyncTransform m_sync;
-    QFutureWatcher<AutoSyncResult> m_syncWatcher;
     QFutureWatcher<VideoProbeResult> m_videoProbeWatcher;
     QFutureWatcher<VideoHashResult> m_videoHashWatcher;
     std::shared_ptr<std::atomic_bool> m_videoHashCancellation;
@@ -448,10 +422,8 @@ private:
     int m_videoChapterIndex = 0;
     QString m_videoChapterNotice;
     QFutureWatcher<VboLoadResult> m_vboLoadWatcher;
-    quint64 m_syncRevision = 0;
     std::shared_ptr<std::atomic_bool> m_videoProbeCancellation;
     std::shared_ptr<std::atomic_bool> m_vboLoadCancellation;
-    std::shared_ptr<std::atomic_bool> m_syncCancellation;
     bool m_videoLoadMarksDocumentDirty = true;
     bool m_vboLoadMarksDocumentDirty = true;
     QString m_videoLoadState = QStringLiteral("idle");
@@ -468,7 +440,6 @@ private:
     QString m_sourceMismatchType;
     QString m_selectedTemplateId;
     QString m_activeTemplateId;
-    QVariantMap m_syncCandidate;
     DocumentController m_document;
     BestLapFinder m_bestLapFinder{m_document};
     // Last, so a running export stops before the rest of the editor goes.

@@ -1968,7 +1968,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                 }
                 Rectangle {
-                    visible: appController.syncOffset !== 0
+                    visible: appController.sync.offset !== 0
                     implicitWidth: syncLabel.implicitWidth + 18
                     height: 28
                     radius: Theme.radius
@@ -1977,7 +1977,7 @@ ApplicationWindow {
                     FeLabel {
                         id: syncLabel
                         anchors.centerIn: parent
-                        text: qsTr("SYNC  %1 s").arg(appController.syncOffset.toFixed(3))
+                        text: qsTr("SYNC  %1 s").arg(appController.sync.offset.toFixed(3))
                         color: Theme.onPrimaryContainer
                         font.pixelSize: Theme.overline
                         font.weight: Font.DemiBold

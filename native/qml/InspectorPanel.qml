@@ -1379,42 +1379,42 @@ Rectangle {
                     FeButton {
                         Layout.fillWidth: true
                         accent: true
-                        text: appController.syncing ? qsTr("Matching GPS speed…") : qsTr("Auto Sync GoPro GPS")
-                        enabled: !appController.syncing && appController.videoName.length > 0 && appController.telemetryName.length > 0
+                        text: appController.sync.running ? qsTr("Matching GPS speed…") : qsTr("Auto Sync GoPro GPS")
+                        enabled: !appController.sync.running && appController.videoName.length > 0 && appController.telemetryName.length > 0
                         onClicked: appController.autoSync()
                     }
                     Rectangle {
-                        visible: Object.keys(appController.syncCandidate).length > 0
+                        visible: Object.keys(appController.sync.candidate).length > 0
                         Layout.fillWidth: true
                         implicitHeight: resultColumn.implicitHeight + 22
                         radius: Theme.radius
-                        color: appController.syncCandidate.automaticallyApplied ? Theme.surfaceContainerHigh : Theme.errorContainer
-                        border.color: appController.syncCandidate.automaticallyApplied ? "transparent" : "transparent"
+                        color: appController.sync.candidate.automaticallyApplied ? Theme.surfaceContainerHigh : Theme.errorContainer
+                        border.color: appController.sync.candidate.automaticallyApplied ? "transparent" : "transparent"
                         ColumnLayout {
                             id: resultColumn
                             anchors.fill: parent
                             anchors.margins: 11
                             FeLabel {
-                                text: appController.syncCandidate.automaticallyApplied ? qsTr("SYNC APPLIED") : qsTr("POSSIBLE SYNCHRONIZATION FOUND")
-                                color: appController.syncCandidate.automaticallyApplied ? Theme.tertiary : Theme.warning
+                                text: appController.sync.candidate.automaticallyApplied ? qsTr("SYNC APPLIED") : qsTr("POSSIBLE SYNCHRONIZATION FOUND")
+                                color: appController.sync.candidate.automaticallyApplied ? Theme.tertiary : Theme.warning
                                 font.pixelSize: Theme.labelSmall
                                 font.weight: Font.DemiBold
                             }
                             FeLabel {
-                                text: qsTr("Offset %1 s").arg(Number(appController.syncCandidate.offset || 0).toFixed(3))
+                                text: qsTr("Offset %1 s").arg(Number(appController.sync.candidate.offset || 0).toFixed(3))
                                 color: Theme.onSurface
                                 font.pixelSize: Theme.subtitle
                                 font.weight: Font.DemiBold
                             }
                             FeLabel {
-                                text: qsTr("Correlation %1  ·  Confidence %2%").arg(Number(appController.syncCandidate.correlation || 0).toFixed(3)).arg((Number(appController.syncCandidate.confidence || 0) * 100).toFixed(0))
+                                text: qsTr("Correlation %1  ·  Confidence %2%").arg(Number(appController.sync.candidate.correlation || 0).toFixed(3)).arg((Number(appController.sync.candidate.confidence || 0) * 100).toFixed(0))
                                 color: Theme.onSurfaceVariant
                                 font.pixelSize: Theme.labelSmall
                             }
                             FeLabel {
-                                visible: !appController.syncCandidate.automaticallyApplied
+                                visible: !appController.sync.candidate.automaticallyApplied
                                 Layout.fillWidth: true
-                                text: appController.syncCandidate.level === "low"
+                                text: appController.sync.candidate.level === "low"
                                       ? qsTr("Low confidence: current timing was not changed.")
                                       : qsTr("Review this candidate before changing timing.")
                                 color: Theme.onErrorContainer
@@ -1422,18 +1422,18 @@ Rectangle {
                                 font.pixelSize: Theme.labelSmall
                             }
                             RowLayout {
-                                visible: !appController.syncCandidate.automaticallyApplied
+                                visible: !appController.sync.candidate.automaticallyApplied
                                 Layout.fillWidth: true
                                 FeButton {
                                     Layout.fillWidth: true
                                     accent: true
                                     text: qsTr("Apply")
-                                    onClicked: appController.applySyncCandidate()
+                                    onClicked: appController.sync.applyCandidate()
                                 }
                                 FeButton {
                                     Layout.fillWidth: true
                                     text: qsTr("Ignore")
-                                    onClicked: appController.ignoreSyncCandidate()
+                                    onClicked: appController.sync.ignoreCandidate()
                                 }
                             }
                         }
@@ -1448,8 +1448,8 @@ Rectangle {
                     }
                     FeTextField {
                         Layout.fillWidth: true
-                        text: appController.syncOffset.toFixed(3)
-                        onEditingFinished: appController.syncOffset = Number(text)
+                        text: appController.sync.offset.toFixed(3)
+                        onEditingFinished: appController.sync.offset = Number(text)
                     }
                     FeLabel {
                         text: qsTr("Time scale")
@@ -1458,8 +1458,8 @@ Rectangle {
                     }
                     FeTextField {
                         Layout.fillWidth: true
-                        text: appController.timeScale.toFixed(6)
-                        onEditingFinished: appController.timeScale = Number(text)
+                        text: appController.sync.timeScale.toFixed(6)
+                        onEditingFinished: appController.sync.timeScale = Number(text)
                     }
 
                     SectionTitle {
