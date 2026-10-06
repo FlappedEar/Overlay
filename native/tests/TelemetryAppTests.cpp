@@ -390,9 +390,10 @@ void TelemetryAppTests::dropsRecordingWorkFromAReplacedDocument()
     QVERIFY(document.attachRunRecording(runId, QUrl::fromLocalFile(alternative)));
     QTRY_COMPARE_WITH_TIMEOUT(document.runRecordingReview().value("state").toString(), QString("review"), 20000);
     // Confirming hashes the recording in the background; the same project is
-    // reopened before the result arrives.
+    // reopened before the result arrives. The hash may already be done (it
+    // was under the sanitizers), but its result reaches the document only
+    // through the event loop, which first runs after the reopen below.
     QVERIFY(document.confirmRunRecording());
-    QVERIFY(document.m_recordingWatcher.isRunning());
     document.requestOpenProject(QUrl::fromLocalFile(projectPath));
     QTRY_VERIFY_WITH_TIMEOUT(!document.m_recordingWatcher.isRunning() && !document.projectLoading(), 20000);
     QTRY_VERIFY_WITH_TIMEOUT(document.runRecordingReview().isEmpty(), 20000);
