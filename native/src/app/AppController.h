@@ -212,9 +212,6 @@ public:
     // "1:49.898" for anything a minute or longer, "28.662 s" below that; "—"
     // when not finite. One formatter for every lap and segment time.
     Q_INVOKABLE static QString formatElapsedTime(double seconds);
-    Q_INVOKABLE bool beginBatchImport(const QList<QUrl> &urls) { return m_document.beginBatchImport(urls); }
-    Q_INVOKABLE void cancelBatchImport() { m_document.cancelBatchImport(); }
-    Q_INVOKABLE bool confirmBatchImport(const QString &name, bool append, const QVariantList &choices) { return m_document.confirmBatchImport(name, append, choices); }
     Q_INVOKABLE void relinkVideo(const QUrl &url);
     Q_INVOKABLE void relinkVbo(const QUrl &url);
     Q_INVOKABLE void resolveSourceMismatch(bool acceptReplacement);
