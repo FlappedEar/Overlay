@@ -69,7 +69,7 @@
 <p>RaceChrono only records tyre data when a TPMS or CAN tyre logger feeds it; a phone-and-OBD setup records none. When no channel of the loaded recording is named as a tyre value and none is chosen, the Tyres inspector says so and every corner shows a dash.</p>
 
 <h2 id="lap-timing">How laps are found</h2>
-<p>Laps, the lap widgets and hot-lap export come from the start/finish line (timing gate) recorded in the telemetry file, for example the RaceChrono track's start line, and from GPS:</p>
+<p>Laps, the lap widgets and hot-lap export come from the start/finish line (timing gate) recorded in the telemetry file, for example the RaceChrono track's start line, and from GPS. When an RCZ session uses a track from RaceChrono's track library, the archive has no start/finish line; it is then rebuilt from RaceChrono's own lap times, and the import shows a warning saying so.</p>
 <ul>
   <li><strong>OUT</strong>: from the start of the recording to the first crossing.</li>
   <li><strong>LAP n</strong>: between two crossings in the same direction.</li>

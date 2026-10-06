@@ -83,6 +83,18 @@ are ignored with a warning; invalid optional gate metadata does not discard othe
 valid telemetry. Archive integrity and resource-limit failures remain fatal. Laps are
 derived through the existing native GPS/gate implementation, not copied from metadata.
 
+**Library tracks (KAN-204).** When the session uses a track from RaceChrono's track
+library, `trackId.json` holds only the track id (for example `{"id":32920}`) and no traps.
+The start/finish line is then rebuilt from RaceChrono's lap boundaries in `session.json`,
+which are line crossings: the GPS position at each lap start and finish timestamp, and the
+direction of travel over the second around it. The gate is centred on the mean crossing,
+across the mean direction of travel, and covers every crossing plus 5 m on each side (at
+least RaceChrono's default 20 m). No gate is built from fewer than two crossings, from
+crossings more than 25 m apart along the direction of travel or in different directions,
+or wider than 200 m. The session warns that the line was rebuilt. Verified on the owner's
+Silesia Ring session of 27 September 2026: 7 laps, each within 0.02 s of RaceChrono's own
+lap times (the VBO export's laps agree within 0.012 s).
+
 The matching RaceChrono Pro 10.2.4 VBO exporter uses centre plus a point backward
 along travel, with vector length equal to the full gate width. The VBO parser identifies
 that exact producer in `[comments]`, rotates the metric vector perpendicular to travel,
