@@ -107,7 +107,7 @@ QVariantMap AnalysisController::comparisonMapLayer(const QString &layerId, const
     if (spec.id == QLatin1String("delta")) {
         // The pair's delta at each progress, drawn where the chosen lap was.
         for (const auto &segment : computeDeltaSeries(m_comparisonProgressTraceCache[0], m_comparisonProgressTraceCache[1],
-                 length / mapLayerPoints)) {
+                 length / mapLayerPoints, comparisonDeltaTiming())) {
             QVector<QPointF> points;
             for (const auto &point : segment) points.append({point.progressMeters, point.deltaSeconds});
             values.append(points);

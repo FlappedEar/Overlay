@@ -458,6 +458,14 @@ bool AnalysisController::openComparisonLapAtProgress(const int slot, const doubl
     return true;
 }
 
+DeltaTiming AnalysisController::comparisonDeltaTiming() const
+{
+    const auto &a = m_comparisonSlots[0].row;
+    const auto &b = m_comparisonSlots[1].row;
+    return {a.value("startTime").toDouble(), a.value("endTime").toDouble(), b.value("startTime").toDouble(),
+        b.value("endTime").toDouble(), m_comparisonProgressAxis.lengthMeters};
+}
+
 double AnalysisController::comparisonProgressAxisLength() const
 {
     ensureComparisonProgressAxis();
@@ -473,8 +481,8 @@ QVariantMap AnalysisController::comparisonDeltaSeriesByProgress(
     if (!std::isfinite(startProgress) || !std::isfinite(endProgress) || endProgress <= startProgress)
         return {{"reason", QStringLiteral("invalidRange")}};
 
-    const auto deltaSegments = computeDeltaSeries(
-        m_comparisonProgressTraceCache[0], m_comparisonProgressTraceCache[1], (endProgress - startProgress) / maximumPoints);
+    const auto deltaSegments = computeDeltaSeries(m_comparisonProgressTraceCache[0], m_comparisonProgressTraceCache[1],
+        (endProgress - startProgress) / maximumPoints, comparisonDeltaTiming());
     QVariantList segments;
     double minimum = 0.0, maximum = 0.0;
     bool haveExtent = false;

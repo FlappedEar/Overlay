@@ -6,7 +6,9 @@
 
 #include "EventProjectFixture.h"
 #include "telemetry/LapTiming.h"
+#include "telemetry/SectorTiming.h"
 #include "telemetry/TrackProgress.h"
+#include "telemetry/TrackSegments.h"
 #include "telemetry/VboParser.h"
 
 #include <QtTest>
@@ -102,6 +104,49 @@ RouteFixture buildRouteFixture(const int turns = 2)
     return fixture;
 }
 
+// The route fixture with its timing gate turned 45 degrees and moved along
+// it, so the gate still crosses the racing line at (300, 0) but its midpoint
+// sits about 10 m away, 7 m ahead along the direction of travel (KAN-152).
+// Progress 0 anchored at the point nearest the midpoint would then fall
+// after the gate, and each lap's first fix would project just before it.
+RouteFixture buildObliqueGateRouteFixture()
+{
+    constexpr double latitude = 52, longitude = 21, earth = 6'371'000;
+    const auto lat = [](double north) { return latitude + north / earth * 180 / std::numbers::pi; };
+    const auto lon = [](double east) {
+        return longitude + east / (earth * std::cos(latitude * std::numbers::pi / 180)) * 180 / std::numbers::pi;
+    };
+    const auto gateLine = [](double eastA, double northA, double eastB, double northB, auto lat, auto lon) {
+        return QString("Start %1 %2 %3 %4 start").arg(lon(eastA), 0, 'f', 9).arg(lat(northA), 0, 'f', 9)
+            .arg(lon(eastB), 0, 'f', 9).arg(lat(northB), 0, 'f', 9);
+    };
+    QString text = QString::fromUtf8(EventProjectFixture::routeVbo(240, -1.0, 0, false, 300, 4));
+    const QString original = gateLine(280, 0, 320, 0, lat, lon);
+    if (!text.contains(original)) return {};
+    text.replace(original, gateLine(282, -18, 332, 32, lat, lon));
+
+    RouteFixture fixture;
+    fixture.session = VboParser::parse(text);
+    fixture.laps = deriveSourceLapSession(fixture.session);
+    if (!fixture.laps.selectedStartGate || fixture.laps.lapTraces.isEmpty()) return fixture;
+    const auto &gate = *fixture.laps.selectedStartGate;
+    const GeoCoordinate origin{
+        (gate.endpointA.latitudeDegrees + gate.endpointB.latitudeDegrees) / 2,
+        (gate.endpointA.longitudeDegrees + gate.endpointB.longitudeDegrees) / 2};
+    fixture.axis = buildProgressAxis(fixture.laps.lapTraces.first(), origin, gate);
+    return fixture;
+}
+
+ApprovedSegmentation quarterSectors(const double length)
+{
+    const QString configuration = "compatibility-v1:" + QString(64, 'a');
+    QJsonArray segments;
+    for (int quarter = 0; quarter < 4; ++quarter)
+        segments.append(makeTrackSegment(TrackSegmentType::Sector, QString("S%1").arg(quarter + 1),
+            length * quarter / 4, length * (quarter + 1) / 4, configuration));
+    return approvedSegmentation(segments, configuration);
+}
+
 } // namespace
 
 class TrackProgressTests final : public QObject {
@@ -114,6 +159,10 @@ private slots:
     void headingRejectsOppositeDirectionParallelSection();
     void outlierAndGapBreakSegmentsWithoutBridging();
     void deltaSeriesOnlyCoversSharedValidRange();
+    void anchorsProgressZeroWhereTheGateCrossesTheAxis();
+    void unwrapsAFirstFixJustBeforeTheGate();
+    void obliqueOffLineGateKeepsEveryLapsSectors();
+    void deltaAtTheFinishEqualsTheLapTimeDifference();
     void marksStraightsWithZeroCurvatureAndCornersWithASpike();
     void producesConsistentlySignedCurvatureOnAConvexLoop();
     void rejectsInvalidSmoothingAndNeverModifiesTheAxis();
@@ -297,6 +346,112 @@ void TrackProgressTests::deltaSeriesOnlyCoversSharedValidRange()
     }
     QVERIFY(sawNearFifty);
     QVERIFY(sawNearHundred);
+}
+
+void TrackProgressTests::anchorsProgressZeroWhereTheGateCrossesTheAxis()
+{
+    const auto fixture = buildObliqueGateRouteFixture();
+    QVERIFY2(fixture.laps.selectedStartGate.has_value(), "fixture must resolve the oblique start gate");
+    QVERIFY(fixture.axis.valid);
+    // The gate crosses the line at (300, 0) in the fixture's frame, which is
+    // (-7, -7) from the gate midpoint the axis uses as its origin.
+    const QPointF crossing(-7.0, -7.0);
+    const double distance = std::hypot(
+        fixture.axis.points.first().x() - crossing.x(), fixture.axis.points.first().y() - crossing.y());
+    QVERIFY2(distance < 1.0, qPrintable(QString("progress 0 is %1 m from the crossing").arg(distance)));
+    QVERIFY(std::abs(fixture.axis.spacingMeters - fixture.axis.lengthMeters / fixture.axis.points.size()) < 1e-6);
+}
+
+void TrackProgressTests::unwrapsAFirstFixJustBeforeTheGate()
+{
+    // The hairpin's gate is a point, so progress 0 is the axis point nearest
+    // it; the lap's first fix is on the connector just before it.
+    const auto axis = buildHairpinAxis();
+    QVERIFY(axis.valid);
+    TelemetrySession session;
+    session.aliases = {{"latitude", "lat"}, {"longitude", "lon"}};
+    auto &lat = session.channels["lat"];
+    auto &lon = session.channels["lon"];
+    const auto addFix = [&](const double time, const double east, const double north) {
+        lat.timestamps.append(time);
+        lat.values.append(static_cast<float>(degreesForMeters(north)));
+        lon.timestamps.append(time);
+        lon.values.append(static_cast<float>(degreesForMeters(east)));
+    };
+    addFix(0.0, 0.0, 1.0);
+    for (int i = 1; i <= 20; ++i) addFix(i * 1.0, i * 2.0 - 0.5, 0.0);
+    session.duration = 20.0;
+
+    const auto trace = projectLapTrace(axis, session, 0.0, session.duration);
+    QCOMPARE(trace.size(), 1);
+    QCOMPARE(trace.first().samples.size(), 21);
+    const auto &first = trace.first().samples.first();
+    QVERIFY2(first.progressMeters < 0.0 && first.progressMeters > -3.0,
+        qPrintable(QString("the first fix is at %1 m").arg(first.progressMeters)));
+    for (qsizetype i = 1; i < trace.first().samples.size(); ++i)
+        QVERIFY(trace.first().samples[i].progressMeters > trace.first().samples[i - 1].progressMeters);
+    const auto atGate = timeAtProgress(trace, 0.0);
+    QVERIFY(atGate.has_value());
+    QVERIFY(*atGate > 0.0 && *atGate < 1.0);
+}
+
+void TrackProgressTests::obliqueOffLineGateKeepsEveryLapsSectors()
+{
+    const auto fixture = buildObliqueGateRouteFixture();
+    QVERIFY(fixture.axis.valid);
+    QVERIFY(fixture.laps.timedLaps.size() >= 3);
+    const auto approved = quarterSectors(fixture.axis.lengthMeters);
+    QVERIFY(approved.valid);
+    for (const auto &lap : fixture.laps.timedLaps) {
+        const auto trace = projectLapTrace(fixture.axis, fixture.session, lap.startTelemetryTime, lap.endTelemetryTime);
+        QVERIFY(!trace.isEmpty());
+        for (const auto &segment : trace)
+            for (qsizetype i = 1; i < segment.samples.size(); ++i)
+                QVERIFY2(segment.samples[i].progressMeters > segment.samples[i - 1].progressMeters,
+                    "progress must increase strictly within a lap, across the gate too");
+        const auto times = computeLapSectorTimes(approved, fixture.axis.lengthMeters, trace,
+            lap.startTelemetryTime, lap.endTelemetryTime, {});
+        QVERIFY(times.valid);
+        for (const auto &sector : times.sectors)
+            QVERIFY2(sector.seconds.has_value(), qPrintable(QString("lap %1 lost %2").arg(lap.number).arg(sector.name)));
+        QVERIFY(times.sumSeconds.has_value());
+        QVERIFY(std::abs(*times.sumSeconds - times.lapSeconds) < 1e-6);
+    }
+}
+
+void TrackProgressTests::deltaAtTheFinishEqualsTheLapTimeDifference()
+{
+    const auto fixture = buildObliqueGateRouteFixture();
+    QVERIFY(fixture.axis.valid);
+    QVERIFY(!fixture.laps.timedLaps.isEmpty());
+    const auto &lap = fixture.laps.timedLaps.first();
+    const auto lapA = projectLapTrace(fixture.axis, fixture.session, lap.startTelemetryTime, lap.endTelemetryTime);
+
+    // Lap B: the same path 10% slower, its clock also shifted so the lap's
+    // first fix lands at a different point within the GPS interval.
+    constexpr double slowdownFactor = 1.10;
+    constexpr double shiftSeconds = 0.13;
+    TelemetrySession sessionB = fixture.session;
+    for (auto &channel : sessionB.channels)
+        for (auto &timestamp : channel.timestamps) timestamp = timestamp * slowdownFactor + shiftSeconds;
+    sessionB.duration = sessionB.duration * slowdownFactor + shiftSeconds;
+    const auto lapsB = deriveSourceLapSession(sessionB);
+    QVERIFY(!lapsB.timedLaps.isEmpty());
+    const auto &lapB = lapsB.timedLaps.first();
+    const auto traceB = projectLapTrace(fixture.axis, sessionB, lapB.startTelemetryTime, lapB.endTelemetryTime);
+
+    const auto delta = computeDeltaSeries(lapA, traceB, 20.0,
+        DeltaTiming{lap.startTelemetryTime, lap.endTelemetryTime, lapB.startTelemetryTime, lapB.endTelemetryTime,
+            fixture.axis.lengthMeters});
+    QVERIFY(!delta.isEmpty());
+    QVERIFY(!delta.first().isEmpty());
+    QCOMPARE(delta.first().first().progressMeters, 0.0);
+    QVERIFY2(std::abs(delta.first().first().deltaSeconds) < 1e-6, "both laps start at their timed start");
+    const auto &finish = delta.last().last();
+    QCOMPARE(finish.progressMeters, fixture.axis.lengthMeters);
+    const double lapTimeDifference = lap.durationSeconds - lapB.durationSeconds;
+    QVERIFY2(std::abs(finish.deltaSeconds - lapTimeDifference) < 1e-6,
+        qPrintable(QString("finish delta %1 s, lap-time difference %2 s").arg(finish.deltaSeconds).arg(lapTimeDifference)));
 }
 
 void TrackProgressTests::marksStraightsWithZeroCurvatureAndCornersWithASpike()

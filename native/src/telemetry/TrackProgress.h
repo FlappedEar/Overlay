@@ -12,9 +12,14 @@
 
 namespace FlappedEar {
 
+// Projection of a gate-to-gate lap starts and ends a few samples inside the
+// gate; coverage within this distance of either gate counts as reaching it.
+inline constexpr double gateCoverageToleranceMeters = 15.0;
+
 // A dense (~2m spacing), gate-anchored polyline built once per compatible
-// track group from one representative lap. progress=0 is rotated to sit at
-// the timing-gate crossing. Points are local east/north meters relative to
+// track group from one representative lap. progress=0 sits where the lap's
+// path crosses the timing gate (KAN-152), or at the point nearest the gate
+// midpoint when the path never crosses the gate's segment. Points are local east/north meters relative to
 // `origin` -- the same convention TrackInference/LapTiming already use for a
 // lap trace, deliberately ignoring the west-positive display flip: that only
 // matters for map presentation, not for this internal distance math.
@@ -99,6 +104,12 @@ struct ProgressSegment {
 // TelemetrySession::sampledSegments's gap-preserving shape: an actual GPS
 // gap, or a stretch projectSample can't lock onto, ends the current segment
 // rather than bridging it.
+//
+// Progress is unwrapped within the lap (KAN-152): a fix taken just after the
+// lap's timed start that projects just before progress 0 is stored as a small
+// negative value, and fixes past the finish continue beyond lengthMeters, so
+// progress rises strictly across the whole lap. A sample that does not move
+// forward is left out.
 [[nodiscard]] QVector<ProgressSegment> projectLapTrace(
     const ProgressAxis &axis, const TelemetrySession &session, double startTime, double endTime,
     const CancellationCheck &cancelled = {});
@@ -121,8 +132,29 @@ struct DeltaPoint {
 // Resamples only where both laps have a projected (valid, locked) sample
 // covering the same progress value -- never across a gap in either lap, and
 // never by inventing a value between A's and B's differing valid ranges.
+// Elapsed time is measured from the progress-0 crossing, or from the first
+// projected sample when the projection does not reach it.
 [[nodiscard]] QVector<QVector<DeltaPoint>> computeDeltaSeries(
     const QVector<ProgressSegment> &lapA, const QVector<ProgressSegment> &lapB,
     double progressStepMeters, const CancellationCheck &cancelled = {});
+
+// Each lap's timed start (its gate crossing) and the axis length.
+struct DeltaTiming {
+    double lapStartA = 0.0;
+    double lapEndA = 0.0;
+    double lapStartB = 0.0;
+    double lapEndB = 0.0;
+    double lengthMeters = 0.0;
+};
+
+// As above, but each lap's time is measured from its timed start, so the delta
+// agrees with lap-time differences (KAN-152). Like sector timing, a lap whose
+// projection reaches within gateCoverageToleranceMeters of the gate is at
+// progress 0 at its timed start and at lengthMeters at its timed end: the
+// delta is 0 at the start and the lap-time difference at the finish, which is
+// always the series' last step. Progress stays within [0, lengthMeters].
+[[nodiscard]] QVector<QVector<DeltaPoint>> computeDeltaSeries(
+    const QVector<ProgressSegment> &lapA, const QVector<ProgressSegment> &lapB,
+    double progressStepMeters, const DeltaTiming &timing, const CancellationCheck &cancelled = {});
 
 } // namespace FlappedEar
