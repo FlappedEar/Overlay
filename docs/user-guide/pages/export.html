@@ -15,7 +15,7 @@
 
 <figure>
   <img src="assets/screens/export-dialog.png" alt="Export dialog in Single lap · hotlap mode with source summary, output file, resolution, frame rate, quality, bitrate and lap range" width="1440" height="1040" loading="lazy">
-  <figcaption>The Export dialog in <strong>Single lap · hotlap</strong> mode for the Session 5 GoPro clip (3840×2160, 59.94 fps, HEVC Main 10). The range is the best lap, LAP 2 (1:49.898), plus a 6-second handle on each side: 2:01.905 in all.</figcaption>
+  <figcaption>The Export dialog in <strong>Single lap · hotlap</strong> mode for Session 5 over the review backdrop (1920×1080, 59.94 fps, 8-bit H.264). The range is the best lap, LAP 2 (1:49.898), plus a 6-second handle on each side: 2:01.922 in all.</figcaption>
 </figure>
 
 <h3 id="source">Source</h3>
@@ -78,7 +78,7 @@
 </figure>
 <figure>
   <img src="assets/screens/export-complete.png" alt="Export complete window" width="1440" height="860" loading="lazy">
-  <figcaption><em>Export complete</em>: the file passed validation. The final encoder was Apple VideoToolbox HEVC.</figcaption>
+  <figcaption><em>Export complete</em>: the file passed validation. This picture was taken on Linux, where the final encoder was x265; on a Mac it is usually Apple VideoToolbox HEVC.</figcaption>
 </figure>
 <p>The progress window ends with one of: <em>Export complete</em>, <em>Export completed with warning</em>, <em>Export failed</em> or <em>Export cancelled</em>. <em>Completed with warning</em> means the file was written but a few frames are missing at the very end; check the result before using it.</p>
 <p>Every export writes a log file, kept even when the export fails or is cancelled. The ten most recent logs are kept; see <a href="projects.html#files">Where files are stored</a>.</p>

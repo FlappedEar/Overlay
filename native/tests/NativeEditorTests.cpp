@@ -531,6 +531,8 @@ void EditorTests::capturesUserGuideScreens()
     // and FLAPPEDEAR_GUIDE_VBO are a matching GoPro clip and VBO;
     // FLAPPEDEAR_GUIDE_DAY (optional) is the folder of that day's VBOs and
     // FLAPPEDEAR_GUIDE_CHAPTERS (optional) a comma-separated chaptered clip.
+    // FLAPPEDEAR_GUIDE_SYNC_OFFSET (optional, seconds) replaces Auto Sync for
+    // a video without GoPro GPS (KAN-189).
     // Private media is read in place and never copied.
     UserGuideCaptureOptions options;
     options.outputDirectory = qEnvironmentVariable("FLAPPEDEAR_GUIDE_CAPTURE_DIR");
@@ -543,6 +545,11 @@ void EditorTests::capturesUserGuideScreens()
             options.day << file.absoluteFilePath();
     const QString chapters = qEnvironmentVariable("FLAPPEDEAR_GUIDE_CHAPTERS");
     if (!chapters.isEmpty()) options.chapters = chapters.split(',', Qt::SkipEmptyParts);
+    if (const QString offset = qEnvironmentVariable("FLAPPEDEAR_GUIDE_SYNC_OFFSET"); !offset.isEmpty()) {
+        bool ok = false;
+        options.syncOffset = offset.toDouble(&ok);
+        QVERIFY2(ok, "FLAPPEDEAR_GUIDE_SYNC_OFFSET is not a number");
+    }
     QTemporaryDir scratch; QVERIFY(scratch.isValid());
     options.scratchDirectory = scratch.path();
     QVERIFY(FlappedEar::registerBundledFonts());
