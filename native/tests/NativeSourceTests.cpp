@@ -167,14 +167,14 @@ void SourceTests::persistsEventSelectionAndRunLocalSync()
     QCOMPARE(controller.lastSavedRevision(), quint64(4));
     const QString documentId = controller.m_document.m_documentId;
     controller.m_activeTemplateId = QStringLiteral("test-template");
-    controller.setSyncOffset(9.0);
-    controller.setTimeScale(1.002);
+    controller.syncController()->setOffset(9.0);
+    controller.syncController()->setTimeScale(1.002);
     QVERIFY(controller.selectEventRun("run-b"));
     QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
     QCOMPARE(controller.sampleCount(), 3);
     QVERIFY(controller.lapSummaries().isEmpty());
-    QCOMPARE(controller.syncOffset(), -1.5);
-    QCOMPARE(controller.timeScale(), 1.0);
+    QCOMPARE(controller.syncController()->offset(), -1.5);
+    QCOMPARE(controller.syncController()->timeScale(), 1.0);
     QCOMPARE(controller.videoLoadState(), QStringLiteral("idle"));
     QVERIFY(controller.videoSource().isEmpty());
     QCOMPARE(controller.activeTemplateId(), QStringLiteral("test-template"));
@@ -198,8 +198,8 @@ void SourceTests::persistsEventSelectionAndRunLocalSync()
     QCOMPARE(runs[0].toObject().value("primaryTelemetrySourceId").toString(), QStringLiteral("run-a-source"));
     QVERIFY(controller.selectEventRun("run-a"));
     QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-    QCOMPARE(controller.syncOffset(), 9.0);
-    QCOMPARE(controller.timeScale(), 1.002);
+    QCOMPARE(controller.syncController()->offset(), 9.0);
+    QCOMPARE(controller.syncController()->timeScale(), 1.002);
     QCOMPARE(controller.lapSummaries().size(), 3);
     QCOMPARE(controller.videoLoadState(), QStringLiteral("missing"));
     QCOMPARE(controller.lastSavedRevision(), revision);
@@ -230,7 +230,7 @@ void SourceTests::recoversEventAndRelinksOnlyActiveSource()
         AppController controller(nullptr, recovery);
         QVERIFY(controller.m_document.beginProjectLoad(path, project));
         QCOMPARE(controller.vboLoadState(), QStringLiteral("missing"));
-        controller.setSyncOffset(8.0);
+        controller.syncController()->setOffset(8.0);
         QVERIFY(controller.selectEventRun("run-b"));
         QCOMPARE(controller.vboLoadState(), QStringLiteral("missing"));
         controller.m_document.writeRecoverySnapshot();
@@ -266,7 +266,7 @@ void SourceTests::rejectsInvalidEventWithoutReplacingDocument()
     QSettings settings; settings.clear(); settings.sync();
     AppController controller(nullptr, directory.filePath("recovery.json"));
     QVERIFY(controller.m_document.beginProjectLoad(directory.filePath("event.fetproject"), EventProjectFixture::project()));
-    controller.setSyncOffset(7.0);
+    controller.syncController()->setOffset(7.0);
     const auto before = controller.currentProjectObject();
     const quint64 generation = controller.m_document.m_sourceGeneration;
     auto malformed = EventProjectFixture::project();
@@ -312,7 +312,7 @@ void SourceTests::rejectsLateSourceResultsAfterRunSelection()
     QCOMPARE(controller.vboLoadState(), QStringLiteral("missing"));
     QVERIFY(controller.channelNames().isEmpty());
     QVERIFY(controller.lapSummaries().isEmpty());
-    QCOMPARE(controller.syncOffset(), -1.5);
+    QCOMPARE(controller.syncController()->offset(), -1.5);
 }
 
 void SourceTests::selectsEventRunThroughEditorQml()
@@ -400,7 +400,7 @@ void SourceTests::importsSixRunsAndAppendsWithoutDuplicates()
     const QString active = controller.activeRunId();
     const auto projectPath = directory.filePath("day.fetproject");
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
-    controller.setSyncOffset(3.0); // Appending must retain unsaved active-run edits.
+    controller.syncController()->setOffset(3.0); // Appending must retain unsaved active-run edits.
     const auto savedRuns = EventProjectFixture::runs(controller.currentProjectObject());
     const auto extra = directory.filePath("new.vbo"); QVERIFY(QFile::copy(QStringLiteral(TEST_FIXTURE_PATH), extra));
     QVERIFY(controller.m_document.beginBatchImport({urls[0], QUrl::fromLocalFile(extra)}));
@@ -411,7 +411,7 @@ void SourceTests::importsSixRunsAndAppendsWithoutDuplicates()
     QTRY_COMPARE(controller.m_document.batchImportState(), QStringLiteral("idle"));
     QCOMPARE(controller.eventRuns().size(), 7);
     QCOMPARE(controller.activeRunId(), active);
-    QCOMPARE(controller.syncOffset(), 3.0);
+    QCOMPARE(controller.syncController()->offset(), 3.0);
     const auto appended = EventProjectFixture::runs(controller.currentProjectObject());
     for (int i = 0; i < 6; ++i) QCOMPARE(appended[i], savedRuns[i]);
     QVERIFY(controller.saveCurrentProject());
@@ -488,9 +488,9 @@ void SourceTests::invalidatesBatchReviewAfterDocumentChanges()
     const QList<QUrl> urls{QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH))};
     QVERIFY(controller.m_document.beginBatchImport(urls));
     QTRY_COMPARE(controller.m_document.batchImportState(), QStringLiteral("review"));
-    controller.setSyncOffset(8);
+    controller.syncController()->setOffset(8);
     QCOMPARE(controller.m_document.batchImportState(), QStringLiteral("error"));
-    QCOMPARE(controller.syncOffset(), 8.0);
+    QCOMPARE(controller.syncController()->offset(), 8.0);
     QVERIFY(controller.m_document.beginBatchImport(urls));
     QTRY_COMPARE(controller.m_document.batchImportState(), QStringLiteral("review"));
     QVERIFY(!controller.m_document.confirmBatchImport("Day", false, independentBatchChoices(controller.m_document.batchImportRows())));
@@ -528,14 +528,14 @@ void SourceTests::importsAnalysisRunsAutomatically()
     QVERIFY(controller.videoSource().isEmpty());
     QVERIFY(controller.dirty());
     const auto active = controller.activeRunId();
-    controller.setSyncOffset(4);
+    controller.syncController()->setOffset(4);
     const auto laps = directory.filePath("third.vbo");
     QVERIFY(writeBytes(laps, EventProjectFixture::lapsVbo()));
     QVERIFY(controller.m_document.importAnalysisRuns({}, {vbo, QUrl::fromLocalFile(laps)}));
     QTRY_COMPARE(committed.size(), 2);
     QCOMPARE(controller.eventRuns().size(), 3);
     QCOMPARE(controller.activeRunId(), active);
-    QCOMPARE(controller.syncOffset(), 4.0);
+    QCOMPARE(controller.syncController()->offset(), 4.0);
     QCOMPARE(controller.m_document.analysisImportMessages().size(), 1);
     const auto path = directory.filePath("outing.fetproject");
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(path)));
@@ -559,10 +559,10 @@ void SourceTests::guardsAutomaticAnalysisImport()
     QVERIFY(controller.eventRuns().isEmpty());
     QVERIFY(!controller.dirty());
     QVERIFY(controller.m_document.importAnalysisRuns("Stale", urls));
-    controller.setSyncOffset(2);
+    controller.syncController()->setOffset(2);
     QTRY_VERIFY(!controller.m_document.m_batchPending);
     QVERIFY(controller.eventRuns().isEmpty());
-    QCOMPARE(controller.syncOffset(), 2.0);
+    QCOMPARE(controller.syncController()->offset(), 2.0);
     QVERIFY(!controller.m_document.importAnalysisRuns("Dirty", urls));
     QVERIFY(controller.m_document.batchImportError().contains("Save"));
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath("old.fetproject"))));
@@ -864,7 +864,7 @@ void SourceTests::keepsEveryTelemetryFieldThroughAnOverlayEdit()
     controller.requestOpenProject(QUrl::fromLocalFile(dayPath));
     QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
     QVERIFY(!controller.dirty());
-    controller.setSyncOffset(4.5);
+    controller.syncController()->setOffset(4.5);
     QVERIFY(controller.widgetModel()->addWidget("lapCurrent") >= 0);
     QVERIFY(controller.saveCurrentProject());
     const auto saved = QJsonDocument::fromJson(readBytes(dayPath)).object();
@@ -1234,9 +1234,9 @@ void SourceTests::keepsVideoChaptersAsOneTimeline()
         QCOMPARE(controller.m_exportChapterPaths.size(), 3);
         QVERIFY(!controller.startExport(file("GX020200.MP4"), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, true));
         QVERIFY2(controller.startExport(QUrl::fromLocalFile(directory.filePath("out.mp4")), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, false),
-                 qPrintable(controller.exportError()));
-        QTRY_VERIFY_WITH_TIMEOUT(!controller.exporting(), 120000); // the worker exited and the output was committed
-        QVERIFY2(controller.exportState() == "complete", qPrintable(controller.exportError() + controller.exportDiagnosticLog().right(3000)));
+                 qPrintable(controller.exporter()->error()));
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.exporter()->exporting(), 120000); // the worker exited and the output was committed
+        QVERIFY2(controller.exporter()->state() == "complete", qPrintable(controller.exporter()->error() + controller.exporter()->diagnosticLog().right(3000)));
         QCOMPARE(MediaProbe::probe(directory.filePath("out.mp4"), {}, true).videoFrameCount, qsizetype(210));
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
     }
@@ -1264,7 +1264,7 @@ void SourceTests::keepsVideoChaptersAsOneTimeline()
             QVERIFY(reopened.locateVideoTimeline(4000).value("gap").toBool());
             QVERIFY(reopened.statusText().contains("gap"));
             QVERIFY(!reopened.startExport(QUrl::fromLocalFile(directory.filePath("gap.mp4")), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, false));
-            QVERIFY(reopened.exportError().contains("missing or changed"));
+            QVERIFY(reopened.exporter()->error().contains("missing or changed"));
             // Saving keeps the missing chapter's reference and duration.
             QVERIFY(reopened.saveProject(QUrl::fromLocalFile(projectPath)));
             const auto again = QJsonDocument::fromJson(readBytes(projectPath)).object()
@@ -1400,37 +1400,37 @@ void SourceTests::preservesTimingEditsDuringAutoSync()
     settings.sync();
     QTemporaryDir directory;
     AppController controller(nullptr, directory.filePath("recovery.json"));
-    controller.m_syncCancellation = std::make_shared<std::atomic_bool>(false);
-    AppController::AutoSyncResult result;
+    controller.m_syncController.m_syncCancellation = std::make_shared<std::atomic_bool>(false);
+    SyncController::AutoSyncResult result;
     result.generation = controller.m_document.m_sourceGeneration;
-    result.syncRevision = controller.m_syncRevision;
+    result.syncRevision = controller.m_syncController.m_syncRevision;
     result.success = true;
     result.candidate.offset = 12.5;
     result.candidate.timeScale = 1.002;
     result.candidate.confidence = 1.0;
-    QPromise<AppController::AutoSyncResult> promise;
+    QPromise<SyncController::AutoSyncResult> promise;
     promise.start();
-    controller.m_syncWatcher.setFuture(promise.future());
-    QSignalSpy finished(&controller, &AppController::syncingChanged);
-    if (edit == 1) controller.setSyncOffset(7.0);
-    if (edit == 2) controller.setTimeScale(1.01);
-    if (edit == 3) { controller.setSyncOffset(7.0); controller.setSyncOffset(0.0); }
-    const bool cancelled = controller.m_syncCancellation->load();
+    controller.m_syncController.m_syncWatcher.setFuture(promise.future());
+    QSignalSpy finished(controller.syncController(), &SyncController::runningChanged);
+    if (edit == 1) controller.syncController()->setOffset(7.0);
+    if (edit == 2) controller.syncController()->setTimeScale(1.01);
+    if (edit == 3) { controller.syncController()->setOffset(7.0); controller.syncController()->setOffset(0.0); }
+    const bool cancelled = controller.m_syncController.m_syncCancellation->load();
     promise.addResult(result); // A completed worker can still deliver an already-queued result.
     promise.finish();
     QTRY_VERIFY(!finished.isEmpty());
     QCOMPARE(cancelled, edit != 0);
-    QCOMPARE(controller.syncOffset(), edit == 0 ? 12.5 : edit == 1 ? 7.0 : 0.0);
-    QCOMPARE(controller.timeScale(), edit == 0 ? 1.002 : edit == 2 ? 1.01 : 1.0);
-    if (edit != 0) QVERIFY(controller.syncCandidate().isEmpty());
+    QCOMPARE(controller.syncController()->offset(), edit == 0 ? 12.5 : edit == 1 ? 7.0 : 0.0);
+    QCOMPARE(controller.syncController()->timeScale(), edit == 0 ? 1.002 : edit == 2 ? 1.01 : 1.0);
+    if (edit != 0) QVERIFY(controller.syncController()->candidate().isEmpty());
     else {
-        QCOMPARE(controller.syncCandidate().value("timeScale").toDouble(), 1.002);
-        controller.applySyncCandidate();
-        QCOMPARE(controller.timeScale(), 1.002);
-        controller.setSyncOffset(8.0);
-        QVERIFY(controller.syncCandidate().isEmpty());
-        controller.applySyncCandidate();
-        QCOMPARE(controller.syncOffset(), 8.0);
+        QCOMPARE(controller.syncController()->candidate().value("timeScale").toDouble(), 1.002);
+        controller.syncController()->applyCandidate();
+        QCOMPARE(controller.syncController()->timeScale(), 1.002);
+        controller.syncController()->setOffset(8.0);
+        QVERIFY(controller.syncController()->candidate().isEmpty());
+        controller.syncController()->applyCandidate();
+        QCOMPARE(controller.syncController()->offset(), 8.0);
     }
 }
 
@@ -2194,12 +2194,12 @@ void SourceTests::exposesNoDataForOverflowingTransforms()
     QTemporaryDir directory;
     AppController controller(nullptr, directory.filePath("recovery.json"));
     controller.m_session = std::make_unique<TelemetrySession>(session);
-    controller.setTimeScale(std::numeric_limits<double>::max());
+    controller.syncController()->setTimeScale(std::numeric_limits<double>::max());
     controller.m_playbackTime = 2;
     QVERIFY(!controller.telemetryValue("speed").isValid());
     QCOMPARE(controller.valueText("speed"), QString("—"));
     QVERIFY(controller.telemetrySeries("speed", 2, 3, 100).isEmpty());
-    controller.setTimeScale(1);
+    controller.syncController()->setTimeScale(1);
     QCOMPARE(controller.telemetryValue("speed").toDouble(), 20.0);
     QVERIFY(!controller.telemetrySeries("speed", 2, 3, 100).isEmpty());
 }
@@ -2278,27 +2278,27 @@ void SourceTests::preservesConfirmedTransformForAmbiguousResult()
 {
     QTemporaryDir directory;
     AppController controller(nullptr, directory.filePath("recovery.json"));
-    controller.setSyncOffset(7.25);
-    controller.setTimeScale(1.003);
+    controller.syncController()->setOffset(7.25);
+    controller.syncController()->setTimeScale(1.003);
     auto video = speedSession(0, 30, 0);
     auto telemetry = speedSession(0, 35, 0);
     for (qsizetype i = 0; i < video.channels["speed"].sampleCount(); ++i) video.channels["speed"].setValue(i, 42.0F);
     for (qsizetype i = 0; i < telemetry.channels["speed"].sampleCount(); ++i) telemetry.channels["speed"].setValue(i, 42.0F);
-    AppController::AutoSyncResult result;
+    SyncController::AutoSyncResult result;
     result.success = true;
     result.generation = controller.m_document.m_sourceGeneration;
-    result.syncRevision = controller.m_syncRevision;
+    result.syncRevision = controller.m_syncController.m_syncRevision;
     result.candidate = TelemetrySyncEngine::synchronize(video, telemetry);
     QVERIFY(!shouldAutoApplySyncCandidate(result.candidate));
-    QPromise<AppController::AutoSyncResult> promise;
+    QPromise<SyncController::AutoSyncResult> promise;
     promise.start();
-    controller.m_syncWatcher.setFuture(promise.future());
-    QSignalSpy finished(&controller, &AppController::syncingChanged);
+    controller.m_syncController.m_syncWatcher.setFuture(promise.future());
+    QSignalSpy finished(controller.syncController(), &SyncController::runningChanged);
     promise.addResult(result); promise.finish();
     QTRY_VERIFY(!finished.isEmpty());
-    QCOMPARE(controller.syncOffset(), 7.25);
-    QCOMPARE(controller.timeScale(), 1.003);
-    QVERIFY(!controller.syncCandidate().isEmpty());
+    QCOMPARE(controller.syncController()->offset(), 7.25);
+    QCOMPARE(controller.syncController()->timeScale(), 1.003);
+    QVERIFY(!controller.syncController()->candidate().isEmpty());
 }
 
 void SourceTests::rejectsInvalidAutomaticCandidates()

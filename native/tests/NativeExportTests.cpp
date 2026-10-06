@@ -473,8 +473,8 @@ void ExportTests::protectsEveryDaySourceFromExport()
     const auto refused = [&](const QString &target, const QString &protectedFile) {
         const QByteArray before = readBytes(protectedFile);
         if (before.isEmpty()) return QString("could not read ") + protectedFile;
-        if (exportTo(target)) { controller.cancelExport(); return QString("export started onto ") + target; }
-        if (controller.exportState() != "failed") return QString("state ") + controller.exportState() + " for " + target;
+        if (exportTo(target)) { controller.exporter()->cancel(); return QString("export started onto ") + target; }
+        if (controller.exporter()->state() != "failed") return QString("state ") + controller.exporter()->state() + " for " + target;
         if (readBytes(protectedFile) != before) return QString("changed ") + protectedFile;
         return QString();
     };
@@ -497,7 +497,7 @@ void ExportTests::protectsEveryDaySourceFromExport()
     {
         const auto failure = refused(hardLink, second);
         QVERIFY2(failure.isEmpty(), qPrintable(failure));
-        QVERIFY(controller.exportError().contains("hard link"));
+        QVERIFY(controller.exporter()->error().contains("hard link"));
     }
 #endif
     // Different letter case, where the file system ignores case (APFS default).
@@ -510,7 +510,7 @@ void ExportTests::protectsEveryDaySourceFromExport()
     const QString unrelated = directory.filePath("previous-export.mp4");
     QVERIFY(writeBytes(unrelated, "earlier export"));
     QVERIFY(!controller.startExport(QUrl::fromLocalFile(unrelated), 32, 32, 30, 1, 8'000'000, false, false, {}, {}, false));
-    QCOMPARE(controller.exportState(), QString("overwriteConfirmationRequired"));
+    QCOMPARE(controller.exporter()->state(), QString("overwriteConfirmationRequired"));
     QCOMPARE(readBytes(unrelated), QByteArray("earlier export"));
 }
 
@@ -1169,25 +1169,25 @@ void ExportTests::stopsUnixWritersBeforeControllerCleanup()
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
     AppController controller;
-    controller.m_exportOutputTransaction = std::make_unique<ExportOutputTransaction>();
+    controller.m_export.m_exportOutputTransaction = std::make_unique<ExportOutputTransaction>();
     const QString target = directory.filePath("result.mp4");
     QVERIFY(writeBytes(target, "existing user target"));
-    const auto prepared = controller.m_exportOutputTransaction->prepare(target, {}, {}, true);
+    const auto prepared = controller.m_export.m_exportOutputTransaction->prepare(target, {}, {}, true);
     QCOMPARE(prepared.status, ExportOutputTransaction::PreparationStatus::Ready);
-    const QString staging = controller.m_exportOutputTransaction->stagingPath();
-    const QString id = controller.m_exportOutputTransaction->transactionId();
+    const QString staging = controller.m_export.m_exportOutputTransaction->stagingPath();
+    const QString id = controller.m_export.m_exportOutputTransaction->transactionId();
     const QString overlay = QDir::temp().filePath(QStringLiteral("flappedear-overlay-%1.mkv").arg(id));
     QVERIFY(writeBytes(overlay, "owned overlay"));
-    controller.m_exportCancelPath = directory.filePath("cancel");
-    if (cancelled) QVERIFY(writeBytes(controller.m_exportCancelPath, {}));
-    controller.m_exportState = cancelled ? QStringLiteral("cancelling") : QStringLiteral("complete");
-    controller.m_exportProcess = std::make_unique<QProcess>();
-    controller.m_exportSupervisor = std::make_unique<ExportProcessSupervisor>(*controller.m_exportProcess);
+    controller.m_export.m_exportCancelPath = directory.filePath("cancel");
+    if (cancelled) QVERIFY(writeBytes(controller.m_export.m_exportCancelPath, {}));
+    controller.m_export.m_exportState = cancelled ? QStringLiteral("cancelling") : QStringLiteral("complete");
+    controller.m_export.m_exportProcess = std::make_unique<QProcess>();
+    controller.m_export.m_exportSupervisor = std::make_unique<ExportProcessSupervisor>(*controller.m_export.m_exportProcess);
     const QString ready = directory.filePath("writer.ready");
-    controller.m_exportSupervisor->start(QStringLiteral(RAW_TRANSPORT_CONSUMER_PATH),
+    controller.m_export.m_exportSupervisor->start(QStringLiteral(RAW_TRANSPORT_CONSUMER_PATH),
         {QStringLiteral("tree-leader-exits"), staging, ready});
-    QVERIFY(controller.m_exportSupervisor->waitForStarted());
-    const auto leaderPid = static_cast<pid_t>(controller.m_exportProcess->processId());
+    QVERIFY(controller.m_export.m_exportSupervisor->waitForStarted());
+    const auto leaderPid = static_cast<pid_t>(controller.m_export.m_exportProcess->processId());
     const auto emergencyStop = qScopeGuard([leaderPid] { if (leaderPid > 1) ::kill(-leaderPid, SIGKILL); });
     QTRY_VERIFY_WITH_TIMEOUT(!readBytes(ready).isEmpty(), 2'000);
     const qint64 writerPid = readBytes(ready).toLongLong();
@@ -1197,19 +1197,19 @@ void ExportTests::stopsUnixWritersBeforeControllerCleanup()
     QString error;
     QVERIFY2(ExportArtifactManifest::create(manifest, &error), qPrintable(error));
     const QString manifestPath = ExportArtifactManifest::manifestPathFor(id);
-    controller.m_exportManifestPath = manifestPath;
-    QCOMPARE(controller.m_exportProcess->write("R", 1), qint64(1));
-    QVERIFY(controller.m_exportProcess->waitForBytesWritten(2'000));
-    QVERIFY(controller.m_exportProcess->state() == QProcess::NotRunning
-            || controller.m_exportProcess->waitForFinished(2'000));
+    controller.m_export.m_exportManifestPath = manifestPath;
+    QCOMPARE(controller.m_export.m_exportProcess->write("R", 1), qint64(1));
+    QVERIFY(controller.m_export.m_exportProcess->waitForBytesWritten(2'000));
+    QVERIFY(controller.m_export.m_exportProcess->state() == QProcess::NotRunning
+            || controller.m_export.m_exportProcess->waitForFinished(2'000));
 
     QVERIFY(!ExportArtifactManifest::recoverStale().contains(manifestPath));
     QVERIFY(QFileInfo::exists(staging));
     QVERIFY(QFileInfo::exists(overlay));
-    QVERIFY(controller.exporting());
-    controller.finishExport(0, QProcess::NormalExit);
-    QVERIFY(!controller.exporting());
-    QCOMPARE(controller.exportState(), cancelled ? QStringLiteral("cancelled") : QStringLiteral("failed"));
+    QVERIFY(controller.exporter()->exporting());
+    controller.m_export.finishExport(0, QProcess::NormalExit);
+    QVERIFY(!controller.exporter()->exporting());
+    QCOMPARE(controller.exporter()->state(), cancelled ? QStringLiteral("cancelled") : QStringLiteral("failed"));
     QVERIFY(!ExportArtifactManifest::processIsActive(writerPid));
     QVERIFY(!QFileInfo::exists(manifestPath));
     QVERIFY(!QFileInfo::exists(overlay));
@@ -1658,9 +1658,9 @@ void ExportTests::boundsVerboseDiagnosticStorage()
 void ExportTests::showsVeryVerboseDiagnosticsLive()
 {
     AppController controller;
-    QSignalSpy logChanged(&controller, &AppController::exportDiagnosticLogChanged);
+    QSignalSpy logChanged(controller.exporter(), &ExportController::diagnosticLogChanged);
     for (int entry = 0; entry < 5; ++entry)
-        controller.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
+        controller.m_export.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
     QTRY_COMPARE(logChanged.count(), 1); // Coalesced.
 
     QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
@@ -1670,8 +1670,8 @@ void ExportTests::showsVeryVerboseDiagnosticsLive()
     auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
     window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
     // The log lives in the export progress popup.
-    controller.m_exportProgressVisible = true;
-    emit controller.exportChanged();
+    controller.m_export.m_exportProgressVisible = true;
+    emit controller.m_export.changed();
     QObject *details = window->findChild<QObject *>("exportDetails");
     QObject *veryVerbose = window->findChild<QObject *>("exportVeryVerbose");
     auto *log = window->findChild<QQuickItem *>("verboseExportLog");
@@ -1680,14 +1680,14 @@ void ExportTests::showsVeryVerboseDiagnosticsLive()
     details->setProperty("checked", true);
     veryVerbose->setProperty("checked", true);
     QTRY_VERIFY(scroll->isVisible());
-    QTRY_COMPARE(log->property("text").toString(), controller.exportDiagnosticLog());
+    QTRY_COMPARE(log->property("text").toString(), controller.exporter()->diagnosticLog());
 
-    controller.appendExportDiagnostic(QStringLiteral("arrived while open"));
+    controller.m_export.appendExportDiagnostic(QStringLiteral("arrived while open"));
     QTRY_VERIFY(log->property("text").toString().endsWith(QStringLiteral("arrived while open")));
 
     // Scroll back into history, detached from the tail, then let the log trim its head.
     for (int entry = 5; entry < 1000; ++entry)
-        controller.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
+        controller.m_export.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
     QTRY_VERIFY(log->property("text").toString().endsWith(QStringLiteral("entry 999")));
     // Let the deferred tail scroll of that update finish before detaching from the tail.
     QTRY_VERIFY(!log->property("programmaticScroll").toBool());
@@ -1706,9 +1706,9 @@ void ExportTests::showsVeryVerboseDiagnosticsLive()
     flickable->setProperty("contentY", anchor);
     QTRY_COMPARE(flickable->property("contentY").toDouble(), anchor);
     for (int entry = 1000; entry < 1700; ++entry)
-        controller.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
+        controller.m_export.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
     QTRY_VERIFY(log->property("text").toString().endsWith(QStringLiteral("entry 1699")));
-    QVERIFY(controller.exportDiagnosticDroppedCharacters() > 0);
+    QVERIFY(controller.exporter()->diagnosticDroppedCharacters() > 0);
     QVERIFY(log->property("text").toString().contains(QStringLiteral("entry 600\n")));
     QTRY_VERIFY(std::abs(flickable->property("contentY").toDouble()
                          - lineTop(QStringLiteral("entry 600\n"))) < 1.0);
@@ -1728,7 +1728,7 @@ void ExportTests::showsVeryVerboseDiagnosticsLive()
     QTest::mouseRelease(window, Qt::LeftButton, {}, end);
     QTRY_VERIFY(bar->property("position").toDouble() + bar->property("size").toDouble() > 0.999);
     QVERIFY(!log->property("followTail").toBool());
-    controller.appendExportDiagnostic(QStringLiteral("after the drag"));
+    controller.m_export.appendExportDiagnostic(QStringLiteral("after the drag"));
     QTRY_VERIFY(log->property("text").toString().endsWith(QStringLiteral("after the drag")));
     QVERIFY(!log->property("followTail").toBool());
     QVERIFY(QMetaObject::invokeMethod(log, "jumpToLatest"));

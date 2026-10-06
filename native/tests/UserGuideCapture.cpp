@@ -140,19 +140,19 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QTRY_VERIFY_WITH_TIMEOUT(controller.playbackTime() > 0.0, 30000);
     QTRY_VERIFY_WITH_TIMEOUT(!window->property("previewPrimeFramePending").toBool(), 30000);
     if (options.syncOffset) {
-        controller.setSyncOffset(*options.syncOffset);
+        controller.syncController()->setOffset(*options.syncOffset);
     } else {
         // Auto Sync is refused until the video's GPS has been read; retry until it starts.
         bool started = false;
         for (int attempt = 0; attempt < 30 && !started; ++attempt) {
             controller.autoSync();
-            started = QTest::qWaitFor([&] { return controller.syncing() || !controller.syncCandidate().isEmpty(); }, 2000);
+            started = QTest::qWaitFor([&] { return controller.syncController()->running() || !controller.syncController()->candidate().isEmpty(); }, 2000);
         }
         QVERIFY2(started, "Auto Sync did not start");
-        QTRY_VERIFY_WITH_TIMEOUT(!controller.syncing() && !controller.syncCandidate().isEmpty(), 300000);
-        const QVariantMap sync = controller.syncCandidate();
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.syncController()->running() && !controller.syncController()->candidate().isEmpty(), 300000);
+        const QVariantMap sync = controller.syncController()->candidate();
         qInfo().noquote() << QString("sync offset %1 s · correlation %2 · confidence %3 · applied %4")
-            .arg(controller.syncOffset(), 0, 'f', 3).arg(sync.value("correlation").toDouble(), 0, 'f', 4)
+            .arg(controller.syncController()->offset(), 0, 'f', 3).arg(sync.value("correlation").toDouble(), 0, 'f', 4)
             .arg(sync.value("confidence").toDouble(), 0, 'f', 2).arg(sync.value("automaticallyApplied").toBool());
         QVERIFY(sync.value("automaticallyApplied").toBool());
     }
@@ -166,7 +166,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
         if (value.toMap().value("isBest").toBool()) best = value.toMap();
     QVERIFY(!best.isEmpty());
     const auto videoSecondsAt = [&](double telemetry) {
-        return (telemetry - controller.syncOffset()) / controller.timeScale();
+        return (telemetry - controller.syncController()->offset()) / controller.syncController()->timeScale();
     };
     const auto seek = [&](double seconds) {
         QMetaObject::invokeMethod(window, "seekTimeline", Q_ARG(QVariant, seconds * 1000.0));
@@ -274,12 +274,12 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QFile::remove(target);
     QVERIFY2(controller.startExport(QUrl::fromLocalFile(target), 1920, 1080, 60000, 1001,
         controller.recommendedExportBitrate(1920, 1080, 60000, 1001, QStringLiteral("high")),
-        true, true, timecode(firstFrame), timecode(firstFrame + 8 * 60)), qPrintable(controller.exportError()));
-    qInfo() << "export started" << controller.exportState() << timecode(firstFrame);
+        true, true, timecode(firstFrame), timecode(firstFrame + 8 * 60)), qPrintable(controller.exporter()->error()));
+    qInfo() << "export started" << controller.exporter()->state() << timecode(firstFrame);
     QQuickItem *overlayRoot = window->contentItem()->parentItem() ? window->contentItem()->parentItem() : window->contentItem();
-    const auto finished = [&] { return controller.exportState() == "complete" || controller.exportState() == "failed"; };
+    const auto finished = [&] { return controller.exporter()->state() == "complete" || controller.exporter()->state() == "failed"; };
     QVERIFY(QTest::qWaitFor([&] {
-        return controller.exportProgressInfo().value("progressPercent").toDouble() >= 25.0 || finished();
+        return controller.exporter()->progressInfo().value("progressPercent").toDouble() >= 25.0 || finished();
     }, 240000));
     QVERIFY(shoot.window(window, "export-progress", {}, 100));
     auto *details = byText(overlayRoot, QStringLiteral("Details"));
@@ -293,10 +293,10 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     verbose->setProperty("checked", false);
     details->setProperty("checked", false);
     QTRY_VERIFY_WITH_TIMEOUT(finished(), 600000);
-    qInfo() << "export state" << controller.exportState();
-    QCOMPARE(controller.exportState(), QStringLiteral("complete"));
+    qInfo() << "export state" << controller.exporter()->state();
+    QCOMPARE(controller.exporter()->state(), QStringLiteral("complete"));
     QVERIFY(shoot.window(window, "export-complete", {}, 800));
-    controller.dismissExportProgress();
+    controller.exporter()->dismissProgress();
     QFile::remove(target);
 
     // A GoPro recording split into chapters, on the run it belongs to.
