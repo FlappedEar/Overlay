@@ -12,7 +12,7 @@ ColumnLayout {
 
     readonly property var values: {
         frame.renderContext.time;
-        return frame.renderContext.tyreValues();
+        return frame.renderContext.tyreValues(frame.widgetSettings);
     }
     readonly property bool showTemperature: frame.widgetSettings.showTemperature ?? true
     readonly property bool showPressure: frame.widgetSettings.showPressure ?? true

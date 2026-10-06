@@ -302,6 +302,7 @@ void TelemetryRenderContext::setSession(const TelemetrySession *session)
 {
     // Sessions are immutable once loaded; map their tyre channels once.
     m_tyreChannels = session ? mapTyreChannels(*session) : TyreChannelMap{};
+    m_pressureUnits.clear();
     if (m_session == session) {
         return;
     }
@@ -376,24 +377,34 @@ QString TelemetryRenderContext::valueText(const QString &channelName, const int 
                            : QStringLiteral("—");
 }
 
-QVariantMap TelemetryRenderContext::tyreValues() const
+QVariantMap TelemetryRenderContext::tyreValues(const QVariantMap &settings) const
 {
     QVariantMap result;
-    const bool available = m_session && m_tyreChannels.hasAny();
+    std::array<QString, tyreCornerCount> temperatureChoice;
+    std::array<QString, tyreCornerCount> pressureChoice;
+    for (int index = 0; index < tyreCornerCount; ++index) {
+        const QString code = tyreCornerCode(static_cast<TyreCorner>(index));
+        temperatureChoice[index] = settings.value(QStringLiteral("temperatureSource") + code).toString();
+        pressureChoice[index] = settings.value(QStringLiteral("pressureSource") + code).toString();
+    }
+    const TyreChannelMap channels = m_session
+        ? withTyreChannelChoices(*m_session, m_tyreChannels, temperatureChoice, pressureChoice, &m_pressureUnits)
+        : TyreChannelMap{};
+    const bool available = m_session && channels.hasAny();
     result.insert(QStringLiteral("available"), available);
     if (!available) return result;
     const auto time = videoToTelemetryTime(m_time, m_sync);
     QVariantList corners;
     for (int index = 0; index < tyreCornerCount; ++index) {
         const auto corner = static_cast<TyreCorner>(index);
-        const TyreReading reading = time ? tyreReadingAt(*m_session, m_tyreChannels, corner, *time) : TyreReading{};
+        const TyreReading reading = time ? tyreReadingAt(*m_session, channels, corner, *time) : TyreReading{};
         QVariantMap entry;
         entry.insert(QStringLiteral("corner"), tyreCornerCode(corner));
         entry.insert(QStringLiteral("hasTemperature"), reading.temperatureCelsius.has_value());
         entry.insert(QStringLiteral("hasPressure"), reading.pressureBar.has_value());
         if (reading.temperatureCelsius) entry.insert(QStringLiteral("temperature"), *reading.temperatureCelsius);
         if (reading.pressureBar) entry.insert(QStringLiteral("pressure"), *reading.pressureBar);
-        entry.insert(QStringLiteral("pressureSourceUnit"), pressureUnitName(m_tyreChannels.pressureUnit[index]));
+        entry.insert(QStringLiteral("pressureSourceUnit"), pressureUnitName(channels.pressureUnit[index]));
         corners.append(entry);
     }
     result.insert(QStringLiteral("corners"), corners);

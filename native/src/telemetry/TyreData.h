@@ -3,6 +3,7 @@
 #include "telemetry/ChannelSummary.h"
 #include "telemetry/TelemetrySession.h"
 
+#include <QHash>
 #include <QString>
 
 #include <array>
@@ -51,6 +52,14 @@ struct TyreReading {
 // The first channel per corner whose name is a tyre (or tire) temperature or
 // pressure for that corner, and each pressure channel's unit.
 [[nodiscard]] TyreChannelMap mapTyreChannels(const TelemetrySession &session);
+
+// KAN-203: the widget's own choice of channel per corner. An empty name keeps
+// the automatic channel; any other name replaces it, and a name the recording
+// lacks gives that corner no data. `pressureUnits` caches the classification
+// per channel name, so a caller that keeps it across frames classifies once.
+[[nodiscard]] TyreChannelMap withTyreChannelChoices(const TelemetrySession &session, TyreChannelMap map,
+    const std::array<QString, tyreCornerCount> &temperature, const std::array<QString, tyreCornerCount> &pressure,
+    QHash<QString, PressureUnit> *pressureUnits = nullptr);
 
 // A declared unit wins; otherwise the magnitude decides (see above).
 [[nodiscard]] PressureUnit classifyPressureUnit(const TelemetryChannel &channel);

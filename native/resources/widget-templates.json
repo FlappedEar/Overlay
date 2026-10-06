@@ -72,7 +72,9 @@
     },
     "tyres": {
       "label": "TYRES", "showLabel": true, "showTemperature": true, "showPressure": true,
-      "pressureUnit": "bar", "pressureDecimals": 2, "coldBelow": 0, "hotAbove": 0
+      "pressureUnit": "bar", "pressureDecimals": 2, "coldBelow": 0, "hotAbove": 0,
+      "temperatureSourceFL": "", "temperatureSourceFR": "", "temperatureSourceRL": "", "temperatureSourceRR": "",
+      "pressureSourceFL": "", "pressureSourceFR": "", "pressureSourceRL": "", "pressureSourceRR": ""
     },
     "retroCustomValue": {
       "showBackground": true, "showBorder": true, "padding": 10, "label": "VALUE", "decimals": 1,

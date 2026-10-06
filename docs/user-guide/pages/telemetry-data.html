@@ -58,14 +58,14 @@
 <p>Any channel can still be chosen by name in a widget's <strong>Source channel</strong>.</p>
 
 <h3 id="tyres">Tyre channels</h3>
-<p>The Tyres widget finds channels whose name contains <code>tyre</code> or <code>tire</code>, either <code>temp</code>/<code>temperature</code> or <code>pressure</code>/<code>press</code>, and one corner: <code>fl</code>, <code>fr</code>, <code>rl</code> or <code>rr</code> (also <code>lf</code>, <code>rf</code>, <code>lr</code>). Example: <code>tyre_temp_fl</code>.</p>
+<p>By default the Tyres widget finds channels whose name contains <code>tyre</code> or <code>tire</code>, either <code>temp</code>/<code>temperature</code> or <code>pressure</code>/<code>press</code>, and one corner: <code>fl</code>, <code>fr</code>, <code>rl</code> or <code>rr</code> (also <code>lf</code>, <code>rf</code>, <code>lr</code>). Example: <code>tyre_temp_fl</code>. Any channel can instead be chosen per corner in the Tyres inspector; a chosen channel's pressure unit is judged the same way.</p>
 <ul>
   <li>Tyre channels are read from VBO files. The RCZ import reads only RaceChrono's GPS, accelerometer, gyro, magnetometer, heart-rate and a fixed set of OBD channels (speed, RPM, throttle, accelerator, brake, coolant, intake, oil and gearbox temperatures), so tyre channels in an <code>.rcz</code> are not imported: export a VBO from RaceChrono instead.</li>
   <li>Temperature is shown in °C. VBO files do not declare units, so a tyre temperature is always treated as °C.</li>
   <li>Pressure in bar, psi or kPa is converted to the chosen display unit. If the unit is not declared (always the case for VBO files), it is judged from typical values.</li>
   <li>An exact 0 is treated as "no reading yet", because tyre-pressure sensors report 0 before their first reading.</li>
 </ul>
-<p>RaceChrono only records tyre data when a TPMS or CAN tyre logger feeds it; a phone-and-OBD setup records none. When the loaded recording has no tyre channel at all, the Tyres inspector says <em>This recording has no tyre channels</em> and every corner shows a dash.</p>
+<p>RaceChrono only records tyre data when a TPMS or CAN tyre logger feeds it; a phone-and-OBD setup records none. When no channel of the loaded recording is named as a tyre value and none is chosen, the Tyres inspector says so and every corner shows a dash.</p>
 
 <h2 id="lap-timing">How laps are found</h2>
 <p>Laps, the lap widgets and hot-lap export come from the start/finish line (timing gate) recorded in the telemetry file, for example the RaceChrono track's start line, and from GPS:</p>

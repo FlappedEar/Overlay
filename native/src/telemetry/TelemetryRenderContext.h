@@ -56,8 +56,10 @@ public:
     // hasPressure, temperature (°C), pressure (bar), pressureSourceUnit}]}
     // at the current time, FL, FR, RL, RR in order. A value is present only
     // when recorded and valid at that time; `available` is false when the
-    // recording has no tyre channels at all.
-    Q_INVOKABLE QVariantMap tyreValues() const;
+    // recording has no tyre channels at all. KAN-203: `settings` are the
+    // widget's settings; a non-empty temperatureSourceFL ... pressureSourceRR
+    // picks that corner's channel instead of the automatic one.
+    Q_INVOKABLE QVariantMap tyreValues(const QVariantMap &settings = {}) const;
     // A recording is loaded and none of its channels is a tyre temperature
     // or pressure, so the tyres widget can only show dashes.
     [[nodiscard]] bool tyreChannelsMissing() const;
@@ -78,6 +80,7 @@ private:
     const TrackGeometry *m_geometry = nullptr;
     LapSession m_lapSession;
     TyreChannelMap m_tyreChannels;
+    mutable QHash<QString, PressureUnit> m_pressureUnits; // chosen pressure channels, per session
     QVariantList m_trackPoints;
     SyncTransform m_sync;
     double m_time = 0.0;

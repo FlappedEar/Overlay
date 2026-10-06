@@ -203,6 +203,19 @@ void WidgetTests::showsTyreTemperatureAndPressurePerCorner()
     QTRY_COMPARE(model->widget(tyres).value("settings").toMap().value("pressureUnit").toString(), QString("psi"));
     QTRY_COMPARE(cornerText("RR", "tyrePressure"), QString("33.4 psi"));
 
+    // KAN-203: each corner's channel can be chosen; FR has no channel of its
+    // own, so it takes RR's pressure.
+    QQuickItem *frPressure = nullptr;
+    QTRY_VERIFY((frPressure = findVisual(findVisual, window->contentItem(),
+        [](QQuickItem *item) { return item->objectName() == "tyreSourceFRPressure" && item->isVisible(); })));
+    const int rrPressure = frPressure->property("model").toStringList().indexOf("tyre_pressure_rr-canbus");
+    QVERIFY(rrPressure > 0);
+    frPressure->setProperty("currentIndex", rrPressure);
+    QVERIFY(QMetaObject::invokeMethod(frPressure, "activated", Q_ARG(int, rrPressure)));
+    QTRY_COMPARE(model->widget(tyres).value("settings").toMap().value("pressureSourceFR").toString(),
+                 QString("tyre_pressure_rr-canbus"));
+    QTRY_COMPARE(cornerText("FR", "tyrePressure"), QString("33.4 psi"));
+
     // KAN-203: a recording without tyre channels says so in the inspector, so the
     // dashes are not mistaken for a broken binding.
     const auto notice = [&] {
@@ -220,8 +233,13 @@ void WidgetTests::showsTyreTemperatureAndPressurePerCorner()
     QVERIFY(writeBytes(plainPath, plain));
     controller.loadVbo(QUrl::fromLocalFile(plainPath));
     QTRY_VERIFY(controller.renderContext()->tyreChannelsMissing());
+    model->setSetting(tyres, "pressureSourceFR", "");
     QTRY_VERIFY(notice()->isVisible());
     QTRY_COMPARE(cornerText("RR", "tyreTemperature"), QString("—"));
+    // Choosing a channel by hand shows it and clears the notice.
+    model->setSetting(tyres, "temperatureSourceRR", "coolant_temp-obd");
+    QTRY_COMPARE(cornerText("RR", "tyreTemperature"), QString("83°C"));
+    QTRY_VERIFY(!notice()->isVisible());
     for (const auto &arguments : warnings)
         for (const auto &error : arguments.first().value<QList<QQmlError>>())
             QVERIFY2(error.toString().contains("Cannot open: qrc:"), qPrintable(error.toString()));
@@ -473,7 +491,9 @@ void WidgetTests::providesCustomizableArchetypes()
         {"gForceMagnitudeBar", {"lateralSource", "longitudinalSource", "invertLateral", "invertLongitudinal", "maxG", "labelText", "showLabel", "showValue", "barColor", "barBackgroundColor", "barRadius"}},
         {"retroCustomValue", {"source", "label", "fallbackText", "panelColor", "valueColor", "labelColor", "icon", "stackPosition", "showSeparator"}},
         {"retroTachometer", {"source", "minValue", "maxValue", "needleColor", "warningValue", "warningColor", "rimColor"}},
-        {"tyres", {"label", "showTemperature", "showPressure", "pressureUnit", "pressureDecimals", "coldBelow", "hotAbove"}},
+        {"tyres", {"label", "showTemperature", "showPressure", "pressureUnit", "pressureDecimals", "coldBelow", "hotAbove",
+                   "temperatureSourceFL", "temperatureSourceFR", "temperatureSourceRL", "temperatureSourceRR",
+                   "pressureSourceFL", "pressureSourceFR", "pressureSourceRL", "pressureSourceRR"}},
         {"lapCurrent", {"label", "timingDecimals"}},
     };
     for (auto iterator = specialized.cbegin(); iterator != specialized.cend(); ++iterator) {
