@@ -291,10 +291,10 @@ jobs:
       CMAKE_BUILD_PARALLEL_LEVEL: '4'
       QT_QPA_PLATFORM: offscreen
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/.github/tsan-suppressions.txt
-      # As ASan+UBSan, and also the telemetry-app suite: its QtConcurrent tasks
-      # are handed to worker threads through Qt's uninstrumented thread pool,
-      # so every captured value reads as a race (docs/testing.md, KAN-219).
-      EXCLUDED_TESTS: flappedear_telemetry_app_tests|flappedear_native_tests_[a-z]+|flappedear_startup_smoke|flappedear_command_line_usage|flappedear_telemetry_core_boundary|flappedear_telemetry_app_boundary|flappedear_boundary_rejects_relative-transitive|flappedear_boundary_rejects_gui-header
+      # As ASan+UBSan, and also the two suites that drive the reference app:
+      # its QtConcurrent tasks reach worker threads through Qt's uninstrumented
+      # thread pool, so every captured value reads as a race (docs/testing.md).
+      EXCLUDED_TESTS: flappedear_telemetry_app_tests|flappedear_project_vector_tests|flappedear_native_tests_[a-z]+|flappedear_startup_smoke|flappedear_command_line_usage|flappedear_telemetry_core_boundary|flappedear_telemetry_app_boundary|flappedear_boundary_rejects_relative-transitive|flappedear_boundary_rejects_gui-header
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -164,6 +164,7 @@ The apps share no code (KAN-167), so each implements the schema and this documen
 
 Tests in this repository:
 - `EventProjectTests::keepsNewerVersionsOfKnownFields` covers the version rules above;
+- `ProjectVectorTests` (KAN-218) opens the shared days in `native/tests/fixtures/project-vectors/` in the reference analysis app, saves them unchanged in place and with Save As, and compares the result with the expected files. FlappedEar Telemetry runs the same vectors, so the two apps cannot drift apart in how they re-save a day ([testing](testing.md#kan-218-fetproject-round-trip-vectors));
 - `SourceTests::keepsEveryTelemetryFieldThroughAnOverlayEdit` opens a day saved by the reference analysis code, without a `scene`, with every analysis field and newer versions added. It edits the synchronization and the scene, saves, and checks that everything else is unchanged.
 
 The analysis code that remains in this repository as a reference for Telemetry treats a newer review or inference as absent. Overlays never edits these fields.

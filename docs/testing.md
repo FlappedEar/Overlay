@@ -1724,7 +1724,7 @@ published change against its own CI run; historical task records do not validate
 new code. Keep the [local task workflow](development-workflow.md) for implementation
 and private-media acceptance.
 
-[Native CI](../.github/workflows/build.yml) runs on pull requests, pushes to `main`, and manual dispatch. Two macOS arm64 jobs configure Debug and Release Ninja builds with Qt 6.8.3 (the supported minimum minor), compile the application and tests with C++20, and run all 42 CTest registrations: 38 Qt Test executables (the GUI application suite, the telemetry-core and telemetry-app suites, the per-module suites, the KAN-125 storage-migration suite, the KAN-180 content-id vector suite and the KAN-178 command-line suite), the production QML startup smoke, the KAN-178 command-line usage check, and the two library-boundary checks. Release jobs additionally deploy Qt and run installed startup with the build SDK hidden, then attach internal candidate archives. Windows builds, tests and installer validation are paused by owner direction on 13 September 2026; resume them only when explicitly requested. Earlier Windows results below are historical. See [Windows installer](windows-installer.md).
+[Native CI](../.github/workflows/build.yml) runs on pull requests, pushes to `main`, and manual dispatch. Two macOS arm64 jobs configure Debug and Release Ninja builds with Qt 6.8.3 (the supported minimum minor), compile the application and tests with C++20, and run all 49 CTest registrations: 43 Qt Test executables (the five GUI application suites, the telemetry-core and telemetry-app suites, the per-module suites, the KAN-125 storage-migration suite, the KAN-180 content-id vector suite, the KAN-218 project vector suite and the KAN-178 command-line suite), the production QML startup smoke, the KAN-178 command-line usage check, the two library-boundary checks and the two checks that the boundary script rejects a bad fixture. Release jobs additionally deploy Qt and run installed startup with the build SDK hidden, then attach internal candidate archives. Windows builds, tests and installer validation are paused by owner direction on 13 September 2026; resume them only when explicitly requested. Earlier Windows results below are historical. See [Windows installer](windows-installer.md).
 
 | Job | Renderer | Toolchain |
 | --- | --- | --- |
@@ -1735,7 +1735,7 @@ and private-media acceptance.
 A third job (KAN-154) builds a Debug configuration on Linux with
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined` and runs every
 CTest test except the GUI application suite, the startup smoke, the command-line
-usage check and the two boundary scripts: 37 Qt Test executables. Those excluded
+usage check and the boundary scripts: 38 Qt Test executables since KAN-218. Those excluded
 need a display, a GPU and FFmpeg 8.1, which the macOS jobs supply. Any sanitizer
 report, including a leak, fails the job. Checked locally on 5 October 2026 with
 Qt 6.8.3 and GCC 13: all 37 pass, `flappedear_recording_alignment_tests` takes
@@ -1761,8 +1761,9 @@ fails it. Qt's prebuilt libraries are not instrumented, so
 [`.github/tsan-suppressions.txt`](../.github/tsan-suppressions.txt) ignores the
 calls Qt Core and Qt Test make into intercepted functions (`memmove`,
 `pthread_cond_destroy`, ...) with `called_from_lib`; our own loads and stores
-are still checked. The job also leaves out `flappedear_telemetry_app_tests`:
-its `QtConcurrent::run` tasks reach the worker through `QThreadPool`, whose
+are still checked. The job also leaves out `flappedear_telemetry_app_tests` and
+`flappedear_project_vector_tests`, which drive the reference app: its
+`QtConcurrent::run` tasks reach the worker through `QThreadPool`, whose
 futex-based locking ThreadSanitizer cannot see, so every value a task captures
 reads as a race with the main thread that wrote it (over 300 reports, all of
 that shape). Checking that suite needs a Qt built with `-sanitize thread`.
@@ -2403,6 +2404,39 @@ revision followed by a newline, which Qt's `$` used to accept.
 
 Checked on Linux with Qt 6.8.3 (Debug): the test passes, and altering one
 recorded gate revision makes `gateRevisions` fail.
+
+## KAN-218: .fetproject round-trip vectors
+
+`ProjectVectorTests` reads `native/tests/fixtures/project-vectors/vectors.json`.
+Each accepted case is a day as FlappedEar Telemetry saves it, with its
+recordings: `telemetry-day.fetproject` carries every analysis field (lap
+exclusions, comparison group, range and channels, run details, segments and
+their review, newer versions of the versioned fields, unknown keys at the root,
+event and run) and `event-demo.fetproject` is a minimal day with relative paths
+only. The test copies a case into a temporary `day/` folder, opens it in the
+reference analysis app (`TelemetryController`), saves it unchanged to the
+case's `savePath` (in place, or Save As to `archive/2026/`) and compares the
+result, as JSON values, with the expected file. The temporary folder in each
+`absolutePath` becomes `/vectors`, and the generated `documentState.saveId`
+(and `documentState.id` when the day had none) becomes `<generated-uuid>` once
+checked to be a UUID. A second save of the saved day must give the same file,
+and no save may change a run's `lapDerivationKey`. Three documents both apps
+must refuse are validated too: root `sources` in v3, an event in a version 2
+document, and a malformed version tag (`channel-fusion-vX`).
+
+What the expected files pin, as of 6 October 2026: a save keeps every field
+it does not own; Save As rewrites each `relativePath` (`../../day/first.vbo`)
+and keeps `absolutePath`; a day without them gains `absolutePath`,
+`documentState.id`, `savedRevision`, `mapSettings.providerId` `none` and
+`exportSettings.quality` `high`.
+
+FlappedEar Telemetry should copy this folder and run the same cases against
+its Dart save (KAN-218 port; that repository is not reachable from here). A
+deliberate change to how a day is saved regenerates the expected files with
+`FLAPPEDEAR_UPDATE_PROJECT_VECTORS=1` and is agreed with the owner and
+Telemetry, as for the content ids (KAN-170). Checked on Linux with Qt 6.8.3
+(Debug): the test passes; removing an unknown key from an expected file fails
+it.
 
 ## KAN-178: command-line modes
 
