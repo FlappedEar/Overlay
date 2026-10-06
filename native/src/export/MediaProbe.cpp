@@ -144,7 +144,7 @@ QByteArray runProbeOutput(
             throw std::runtime_error(QStringLiteral("ffprobe %1 output exceeded %2 bytes while probing %3 (observed %4 bytes).").arg(mode).arg(outputLimitBytes).arg(path).arg(stdoutOutput.observedBytes()).toStdString());
         }
         const qint64 remaining = timeoutMilliseconds - elapsed.elapsed();
-        finished = process.waitForFinished(static_cast<int>(qMin<qint64>(250, remaining)));
+        finished = waitForOutputOrExit(process, static_cast<int>(qMin<qint64>(250, remaining)));
         if (!finished && progressCallback && heartbeat.shouldEmit(elapsed.elapsed())) {
             progressCallback({MediaProbeEvent::Phase::Heartbeat, elapsed.elapsed(), executable,
                               arguments, path, mode, 0});

@@ -1270,6 +1270,25 @@ void ExportTests::boundsProcessOutputAndProgressLines()
     QVERIFY(tail.truncated());
     QCOMPARE(tail.bytes(), QByteArrayLiteral("5678"));
 
+#ifdef Q_OS_UNIX
+    // KAN-201: a child that floods its output is stopped close to the cap, not
+    // after QProcess has buffered everything written during a long wait.
+    QProcess flood;
+    flood.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QStringLiteral("exec head -c 268435456 /dev/zero")});
+    QVERIFY(flood.waitForStarted());
+    constexpr qint64 cap = 1024 * 1024;
+    BoundedProcessOutput flooded(BoundedProcessOutput::Mode::CompletePayload, cap);
+    bool exited = false;
+    while (!exited && !flooded.exceeded()) {
+        exited = waitForOutputOrExit(flood, 250);
+        flooded.append(flood.readAllStandardOutput());
+    }
+    flood.kill();
+    QVERIFY(flood.waitForFinished(5'000));
+    QVERIFY(flooded.exceeded());
+    QVERIFY2(flooded.observedBytes() <= 2 * cap, qPrintable(QString::number(flooded.observedBytes())));
+#endif
+
     FfmpegProgressParser parser;
     static_cast<void>(parser.append(QByteArray(ProcessOutputLimits::ffmpegProgressLineBytes + 1, 'x')));
     QVERIFY(parser.overflowed());

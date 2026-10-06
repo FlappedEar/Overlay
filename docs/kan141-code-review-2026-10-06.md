@@ -26,8 +26,8 @@ filed. Severity is the reviewer's estimate of user impact.
 | T2 | Medium | A merged fused channel recomputes its gap threshold over mixed rates and can bridge real gaps. | KAN-188 |
 | T3 | Medium (policy) | Overlays hold the last value for up to 0.75 s (heart rate 2 s) into gaps and past the end. | Kept by owner decision, KAN-200 |
 | T4 | Medium–high | GoPro GPMF parsing copied nested containers, multiplying memory, with no packet cap. | Fixed, KAN-197 (#182) |
-| T5 | Low | ffprobe output is buffered without a bound before the size cap is checked. | KAN-201 |
-| T6 | Low (latent) | Driving distance integrates speed across telemetry gaps. | KAN-201 |
+| T5 | Low | ffprobe output is buffered without a bound before the size cap is checked. | Fixed, KAN-201 (#188) |
+| T6 | Low (latent) | Driving distance integrates speed across telemetry gaps. | Fixed, KAN-201 (#188) |
 
 Areas found sound: atomic saves, dirty-state prompts, missing media handling, generation guards
 outside recordings, cancellation, the chapters timeline, sidebar scrolling, shortcut gating, preview

@@ -1,5 +1,8 @@
 #include "export/BoundedProcessOutput.h"
 
+#include <QElapsedTimer>
+#include <QProcess>
+
 namespace FlappedEar {
 
 BoundedProcessOutput::BoundedProcessOutput(const Mode mode, const qint64 maximumBytes)
@@ -38,6 +41,18 @@ QString utf8Tail(const QString &text, const qint64 maximumUtf8Bytes)
     const qsizetype line = utf8.indexOf('\n', start);
     if (line >= 0 && line + 1 < utf8.size() && line - start < 4096) start = line + 1;
     return QString::fromUtf8(marker + utf8.sliced(start));
+}
+
+bool waitForOutputOrExit(QProcess &process, const int milliseconds)
+{
+    QElapsedTimer waited;
+    waited.start();
+    if (process.waitForReadyRead(milliseconds)) return false;
+    if (process.state() == QProcess::NotRunning) return true;
+    // A closed standard output returns at once and can bring no more bytes, so
+    // waiting for the exit cannot grow it.
+    if (waited.elapsed() < milliseconds / 2) return process.waitForFinished(milliseconds);
+    return false;
 }
 
 } // namespace FlappedEar
