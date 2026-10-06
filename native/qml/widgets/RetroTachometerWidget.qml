@@ -3,8 +3,12 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 Item {
+    id: tachometer
     property var frame: parent.frame
     anchors.fill: parent
+    // A CSS font string needs a multi-word family quoted; unquoted, Canvas drops
+    // the spaces ("HelveticaNeue") and falls back to its default font (KAN-139).
+    readonly property string canvasFamily: "'" + String(frame.family).replace(/['"\\]/g, "") + "'"
     property var rawValue: frame.adjusted(frame.raw("source", "rpm"))
     property bool hasValue: rawValue !== undefined && rawValue !== null && Number.isFinite(Number(rawValue))
     property real value: hasValue ? Number(rawValue) : Number(frame.widgetSettings.minValue ?? 0)
@@ -85,7 +89,7 @@ Item {
                 if (major) {
                     ctx.font = "700 " + (frame.configuredFontSize() > 0
                         ? frame.configuredFontSize() * frame.sceneScale
-                        : Math.max(12 * frame.sceneScale, radius * 0.16)) + "px " + frame.family;
+                        : Math.max(12 * frame.sceneScale, radius * 0.16)) + "px " + tachometer.canvasFamily;
                     ctx.fillText(String(Math.round((minimum + (maximum - minimum) * ratio) / 1000)),
                                  cx + Math.cos(angle) * radius * 0.64,
                                  cy + Math.sin(angle) * radius * 0.64);
@@ -107,9 +111,9 @@ Item {
             // The compact two-line caption follows the reference hierarchy:
             // informative, but secondary to the analog face and readout.
             ctx.fillStyle = settings.secondaryTextColor || "#b5c0ca";
-            ctx.font = "700 " + Math.max(9 * frame.sceneScale, radius * 0.105) + "px " + frame.family;
+            ctx.font = "700 " + Math.max(9 * frame.sceneScale, radius * 0.105) + "px " + tachometer.canvasFamily;
             ctx.fillText(settings.label || "RPM", cx, cy - radius * 0.27);
-            ctx.font = "600 " + Math.max(8 * frame.sceneScale, radius * 0.085) + "px " + frame.family;
+            ctx.font = "600 " + Math.max(8 * frame.sceneScale, radius * 0.085) + "px " + tachometer.canvasFamily;
             ctx.fillText(settings.scaleLabel || "x1000", cx, cy - radius * 0.14);
 
             ctx.fillStyle = "#0d151b";
@@ -125,7 +129,7 @@ Item {
             ctx.globalAlpha = 1;
 
             ctx.fillStyle = dialColor;
-            ctx.font = "700 " + Math.max(18 * frame.sceneScale, radius * 0.26) + "px " + frame.family;
+            ctx.font = "700 " + Math.max(18 * frame.sceneScale, radius * 0.26) + "px " + tachometer.canvasFamily;
             ctx.fillText(hasValue ? Math.round(value).toString() : "—", cx, cy + radius * 0.63);
         }
     }

@@ -15,13 +15,11 @@
       "textColor": "#f2f5f7",
       "secondaryTextColor": "#b5c0ca",
       "accentColor": "#55d76a",
-      "accentColor2": "#42a5ff",
       "fontFamily": "Helvetica Neue",
       "fontWeight": 600,
       "fontSize": 0,
       "valueFontScale": 1,
       "labelFontScale": 1,
-      "textAlign": "center",
       "padding": 10,
       "source": "",
       "unit": "",
@@ -36,7 +34,7 @@
       "clampValue": false,
       "style": "classic"
     },
-    "speed": { "label": "Speed", "unit": "km/h", "maxValue": 300, "showGauge": false },
+    "speed": { "label": "Speed", "unit": "km/h", "maxValue": 300 },
     "heartRate": { "label": "HR", "unit": "bpm", "accentColor": "#e14b4b", "maxValue": 220, "showIcon": true },
     "pedals": {
       "acceleratorSource": "", "brakeSource": "", "acceleratorLabel": "Throttle", "brakeLabel": "Brake",
@@ -84,13 +82,13 @@
     "lapCurrent": {
       "label": "Current", "showBorder": false,
       "backgroundColor": "#343941", "backgroundOpacity": 0.76,
-      "accentColor": "#20d05a", "accentColor2": "#ef4f5f", "timingDecimals": 2
+      "accentColor": "#20d05a", "timingDecimals": 2
     },
     "retroTachometer": {
       "showBackground": false, "showBorder": false, "padding": 0, "source": "rpm-obd",
       "label": "RPM", "minValue": 0, "maxValue": 9000, "warningValue": 7500, "dialColor": "#f2f5f7",
       "needleColor": "#e14b4b", "warningColor": "#e14b4b", "rimColor": "#8895a3",
-      "valuePlateColor": "#111a22", "panelColor": "#111a22", "panelOpacity": 0.86
+      "panelColor": "#111a22", "panelOpacity": 0.86
     }
   },
   "templates": [

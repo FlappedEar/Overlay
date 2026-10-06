@@ -58,6 +58,9 @@ that check over this file.
   uses Tech throughout. Tech renderers live in `native/qml/widgets/tech/`; the
   radar trail uses `telemetryValueAgo`, so it is deterministic. Saved projects
   keep Classic.
+- **Inspector shows only working controls (KAN-139, 6 October 2026):**
+  `InspectorPanel.qml`'s `unusedControls` lists, per style and type, the
+  shared settings a renderer ignores; update it when a renderer changes.
 - `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
   `docs/product-delivery.md` and Jira are the only status records.
 

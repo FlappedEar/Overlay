@@ -35,6 +35,7 @@ private slots:
     void rejectsNonFiniteWidgetGeometryAndDuplicateIds();
     void loadsVisualTemplates();
     void dropsRetiredWidgetTypes();
+    void keepsRetiredWidgetSettings();
     void providesCustomizableArchetypes();
     void persistsAndSharesCustomTemplates();
     void updatesCustomTemplatesInPlace();
@@ -392,18 +393,59 @@ void WidgetTests::dropsRetiredWidgetTypes()
     QCOMPARE(reloaded.count(), 1);
 }
 
+void WidgetTests::keepsRetiredWidgetSettings()
+{
+    // KAN-139: settings no renderer reads any more (accentColor2, textAlign,
+    // showGauge, valuePlateColor) are no longer defaults or inspector controls,
+    // but a project or template that holds them opens and saves them unchanged.
+    const QJsonObject legacySettings{
+        {QStringLiteral("accentColor2"), QStringLiteral("#ef4f5f")},
+        {QStringLiteral("textAlign"), QStringLiteral("left")},
+        {QStringLiteral("showGauge"), true},
+        {QStringLiteral("valuePlateColor"), QStringLiteral("#111a22")},
+        {QStringLiteral("label"), QStringLiteral("KM/H")},
+    };
+    const QJsonArray scene{
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("old-speed")}, {QStringLiteral("type"), QStringLiteral("speed")},
+                    {QStringLiteral("settings"), legacySettings}},
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("old-rpm")}, {QStringLiteral("type"), QStringLiteral("retroTachometer")},
+                    {QStringLiteral("settings"), legacySettings}},
+    };
+    WidgetModel model;
+    QVERIFY(model.fromJson(scene));
+    QCOMPARE(model.count(), 2);
+    QCOMPARE(model.retiredWidgetsDropped(), 0);
+    const QJsonArray saved = model.toJson();
+    for (const QJsonValue &widget : saved) {
+        const QJsonObject settings = widget.toObject().value(QStringLiteral("settings")).toObject();
+        for (auto it = legacySettings.begin(); it != legacySettings.end(); ++it)
+            QVERIFY2(settings.value(it.key()) == it.value(), qPrintable(widget.toObject().value("type").toString() + ": " + it.key()));
+    }
+    WidgetModel reopened;
+    QVERIFY(reopened.fromJson(saved));
+    QCOMPARE(reopened.toJson(), saved);
+
+    // New widgets no longer carry them.
+    WidgetModel fresh;
+    for (const QString type : {"speed", "lapCurrent", "retroTachometer", "heartRate"}) {
+        const QVariantMap settings = fresh.widget(fresh.addWidget(type)).value("settings").toMap();
+        for (const QString retired : {"accentColor2", "textAlign", "showGauge", "valuePlateColor"})
+            QVERIFY2(!settings.contains(retired), qPrintable(type + ": " + retired));
+    }
+}
+
 void WidgetTests::providesCustomizableArchetypes()
 {
     WidgetModel model;
     const QHash<QString, QStringList> specialized = {
-        {"speed", {"showGauge", "unit", "maxValue"}},
+        {"speed", {"unit", "maxValue"}},
         {"heartRate", {"showIcon", "unit", "accentColor"}},
         {"pedals", {"acceleratorSource", "brakeSource", "acceleratorColor", "brakeColor"}},
         {"f1GForceRadar", {"lateralSource", "longitudinalSource", "invertLateral", "invertLongitudinal", "maxG", "ringStepG", "showCrosshair", "showCenterBox", "showRingLabels", "radarBackgroundColor", "dotColor", "gridColor"}},
         {"gForceMagnitudeBar", {"lateralSource", "longitudinalSource", "invertLateral", "invertLongitudinal", "maxG", "labelText", "showLabel", "showValue", "barColor", "barBackgroundColor", "barRadius"}},
         {"retroCustomValue", {"source", "label", "fallbackText", "panelColor", "valueColor", "labelColor", "icon", "stackPosition", "showSeparator"}},
-        {"retroTachometer", {"source", "minValue", "maxValue", "needleColor"}},
-        {"tyres", {"label", "showTemperature", "showPressure", "pressureUnit", "coldBelow", "hotAbove"}},
+        {"retroTachometer", {"source", "minValue", "maxValue", "needleColor", "warningValue", "warningColor", "rimColor"}},
+        {"tyres", {"label", "showTemperature", "showPressure", "pressureUnit", "pressureDecimals", "coldBelow", "hotAbove"}},
         {"lapCurrent", {"label", "timingDecimals"}},
     };
     for (auto iterator = specialized.cbegin(); iterator != specialized.cend(); ++iterator) {
