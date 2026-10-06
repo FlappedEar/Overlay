@@ -168,42 +168,6 @@ AppController::AppController(QObject *parent, QString recoveryPath,
         }
         commitVboLoad(result, m_vboLoadMarksDocumentDirty);
     });
-    connect(&m_videoHashWatcher, &QFutureWatcher<VideoHashResult>::finished, this, [this] {
-        const VideoHashResult result = m_videoHashWatcher.result();
-        if (result.cancelled || result.generation != m_document.sourceGeneration()
-            || m_videoLoadState != QStringLiteral("ready") || m_videoSource.toLocalFile() != result.path)
-            return;
-        // KAN-208: a saved identity that the file no longer has is a mismatch;
-        // otherwise the computed one is recorded and saved with the project.
-        const auto expectedAt = [this](const qsizetype index) {
-            return m_videoChapterStates.isEmpty() || index == 0 ? m_videoReference.contentSha256
-                                                                 : m_videoChapterStates[index].reference.contentSha256;
-        };
-        bool mismatch = false;
-        for (qsizetype index = 0; index < result.digests.size(); ++index) {
-            const auto &digest = result.digests[index];
-            if (!digest.isEmpty() && !expectedAt(index).isEmpty() && digest != expectedAt(index)) mismatch = true;
-        }
-        if (mismatch) {
-            AppLog::warn(QStringLiteral("Video content differs from the project's saved identity: %1").arg(result.path));
-            m_videoLoadState = QStringLiteral("mismatch");
-            if (m_hashedVideoProbe.relink) {
-                m_pendingMismatchVideo = m_hashedVideoProbe;
-                m_pendingMismatchVbo = {};
-                m_sourceMismatchType = QStringLiteral("video");
-                emit sourceMismatchChanged();
-            }
-            emit sourceLoadStateChanged();
-            emit exportChanged();
-            setStatus(QStringLiteral("Video source does not match the project: its content changed."));
-            return;
-        }
-        for (qsizetype index = 0; index < result.digests.size(); ++index) {
-            if (result.digests[index].isEmpty()) continue;
-            if (m_videoChapterStates.isEmpty() || index == 0) m_videoReference.contentSha256 = result.digests[index];
-            if (index < m_videoChapterStates.size()) m_videoChapterStates[index].reference.contentSha256 = result.digests[index];
-        }
-    });
     initializeDocument();
     m_document.startup();
 }
@@ -215,7 +179,7 @@ AppController::~AppController()
     QElapsedTimer sourceShutdown;
     sourceShutdown.start();
     while (sourceShutdown.elapsed() < 2'000
-           && (m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning() || m_videoHashWatcher.isRunning()
+           && (m_videoProbeWatcher.isRunning() || m_vboLoadWatcher.isRunning()
                || m_document.projectLoadRunning() || m_syncController.running() || m_document.importRunning())) {
         QThread::msleep(10);
     }
@@ -579,7 +543,7 @@ quint64 AppController::beginSourceReplacement(const bool replacingVideo)
         if (replacingVideo) startVboLoad(request.path, generation, request.markDocumentDirty,
                                         request.expectedFingerprint, request.relink, request.expectedContentSha256);
         else startVideoProbe(request.path, generation, request.markDocumentDirty,
-                             request.expectedFingerprint, request.relink, request.chapters, request.expectedContentSha256);
+                             request.expectedFingerprint, request.relink, request.chapters);
     }
     return generation;
 }
@@ -622,7 +586,7 @@ void AppController::resumeInterruptedSources()
     if (video) {
         const auto request = m_videoLoadRequest;
         startVideoProbe(request.path, generation, request.markDocumentDirty,
-                        request.expectedFingerprint, request.relink, request.chapters, request.expectedContentSha256);
+                        request.expectedFingerprint, request.relink, request.chapters);
     }
     if (vbo) {
         const auto request = m_vboLoadRequest;
@@ -636,7 +600,7 @@ void AppController::cancelSourceJobs()
 {
     m_document.cancelProjectLoad();
     m_syncController.cancel();
-    for (const auto &cancellation : {m_videoProbeCancellation, m_vboLoadCancellation, m_videoHashCancellation}) {
+    for (const auto &cancellation : {m_videoProbeCancellation, m_vboLoadCancellation}) {
         if (cancellation) {
             cancellation->store(true);
         }
@@ -645,26 +609,24 @@ void AppController::cancelSourceJobs()
 
 void AppController::startVideoProbe(
     const QString &path, const quint64 generation, const bool markDocumentDirty,
-    QJsonObject expectedFingerprint, const bool relink, QVector<VideoChapterInput> chapters,
-    const QString &expectedContentSha256)
+    QJsonObject expectedFingerprint, const bool relink, QVector<VideoChapterInput> chapters)
 {
     AppLog::info(QStringLiteral("Video load/probe started: %1").arg(path));
     m_videoProbeCancellation = std::make_shared<std::atomic_bool>(false);
     const std::shared_ptr<std::atomic_bool> cancellation = m_videoProbeCancellation;
-    m_videoLoadRequest = {path, markDocumentDirty, expectedFingerprint, relink, chapters, expectedContentSha256};
+    m_videoLoadRequest = {path, markDocumentDirty, expectedFingerprint, relink, chapters};
     m_pendingVideoPath = path;
     m_videoLoadMarksDocumentDirty = markDocumentDirty;
     m_videoLoadState = QStringLiteral("loading");
     emit sourceLoadStateChanged();
     m_videoProbeWatcher.setFuture(QtConcurrent::run(
         [path, generation, cancellation, expectedFingerprint = std::move(expectedFingerprint), relink,
-         chapters = std::move(chapters), expectedContentSha256] {
+         chapters = std::move(chapters)] {
         VideoProbeResult result;
         result.path = path;
         result.generation = generation;
         result.expectedFingerprint = expectedFingerprint;
         result.relink = relink;
-        result.expectedContentSha256 = expectedContentSha256;
         try {
             result.mediaInfo = MediaProbe::probe(
                 path, {}, false, -1, {}, [cancellation] { return cancellation->load(); });
@@ -676,7 +638,7 @@ void AppController::startVideoProbe(
                 const auto videoDuration = [](const MediaInfo &info) {
                     return info.videoDuration > 0.0 ? info.videoDuration : info.duration;
                 };
-                result.chapters.append({ProjectSourceReferenceCodec::forLoadedSource(path, result.fingerprint, expectedContentSha256), path,
+                result.chapters.append({ProjectSourceReferenceCodec::forLoadedSource(path, result.fingerprint), path,
                     videoDuration(result.mediaInfo), true, {}, result.mediaInfo});
                 for (const auto &input : chapters) {
                     if (cancellation->load()) break;
@@ -692,8 +654,7 @@ void AppController::startVideoProbe(
                                 == SourceFingerprintMatch::Mismatch) {
                                 chapter.problem = QStringLiteral("mismatch");
                             } else {
-                                chapter.reference = ProjectSourceReferenceCodec::forLoadedSource(
-                                    input.path, fingerprint, input.reference.contentSha256);
+                                chapter.reference = ProjectSourceReferenceCodec::forLoadedSource(input.path, fingerprint);
                                 chapter.durationSeconds = videoDuration(info);
                                 chapter.available = true;
                                 chapter.mediaInfo = info;
@@ -809,10 +770,10 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     AppLog::info(QStringLiteral("Video load succeeded: %1").arg(result.path));
     m_videoSource = QUrl::fromLocalFile(result.path);
     m_exportSourceInfo = result.mediaInfo;
-    // KAN-208: the saved content identity stays until the background hash
-    // confirms or contradicts it (startVideoHash).
+    // KAN-208: videos keep the sampled video-v1 check; only telemetry carries
+    // a full-content identity (owner decision, 6 October 2026).
     m_videoReference = ProjectSourceReferenceCodec::forLoadedSource(
-        result.path, result.fingerprint, result.expectedContentSha256);
+        result.path, result.fingerprint);
     // KAN-105: chapters play as one timeline; a gap keeps its saved duration.
     m_videoChapterStates = result.chapters;
     m_videoChapterIndex = 0;
@@ -874,28 +835,6 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     setStatus(QStringLiteral("Video opened: %1").arg(QFileInfo(result.path).fileName())
         + (m_videoChapterNotice.isEmpty() ? QString() : QStringLiteral(". ") + m_videoChapterNotice));
     m_videoChapterNotice.clear();
-    startVideoHash(result);
-}
-
-void AppController::startVideoHash(const VideoProbeResult &committed)
-{
-    if (m_videoHashCancellation) m_videoHashCancellation->store(true);
-    m_videoHashCancellation = std::make_shared<std::atomic_bool>(false);
-    const auto cancellation = m_videoHashCancellation;
-    m_hashedVideoProbe = committed;
-    QStringList paths;
-    if (m_videoChapterStates.isEmpty()) paths.append(committed.path);
-    for (const auto &chapter : m_videoChapterStates) paths.append(chapter.available ? chapter.path : QString());
-    m_videoHashWatcher.setFuture(QtConcurrent::run(
-        [paths, generation = committed.generation, path = committed.path, cancellation] {
-        VideoHashResult result{generation, path, {}, false};
-        for (const auto &chapterPath : paths) {
-            result.digests.append(chapterPath.isEmpty() ? QString()
-                : ProjectSourceReferenceCodec::fileSha256(chapterPath, [cancellation] { return cancellation->load(); }));
-        }
-        result.cancelled = cancellation->load();
-        return result;
-    }));
 }
 
 void AppController::commitVboLoad(const VboLoadResult &result, const bool markDocumentDirty)
@@ -1075,8 +1014,7 @@ void AppController::relinkVideo(const QUrl &url)
     const QString path = normalizedSourcePath(info.absoluteFilePath());
     m_pendingVideoPath = path;
     // Relinking moves the first chapter; the other chapters keep their references.
-    startVideoProbe(path, generation, true, m_videoReference.fingerprint, true, videoChapterInputs(),
-                    m_videoReference.contentSha256);
+    startVideoProbe(path, generation, true, m_videoReference.fingerprint, true, videoChapterInputs());
 }
 
 void AppController::relinkVbo(const QUrl &url)
@@ -1105,9 +1043,6 @@ void AppController::resolveSourceMismatch(const bool acceptReplacement)
     }
     if (type == QStringLiteral("video") && m_pendingMismatchVideo.success
         && m_pendingMismatchVideo.generation == m_document.sourceGeneration()) {
-        // A replacement has no saved content identity to keep (KAN-208).
-        m_pendingMismatchVideo.expectedContentSha256.clear();
-        for (auto &chapter : m_pendingMismatchVideo.chapters) chapter.reference.contentSha256.clear();
         commitVideoProbe(m_pendingMismatchVideo, true);
     } else if (type == QStringLiteral("telemetry") && m_pendingMismatchVbo.success
                && m_pendingMismatchVbo.generation == m_document.sourceGeneration()) {
@@ -1190,7 +1125,7 @@ void AppController::startEditorSources(const ProjectLoadResult &result)
             chapters.append({saved[index].reference, ProjectSourceReferenceCodec::resolve(saved[index].reference, result.projectPath),
                 saved[index].durationSeconds});
         startVideoProbe(result.resolvedVideoPath, result.generation, false,
-                        result.videoReference.fingerprint, false, chapters, result.videoReference.contentSha256);
+                        result.videoReference.fingerprint, false, chapters);
     }
     if (!result.resolvedVboPath.isEmpty()) {
         startVboLoad(result.resolvedVboPath, result.generation, false,

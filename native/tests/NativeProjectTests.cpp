@@ -46,7 +46,7 @@ private slots:
     void opensProjectsWithMissingSources();
     void relinksTelemetryWithMismatchPolicy();
     void detectsTelemetryChangedOutsideSampledWindows();
-    void detectsVideoChangedOutsideSampledWindows();
+    void videosKeepTheSampledCheck();
     void rejectsStaleRelinkResults();
     void restoresSavedProjectsAndPreservesUnknownFields();
     void recoversAndDiscardsSavedChanges();
@@ -897,69 +897,46 @@ void ProjectTests::detectsTelemetryChangedOutsideSampledWindows()
              QString::fromLatin1(QCryptographicHash::hash(changed, QCryptographicHash::Sha256).toHex()));
 }
 
-void ProjectTests::detectsVideoChangedOutsideSampledWindows()
+void ProjectTests::videosKeepTheSampledCheck()
 {
-    // KAN-208: a video opens at once and is hashed in full behind it. A
-    // same-sized file changed between the sampled windows keeps its
-    // fingerprint, so only that hash reports the mismatch; choosing the file
-    // again and accepting it records the new identity.
+    // KAN-208, owner decision of 6 October 2026: only telemetry gets the
+    // full-content identity. A video keeps the sampled video-v1 check: Overlays
+    // saves no contentSha256 for it and does not check one a document carries.
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
     QSettings settings; settings.clear(); settings.sync();
     const auto video = directory.filePath("clip.mp4");
     QProcess encoder;
     encoder.start(FfmpegTools::ffmpegPath(), {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
-        "testsrc2=s=320x180:r=30:d=10", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", video});
+        "testsrc2=s=320x180:r=30:d=2", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", video});
     QVERIFY(encoder.waitForFinished(60'000));
     QCOMPARE(encoder.exitCode(), 0);
-    const auto bytes = readBytes(video);
-    QVERIFY2(bytes.size() > 320 * 1024, qPrintable(QString::number(bytes.size())));
-    const auto digestOf = [](const QByteArray &data) {
-        return QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
-    };
     const auto projectPath = directory.filePath("clip.fetproject");
     {
         AppController controller(nullptr, directory.filePath("recovery.json"));
         controller.loadVideo(QUrl::fromLocalFile(video));
         QTRY_COMPARE(controller.videoLoadState(), QStringLiteral("ready"));
-        QTRY_COMPARE(controller.m_videoReference.contentSha256, digestOf(bytes));
+        QVERIFY(controller.m_videoReference.contentSha256.isEmpty());
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
     }
-    const auto reference = QJsonDocument::fromJson(readBytes(projectPath)).object()
-        .value("sources").toObject().value("video").toObject();
-    QCOMPARE(reference.value("contentSha256").toString(), digestOf(bytes));
+    auto document = QJsonDocument::fromJson(readBytes(projectPath)).object();
+    auto sources = document.value("sources").toObject();
+    auto reference = sources.value("video").toObject();
+    QVERIFY(!reference.contains("contentSha256"));
 
-    // One byte of the encoded frames at 80 KiB, before the middle window.
-    auto changed = bytes;
-    changed[80 * 1024] = static_cast<char>(changed[80 * 1024] ^ 0x01);
-    QVERIFY(80 * 1024 + 1 < bytes.size() / 2 - 32 * 1024);
-    QVERIFY(writeBytes(video, changed));
-    QCOMPARE(ProjectSourceReferenceCodec::sampledDigest(video),
-             reference.value("fingerprint").toObject().value("sampledSha256").toString());
-
+    // A full-content identity another writer saved is neither checked nor kept.
+    reference.insert("contentSha256", QString(64, QLatin1Char('0')));
+    sources.insert("video", reference);
+    document.insert("sources", sources);
+    QVERIFY(writeBytes(projectPath, QJsonDocument(document).toJson()));
     AppController controller(nullptr, directory.filePath("recovery.json"));
     controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
-    QTRY_COMPARE(controller.videoLoadState(), QStringLiteral("mismatch"));
-    QVERIFY(controller.sourceMismatchType().isEmpty()); // opening reports it; it does not ask
-    QVERIFY(!controller.dirty());
-    controller.relinkVideo(QUrl::fromLocalFile(video));
-    QTRY_COMPARE(controller.sourceMismatchType(), QStringLiteral("video"));
-    controller.resolveSourceMismatch(true);
-    QCOMPARE(controller.videoLoadState(), QStringLiteral("ready"));
-    QVERIFY(controller.dirty());
-    QTRY_COMPARE(controller.m_videoReference.contentSha256, digestOf(changed));
-    QVERIFY(controller.saveCurrentProject());
-    QCOMPARE(QJsonDocument::fromJson(readBytes(projectPath)).object().value("sources").toObject()
-                 .value("video").toObject().value("contentSha256").toString(), digestOf(changed));
-
-    // Re-encoded with the same duration, size and rate: other bytes, other identity.
-    const auto reencoded = directory.filePath("reencoded.mp4");
-    encoder.start(FfmpegTools::ffmpegPath(), {"-hide_banner", "-loglevel", "error", "-y", "-i", video,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-pix_fmt", "yuv420p", reencoded});
-    QVERIFY(encoder.waitForFinished(60'000));
-    QCOMPARE(encoder.exitCode(), 0);
-    QVERIFY(ProjectSourceReferenceCodec::fileSha256(reencoded) != digestOf(changed));
-    QVERIFY(ProjectSourceReferenceCodec::fileSha256(reencoded).size() == 64);
+    QTRY_COMPARE(controller.videoLoadState(), QStringLiteral("ready"));
+    QVERIFY(controller.m_videoReference.contentSha256.isEmpty());
+    const auto resaved = directory.filePath("resaved.fetproject");
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(resaved)));
+    QVERIFY(!QJsonDocument::fromJson(readBytes(resaved)).object().value("sources").toObject()
+                 .value("video").toObject().contains("contentSha256"));
 }
 
 void ProjectTests::rejectsStaleRelinkResults()
