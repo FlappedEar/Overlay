@@ -60,16 +60,15 @@ inline TelemetrySession speedSession(const double start, const double end, const
     speed.name = "speed";
     speed.unit = "km/h";
     for (double time = start; time <= end; time += 0.2) {
-        speed.timestamps.append(time);
         const double sourceTime = time - valueOffset;
-        speed.values.append(static_cast<float>(
+        speed.appendSample(time, static_cast<float>(
             50.0 + 18.0 * std::sin(sourceTime * 0.21)
             + 7.0 * std::sin(sourceTime * 0.73) + sourceTime * 0.08));
     }
     session.channels.insert("speed", speed);
     session.aliases.insert("speed", "speed");
     session.duration = end - start;
-    session.sampleCount = speed.values.size();
+    session.sampleCount = speed.values().size();
     return session;
 }
 

@@ -300,9 +300,9 @@ private slots:
         for (const auto &alias : {QString("speed"), QString("rpm"), QString("heartRate"), QString("brake")}) {
             const auto &channel = reference.channels[reference.aliases.value(alias)];
             QVector<double> errors;
-            for (qsizetype i = 0; i < channel.timestamps.size(); ++i) {
-                const auto value = native.valueAt(alias, channel.timestamps[i] + shift);
-                if (value && std::isfinite(channel.values[i])) errors.append(std::abs(*value - channel.values[i]));
+            for (qsizetype i = 0; i < channel.timestamps().size(); ++i) {
+                const auto value = native.valueAt(alias, channel.timestamps()[i] + shift);
+                if (value && std::isfinite(channel.values()[i])) errors.append(std::abs(*value - channel.values()[i]));
             }
             QVERIFY(errors.size() > reference.sampleCount / 2);
             std::sort(errors.begin(), errors.end());
@@ -316,11 +316,11 @@ private slots:
             const auto &channel = reference.channels[name];
             QVERIFY2(native.channels.contains(name), qPrintable(name));
             QVector<double> errors;
-            for (qsizetype i = 0; i < channel.timestamps.size(); ++i) {
-                const auto value = native.valueAt(name, channel.timestamps[i] + shift);
-                if (value && std::isfinite(channel.values[i])) errors.append(std::abs(*value - channel.values[i]));
+            for (qsizetype i = 0; i < channel.timestamps().size(); ++i) {
+                const auto value = native.valueAt(name, channel.timestamps()[i] + shift);
+                if (value && std::isfinite(channel.values()[i])) errors.append(std::abs(*value - channel.values()[i]));
             }
-            QVERIFY2(errors.size() > channel.timestamps.size() / 2, qPrintable(name));
+            QVERIFY2(errors.size() > channel.timestamps().size() / 2, qPrintable(name));
             std::sort(errors.begin(), errors.end());
             qInfo() << name << "median/max absolute difference" << errors[errors.size() / 2] << errors.last();
             QVERIFY2(errors[errors.size() / 2] < .5, qPrintable(name));

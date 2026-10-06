@@ -43,19 +43,19 @@ GgPairs buildGgPairs(const TelemetrySession &session, const double startTime, co
         return result;
     }
     if (!std::isfinite(startTime) || !std::isfinite(endTime) || endTime <= startTime
-        || longitudinal->timestamps.size() != longitudinal->values.size()
-        || lateral->timestamps.size() != lateral->values.size() || lateral->timestamps.isEmpty()) {
+        || longitudinal->timestamps().size() != longitudinal->values().size()
+        || lateral->timestamps().size() != lateral->values().size() || lateral->timestamps().isEmpty()) {
         result.unavailableReason = ggNoOverlap;
         return result;
     }
     result.valid = true;
-    const auto &lateralTimes = lateral->timestamps;
+    const auto &lateralTimes = lateral->timestamps();
     const double gapLimit = telemetryGapThreshold(*lateral);
     bool shared = true;
-    for (qsizetype i = 0; i < longitudinal->timestamps.size(); ++i) {
-        const double time = longitudinal->timestamps[i];
+    for (qsizetype i = 0; i < longitudinal->timestamps().size(); ++i) {
+        const double time = longitudinal->timestamps()[i];
         if (time < startTime || time > endTime) continue;
-        const double longitudinalValue = longitudinal->values[i];
+        const double longitudinalValue = longitudinal->values()[i];
         if (!std::isfinite(longitudinalValue)) continue;
         ++result.candidateCount;
         const auto next = std::lower_bound(lateralTimes.cbegin(), lateralTimes.cend(), time);
@@ -63,12 +63,12 @@ GgPairs buildGgPairs(const TelemetrySession &session, const double startTime, co
         std::optional<double> lateralValue;
         double offset = 0.0;
         if (next != lateralTimes.cend() && *next == time) {
-            if (std::isfinite(lateral->values[nextIndex])) lateralValue = lateral->values[nextIndex];
+            if (std::isfinite(lateral->values()[nextIndex])) lateralValue = lateral->values()[nextIndex];
         } else {
             shared = false;
             if (nextIndex > 0 && nextIndex < lateralTimes.size()) {
                 const double before = lateralTimes[nextIndex - 1], after = lateralTimes[nextIndex];
-                const double a = lateral->values[nextIndex - 1], b = lateral->values[nextIndex];
+                const double a = lateral->values()[nextIndex - 1], b = lateral->values()[nextIndex];
                 if (after - before <= gapLimit && std::isfinite(a) && std::isfinite(b)) {
                     lateralValue = a + (b - a) * (time - before) / (after - before);
                     offset = std::min(time - before, after - time);

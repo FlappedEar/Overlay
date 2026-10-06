@@ -114,8 +114,8 @@ BrakingMetrics computeBrakingMetrics(const double axisLengthMeters, const Approv
     }
     result.decelerationChannel = decelerationName;
     result.decelerationUnit = decelerationChannel->unit;
-    const auto &times = decelerationChannel->timestamps;
-    const auto &values = decelerationChannel->values;
+    const auto &times = decelerationChannel->timestamps();
+    const auto &values = decelerationChannel->values();
     if (times.size() != values.size()) {
         result.decelerationUnavailableReason = brakingIncompleteCoverage;
         return result;

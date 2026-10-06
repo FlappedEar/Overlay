@@ -69,10 +69,8 @@ TelemetrySession hairpinGpsSessionWithOutlierAndGap()
     auto &lat = session.channels["lat"];
     auto &lon = session.channels["lon"];
     const auto addFix = [&](const double time, const double east, const double north) {
-        lat.timestamps.append(time);
-        lat.values.append(static_cast<float>(degreesForMeters(north)));
-        lon.timestamps.append(time);
-        lon.values.append(static_cast<float>(degreesForMeters(east)));
+        lat.appendSample(time, static_cast<float>(degreesForMeters(north)));
+        lon.appendSample(time, static_cast<float>(degreesForMeters(east)));
     };
     for (int i = 0; i <= 20; ++i) addFix(i * 1.0, i * 2.0, 0.0); // t=0..20s, east 0..40m, steady 2 m/s
     addFix(21.0, 10.0, 50.0); // one sample far off either leg: a GPS outlier
@@ -224,8 +222,11 @@ void TrackProgressTests::knownDelayHasCorrectSignAndFinishLineMagnitude()
     // Lap B: the identical physical path, uniformly 10% slower.
     constexpr double slowdownFactor = 1.10;
     TelemetrySession sessionB = fixture.session;
-    for (auto &channel : sessionB.channels)
-        for (auto &timestamp : channel.timestamps) timestamp *= slowdownFactor;
+    for (auto &channel : sessionB.channels) {
+        auto times = channel.timestamps();
+        for (auto &timestamp : times) timestamp *= slowdownFactor;
+        channel.setSamples(times, channel.values());
+    }
     sessionB.duration *= slowdownFactor;
     const auto lapB = projectLapTrace(
         fixture.axis, sessionB, lap.startTelemetryTime * slowdownFactor, lap.endTelemetryTime * slowdownFactor);
@@ -436,10 +437,8 @@ void TrackProgressTests::unwrapsAFirstFixJustBeforeTheGate()
     auto &lat = session.channels["lat"];
     auto &lon = session.channels["lon"];
     const auto addFix = [&](const double time, const double east, const double north) {
-        lat.timestamps.append(time);
-        lat.values.append(static_cast<float>(degreesForMeters(north)));
-        lon.timestamps.append(time);
-        lon.values.append(static_cast<float>(degreesForMeters(east)));
+        lat.appendSample(time, static_cast<float>(degreesForMeters(north)));
+        lon.appendSample(time, static_cast<float>(degreesForMeters(east)));
     };
     addFix(0.0, 0.0, 1.0);
     for (int i = 1; i <= 20; ++i) addFix(i * 1.0, i * 2.0 - 0.5, 0.0);
@@ -495,8 +494,11 @@ void TrackProgressTests::deltaAtTheFinishEqualsTheLapTimeDifference()
     constexpr double slowdownFactor = 1.10;
     constexpr double shiftSeconds = 0.13;
     TelemetrySession sessionB = fixture.session;
-    for (auto &channel : sessionB.channels)
-        for (auto &timestamp : channel.timestamps) timestamp = timestamp * slowdownFactor + shiftSeconds;
+    for (auto &channel : sessionB.channels) {
+        auto times = channel.timestamps();
+        for (auto &timestamp : times) timestamp = timestamp * slowdownFactor + shiftSeconds;
+        channel.setSamples(times, channel.values());
+    }
     sessionB.duration = sessionB.duration * slowdownFactor + shiftSeconds;
     const auto lapsB = deriveSourceLapSession(sessionB);
     QVERIFY(!lapsB.timedLaps.isEmpty());

@@ -44,13 +44,13 @@ qsizetype channelSamples(const TelemetrySession &session, const qsizetype availa
     }
     for (auto channel = session.channels.cbegin(); channel != session.channels.cend(); ++channel) {
         throwIfCancelled(cancelled);
-        if (channel->timestamps.size() != channel->values.size()) {
+        if (channel->timestamps().size() != channel->values().size()) {
             throw std::runtime_error("Telemetry source has mismatched channel timestamps and values.");
         }
-        if (channel->values.size() > available - count) {
+        if (channel->values().size() > available - count) {
             throw ResourceLimitError("Batch decoded-sample limit exceeded; import fewer recordings.");
         }
-        count += channel->values.size();
+        count += channel->values().size();
     }
     return count;
 }
@@ -58,21 +58,21 @@ qsizetype channelSamples(const TelemetrySession &session, const qsizetype availa
 const TelemetryChannel *gpsChannel(const TelemetrySession &session, const QString &alias)
 {
     const auto channel = session.channels.constFind(session.aliases.value(alias, alias));
-    if (channel == session.channels.cend() || channel->values.size() < 16
-        || channel->timestamps.size() != channel->values.size()) return nullptr;
+    if (channel == session.channels.cend() || channel->values().size() < 16
+        || channel->timestamps().size() != channel->values().size()) return nullptr;
     return &channel.value();
 }
 
 std::optional<double> nearbyRawValue(const TelemetryChannel &channel, const double time)
 {
-    const auto &times = channel.timestamps;
+    const auto &times = channel.timestamps();
     const auto next = std::lower_bound(times.cbegin(), times.cend(), time);
     qsizetype index = std::distance(times.cbegin(), next);
     if (index == times.size() || (index > 0 && time - times[index - 1] <= times[index] - time)) --index;
     // Raw samples only: do not interpolate over gaps or inherit overlay holding.
     if (index < 0 || std::abs(times[index] - time) > 0.6
-        || !std::isfinite(channel.values[index])) return std::nullopt;
-    return channel.values[index];
+        || !std::isfinite(channel.values()[index])) return std::nullopt;
+    return channel.values()[index];
 }
 
 GeoCoordinate matchingCoordinate(const TelemetrySession &session, double latitude, double longitude)
@@ -90,8 +90,8 @@ TraceEvidence traceEvidence(const TelemetrySession &session, const CancellationC
     const auto *latitude = gpsChannel(session, QStringLiteral("latitude"));
     const auto *longitude = gpsChannel(session, QStringLiteral("longitude"));
     if (!latitude || !longitude) return evidence;
-    const double start = std::max(latitude->timestamps.first(), longitude->timestamps.first());
-    const double end = std::min(latitude->timestamps.last(), longitude->timestamps.last());
+    const double start = std::max(latitude->timestamps().first(), longitude->timestamps().first());
+    const double end = std::min(latitude->timestamps().last(), longitude->timestamps().last());
     evidence.duration = end - start;
     if (!std::isfinite(start) || !std::isfinite(evidence.duration) || evidence.duration < 10.0) return evidence;
     int valid = 0;

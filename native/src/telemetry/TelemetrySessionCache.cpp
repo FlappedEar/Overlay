@@ -15,7 +15,7 @@ qint64 telemetrySessionMemoryBytes(const TelemetrySession &session)
     const auto string = [&add](const QString &value) { add(value.capacity(), sizeof(QChar)); add(1, 64); };
     for (auto it = session.channels.cbegin(); it != session.channels.cend(); ++it) {
         add(1, 256); string(it.key()); string(it->name); string(it->unit);
-        add(it->timestamps.capacity(), sizeof(double)); add(it->values.capacity(), sizeof(float));
+        add(it->timestamps().capacity(), sizeof(double)); add(it->values().capacity(), sizeof(float));
     }
     for (const auto *map : {&session.metadata, &session.aliases})
         for (auto it = map->cbegin(); it != map->cend(); ++it) { add(1, 128); string(it.key()); string(it.value()); }

@@ -53,12 +53,35 @@ private:
     mutable Entry m_entry;
 };
 
-struct TelemetryChannel {
+// One telemetry channel (KAN-209). Its timestamps are finite and strictly
+// increasing, with one value per timestamp; a value may be NaN, which marks a
+// gap. The samples change only through the setters, which reject anything
+// else with std::invalid_argument, so every reader can rely on that order.
+class TelemetryChannel {
+public:
     QString name;
     QString unit;
-    QVector<double> timestamps;
-    QVector<float> values;
-    ChannelCadenceCache cadence {};
+
+    TelemetryChannel() = default;
+    TelemetryChannel(QString name, QString unit, QVector<double> timestamps = {}, QVector<float> values = {});
+
+    [[nodiscard]] const QVector<double> &timestamps() const noexcept { return m_timestamps; }
+    [[nodiscard]] const QVector<float> &values() const noexcept { return m_values; }
+    [[nodiscard]] qsizetype sampleCount() const noexcept { return m_timestamps.size(); }
+    [[nodiscard]] bool isEmpty() const noexcept { return m_timestamps.isEmpty(); }
+    [[nodiscard]] const ChannelCadenceCache &cadence() const noexcept { return m_cadence; }
+
+    void setSamples(QVector<double> timestamps, QVector<float> values);
+    // The time must be finite and later than the last sample's.
+    void appendSample(double time, float value);
+    void setValue(qsizetype index, float value);
+    void reserve(qsizetype size);
+    void clear();
+
+private:
+    QVector<double> m_timestamps;
+    QVector<float> m_values;
+    ChannelCadenceCache m_cadence {};
 };
 
 struct SyncTransform {

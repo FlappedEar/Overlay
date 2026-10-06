@@ -37,13 +37,12 @@ TelemetrySession recording(const double start, const double end, const double ra
     speed.name = "velocity";
     speed.unit = "km/h";
     for (double time = start; time <= end + 1e-9; time += 1.0 / rateHz) {
-        speed.timestamps.append(time);
-        speed.values.append(static_cast<float>(speedAt(time)));
+        speed.appendSample(time, static_cast<float>(speedAt(time)));
     }
     session.channels.insert(speed.name, speed);
     session.aliases.insert("speed", speed.name);
     session.duration = end - start;
-    session.sampleCount = speed.values.size();
+    session.sampleCount = speed.values().size();
     if (startMilliseconds) session.metadata.insert("firstTimestampMilliseconds", QString::number(*startMilliseconds));
     return session;
 }

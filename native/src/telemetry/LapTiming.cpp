@@ -166,13 +166,13 @@ std::optional<GpsSample> gpsSampleAt(
     const qsizetype index,
     const GeoCoordinate &origin)
 {
-    if (index < 0 || index >= latitude.timestamps.size() || index >= latitude.values.size()
-        || index >= longitude.timestamps.size() || index >= longitude.values.size()) {
+    if (index < 0 || index >= latitude.timestamps().size() || index >= latitude.values().size()
+        || index >= longitude.timestamps().size() || index >= longitude.values().size()) {
         return std::nullopt;
     }
-    const double latitudeTime = latitude.timestamps[index];
-    const double longitudeTime = longitude.timestamps[index];
-    const GeoCoordinate coordinate{latitude.values[index], longitude.values[index]};
+    const double latitudeTime = latitude.timestamps()[index];
+    const double longitudeTime = longitude.timestamps()[index];
+    const GeoCoordinate coordinate{latitude.values()[index], longitude.values()[index]};
     if (!std::isfinite(latitudeTime) || latitudeTime != longitudeTime
         || !isValidCoordinate(coordinate)) {
         return std::nullopt;
@@ -190,11 +190,11 @@ LapReferenceIssue referenceIssueForLap(const TelemetrySession &session, const Ti
     const auto latitude = session.channels.constFind(session.aliases.value("latitude"));
     const auto longitude = session.channels.constFind(session.aliases.value("longitude"));
     if (latitude == session.channels.cend() || longitude == session.channels.cend()
-        || latitude->timestamps.size() != latitude->values.size()
-        || longitude->timestamps.size() != longitude->values.size()
-        || latitude->timestamps.size() != longitude->timestamps.size()
-        || latitude->timestamps.isEmpty()) return LapReferenceIssue::InvalidGps;
-    const auto &times = latitude->timestamps;
+        || latitude->timestamps().size() != latitude->values().size()
+        || longitude->timestamps().size() != longitude->values().size()
+        || latitude->timestamps().size() != longitude->timestamps().size()
+        || latitude->timestamps().isEmpty()) return LapReferenceIssue::InvalidGps;
+    const auto &times = latitude->timestamps();
     auto first = std::lower_bound(times.cbegin(), times.cend(), lap.startTelemetryTime);
     if (first != times.cbegin() && (first == times.cend() || *first > lap.startTelemetryTime)) --first;
     const auto last = std::lower_bound(first, times.cend(), lap.endTelemetryTime);
@@ -242,8 +242,8 @@ void buildLapTraces(
     const auto latitude = session.channels.constFind(session.aliases.value("latitude"));
     const auto longitude = session.channels.constFind(session.aliases.value("longitude"));
     if (latitude == session.channels.cend() || longitude == session.channels.cend()
-        || latitude->timestamps.size() != latitude->values.size()
-        || longitude->timestamps.size() != longitude->values.size()) {
+        || latitude->timestamps().size() != latitude->values().size()
+        || longitude->timestamps().size() != longitude->values().size()) {
         return;
     }
 
@@ -276,24 +276,24 @@ void buildLapTraces(
         LapTrace trace{lap.number, lap.startTelemetryTime, lap.durationSeconds, {}};
         appendCoordinate(trace, lap.startTelemetryTime);
         auto latitudeTime = std::upper_bound(
-            latitude->timestamps.cbegin(), latitude->timestamps.cend(), lap.startTelemetryTime);
+            latitude->timestamps().cbegin(), latitude->timestamps().cend(), lap.startTelemetryTime);
         const auto latitudeEnd = std::lower_bound(
-            latitudeTime, latitude->timestamps.cend(), lap.endTelemetryTime);
+            latitudeTime, latitude->timestamps().cend(), lap.endTelemetryTime);
         const qsizetype rawPointCount = std::distance(latitudeTime, latitudeEnd);
         const qsizetype stride = std::max<qsizetype>(
             1, (rawPointCount + MaximumPointsPerLapTrace - 3)
                    / (MaximumPointsPerLapTrace - 2));
         qsizetype ordinal = 0;
-        for (; latitudeTime != latitude->timestamps.cend() && *latitudeTime < lap.endTelemetryTime;
+        for (; latitudeTime != latitude->timestamps().cend() && *latitudeTime < lap.endTelemetryTime;
              ++latitudeTime, ++ordinal) {
-            const qsizetype index = std::distance(latitude->timestamps.cbegin(), latitudeTime);
+            const qsizetype index = std::distance(latitude->timestamps().cbegin(), latitudeTime);
             if ((index & 0xff) == 0) throwIfCancelled(cancelled);
             if (ordinal % stride != 0) continue;
-            if (index >= longitude->timestamps.size()
-                || latitude->timestamps[index] != longitude->timestamps[index]) {
+            if (index >= longitude->timestamps().size()
+                || latitude->timestamps()[index] != longitude->timestamps()[index]) {
                 continue;
             }
-            const GeoCoordinate coordinate{latitude->values[index], longitude->values[index]};
+            const GeoCoordinate coordinate{latitude->values()[index], longitude->values()[index]};
             if (!isValidCoordinate(coordinate)) continue;
             const MetricPoint point = projectCoordinate(coordinate, origin);
             if (!std::isfinite(point.eastMeters) || !std::isfinite(point.northMeters)) continue;
@@ -372,8 +372,8 @@ LapSession detectLaps(
         return result;
     }
     const qsizetype sampleCount = std::max(
-        std::max(latitude->timestamps.size(), latitude->values.size()),
-        std::max(longitude->timestamps.size(), longitude->values.size()));
+        std::max(latitude->timestamps().size(), latitude->values().size()),
+        std::max(longitude->timestamps().size(), longitude->values().size()));
     const double gapThreshold = std::max(
         telemetryGapThreshold(*latitude), telemetryGapThreshold(*longitude));
     // KAN-213: the direction of travel is the one most valid crossings agree

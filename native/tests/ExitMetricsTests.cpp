@@ -28,8 +28,7 @@ TelemetryChannel makeChannel(const QString &name, const QString &unit, const std
     channel.name = name;
     channel.unit = unit;
     for (int k = 0; k < sampleCount; ++k) {
-        channel.timestamps.append(k * dt);
-        channel.values.append(static_cast<float>(value(k)));
+        channel.appendSample(k * dt, static_cast<float>(value(k)));
     }
     return channel;
 }

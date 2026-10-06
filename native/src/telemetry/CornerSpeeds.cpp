@@ -112,7 +112,7 @@ CornerSpeeds computeCornerSpeeds(const ProgressAxis &axis, const TrackFeatures &
 
     // Sample density of the recorded channel between the boundary crossings.
     if (result.entry.telemetryTime && result.exit.telemetryTime && *result.exit.telemetryTime > *result.entry.telemetryTime) {
-        const auto &times = channelIt->timestamps;
+        const auto &times = channelIt->timestamps();
         const auto from = std::lower_bound(times.cbegin(), times.cend(), *result.entry.telemetryTime);
         const auto to = std::upper_bound(times.cbegin(), times.cend(), *result.exit.telemetryTime);
         const auto samples = std::distance(from, to);

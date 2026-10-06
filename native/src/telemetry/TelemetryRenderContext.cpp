@@ -91,25 +91,25 @@ std::optional<double> presentationValueAt(
     const auto channelIterator = session.channels.constFind(resolved);
     if (channelIterator == session.channels.cend()) return std::nullopt;
     const TelemetryChannel &channel = channelIterator.value();
-    if (channel.timestamps.size() != channel.values.size() || channel.timestamps.isEmpty())
+    if (channel.timestamps().size() != channel.values().size() || channel.timestamps().isEmpty())
         return std::nullopt;
 
     const PresentationPolicy policy = presentationPolicy(channelName + QLatin1Char(' ') + resolved);
     std::optional<double> presented = session.valueAt(channelName, time, policy.interpolation);
-    const auto next = std::lower_bound(channel.timestamps.cbegin(), channel.timestamps.cend(), time);
-    if (presented && next != channel.timestamps.cbegin() && next != channel.timestamps.cend()
+    const auto next = std::lower_bound(channel.timestamps().cbegin(), channel.timestamps().cend(), time);
+    if (presented && next != channel.timestamps().cbegin() && next != channel.timestamps().cend()
         && *next != time) {
         const double gap = *next - *(next - 1);
         if (gap > telemetryGapThreshold(channel, policy.staleSeconds)) presented.reset();
     }
     if (!presented) {
-        const auto after = std::upper_bound(channel.timestamps.cbegin(), channel.timestamps.cend(), time);
-        for (auto iterator = after; iterator != channel.timestamps.cbegin();) {
+        const auto after = std::upper_bound(channel.timestamps().cbegin(), channel.timestamps().cend(), time);
+        for (auto iterator = after; iterator != channel.timestamps().cbegin();) {
             --iterator;
-            const qsizetype index = std::distance(channel.timestamps.cbegin(), iterator);
+            const qsizetype index = std::distance(channel.timestamps().cbegin(), iterator);
             if (time - *iterator > policy.staleSeconds) break;
-            if (std::isfinite(channel.values[index])) {
-                presented = channel.values[index];
+            if (std::isfinite(channel.values()[index])) {
+                presented = channel.values()[index];
                 break;
             }
         }
@@ -119,12 +119,12 @@ std::optional<double> presentationValueAt(
     double weightedTotal = *presented;
     double totalWeight = 1.0;
     const double windowStart = time - policy.smoothingSeconds;
-    auto iterator = std::lower_bound(channel.timestamps.cbegin(), channel.timestamps.cend(), windowStart);
-    for (; iterator != channel.timestamps.cend() && *iterator <= time; ++iterator) {
-        const qsizetype index = std::distance(channel.timestamps.cbegin(), iterator);
-        if (qFuzzyCompare(*iterator, time) || !std::isfinite(channel.values[index])) continue;
+    auto iterator = std::lower_bound(channel.timestamps().cbegin(), channel.timestamps().cend(), windowStart);
+    for (; iterator != channel.timestamps().cend() && *iterator <= time; ++iterator) {
+        const qsizetype index = std::distance(channel.timestamps().cbegin(), iterator);
+        if (qFuzzyCompare(*iterator, time) || !std::isfinite(channel.values()[index])) continue;
         const double weight = std::max(0.0, 1.0 - (time - *iterator) / policy.smoothingSeconds);
-        weightedTotal += channel.values[index] * weight;
+        weightedTotal += channel.values()[index] * weight;
         totalWeight += weight;
     }
     const double smoothed = weightedTotal / totalWeight;

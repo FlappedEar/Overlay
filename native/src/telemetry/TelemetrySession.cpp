@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <stdexcept>
 #include <utility>
 
 namespace FlappedEar {
@@ -85,9 +86,57 @@ qsizetype ChannelCadenceCache::computations() const
     return m_entry.computations;
 }
 
+TelemetryChannel::TelemetryChannel(QString name, QString unit, QVector<double> timestamps, QVector<float> values)
+    : name(std::move(name))
+    , unit(std::move(unit))
+{
+    setSamples(std::move(timestamps), std::move(values));
+}
+
+void TelemetryChannel::setSamples(QVector<double> timestamps, QVector<float> values)
+{
+    if (timestamps.size() != values.size())
+        throw std::invalid_argument("A telemetry channel needs one value per timestamp.");
+    for (qsizetype index = 0; index < timestamps.size(); ++index) {
+        if (!std::isfinite(timestamps[index]) || (index > 0 && timestamps[index] <= timestamps[index - 1]))
+            throw std::invalid_argument("Telemetry timestamps must be finite and strictly increasing.");
+    }
+    m_timestamps = std::move(timestamps);
+    m_values = std::move(values);
+    m_cadence = {};
+}
+
+void TelemetryChannel::appendSample(double time, float value)
+{
+    if (!std::isfinite(time) || (!m_timestamps.isEmpty() && time <= m_timestamps.constLast()))
+        throw std::invalid_argument("Telemetry timestamps must be finite and strictly increasing.");
+    m_timestamps.append(time);
+    m_values.append(value);
+    m_cadence = {};
+}
+
+void TelemetryChannel::setValue(qsizetype index, float value)
+{
+    if (index < 0 || index >= m_values.size()) throw std::out_of_range("Telemetry sample index is out of range.");
+    m_values[index] = value;
+}
+
+void TelemetryChannel::reserve(qsizetype size)
+{
+    m_timestamps.reserve(size);
+    m_values.reserve(size);
+}
+
+void TelemetryChannel::clear()
+{
+    m_timestamps.clear();
+    m_values.clear();
+    m_cadence = {};
+}
+
 double telemetryBaseInterval(const TelemetryChannel &channel)
 {
-    return channel.cadence.baseInterval(channel.timestamps);
+    return channel.cadence().baseInterval(channel.timestamps());
 }
 
 double telemetryGapThreshold(const TelemetryChannel &channel, const double minimumSeconds)
@@ -118,11 +167,11 @@ std::optional<double> TelemetrySession::valueAt(
 
 std::optional<double> telemetryValueAt(const TelemetryChannel &channel, const double time, const InterpolationMode mode)
 {
-    if (channel.timestamps.isEmpty() || channel.values.isEmpty() || !std::isfinite(time)) {
+    if (channel.timestamps().isEmpty() || channel.values().isEmpty() || !std::isfinite(time)) {
         return std::nullopt;
     }
-    const auto &timestamps = channel.timestamps;
-    const auto &values = channel.values;
+    const auto &timestamps = channel.timestamps();
+    const auto &values = channel.values();
     if (timestamps.size() != values.size() || time < timestamps.front() || time > timestamps.back()) {
         return std::nullopt;
     }
@@ -206,7 +255,7 @@ QVector<QVector<QPointF>> TelemetrySession::sampledSegments(
         return {};
     }
     const TelemetryChannel &channel = channelIterator.value();
-    if (channel.timestamps.size() != channel.values.size() || channel.timestamps.isEmpty()) {
+    if (channel.timestamps().size() != channel.values().size() || channel.timestamps().isEmpty()) {
         if (status) *status = SampledSegmentsStatus::ChannelMalformed;
         return {};
     }
@@ -214,9 +263,9 @@ QVector<QVector<QPointF>> TelemetrySession::sampledSegments(
     QVector<QVector<QPointF>> rawSegments;
     QVector<QPointF> current;
     const double gapThreshold = telemetryGapThreshold(channel);
-    for (qsizetype index = 0; index < channel.timestamps.size(); ++index) {
-        const double timestamp = channel.timestamps[index];
-        const double value = channel.values[index];
+    for (qsizetype index = 0; index < channel.timestamps().size(); ++index) {
+        const double timestamp = channel.timestamps()[index];
+        const double value = channel.values()[index];
         if (!std::isfinite(timestamp) || timestamp < rangeStart || timestamp > rangeEnd) {
             continue;
         }
@@ -362,7 +411,7 @@ void preferAcceleratorPedalForThrottle(TelemetrySession &session)
         QRegularExpression::CaseInsensitiveOption);
     for (const auto &name : session.channelNames()) {
         if (!pedal.match(name).hasMatch()) continue;
-        const auto &values = session.channels[name].values;
+        const auto &values = session.channels[name].values();
         if (std::any_of(values.cbegin(), values.cend(), [](const float value) { return std::isfinite(value); })) {
             session.aliases.insert(QStringLiteral("throttle"), name);
             return;

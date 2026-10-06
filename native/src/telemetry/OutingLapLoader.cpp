@@ -119,8 +119,10 @@ OutingLapDetail loadOutingLapDetail(const QJsonObject &source,
                 throwIfCancelled(cancelled);
                 const auto longitude = session->valueAt("longitude", point.x());
                 if (!longitude) continue;
-                lat.values.append(static_cast<float>(point.y()));
-                lon.values.append(static_cast<float>(*longitude));
+                // Geometry reads only the points; the index keeps time ordered.
+                const auto order = static_cast<double>(lat.sampleCount());
+                lat.appendSample(order, static_cast<float>(point.y()));
+                lon.appendSample(order, static_cast<float>(*longitude));
             }
         }
         result.geometry = buildTrackGeometry(mapSession, cancelled);

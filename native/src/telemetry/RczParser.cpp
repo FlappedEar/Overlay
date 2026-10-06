@@ -379,26 +379,26 @@ TelemetrySession RczParser::parseFile(const QString &path, const CancellationChe
         for (int suffix = 2; session.channels.contains(map.name); ++suffix)
             map.name = QStringLiteral("%1 (%2)").arg(base).arg(suffix);
         TelemetryChannel channel;
-        channel.name = map.name; channel.unit = map.unit; channel.timestamps = times; channel.values = std::move(values);
-        session.sampleCount = std::max(session.sampleCount, channel.timestamps.size());
+        channel.name = map.name; channel.unit = map.unit; channel.setSamples(times, std::move(values));
+        session.sampleCount = std::max(session.sampleCount, channel.timestamps().size());
         const double gapLimit = telemetryGapThreshold(channel);
         QVector<double> gapTimes;
         QVector<float> gapValues;
         if (boundedDecode) {
-            qsizetype count = channel.timestamps.size();
-            for (qsizetype i = 1; i < channel.timestamps.size(); ++i) {
+            qsizetype count = channel.timestamps().size();
+            for (qsizetype i = 1; i < channel.timestamps().size(); ++i) {
                 if ((i & 0xfff) == 0) throwIfCancelled(cancelled);
-                if (channel.timestamps[i] - channel.timestamps[i - 1] > gapLimit) count += 2;
+                if (channel.timestamps()[i] - channel.timestamps()[i - 1] > gapLimit) count += 2;
             }
-            if (count > 8'000'000 - totalSamples + channel.values.size())
+            if (count > 8'000'000 - totalSamples + channel.values().size())
                 fail("Decoded gap/sample budget exceeded.");
             gapTimes.reserve(count); gapValues.reserve(count);
         }
-        for (qsizetype index = 0; index < channel.timestamps.size(); ++index) {
+        for (qsizetype index = 0; index < channel.timestamps().size(); ++index) {
             if ((index & 0xfff) == 0) throwIfCancelled(cancelled);
-            const double time = channel.timestamps[index];
-            if (index && time - channel.timestamps[index - 1] > gapLimit) {
-                const double previous = channel.timestamps[index - 1];
+            const double time = channel.timestamps()[index];
+            if (index && time - channel.timestamps()[index - 1] > gapLimit) {
+                const double previous = channel.timestamps()[index - 1];
                 gapTimes.append(std::nextafter(previous, time));
                 gapTimes.append(std::nextafter(time, previous));
                 gapValues.append(std::numeric_limits<float>::quiet_NaN());
@@ -406,10 +406,10 @@ TelemetrySession RczParser::parseFile(const QString &path, const CancellationChe
                 totalSamples += 2;
                 if (totalSamples > 8'000'000) fail("Decoded gap/sample budget exceeded.");
             }
-            gapTimes.append(time); gapValues.append(channel.values[index]);
+            gapTimes.append(time); gapValues.append(channel.values()[index]);
         }
-        channel.timestamps = std::move(gapTimes); channel.values = std::move(gapValues);
-        session.duration = std::max(session.duration, channel.timestamps.constLast());
+        channel.setSamples(std::move(gapTimes), std::move(gapValues));
+        session.duration = std::max(session.duration, channel.timestamps().constLast());
         if (!map.alias.isEmpty() && primary) session.aliases.insert(map.alias, channel.name);
         session.channels.insert(channel.name, std::move(channel));
     };

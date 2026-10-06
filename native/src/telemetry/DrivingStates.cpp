@@ -32,9 +32,9 @@ void classify(const TelemetryChannel &channel, const std::function<double(double
     const BrakingThreshold &threshold, const double minimumDuration, const double start, const double end,
     DrivingStateTrack &track)
 {
-    if (channel.timestamps.size() != channel.values.size()) return;
+    if (channel.timestamps().size() != channel.values().size()) return;
     const double gapThreshold = telemetryGapThreshold(channel);
-    const auto &times = channel.timestamps;
+    const auto &times = channel.timestamps();
     const auto begin = std::distance(times.cbegin(), std::lower_bound(times.cbegin(), times.cend(), start));
     const auto last = std::distance(times.cbegin(), std::upper_bound(times.cbegin(), times.cend(), end));
     std::optional<double> knownStart, activeStart;
@@ -53,7 +53,7 @@ void classify(const TelemetryChannel &channel, const std::function<double(double
     };
     for (auto index = begin; index < last; ++index) {
         const double time = times[index];
-        const double value = channel.values[index];
+        const double value = channel.values()[index];
         const bool gap = havePrevious && gapThreshold > 0.0 && time - previousTime > gapThreshold;
         if (gap || !std::isfinite(value)) closeKnown(previousTime);
         if (!std::isfinite(value)) { havePrevious = false; continue; }
@@ -210,8 +210,8 @@ QVector<DrivingStateInterval> overlapOf(const QVector<DrivingStateInterval> &fir
 double travelledMeters(const TelemetrySession &session, const QVector<DrivingStateInterval> &intervals)
 {
     const auto speed = session.channels.constFind(session.aliases.value(QStringLiteral("speed")));
-    if (speed == session.channels.cend() || speed->timestamps.size() != speed->values.size()) return 0.0;
-    const auto &times = speed->timestamps;
+    if (speed == session.channels.cend() || speed->timestamps().size() != speed->values().size()) return 0.0;
+    const auto &times = speed->timestamps();
     // KAN-201: no distance is integrated across a telemetry gap.
     const double gapThreshold = telemetryGapThreshold(*speed);
     double meters = 0.0;
@@ -219,7 +219,7 @@ double travelledMeters(const TelemetrySession &session, const QVector<DrivingSta
         auto index = std::distance(times.cbegin(), std::lower_bound(times.cbegin(), times.cend(), interval.start));
         for (; index + 1 < times.size() && times[index + 1] <= interval.end; ++index) {
             if (times[index + 1] - times[index] > gapThreshold) continue;
-            const double a = speed->values[index], b = speed->values[index + 1];
+            const double a = speed->values()[index], b = speed->values()[index + 1];
             if (std::isfinite(a) && std::isfinite(b)) meters += (a + b) / 2.0 / 3.6 * (times[index + 1] - times[index]);
         }
     }

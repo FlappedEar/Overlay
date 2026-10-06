@@ -18,20 +18,17 @@ TelemetrySession interiorGapFixture()
     // sparse fixture every point also arms or finalizes a gate passage, so
     // removing one tests passage rejection rather than interior lap coverage.
     for (auto &channel : session.channels) {
-        const auto times = channel.timestamps;
-        const auto values = channel.values;
-        channel.timestamps.clear();
-        channel.values.clear();
+        const auto times = channel.timestamps();
+        const auto values = channel.values();
+        channel.clear();
         for (qsizetype index = 1; index < times.size(); ++index) {
             for (double time = times[index - 1]; time < times[index]; time += 0.25) {
                 const double fraction = (time - times[index - 1]) / (times[index] - times[index - 1]);
-                channel.timestamps.append(time);
-                channel.values.append(static_cast<float>(values[index - 1]
+                channel.appendSample(time, static_cast<float>(values[index - 1]
                     + (values[index] - values[index - 1]) * fraction));
             }
         }
-        channel.timestamps.append(times.last());
-        channel.values.append(values.last());
+        channel.appendSample(times.last(), values.last());
     }
     return session;
 }
@@ -320,7 +317,9 @@ void LapEligibilityTests::retainsMeasuredLapWithInteriorGpsGap()
     auto session = interiorGapFixture();
     for (const auto &name : {QStringLiteral("latitude"), QStringLiteral("longitude")}) {
         auto &channel = session.channels[session.aliases.value(name)];
-        for (auto &time : channel.timestamps) if (time >= 3.5) time += 10.0;
+        auto times = channel.timestamps();
+        for (auto &time : times) if (time >= 3.5) time += 10.0;
+        channel.setSamples(times, channel.values());
     }
     session.duration += 10.0;
     const auto laps = deriveSourceLapSession(session);
@@ -348,11 +347,15 @@ void LapEligibilityTests::rejectsInvalidAndUnpairedCoordinates()
     auto session = interiorGapFixture();
     auto &latitude = session.channels[session.aliases.value("latitude")];
     auto &longitude = session.channels[session.aliases.value("longitude")];
-    const auto interior = latitude.timestamps.indexOf(3.5);
+    const auto interior = latitude.timestamps().indexOf(3.5);
     QVERIFY(interior >= 0);
-    if (kind == 0) latitude.values[interior] = std::numeric_limits<float>::quiet_NaN();
-    if (kind == 1) latitude.values[interior] = 100.0F;
-    if (kind == 2) longitude.timestamps[interior] += 0.01;
+    if (kind == 0) latitude.setValue(interior, std::numeric_limits<float>::quiet_NaN());
+    if (kind == 1) latitude.setValue(interior, 100.0F);
+    if (kind == 2) {
+        auto times = longitude.timestamps();
+        times[interior] += 0.01;
+        longitude.setSamples(times, longitude.values());
+    }
     const auto laps = deriveSourceLapSession(session);
     QCOMPARE(laps.timedLaps.size(), 3);
     QCOMPARE(laps.timedLaps[0].referenceIssue, LapReferenceIssue::InvalidGps);
@@ -366,9 +369,9 @@ void LapEligibilityTests::exposesNoBestWhenEveryLapHasMissingGps()
     auto session = interiorGapFixture();
     auto &latitude = session.channels[session.aliases.value("latitude")];
     for (double time : {3.5, 7.5, 12.5}) {
-        const auto index = latitude.timestamps.indexOf(time);
+        const auto index = latitude.timestamps().indexOf(time);
         QVERIFY(index >= 0);
-        latitude.values[index] = std::numeric_limits<float>::quiet_NaN();
+        latitude.setValue(index, std::numeric_limits<float>::quiet_NaN());
     }
     const auto laps = deriveSourceLapSession(session);
     QCOMPARE(laps.timedLaps.size(), 3);
@@ -388,9 +391,9 @@ void LapEligibilityTests::rendererNeverUsesIneligibleCompletedLap()
 {
     auto session = interiorGapFixture();
     auto &latitude = session.channels[session.aliases.value("latitude")];
-    const auto interior = latitude.timestamps.indexOf(3.5);
+    const auto interior = latitude.timestamps().indexOf(3.5);
     QVERIFY(interior >= 0);
-    latitude.values[interior] = std::numeric_limits<float>::quiet_NaN();
+    latitude.setValue(interior, std::numeric_limits<float>::quiet_NaN());
     const auto laps = deriveSourceLapSession(session);
     TelemetryRenderContext context;
     context.setSession(&session);
@@ -450,9 +453,9 @@ void LapEligibilityTests::propagatesOutingEligibilityAndBest()
 {
     auto session = interiorGapFixture();
     auto &latitude = session.channels[session.aliases.value("latitude")];
-    const auto interior = latitude.timestamps.indexOf(3.5);
+    const auto interior = latitude.timestamps().indexOf(3.5);
     QVERIFY(interior >= 0);
-    latitude.values[interior] = std::numeric_limits<float>::quiet_NaN();
+    latitude.setValue(interior, std::numeric_limits<float>::quiet_NaN());
     const auto laps = deriveSourceLapSession(session);
     const auto rows = outingLapRows(session, laps, "run", "Run", 0);
     QCOMPARE(rows.size(), 5);
@@ -485,9 +488,9 @@ void LapEligibilityTests::rendererOmitsDeltaAtMissingCurrentCoordinate()
 {
     auto session = interiorGapFixture();
     auto &latitude = session.channels[session.aliases.value("latitude")];
-    const auto interior = latitude.timestamps.indexOf(12.5);
+    const auto interior = latitude.timestamps().indexOf(12.5);
     QVERIFY(interior >= 0);
-    latitude.values[interior] = std::numeric_limits<float>::quiet_NaN();
+    latitude.setValue(interior, std::numeric_limits<float>::quiet_NaN());
     const auto laps = deriveSourceLapSession(session);
     TelemetryRenderContext context;
     context.setSession(&session);

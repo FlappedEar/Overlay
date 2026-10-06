@@ -31,8 +31,8 @@ Rise firstSustainedRise(const TelemetryChannel &channel, const double on, const 
     const double minimumDuration, const double startTime, const double endTime)
 {
     Rise rise;
-    const auto &times = channel.timestamps;
-    const auto &values = channel.values;
+    const auto &times = channel.timestamps();
+    const auto &values = channel.values();
     if (times.size() != values.size()) {
         rise.reason = exitIncompleteCoverage;
         return rise;
