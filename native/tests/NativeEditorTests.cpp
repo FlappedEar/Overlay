@@ -943,15 +943,17 @@ void EditorTests::keepsSidebarReachableAtMinimumSize()
         QVERIFY(flickable && flickable->inherits("QQuickFlickable"));
         auto *content = flickable->property("contentItem").value<QQuickItem *>();
         QVERIFY(content);
-        // Let the tab's layout settle.
+        // Let the tab's layout settle. On a loaded macOS CI runner the Retro
+        // Custom inspector has needed more than 5 s to stop growing (PR #202
+        // failed twice at 5 s, Qt reporting it settled soon after), so allow 20 s.
         double settled = -1.0;
-        QTRY_VERIFY([&] {
+        QTRY_VERIFY_WITH_TIMEOUT([&] {
             const double height = flickable->property("contentHeight").toDouble();
             const bool same = height == settled;
             settled = height;
             QTest::qWait(50);
             return same && height > 0.0;
-        }());
+        }(), 20'000);
         const double viewport = flickable->height();
         // The scroller itself is inside the window.
         const QRectF frame = flickable->mapRectToScene(QRectF(0, 0, flickable->width(), viewport));
