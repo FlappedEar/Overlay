@@ -135,6 +135,7 @@ DocumentController::DocumentController(DocumentHost &host, QString recoveryPath,
             AppLog::error(QStringLiteral("Project load failed: %1: %2")
                               .arg(result.projectPath, result.error));
             setProjectLoadState(false, {}, result.error);
+            m_host.resumeInterruptedSources();
             m_host.showStatus(QStringLiteral("Project could not be opened: %1").arg(result.error));
             return;
         }
@@ -142,6 +143,7 @@ DocumentController::DocumentController(DocumentHost &host, QString recoveryPath,
             AppLog::warn(QStringLiteral("Stale project load rejected due to document revision: %1")
                              .arg(result.projectPath));
             setProjectLoadState(false, {}, QStringLiteral("document changed while project was loading."));
+            m_host.resumeInterruptedSources();
             m_host.showStatus(QStringLiteral("Project load cancelled because the current document changed."));
             return;
         }
@@ -260,6 +262,7 @@ void DocumentController::performClearProject()
     m_pendingOpenProject = QUrl();
     m_settings.remove("project/path");
     m_settings.sync();
+    clearRecoveryDegradedIfClean();
     emit documentStateChanged();
     emit destructiveActionChanged();
     m_host.showStatus("New native project created.");
@@ -519,6 +522,7 @@ bool DocumentController::commitProjectLoad(const ProjectLoadResult &result)
         }
     }
     m_host.announceEditorProject();
+    clearRecoveryDegradedIfClean();
     emit documentStateChanged();
     setProjectLoadState(false);
     if (result.runSelection) {
@@ -574,6 +578,12 @@ bool DocumentController::saveProject(const QUrl &url)
     if (m_recoveryPending) {
         // Saving now would make a document the driver has not chosen authoritative.
         m_host.showStatus(QStringLiteral("Choose Recover or Discard for the unsaved changes first."));
+        return false;
+    }
+    if (m_projectLoading) {
+        // The open in flight replaces this document; saving it now could write
+        // changes the driver chose to discard as the clean state (KAN-195).
+        m_host.showStatus(QStringLiteral("Wait for the project to finish opening before saving."));
         return false;
     }
     QJsonObject project = currentProjectObject(path, m_documentState.revision());
@@ -632,6 +642,7 @@ bool DocumentController::saveProject(const QUrl &url)
     m_documentState.markSaved(path);
     m_recoveryTimer.stop();
     clearRecovery(QStringLiteral("successful save"));
+    clearRecoveryDegradedIfClean();
     emit documentStateChanged();
     AppLog::info(QStringLiteral("Project save succeeded: %1").arg(path));
     m_host.showStatus(QStringLiteral("Project saved: %1").arg(QFileInfo(path).fileName()));
@@ -690,6 +701,16 @@ void DocumentController::writeRecoverySnapshot()
         emit recoveryChanged();
     }
     AppLog::info(QStringLiteral("Recovery snapshot written"));
+}
+
+// A clean document has nothing to protect, so a recovery write failure no
+// longer degrades it (KAN-195).
+void DocumentController::clearRecoveryDegradedIfClean()
+{
+    if (!m_recoveryDegraded || m_documentState.dirty()) return;
+    m_recoveryDegraded = false;
+    m_recoveryError.clear();
+    emit recoveryChanged();
 }
 
 bool DocumentController::clearRecovery(const QString &reason)

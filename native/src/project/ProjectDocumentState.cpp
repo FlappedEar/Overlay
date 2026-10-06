@@ -1,4 +1,5 @@
 #include "project/ProjectDocumentState.h"
+#include <limits>
 
 namespace FlappedEar {
 
@@ -25,8 +26,12 @@ void ProjectDocumentState::restoreUnsaved(
     const QString &projectPath, const quint64 revision, const quint64 lastSavedRevision)
 {
     m_projectPath = projectPath;
-    m_revision = revision;
     m_lastSavedRevision = lastSavedRevision;
+    // Recovered changes are unsaved by definition, even from a snapshot whose
+    // revision does not exceed the saved one (a legacy version 1 file, KAN-195).
+    m_revision = revision > lastSavedRevision
+            || lastSavedRevision == std::numeric_limits<quint64>::max()
+        ? revision : lastSavedRevision + 1;
     m_pendingAction = DestructiveAction::None;
 }
 

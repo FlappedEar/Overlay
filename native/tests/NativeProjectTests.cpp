@@ -25,6 +25,8 @@ private slots:
     void keepsRecoveryWhenQuittingAtTheRecoveryPrompt();
     void offersRecoveryOfAnEventCreatedByImport();
     void routesNewDocumentSaveAsThroughPendingQuit();
+    void failedOpenResumesCurrentSourceLoads();
+    void refusesSaveWhileProjectOpens();
     void surfacesAndRetriesRecoveryPersistenceFailure();
     void savesProjectsAtomically();
     void writesRecoverySnapshotsAtomically();
@@ -566,6 +568,76 @@ void ProjectTests::opensProjectsTransactionally()
                  .value(QStringLiteral("fingerprint")).toObject().isEmpty());
 }
 
+// KAN-195: an Open that fails after cancelling the current sources' loads
+// restarts them, so the project that stays open still loads its media.
+void ProjectTests::failedOpenResumesCurrentSourceLoads()
+{
+    QSettings settings;
+    settings.clear();
+    settings.sync();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    AppController controller(nullptr, directory.filePath(QStringLiteral("recovery.json")));
+    controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
+    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+    const QString current = directory.filePath(QStringLiteral("current.fetproject"));
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(current)));
+    QVERIFY(!controller.dirty());
+    const QStringList channels = controller.channelNames();
+
+    // The current project's telemetry is loading again when an Open of a
+    // corrupt project starts and fails.
+    controller.startVboLoad(controller.m_vboLoadRequest.path, controller.m_document.sourceGeneration(), false,
+                            controller.m_vboLoadRequest.expectedFingerprint);
+    QCOMPARE(controller.vboLoadState(), QStringLiteral("loading"));
+    const QString corrupt = directory.filePath(QStringLiteral("corrupt.fetproject"));
+    QVERIFY(writeBytes(corrupt, QByteArrayLiteral("{not a project")));
+    controller.requestOpenProject(QUrl::fromLocalFile(corrupt));
+    QTRY_VERIFY(!controller.projectLoading());
+    QVERIFY(!controller.projectLoadError().isEmpty());
+    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+    QCOMPARE(controller.channelNames(), channels);
+    QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(current).canonicalFilePath());
+    QVERIFY(!controller.dirty());
+}
+
+// KAN-195: while an Open replaces the document, Save does not write the
+// changes the driver chose to discard as the clean state.
+void ProjectTests::refusesSaveWhileProjectOpens()
+{
+    QSettings settings;
+    settings.clear();
+    settings.sync();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    AppController controller(nullptr, directory.filePath(QStringLiteral("recovery.json")));
+    const QString first = directory.filePath(QStringLiteral("first.fetproject"));
+    controller.setSyncOffset(1.0);
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(first)));
+    const QByteArray saved = readBytes(first);
+    const QString second = directory.filePath(QStringLiteral("second.fetproject"));
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(second)));
+    controller.setSyncOffset(2.0);
+    QVERIFY(controller.dirty());
+    // Back to the first project's path with unsaved edits, then open the second
+    // and discard them.
+    controller.m_document.m_documentState.restoreUnsaved(QFileInfo(first).canonicalFilePath(), 9, 8);
+    controller.requestOpenProject(QUrl::fromLocalFile(second));
+    controller.resolveDestructiveAction(QStringLiteral("discard"));
+    QVERIFY(controller.projectLoading());
+    QVERIFY(!controller.saveCurrentProject());
+    QCOMPARE(readBytes(first), saved);
+    QTRY_VERIFY(!controller.projectLoading());
+    QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(second).canonicalFilePath());
+    QVERIFY(!controller.dirty());
+
+    // Restored recovery state is unsaved even when its revision does not exceed
+    // the saved one (a legacy version 1 snapshot).
+    ProjectDocumentState state;
+    state.restoreUnsaved(first, 4, 4);
+    QVERIFY(state.dirty());
+}
+
 void ProjectTests::surfacesAndRetriesRecoveryPersistenceFailure()
 {
     QTemporaryDir directory;
@@ -582,6 +654,9 @@ void ProjectTests::surfacesAndRetriesRecoveryPersistenceFailure()
     QVERIFY(controller.dirty()); // Editing remains available while recovery is unavailable.
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath(QStringLiteral("manual.fetproject")))));
     QVERIFY(!controller.dirty()); // Authoritative manual save is independent of recovery failure.
+    QVERIFY(!controller.recoveryDegraded()); // A clean document has nothing to protect (KAN-195).
+    controller.setSyncOffset(1.5);
+    QTRY_VERIFY(controller.recoveryDegraded());
 
     QVERIFY(QDir().rmdir(recoveryPath));
     controller.setSyncOffset(2.0);

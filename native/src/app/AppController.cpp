@@ -727,15 +727,39 @@ quint64 AppController::beginSourceGeneration(const bool /*preserveOuting: no ana
         || m_document.projectLoadRunning() || m_syncWatcher.isRunning();
     cancelSourceJobs();
     if (replacing) AppLog::info(QStringLiteral("Previous source load cancelled after replacement"));
-    if (m_videoProbeWatcher.isRunning()) {
+    // A load whose job has ended but whose result is not yet delivered is also
+    // stopped: the new generation rejects that result.
+    m_videoLoadInterrupted = m_videoLoadState == QStringLiteral("loading");
+    m_vboLoadInterrupted = m_vboLoadState == QStringLiteral("loading");
+    if (m_videoLoadInterrupted) {
         m_videoLoadState = QStringLiteral("idle");
     }
-    if (m_vboLoadWatcher.isRunning()) {
+    if (m_vboLoadInterrupted) {
         m_vboLoadState = QStringLiteral("idle");
     }
     emit sourceLoadStateChanged();
     m_document.setProjectLoadState(false);
     return generation;
+}
+
+void AppController::resumeInterruptedSources()
+{
+    const quint64 generation = m_document.sourceGeneration();
+    const bool video = m_videoLoadInterrupted && !m_videoLoadRequest.path.isEmpty();
+    const bool vbo = m_vboLoadInterrupted && !m_vboLoadRequest.path.isEmpty();
+    m_videoLoadInterrupted = false;
+    m_vboLoadInterrupted = false;
+    if (video) {
+        const auto request = m_videoLoadRequest;
+        startVideoProbe(request.path, generation, request.markDocumentDirty,
+                        request.expectedFingerprint, request.relink, request.chapters);
+    }
+    if (vbo) {
+        const auto request = m_vboLoadRequest;
+        startVboLoad(request.path, generation, request.markDocumentDirty,
+                     request.expectedFingerprint, request.relink);
+    }
+    if (video || vbo) AppLog::info(QStringLiteral("Interrupted source loads resumed after a failed project open"));
 }
 
 void AppController::cancelSourceJobs()

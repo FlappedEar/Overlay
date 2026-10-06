@@ -432,11 +432,13 @@ ApplicationWindow {
             Action {
                 text: qsTr("Save Project")
                 shortcut: StandardKey.Save
+                enabled: !appController.projectLoading
                 onTriggered: appController.saveCurrentProject()
             }
             Action {
                 text: qsTr("Save Project As…")
                 shortcut: StandardKey.SaveAs
+                enabled: !appController.projectLoading
                 onTriggered: window.openProjectSaveDialog()
             }
             Action {
@@ -2719,6 +2721,7 @@ ApplicationWindow {
                     visible: appController.recoveryDegraded
                     compact: true
                     text: qsTr("SAVE")
+                    enabled: !appController.projectLoading
                     onClicked: appController.saveCurrentProject()
                 }
                 FeLabel {
