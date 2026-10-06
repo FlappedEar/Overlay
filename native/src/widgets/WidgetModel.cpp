@@ -66,7 +66,8 @@ const QStringList widgetTypes = {
 
 // KAN-192: types the owner retired on 5 October 2026. A saved project or
 // template that still holds one opens without it; the editor reports how many
-// were left out. Any other unknown type still makes the document invalid.
+// were left out. Any other type is a newer version's and is kept unchanged
+// (KAN-217).
 const QStringList retiredWidgetTypes = {
     "rpm", "gForce", "track", "customValue", "arcGauge", "dialGauge", "telemetryOverlay",
     "lapBest", "lapDelta", "speedBest", "speedCurrent", "speedDelta", "retroGrandPrix",
@@ -619,7 +620,7 @@ int WidgetModel::addWidget(const QString &type)
     if (!validType(type)) {
         return -1;
     }
-    if (m_widgets.size() >= ProjectLimits::maximumWidgets) {
+    if (sceneWidgetCount() >= ProjectLimits::maximumWidgets) {
         setLastError(tr("The scene limit is %1 widgets.").arg(ProjectLimits::maximumWidgets));
         return -1;
     }
@@ -675,7 +676,7 @@ int WidgetModel::duplicateWidget(const int index)
     if (index < 0 || index >= m_widgets.size()) {
         return -1;
     }
-    if (m_widgets.size() >= ProjectLimits::maximumWidgets
+    if (sceneWidgetCount() >= ProjectLimits::maximumWidgets
         || totalCueCount() + m_widgets[index].cues.size() > ProjectLimits::maximumTotalCues) {
         setLastError(tr("Duplicating this widget would exceed the scene's widget or animation limit."));
         return -1;
@@ -901,6 +902,7 @@ void WidgetModel::resetDefaults()
         return;
     }
     beginResetModel();
+    m_unknownWidgets.clear();
     m_widgets = {createWidget("speed", 0), createWidget("lapCurrent", 1),
                  createWidget("heartRate", 2)};
     endResetModel();
@@ -938,6 +940,8 @@ bool WidgetModel::applyTemplate(const QString &templateId)
             widgets.append(std::move(widget));
         }
         beginResetModel();
+        // A template replaces the whole scene, unknown widgets included.
+        m_unknownWidgets.clear();
         m_widgets = std::move(widgets);
         endResetModel();
         ++m_revision;
@@ -1098,8 +1102,15 @@ void WidgetModel::setLastError(const QString &error)
 
 qsizetype WidgetModel::totalCueCount() const
 {
-    qsizetype count = 0;
+    qsizetype count = unknownCueCount();
     for (const WidgetData &widget : m_widgets) count += widget.cues.size();
+    return count;
+}
+
+qsizetype WidgetModel::unknownCueCount() const
+{
+    qsizetype count = 0;
+    for (const auto &[index, object] : m_unknownWidgets) count += object.value(QStringLiteral("cues")).toArray().size();
     return count;
 }
 
@@ -1197,6 +1208,7 @@ QJsonArray WidgetModel::toJson() const
                                  {"groupId", widget.groupId},
                                  {"settings", QJsonObject::fromVariantMap(widget.settings)}});
     }
+    for (const auto &[index, object] : m_unknownWidgets) array.insert(qMin(index, array.size()), object);
     return array;
 }
 
@@ -1206,6 +1218,7 @@ bool WidgetModel::fromJson(const QJsonArray &array)
                                {QStringLiteral("scene"), QJsonObject{{QStringLiteral("widgets"), array}}}};
     if (!ProjectLimits::validateProject(document)) return false;
     QList<WidgetData> widgets;
+    QList<QPair<qsizetype, QJsonObject>> unknown;
     QSet<QString> ids;
     int retired = 0;
     for (const QJsonValue &entry : array) {
@@ -1215,12 +1228,15 @@ bool WidgetModel::fromJson(const QJsonArray &array)
             ++retired;
             continue;
         }
-        if (!validType(type)) {
-            return false;
-        }
         const QString id = object.value("id").toString();
         if (!validPersistedWidgetId(id) || ids.contains(id)) return false;
         ids.insert(id);
+        if (!validType(type)) {
+            // A newer version's widget: kept as written (ProjectLimits has
+            // bounded it), at its place among the widgets written back.
+            unknown.append({widgets.size() + unknown.size(), object});
+            continue;
+        }
         WidgetData widget = createWidget(type, widgets.size());
         widget.id = id;
         normalizeWidgetGeometry(&widget, object.toVariantMap());
@@ -1237,6 +1253,7 @@ bool WidgetModel::fromJson(const QJsonArray &array)
     }
     beginResetModel();
     m_widgets = std::move(widgets);
+    m_unknownWidgets = std::move(unknown);
     endResetModel();
     m_retiredWidgetsDropped = retired;
     ++m_revision;
