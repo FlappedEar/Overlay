@@ -43,6 +43,7 @@ private slots:
     void guardsAutomaticAnalysisImport();
     void findsTheDayBestLapWithoutTheAnalysis();
     void restoresDayDecisionsAfterMoveMissingRelinkAndRecovery();
+    void keepsEveryTelemetryFieldThroughAnOverlayEdit();
     void automaticallyGroupsPrivateTrackDay();
     void lapExclusionPolicySharesRankingAndRenderInputs();
     void lapExclusionsSurviveSaveRecoveryAndInvalidateSafely();
@@ -776,6 +777,101 @@ void SourceTests::restoresDayDecisionsAfterMoveMissingRelinkAndRecovery()
     QVERIFY(!clean.recoveryPending()); QTRY_COMPARE(clean.vboLoadState(), QString("ready"));
     QVERIFY(!clean.dirty());
     const auto failure = sameDecisions(clean); QVERIFY2(failure.isEmpty(), qPrintable(failure));
+}
+
+void SourceTests::keepsEveryTelemetryFieldThroughAnOverlayEdit()
+{
+    // KAN-170: a day saved by FlappedEar Telemetry, carrying every analysis
+    // field and newer versions of the versioned ones, opens in Overlays.
+    // After an overlay edit and a save, everything Overlays does not own is
+    // unchanged; the newer fields are kept, not applied.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto first = directory.filePath("first.vbo"), second = directory.filePath("second.vbo");
+    QVERIFY(writeBytes(first, EventProjectFixture::lapsVbo()));
+    QVERIFY(writeBytes(second, EventProjectFixture::lapsVbo().replace("52.0008", "52.0007")));
+    const auto dayPath = directory.filePath("day.fetproject");
+    QString group;
+    {
+        TelemetryController reference(directory.filePath("reference.json"));
+        auto &analysis = *reference.analysis();
+        QVERIFY(importReferenceDay(reference, "Shared day", {QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)}));
+        QTRY_COMPARE(analysis.outingLaps().size(), 10);
+        const auto runA = reference.document()->eventRuns()[0].toMap().value("id").toString();
+        QVERIFY(analysis.setRunTrackConfiguration(runA, "Circuit A", "clockwise"));
+        QTRY_VERIFY(!analysis.outingLapsLoading() && analysis.m_outingLapRequestedKey == analysis.outingLapKey());
+        for (const auto &value : analysis.outingLaps()) {
+            const auto row = value.toMap();
+            if (row.value("type") != "LAP" || row.value("runId") != runA) continue;
+            group = row.value("compatibilityGroupId").toString();
+            QVERIFY(analysis.setOutingLapExcluded(row.value("reference").toMap(), true, "Traffic"));
+            break;
+        }
+        const auto metadata = analysis.runMetadata(runA);
+        QVERIFY(analysis.updateRunMetadata(runA, metadata.value("editToken").toString(), "Morning", "Notes", "Dry", "Softer rear"));
+        QVERIFY(analysis.selectOutingComparisonGroup(group));
+        QVERIFY(reference.document()->saveProject(QUrl::fromLocalFile(dayPath)));
+    }
+    // What a newer Telemetry may add: the remaining analysis fields, newer
+    // versions of the versioned ones and keys this build does not know.
+    auto day = QJsonDocument::fromJson(readBytes(dayPath)).object();
+    auto event = day.value("event").toObject();
+    auto runs = event.value("runs").toArray();
+    QCOMPARE(runs.size(), 2);
+    auto runA = runs[0].toObject(), runB = runs[1].toObject();
+    runA.insert("trackSegments", QJsonArray{QJsonObject{{"id", "s1"}, {"type", "sector"}, {"name", "Sector 1"},
+        {"startProgressMeters", 0.0}, {"endProgressMeters", 40.0}, {"trackConfigurationReference", group}}});
+    runA.insert("trackSegmentReview", QJsonObject{{"version", "track-segment-review-v1"},
+        {"trackConfigurationReference", group}, {"proposalAlgorithm", "proposals-v1"}, {"rejected", QJsonArray{}}});
+    runA.insert("futureRunField", QJsonObject{{"kept", true}});
+    runB.insert("trackSegments", QJsonArray{QJsonObject{{"id", "s2"}, {"type", "corner"}, {"name", "Turn 1"},
+        {"startProgressMeters", 10.0}, {"endProgressMeters", 30.0}, {"trackConfigurationReference", "compatibility-v2:next"}}});
+    runB.insert("trackSegmentReview", QJsonObject{{"version", "track-segment-review-v2"}, {"axis", QJsonObject{{"lap", 3}}}});
+    runB.insert("trackInference", QJsonObject{{"algorithm", "gps-route-v2"}, {"layoutId", "gps-route-v2:next"}});
+    runB.insert("fusion", QJsonObject{{"algorithm", "channel-fusion-v2"}, {"sources", QJsonArray{"a", "b"}}});
+    runs[0] = runA; runs[1] = runB;
+    event.insert("runs", runs);
+    auto decisions = event.value("analysisDecisions").toObject();
+    decisions.insert("comparisonRange", QJsonObject{{"startMeters", 5.0}, {"endMeters", 60.0}});
+    decisions.insert("comparisonChannels", QJsonArray{"speed"});
+    event.insert("analysisDecisions", decisions);
+    event.insert("futureEventField", 3);
+    day.insert("event", event);
+    day.insert("futureRootField", QJsonObject{{"kept", true}});
+    day.remove("scene"); // Telemetry has no editor and may write no scene.
+    QString error; QVERIFY2(ProjectLimits::validateProject(day, &error), qPrintable(error));
+    QVERIFY(writeBytes(dayPath, QJsonDocument(day).toJson()));
+    // Everything but what Overlays owns: the scene, the chart channels, the
+    // map and export settings, each run's sync and video, and the revision.
+    const auto notOverlays = [](QJsonObject project) {
+        for (const auto *key : {"scene", "analysis", "mapSettings", "exportSettings", "documentState"}) project.remove(key);
+        auto event = project.value("event").toObject();
+        auto runs = event.value("runs").toArray();
+        for (qsizetype i = 0; i < runs.size(); ++i) {
+            auto run = runs[i].toObject(); run.remove("sync");
+            auto sources = run.value("sources").toObject(); sources.remove("video");
+            run.insert("sources", sources); runs[i] = run;
+        }
+        event.insert("runs", runs); project.insert("event", event);
+        return project;
+    };
+
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.requestOpenProject(QUrl::fromLocalFile(dayPath));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
+    QVERIFY(!controller.dirty());
+    controller.setSyncOffset(4.5);
+    QVERIFY(controller.widgetModel()->addWidget("lapCurrent") >= 0);
+    QVERIFY(controller.saveCurrentProject());
+    const auto saved = QJsonDocument::fromJson(readBytes(dayPath)).object();
+    QCOMPARE(notOverlays(saved), notOverlays(day));
+    QCOMPARE(saved.value("event").toObject().value("runs").toArray()[0].toObject().value("sync").toObject().value("offset").toDouble(), 4.5);
+    QVERIFY(!saved.value("scene").toObject().value("widgets").toArray().isEmpty());
+    // The newer fusion is not applied: the day's laps derive from each primary.
+    controller.requestDayBestLap();
+    QTRY_COMPARE(controller.dayBestLap().value("state").toString(), QString("available"));
+    QVERIFY(controller.selectEventRun(runB.value("id").toString()));
+    QTRY_COMPARE(controller.vboLoadState(), QString("ready"));
 }
 
 void SourceTests::automaticallyGroupsPrivateTrackDay()

@@ -16,6 +16,7 @@
   <li>synchronization offset and time scale;</li>
   <li>for events: runs, run names and notes, lap exclusions, grouping corrections, approved track segments, the selected comparison and channel choices.</li>
 </ul>
+<p>FlappedEar Overlays and FlappedEar Telemetry use the same project file. Overlays keeps everything Telemetry saved, including what it does not use, and changes only its own parts: the scene, each run's video and synchronization, and the chart channels. A project saved by a newer Telemetry still opens; analysis decisions in a format this version does not know are kept unchanged but not applied. For example, a source fusion from a newer Telemetry is kept, and the run's laps come from its primary recording alone.</p>
 <p>Laps are not stored; they are derived from the recordings each time. Export choices (size, frame rate, quality, range, output file) are not saved either: the Export dialog starts from the source format each time it opens.</p>
 
 <h2 id="events">Events, runs and laps</h2>

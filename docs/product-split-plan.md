@@ -141,8 +141,9 @@ Changes:
 
 Owner direction (2 October 2026, with separate repositories): the two apps keep
 one format, compatible between them, so that either app opens and re-saves the
-other's documents without losing anything. The compatibility rules and the
-round-trip tests in both directions are [KAN-170]; they are not written yet.
+other's documents without losing anything. The compatibility rules are in
+[event projects](event-project-format.md#compatibility-between-the-two-apps-kan-170)
+([KAN-170]); round-trip tests exist in both repositories.
 The [architect handover](telemetry-handover.md#the-shared-contract-fetproject)
 summarises what the current code keeps, rejects and rewrites.
 

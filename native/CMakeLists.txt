@@ -73,6 +73,7 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/project/ProjectSourceReference.h
     src/project/EventProjectCodec.cpp
     src/project/EventProjectCodec.h
+    src/project/FormatVersion.h
     src/telemetry/TelemetrySession.cpp
     src/telemetry/TelemetrySession.h
     src/telemetry/TelemetryGeometry.cpp
