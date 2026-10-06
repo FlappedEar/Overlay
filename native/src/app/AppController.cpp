@@ -72,6 +72,9 @@ AppController::AppController(QObject *parent, QString recoveryPath,
     , m_previewRenderContext(this)
     , m_document(*this, std::move(recoveryPath), std::move(recoveryOperations))
 {
+    m_exportDiagnosticNotifier.setSingleShot(true);
+    m_exportDiagnosticNotifier.setInterval(200);
+    connect(&m_exportDiagnosticNotifier, &QTimer::timeout, this, &AppController::exportDiagnosticLogChanged);
     m_sync = {};
     m_previewRenderContext.setSyncTransform(m_sync);
     // KAN-104: a reviewed chapter group.
@@ -1528,6 +1531,8 @@ bool AppController::startExport(
     m_exportError.clear();
     m_exportMetrics.clear();
     m_exportDiagnosticLog.clear();
+    m_exportDiagnosticNotifier.stop();
+    emit exportDiagnosticLogChanged();
     const QDateTime exportStarted = QDateTime::currentDateTime();
     const QString exportLogDirectory = QDir(
         QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)).filePath(
@@ -1792,6 +1797,7 @@ void AppController::copyExportDiagnostics()
 void AppController::appendExportDiagnostic(const QString &entry)
 {
     m_exportDiagnosticLog.append(entry);
+    if (!m_exportDiagnosticNotifier.isActive()) m_exportDiagnosticNotifier.start();
     if (m_persistentExportLog && !m_persistentExportLog->append(entry)) {
         AppLog::warn(QStringLiteral("Could not append export diagnostic log: %1")
                          .arg(m_persistentExportLog->path()));

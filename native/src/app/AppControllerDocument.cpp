@@ -134,6 +134,8 @@ void AppController::clearEditor()
     m_exportSourceInfo = {};
     m_exportMetrics.clear();
     m_exportDiagnosticLog.clear();
+    m_exportDiagnosticNotifier.stop();
+    emit exportDiagnosticLogChanged();
     m_exportProgressInfo.clear();
     m_exportProgressVisible = false;
     m_telemetryPath.clear();

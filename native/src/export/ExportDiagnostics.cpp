@@ -65,6 +65,7 @@ BoundedDiagnosticLog::BoundedDiagnosticLog(const qsizetype maximumEntries)
 void BoundedDiagnosticLog::clear()
 {
     m_entries.clear();
+    m_droppedCharacters = 0;
     m_omissionMarkerNeeded = false;
 }
 
@@ -73,6 +74,7 @@ void BoundedDiagnosticLog::append(const QString &entry)
     m_entries.append(entry);
     const qsizetype contentLimit = m_maximumEntries - 1;
     while (m_entries.size() > contentLimit) {
+        m_droppedCharacters += m_entries.first().size() + 1;
         m_entries.removeFirst();
         m_omissionMarkerNeeded = true;
     }

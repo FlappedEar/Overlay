@@ -66,6 +66,10 @@ Progress and Very Verbose diagnostics report stage activity, Stage B source rang
 input-seek and absolute-trim values, time to the first Stage B output frame, FFmpeg progress,
 temporary-overlay size, frame-count source, reported rates/time base, metadata
 validation elapsed time, validation checks, and bounded diagnostic output.
+The Very Verbose view keeps the latest 1,500 entries (`BoundedDiagnosticLog`) and is
+notified at most every 200 ms (`exportDiagnosticLogChanged`). While detached from the
+tail it keeps the same history in view as the head trims, using the log's
+`droppedCharacters` count (KAN-141 review, 6 October 2026).
 When an export is prepared, the controller also creates one flushed text log in
 `QStandardPaths::AppLocalDataLocation/exports/`, named
 `export-YYYYMMDD-hhmmss-<export-uuid>.log`. Its header records the source,

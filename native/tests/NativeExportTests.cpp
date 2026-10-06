@@ -90,6 +90,7 @@ private slots:
     void estimatesExportProgress();
     void tracksExportStageElapsedTime();
     void boundsVerboseDiagnosticStorage();
+    void showsVeryVerboseDiagnosticsLive();
     void persistsExportDiagnosticsAndRetainsKnownLogs();
     void formatsStageAFailureDiagnostics();
     void throttlesDiagnosticHeartbeats();
@@ -1458,6 +1459,70 @@ void ExportTests::boundsVerboseDiagnosticStorage()
     QVERIFY(log.text().startsWith(QStringLiteral("[older diagnostic entries omitted]\n")));
     QVERIFY(!log.text().contains(QStringLiteral("one")));
     QVERIFY(log.text().endsWith(QStringLiteral("five\nwith details")));
+    // "one" and "two" left the head, each with its line break.
+    QCOMPARE(log.droppedCharacters(), qint64(8));
+    log.clear();
+    QCOMPARE(log.droppedCharacters(), qint64(0));
+}
+
+// The Very verbose view follows the log as entries arrive, and a reader scrolled back
+// keeps the same history in view while the bounded log trims its head.
+void ExportTests::showsVeryVerboseDiagnosticsLive()
+{
+    AppController controller;
+    QSignalSpy logChanged(&controller, &AppController::exportDiagnosticLogChanged);
+    for (int entry = 0; entry < 5; ++entry)
+        controller.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
+    QTRY_COMPARE(logChanged.count(), 1); // Coalesced.
+
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(qmlSourcePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create());
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    // The log lives in the export progress popup.
+    controller.m_exportProgressVisible = true;
+    emit controller.exportChanged();
+    QObject *details = window->findChild<QObject *>("exportDetails");
+    QObject *veryVerbose = window->findChild<QObject *>("exportVeryVerbose");
+    auto *log = window->findChild<QQuickItem *>("verboseExportLog");
+    auto *scroll = window->findChild<QQuickItem *>("verboseExportScroll");
+    QVERIFY(details && veryVerbose && log && scroll);
+    details->setProperty("checked", true);
+    veryVerbose->setProperty("checked", true);
+    QTRY_VERIFY(scroll->isVisible());
+    QTRY_COMPARE(log->property("text").toString(), controller.exportDiagnosticLog());
+
+    controller.appendExportDiagnostic(QStringLiteral("arrived while open"));
+    QTRY_VERIFY(log->property("text").toString().endsWith(QStringLiteral("arrived while open")));
+
+    // Scroll back into history, detached from the tail, then let the log trim its head.
+    for (int entry = 5; entry < 1000; ++entry)
+        controller.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
+    QTRY_VERIFY(log->property("text").toString().endsWith(QStringLiteral("entry 999")));
+    auto *flickable = scroll->property("contentItem").value<QQuickItem *>();
+    QVERIFY(flickable);
+    QTRY_VERIFY(flickable->property("contentHeight").toDouble() > scroll->height() * 2);
+    log->setProperty("followTail", false);
+    const auto lineTop = [&](const QString &line) {
+        const int position = int(log->property("text").toString().indexOf(line));
+        QRectF rectangle;
+        QMetaObject::invokeMethod(log, "positionToRectangle", Q_RETURN_ARG(QRectF, rectangle),
+                                  Q_ARG(int, position));
+        return rectangle.y();
+    };
+    const double anchor = lineTop(QStringLiteral("entry 600\n"));
+    flickable->setProperty("contentY", anchor);
+    QTRY_COMPARE(flickable->property("contentY").toDouble(), anchor);
+    for (int entry = 1000; entry < 1700; ++entry)
+        controller.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
+    QTRY_VERIFY(log->property("text").toString().endsWith(QStringLiteral("entry 1699")));
+    QVERIFY(controller.exportDiagnosticDroppedCharacters() > 0);
+    QVERIFY(log->property("text").toString().contains(QStringLiteral("entry 600\n")));
+    QTRY_VERIFY(std::abs(flickable->property("contentY").toDouble()
+                         - lineTop(QStringLiteral("entry 600\n"))) < 1.0);
+    QVERIFY(!log->property("followTail").toBool());
 }
 
 void ExportTests::persistsExportDiagnosticsAndRetainsKnownLogs()
