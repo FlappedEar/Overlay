@@ -22,6 +22,10 @@
 - Heart Rate comes from the imported VBO/RCZ session; do not add a separate HR source.
 - Never invent brake telemetry or substitute another channel silently.
 - Never couple telemetry to FPS. All synchronization is time based.
+- Allowed exception (owner decision, KAN-200): overlays hold a channel's last sample for a short,
+  bounded time into a gap or past the end of the data (0.75 s, heart rate 2 s; `presentationPolicy`
+  in `TelemetryRenderContext.cpp`), so a value does not flicker to a dash between samples. Beyond
+  that hold a missing value is shown as missing.
 - Preview and export should share scene definitions and rendering logic.
 - Always test parser changes, including malformed input.
 - Always test synchronization changes with deterministic and ambiguous signals.
@@ -45,7 +49,9 @@
   document validation/commit must remain transactional even though external sources resolve afterward.
 - A project document and its external assets are separate. Missing or moved media must not prevent a
   valid project document from opening. Relative source references are preferred where portable, and a
-  source must not be silently accepted solely because a pathname matches.
+  source must not be silently accepted solely because a pathname matches. Allowed exception (owner
+  decision, KAN-200): a reference saved without a fingerprint, by an older version, is accepted by
+  path, and its fingerprint is recorded from then on.
 - The saved `.fetproject` is the authoritative clean document state. Recovery data is separate,
   represents unsaved changes, and must never be silently marked clean. Discard removes unsaved
   recovery state rather than persisting it as the next clean session. A recovery file is offered only

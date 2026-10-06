@@ -1811,7 +1811,7 @@ through the production controller, without layout, direction or group clicks:
 
 ```bash
 FLAPPEDEAR_REAL_DAY="$PWD/jastrzab" \
-  ./build-native/native/tests/flappedear_native_tests automaticallyGroupsPrivateTrackDay
+  ./build-native/native/tests/flappedear_native_tests_sources automaticallyGroupsPrivateTrackDay
 ```
 
 It expects multiple recordings of one compatible route and direction and checks
