@@ -24,6 +24,7 @@
   <tr><th>Message or symptom</th><th>What to do</th></tr>
   <tr><td><em>Choose an existing VBO or RaceChrono RCZ telemetry file.</em></td><td>Only <code>.vbo</code> and <code>.rcz</code> files are supported.</td></tr>
   <tr><td><em>VBO has no [column names] section.</em> / <em>VBO has no [data] rows.</em></td><td>The file is not a complete VBO export. Export it again.</td></tr>
+  <tr><td><em>VBO has no recognised time column</em></td><td>The time column has a name the application does not know. Rename it to <code>time</code> in the <code>[column names]</code> section and open the file again. Row numbers are never used as time.</td></tr>
   <tr><td><em>GPS coordinates and timing gates unavailable</em></td><td>The coordinate unit of this VBO is not known. See <a href="telemetry-data.html#vbo">VBO files</a> for the header line to add.</td></tr>
   <tr><td><em>Timing gates ignored: this RaceChrono exporter version has not been validated.</em></td><td>Telemetry is usable, but no laps are derived from this file. Timing gates are read from RaceChrono Pro 10.2.4 VBO exports, the version that has been verified, and from other VBO files that declare <code>coordinate units</code> in the header. Other RaceChrono versions lose their gates.</td></tr>
   <tr><td><em>Resumed sessions are not supported yet.</em> / <em>Multi-session or resumed archives are not supported</em></td><td>Share one uninterrupted session from RaceChrono, or use its VBO export.</td></tr>
