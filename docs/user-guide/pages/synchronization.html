@@ -35,7 +35,7 @@
 
 <h3 id="auto-requirements">Requirements and limits</h3>
 <ul>
-  <li>The video must contain GoPro GPMF GPS data, and the telemetry must have a speed channel. Each source needs at least 20 GPS speed samples. With less than 20 seconds of overlap a result can be shown but is never applied automatically.</li>
+  <li>The video must contain GoPro GPMF GPS data, and the telemetry must have a speed channel. Only GPS samples with a 2-D or 3-D fix are used; where the camera recorded no fix information they are left out. Each source needs at least 20 GPS speed samples. With less than 20 seconds of overlap a result can be shown but is never applied automatically.</li>
   <li>ffprobe (part of FFmpeg) must be installed; see <a href="installation.html#ffmpeg">Installing FFmpeg</a>.</li>
   <li>Automatic synchronization sets only the offset. Time scale stays <code>1</code>.</li>
   <li>For a chaptered GoPro recording, only the first chapter's GPS is used.</li>
@@ -48,6 +48,7 @@
   <tr><td>Open both a GoPro video and telemetry before auto sync.</td><td>One of the two sources is missing.</td></tr>
   <tr><td>No GoPro GPMF telemetry track was found.</td><td>The video has no GoPro metadata (another camera, GPS off, or re-encoded footage). Use manual timing.</td></tr>
   <tr><td>The GPMF track contains no usable GPS speed samples.</td><td>The camera had no GPS fix during the recording.</td></tr>
+  <tr><td>The GPMF track's GPS has no fix information (GPSF), so its samples are not used.</td><td>The camera did not record how good its GPS fix was, so its positions and speeds are not trusted. Use manual timing.</td></tr>
   <tr><td>GPS speed is not available in both telemetry sources.</td><td>The telemetry file has no recognised speed channel.</td></tr>
   <tr><td>ffprobe was not found. Install FFmpeg to read GoPro telemetry.</td><td>See <a href="installation.html#ffmpeg">Installing FFmpeg</a>.</td></tr>
 </table>

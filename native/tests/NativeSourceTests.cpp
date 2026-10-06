@@ -21,6 +21,7 @@
 #if defined(Q_OS_UNIX)
 #include <sys/resource.h>
 #endif
+#include <optional>
 
 using namespace NativeTestSupport;
 
@@ -55,6 +56,7 @@ private slots:
     void playsVideoChaptersAcrossBoundaries();
     void persistsAndInvalidatesRunTrackConfiguration();
     void decodesGps9Gpmf();
+    void judgesGoProGpsQuality();
     void rejectsMalformedGpmf();
     void cancelsSlowGoProProbePromptly();
     void boundsGoProProbeOutput();
@@ -1902,6 +1904,76 @@ void SourceTests::decodesGps9Gpmf()
     QCOMPARE(speed.timestamps, QVector<double>({10.0, 10.5}));
     QVERIFY(qAbs(speed.values[0] - 4.5F) < 0.001F);
     QVERIFY(qAbs(speed.values[1] - 5.4F) < 0.001F);
+}
+
+void SourceTests::judgesGoProGpsQuality()
+{
+    // KAN-211. GPS5: lat, lon, alt, 2-D speed (m/s * 1000), 3-D speed.
+    const auto gps5Packet = [](const qint32 speed, const std::optional<qint32> fix) {
+        QByteArray scale;
+        for (const qint32 value : {10000000, 10000000, 1000, 1000, 100}) append32(scale, value);
+        QByteArray gps;
+        for (const qint32 value : {500000000, 190000000, 250000, speed, speed}) append32(gps, value);
+        QByteArray stream = klvRecord("SCAL", 'l', 4, 5, scale);
+        if (fix) {
+            QByteArray fixBytes;
+            append32(fixBytes, *fix);
+            stream += klvRecord("GPSF", 'L', 4, 1, fixBytes);
+        }
+        stream += klvRecord("GPS5", 'l', 20, 1, gps);
+        return klvRecord("STRM", 0, 1, stream.size(), stream);
+    };
+    const auto gps9Stream = [](const qint32 speed, const quint16 fix) {
+        QByteArray scale;
+        for (const qint32 value : {10000000, 10000000, 1000, 1000, 100, 1, 1000, 100, 1}) append32(scale, value);
+        QByteArray gps;
+        for (const qint32 value : {500000000, 190000000, 250000, speed, 130, 10000, 200000}) append32(gps, value);
+        append16(gps, 150);
+        append16(gps, fix);
+        QByteArray stream = klvRecord("SCAL", 'l', 4, 9, scale);
+        stream += klvRecord("GPS9", '?', 32, 1, gps);
+        return klvRecord("STRM", 0, 1, stream.size(), stream);
+    };
+    const auto device = [](const QByteArray &streams) { return klvRecord("DEVC", 0, 1, streams.size(), streams); };
+    const auto speedsOf = [](const GoProTelemetryResult &result) {
+        return result.session.channels.value(QStringLiteral("GoPro GPS speed")).values;
+    };
+
+    // GPS5 without GPSF: fix quality unknown, so not used.
+    QString message;
+    try {
+        (void) GoProTelemetrySource::decodeGpsPackets({{device(gps5Packet(10000, std::nullopt)), 0.0, 1.0}}, 1.0);
+    } catch (const std::runtime_error &error) {
+        message = QString::fromUtf8(error.what());
+    }
+    QVERIFY2(message.contains(QStringLiteral("no fix information")), qPrintable(message));
+    const auto mixedFix = GoProTelemetrySource::decodeGpsPackets(
+        {{device(gps5Packet(10000, 3)), 0.0, 1.0}, {device(gps5Packet(20000, std::nullopt)), 1.0, 1.0}}, 2.0);
+    QCOMPARE(mixedFix.session.sampleCount, 1);
+    QCOMPARE(mixedFix.session.warnings.size(), 1);
+
+    // Sparse GPS9 (first packet only) with complete GPS5: GPS5 fills the rest.
+    const auto sparse = GoProTelemetrySource::decodeGpsPackets({
+        {device(gps9Stream(1000, 3) + gps5Packet(9000, 3)), 0.0, 1.0},
+        {device(gps5Packet(2000, 3)), 1.0, 1.0},
+        {device(gps5Packet(3000, 3)), 2.0, 1.0}}, 3.0);
+    QCOMPARE(sparse.gpsStream, QStringLiteral("GPS9+GPS5"));
+    QCOMPARE(sparse.session.channels.value(QStringLiteral("GoPro GPS speed")).timestamps,
+             QVector<double>({0.0, 1.0, 2.0}));
+    QVERIFY(qAbs(speedsOf(sparse)[0] - 3.6F) < 0.001F);
+    QVERIFY(qAbs(speedsOf(sparse)[1] - 7.2F) < 0.001F);
+
+    // The same timestamp twice, a 2-D fix then a 3-D fix: the 3-D one is kept.
+    const auto duplicate = GoProTelemetrySource::decodeGpsPackets(
+        {{device(gps9Stream(1000, 2)), 1.0, 1.0}, {device(gps9Stream(2000, 3)), 1.0, 1.0}}, 2.0);
+    QCOMPARE(duplicate.session.sampleCount, 1);
+    QVERIFY(qAbs(speedsOf(duplicate)[0] - 7.2F) < 0.001F);
+
+    // Valid GPS followed by a malformed KLV tail keeps the valid samples.
+    const auto tail = GoProTelemetrySource::decodeGpsPackets(
+        {{device(gps9Stream(1000, 3)) + QByteArray("GPS9?\x20\xff\xff\x01\x02", 10), 0.0, 1.0}}, 1.0);
+    QCOMPARE(tail.session.sampleCount, 1);
+    QVERIFY(qAbs(speedsOf(tail)[0] - 3.6F) < 0.001F);
 }
 
 void SourceTests::rejectsMalformedGpmf()
