@@ -1628,9 +1628,19 @@ void WidgetTests::editsDesignedWidgetInWidgetEditor()
     QVERIFY(editor);
     const auto elements = [&] { return model->widget(designed).value("settings").toMap().value("elements").toList(); };
 
+    model->setSetting(designed, QStringLiteral("stackPosition"), QStringLiteral("top"));
     QVERIFY(QMetaObject::invokeMethod(editor, "openFor", Q_ARG(QVariant, designed)));
     QTRY_VERIFY(editor->property("visible").toBool());
     QCOMPARE(editor->property("selectedElement").toInt(), 0);
+    // KAN-199: the editor draws the export's panel, stacking and scaled corners included.
+    auto *panel = object->findChild<QQuickItem *>(QStringLiteral("widgetEditorPanel"));
+    QVERIFY(panel);
+    QTRY_VERIFY(panel->width() > 0);
+    QVERIFY(panel->property("squareBottom").toBool());
+    QVERIFY(!panel->property("squareTop").toBool());
+    const double zoom = panel->width() / (model->widget(designed).value("width").toDouble() * 1920.0);
+    QVERIFY(std::abs(panel->property("cornerRadius").toDouble()
+                     - model->widget(designed).value("settings").toMap().value("cornerRadius", 12).toDouble() * zoom) < 1e-6);
     QVERIFY(QMetaObject::invokeMethod(editor, "addElement", Q_ARG(QVariant, QStringLiteral("lap"))));
     QCOMPARE(elements().size(), original.size() + 1);
     QCOMPARE(elements().constLast().toMap().value("kind").toString(), QStringLiteral("lap"));
