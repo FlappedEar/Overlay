@@ -41,6 +41,7 @@ private slots:
     void rejectsNonFiniteWidgetGeometryAndDuplicateIds();
     void loadsVisualTemplates();
     void dropsRetiredWidgetTypes();
+    void keepsUnknownWidgetTypesUnchanged();
     void keepsRetiredWidgetSettings();
     void providesCustomizableArchetypes();
     void persistsAndSharesCustomTemplates();
@@ -384,6 +385,52 @@ void WidgetTests::loadsVisualTemplates()
         QVERIFY2(!model.applyTemplate(id), qPrintable(id));
 }
 
+void WidgetTests::keepsUnknownWidgetTypesUnchanged()
+{
+    // KAN-217: a scene saved by a newer version keeps that version's widgets.
+    // They are not shown, and saving writes them back unchanged in place.
+    WidgetModel model;
+    const QJsonObject future{{"id", "future"}, {"type", "sparkline"}, {"x", 0.7}, {"y", 0.1},
+        {"settings", QJsonObject{{"channel", "rpm"}, {"window", 12}, {"style", QJsonObject{{"glow", true}}}}},
+        {"cues", QJsonArray{QJsonObject{{"start", 1.0}, {"end", 2.0}}}}, {"newerKey", "kept"}};
+    const QJsonArray scene{
+        QJsonObject{{"id", "speed"}, {"type", "speed"}},
+        future,
+        QJsonObject{{"id", "old"}, {"type", "rpm"}},
+        QJsonObject{{"id", "lap"}, {"type", "lapCurrent"}},
+        QJsonObject{{"id", "future-2"}, {"type", "anotherNewType"}},
+    };
+    QVERIFY(model.fromJson(scene));
+    QCOMPARE(model.count(), 2);
+    QCOMPARE(model.unknownWidgetsKept(), 2);
+    QCOMPARE(model.retiredWidgetsDropped(), 1);
+    auto saved = model.toJson();
+    QCOMPARE(saved.size(), 4);
+    QCOMPARE(saved[0].toObject().value("id").toString(), QString("speed"));
+    QCOMPARE(saved[1].toObject(), future);
+    QCOMPARE(saved[2].toObject().value("id").toString(), QString("lap"));
+    QCOMPARE(saved[3].toObject(), scene[4].toObject());
+    // Editing the known widgets keeps the unknown ones.
+    model.moveWidget(1, 0.2, 0.2);
+    QVERIFY(model.addWidget("heartRate") >= 0);
+    saved = model.toJson();
+    QCOMPARE(saved.size(), 5);
+    QCOMPARE(saved[1].toObject(), future);
+    QVERIFY(model.fromJson(saved));
+    QCOMPARE(model.toJson(), saved);
+    // They count toward the scene limits; a duplicate id is still invalid.
+    QJsonArray full;
+    for (qsizetype i = 0; i < ProjectLimits::maximumWidgets; ++i)
+        full.append(QJsonObject{{"id", QString("f%1").arg(i)}, {"type", "sparkline"}});
+    QVERIFY(model.fromJson(full));
+    QCOMPARE(model.addWidget("speed"), -1);
+    QVERIFY(!model.fromJson(QJsonArray{future, future}));
+    // A template replaces the whole scene, unknown widgets included.
+    QVERIFY(model.fromJson(scene));
+    QVERIFY(model.applyTemplate("motorsport-broadcast-smoke"));
+    QCOMPARE(model.unknownWidgetsKept(), 0);
+}
+
 void WidgetTests::dropsRetiredWidgetTypes()
 {
     // KAN-192: a project or custom template saved with a removed type still
@@ -406,9 +453,11 @@ void WidgetTests::dropsRetiredWidgetTypes()
     QCOMPARE(model.widget(1).value("type").toString(), QString("lapCurrent"));
     QVERIFY(model.fromJson(QJsonArray{scene.at(0)}));
     QCOMPARE(model.retiredWidgetsDropped(), 0);
-    // A type that never existed still makes the scene invalid.
-    QVERIFY(!model.fromJson(QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("x")},
-                                                   {QStringLiteral("type"), QStringLiteral("unknownType")}}}));
+    // A type this build does not know is a newer version's: kept, not dropped (KAN-217).
+    QVERIFY(model.fromJson(QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("x")},
+                                                  {QStringLiteral("type"), QStringLiteral("unknownType")}}}));
+    QCOMPARE(model.count(), 0);
+    QCOMPARE(model.unknownWidgetsKept(), 1);
 
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -1146,7 +1195,7 @@ void WidgetTests::projectsWestPositiveTracksWithoutMirroring()
     // Projection must never rewrite the source or fabricate missing marker data.
     QCOMPARE(westSession.valueAt("longitude", 0).value(), -longitude);
     auto missing = westSession;
-    missing.channels["longitude"].values[1] = std::numeric_limits<float>::quiet_NaN();
+    missing.channels["longitude"].setValue(1, std::numeric_limits<float>::quiet_NaN());
     QVERIFY(!currentTrackPoint(missing, 1, westMap));
     TelemetryRenderContext context;
     context.setSession(&westSession);
@@ -1171,21 +1220,17 @@ void WidgetTests::cachesStaticTrackGeometry()
     TelemetrySession session;
     TelemetryChannel latitude;
     latitude.name = QStringLiteral("latitude");
-    latitude.timestamps.reserve(pointCount);
-    latitude.values.reserve(pointCount);
+    latitude.reserve(pointCount);
     TelemetryChannel longitude;
     longitude.name = QStringLiteral("longitude");
-    longitude.timestamps.reserve(pointCount);
-    longitude.values.reserve(pointCount);
+    longitude.reserve(pointCount);
     for (qsizetype index = 0; index < pointCount; ++index) {
         const double progress = static_cast<double>(index) / static_cast<double>(pointCount - 1);
         geometry.points.append(
             {progress, 0.5 + 0.4 * std::sin(progress * 8.0 * std::numbers::pi)});
         const double timestamp = static_cast<double>(index) / 10.0;
-        latitude.timestamps.append(timestamp);
-        longitude.timestamps.append(timestamp);
-        latitude.values.append(static_cast<float>(52.0 + progress * 0.001));
-        longitude.values.append(static_cast<float>(21.0 + progress * 0.001));
+        latitude.appendSample(timestamp, static_cast<float>(52.0 + progress * 0.001));
+        longitude.appendSample(timestamp, static_cast<float>(21.0 + progress * 0.001));
     }
     session.channels.insert(latitude.name, latitude);
     session.channels.insert(longitude.name, longitude);
@@ -1767,7 +1812,7 @@ void WidgetTests::rendersTyresInExportScene()
         const TelemetrySession real = TelemetrySource::load(file.absoluteFilePath());
         const TyreChannelMap map = mapTyreChannels(real);
         if (!map.hasAny()) continue;
-        const auto &timestamps = real.channels.value(map.pressure[0]).timestamps;
+        const auto timestamps = real.channels.value(map.pressure[0]).timestamps();
         const double time = timestamps[timestamps.size() / 2];
         TelemetryFrameRenderer realRenderer;
         QVERIFY2(realRenderer.initialize(&widgets, &real, nullptr, SyncTransform{}, QSize(1280, 720)),
@@ -1837,8 +1882,7 @@ void WidgetTests::repaintsOnlyMovingGaugeLayers()
         TelemetryChannel channel;
         channel.name = name;
         for (double time = 0.0; time <= 6.0; time += 0.05) {
-            channel.timestamps.append(time);
-            channel.values.append(static_cast<float>(amplitude * (1.0 + std::sin(time * 1.3))));
+            channel.appendSample(time, static_cast<float>(amplitude * (1.0 + std::sin(time * 1.3))));
         }
         session.channels.insert(name, channel);
         session.aliases.insert(name, name);

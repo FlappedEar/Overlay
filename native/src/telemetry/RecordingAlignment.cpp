@@ -12,7 +12,7 @@ namespace {
 const TelemetryChannel *speedChannel(const TelemetrySession &session)
 {
     const auto found = session.channels.constFind(session.aliases.value(QStringLiteral("speed")));
-    return found == session.channels.cend() || found->timestamps.isEmpty() ? nullptr : &*found;
+    return found == session.channels.cend() || found->timestamps().isEmpty() ? nullptr : &*found;
 }
 
 // A session holding only the speed samples of `channel` in [from, to], on
@@ -22,11 +22,10 @@ TelemetrySession speedSlice(const TelemetryChannel &channel, const double from, 
     TelemetryChannel slice;
     slice.name = channel.name;
     slice.unit = channel.unit;
-    for (qsizetype index = 0; index < channel.timestamps.size(); ++index) {
-        const double time = channel.timestamps[index];
+    for (qsizetype index = 0; index < channel.timestamps().size(); ++index) {
+        const double time = channel.timestamps()[index];
         if (time < from || time > to) continue;
-        slice.timestamps.append(time);
-        slice.values.append(channel.values[index]);
+        slice.appendSample(time, channel.values()[index]);
     }
     TelemetrySession session;
     session.channels.insert(slice.name, slice);
@@ -63,8 +62,8 @@ RecordingAlignment alignRecordings(const TelemetrySession &primary, const Teleme
     result.peakUniqueness = whole.diagnostics.peakUniqueness;
     result.confidence = whole.confidence;
     // The candidate's span that the primary covers under the whole offset.
-    const double from = std::max(candidateSpeed->timestamps.constFirst(), primarySpeed->timestamps.constFirst() - whole.offset);
-    const double to = std::min(candidateSpeed->timestamps.constLast(), primarySpeed->timestamps.constLast() - whole.offset);
+    const double from = std::max(candidateSpeed->timestamps().constFirst(), primarySpeed->timestamps().constFirst() - whole.offset);
+    const double to = std::min(candidateSpeed->timestamps().constLast(), primarySpeed->timestamps().constLast() - whole.offset);
     result.overlapSeconds = std::max(0.0, to - from);
     if (result.overlapSeconds < kMinimumSyncOverlapSeconds) {
         result.reason = QStringLiteral("shortOverlap");

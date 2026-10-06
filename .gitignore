@@ -7,6 +7,8 @@ __MACOSX/
 *.mp4
 *.mov
 *.fetproject
+# Shared project round-trip vectors (KAN-218).
+!/native/tests/fixtures/project-vectors/*.fetproject
 /*.vbo
 /samples/*.vbo
 /jastrzab/

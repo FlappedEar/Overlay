@@ -64,8 +64,8 @@ CoastingSummary summarizeCoasting(const TelemetrySession &session, const double 
         }
         // Distance and segment shares from the speed samples inside the episode.
         if (speedChannel != session.channels.cend()) {
-            const auto &times = speedChannel->timestamps;
-            const auto &values = speedChannel->values;
+            const auto &times = speedChannel->timestamps();
+            const auto &values = speedChannel->values();
             auto index = std::distance(times.cbegin(), std::lower_bound(times.cbegin(), times.cend(), interval.start));
             for (; index + 1 < times.size() && times[index + 1] <= interval.end; ++index) {
                 const double a = values[index], b = values[index + 1];

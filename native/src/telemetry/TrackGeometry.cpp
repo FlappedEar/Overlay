@@ -36,13 +36,13 @@ TrackGeometry buildTrackGeometry(const TelemetrySession &session, const Cancella
         return geometry;
     }
 
-    const qsizetype count = std::min(latitude->values.size(), longitude->values.size());
+    const qsizetype count = std::min(latitude->values().size(), longitude->values().size());
     QVector<QPointF> localPoints;
     localPoints.reserve(count);
     for (qsizetype index = 0; index < count; ++index) {
         if ((index & 0xff) == 0) throwIfCancelled(cancelled);
-        const double lat = latitude->values[index];
-        const double lon = longitude->values[index];
+        const double lat = latitude->values()[index];
+        const double lon = longitude->values()[index];
         if (!isValidCoordinate({lat, lon})) {
             continue;
         }
@@ -121,8 +121,11 @@ void appendLatLon(const TelemetrySession &session, const double startTime, const
             throwIfCancelled(cancelled);
             const auto lon = session.valueAt("longitude", sample.x());
             if (!lon) continue;
-            latitude.values.append(static_cast<float>(sample.y()));
-            longitude.values.append(static_cast<float>(*lon));
+            // Geometry reads only the points; the index keeps time ordered
+            // across both sessions.
+            const auto order = static_cast<double>(latitude.sampleCount());
+            latitude.appendSample(order, static_cast<float>(sample.y()));
+            longitude.appendSample(order, static_cast<float>(*lon));
         }
     }
 }

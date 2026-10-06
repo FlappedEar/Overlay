@@ -56,6 +56,15 @@ bool AppController::applyEditorScene(const ProjectLoadResult &result, QString *e
                 ? QStringLiteral("1 widget of a removed type was left out.")
                 : QStringLiteral("%1 widgets of removed types were left out.").arg(retired);
         }
+        // KAN-217: a newer version's widgets stay in the file, unseen.
+        if (const int unknown = m_widgetModel.unknownWidgetsKept(); unknown > 0) {
+            AppLog::warn(QStringLiteral("Project load kept %1 widget(s) of unknown types unchanged: %2")
+                             .arg(unknown).arg(result.projectPath));
+            const QString kept = unknown == 1
+                ? QStringLiteral("1 widget from a newer version is kept in the file but not shown.")
+                : QStringLiteral("%1 widgets from a newer version are kept in the file but not shown.").arg(unknown);
+            m_sceneNotice = m_sceneNotice.isEmpty() ? kept : m_sceneNotice + QLatin1Char(' ') + kept;
+        }
         return true;
     }
     AppLog::error(QStringLiteral("Project load failed while applying widget scene: %1")

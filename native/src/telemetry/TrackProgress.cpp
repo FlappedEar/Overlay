@@ -13,6 +13,9 @@ double pointDistance(const QPointF &a, const QPointF &b) { return std::hypot(a.x
 constexpr double backwardToleranceMeters = 3.0;
 // A lock older than this is not continued: the next fix is a cold start.
 constexpr double maximumGapSeconds = 5.0;
+// Fixes one lap trace projects at most, besides each run's first and last
+// (KAN-220); the former latitude buckets kept up to twice 4000.
+constexpr qsizetype maximumLapTraceFixes = 8000;
 
 double cross(const QPointF &a, const QPointF &b) { return a.x() * b.y() - a.y() * b.x(); }
 
@@ -401,7 +404,13 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
 {
     QVector<ProgressSegment> result;
     if (!axis.valid) return result;
-    const auto latitudeSegments = session.sampledSegments("latitude", startTime, endTime, 4000);
+    // KAN-220: fixes are chosen evenly by time order, not by latitude
+    // extremes, so neither axis biases which ones are projected. Each run keeps
+    // its first and last fix.
+    const auto latitudeSegments = session.rawSegments("latitude", startTime, endTime);
+    qsizetype fixCount = 0;
+    for (const auto &segment : latitudeSegments) fixCount += segment.size();
+    qsizetype ordinal = -1;
 
     ProgressSegment current;
     ProjectionContext context;
@@ -417,8 +426,14 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
 
     for (const auto &segment : latitudeSegments) {
         flush(); // a raw GPS gap between sampledSegments runs is never bridged
-        for (const auto &sample : segment) {
-            throwIfCancelled(cancelled);
+        for (qsizetype index = 0; index < segment.size(); ++index) {
+            ++ordinal;
+            if ((ordinal & 0xff) == 0) throwIfCancelled(cancelled);
+            if (index != 0 && index != segment.size() - 1
+                && !keepEvenlySpread(ordinal, fixCount, maximumLapTraceFixes)) {
+                continue;
+            }
+            const QPointF &sample = segment[index];
             const double time = sample.x();
             const double latitude = sample.y();
             const auto longitude = session.valueAt("longitude", time);

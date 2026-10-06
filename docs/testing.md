@@ -1724,17 +1724,19 @@ published change against its own CI run; historical task records do not validate
 new code. Keep the [local task workflow](development-workflow.md) for implementation
 and private-media acceptance.
 
-[Native CI](../.github/workflows/build.yml) runs on pull requests, pushes to `main`, and manual dispatch. Two macOS arm64 jobs configure Debug and Release Ninja builds with Qt 6.8.3 (the supported minimum minor), compile the application and tests with C++20, and run all 42 CTest registrations: 38 Qt Test executables (the GUI application suite, the telemetry-core and telemetry-app suites, the per-module suites, the KAN-125 storage-migration suite, the KAN-180 content-id vector suite and the KAN-178 command-line suite), the production QML startup smoke, the KAN-178 command-line usage check, and the two library-boundary checks. Release jobs additionally deploy Qt and run installed startup with the build SDK hidden, then attach internal candidate archives. Windows builds, tests and installer validation are paused by owner direction on 13 September 2026; resume them only when explicitly requested. Earlier Windows results below are historical. See [Windows installer](windows-installer.md).
+[Native CI](../.github/workflows/build.yml) runs on pull requests, pushes to `main`, and manual dispatch. Two macOS arm64 jobs configure Debug and Release Ninja builds with Qt 6.8.3 (the supported minimum minor), compile the application and tests with C++20, and run all 49 CTest registrations: 43 Qt Test executables (the five GUI application suites, the telemetry-core and telemetry-app suites, the per-module suites, the KAN-125 storage-migration suite, the KAN-180 content-id vector suite, the KAN-218 project vector suite and the KAN-178 command-line suite), the production QML startup smoke, the KAN-178 command-line usage check, the two library-boundary checks and the two checks that the boundary script rejects a bad fixture. Release jobs additionally deploy Qt and run installed startup with the build SDK hidden, then attach internal candidate archives. Windows builds, tests and installer validation are paused by owner direction on 13 September 2026; resume them only when explicitly requested. Earlier Windows results below are historical. See [Windows installer](windows-installer.md).
 
 | Job | Renderer | Toolchain |
 | --- | --- | --- |
 | `macOS arm64 / Debug or Release / Qt 6.8.3` | Metal; Cocoa for native window interaction | `macos-15`, Apple Clang |
 | `Linux x64 / ASan+UBSan / Qt 6.8.3` | None (offscreen; GUI-free tests only) | `ubuntu-24.04`, GCC, AddressSanitizer with leak checks and UndefinedBehaviorSanitizer |
+| `Linux x64 / TSan / Qt 6.8.3` | None (offscreen; GUI-free tests only) | `ubuntu-24.04`, GCC, ThreadSanitizer |
+| `Linux x64 / GUI ASan+UBSan / Qt 6.8.3` | Mesa software OpenGL on Xvfb | `ubuntu-24.04`, GCC, AddressSanitizer without leak checks and UndefinedBehaviorSanitizer |
 
 A third job (KAN-154) builds a Debug configuration on Linux with
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined` and runs every
 CTest test except the GUI application suite, the startup smoke, the command-line
-usage check and the two boundary scripts: 37 Qt Test executables. Those excluded
+usage check and the boundary scripts: 38 Qt Test executables since KAN-218. Those excluded
 need a display, a GPU and FFmpeg 8.1, which the macOS jobs supply. Any sanitizer
 report, including a leak, fails the job. Checked locally on 5 October 2026 with
 Qt 6.8.3 and GCC 13: all 37 pass, `flappedear_recording_alignment_tests` takes
@@ -1753,6 +1755,50 @@ flags='-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recove
 cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_C_FLAGS=$flags" \
   "-DCMAKE_CXX_FLAGS=$flags" "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"
 ```
+
+A fourth job (KAN-219) builds the same GUI-free tests with
+`-fsanitize=thread -O1 -g` and runs them under ThreadSanitizer; any report
+fails it. Qt's prebuilt libraries are not instrumented, so
+[`.github/tsan-suppressions.txt`](../.github/tsan-suppressions.txt) ignores the
+calls Qt Core and Qt Test make into intercepted functions (`memmove`,
+`pthread_cond_destroy`, ...) with `called_from_lib`; our own loads and stores
+are still checked. Qt Test's watchdog then waits in libstdc++'s
+`std::condition_variable::wait` on a mutex locked inside Qt Test, so one `mutex:`
+entry ignores that misuse report there and nothing else. The job also leaves out `flappedear_telemetry_app_tests` and
+`flappedear_project_vector_tests`, which drive the reference app: its
+`QtConcurrent::run` tasks reach the worker through `QThreadPool`, whose
+futex-based locking ThreadSanitizer cannot see, so every value a task captures
+reads as a race with the main thread that wrote it (over 300 reports, all of
+that shape). Checking that suite needs a Qt built with `-sanitize thread`.
+`TelemetrySessionCache::load` now polls `std::mutex::try_lock` every 2 ms
+instead of `std::timed_mutex::try_lock_for`: GCC 13's ThreadSanitizer does not
+intercept `pthread_mutex_clocklock`, so it saw every unlock of the cache lock
+without the lock. Checked locally on 6 October 2026 with Qt 6.8.3 and GCC 13:
+the other 36 suites pass with no report, and a race injected between two threads
+(one on a `QVector`, one through `QThreadPool::start`) is still reported with
+the suppressions in place. The job lowers `vm.mmap_rnd_bits` to
+28, which GCC 13's runtime needs on the runner kernel. Locally:
+
+```bash
+flags='-fsanitize=thread -fno-omit-frame-pointer -O1 -g'
+cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_C_FLAGS=$flags" \
+  "-DCMAKE_CXX_FLAGS=$flags" "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread"
+TSAN_OPTIONS="suppressions=$PWD/.github/tsan-suppressions.txt" \
+  ./build-tsan/native/tests/flappedear_source_cache_tests
+```
+
+A fifth job (KAN-219) runs three of the five GUI application suites
+(`flappedear_native_tests_editor`, `_project` and `_widgets`) built with
+`-fsanitize=address,undefined` on Xvfb with Mesa's OpenGL
+(`QT_QPA_PLATFORM=xcb`, `QSG_RHI_BACKEND=opengl`). The sources and export
+suites are left out because they need FFmpeg 8.1. Leak checks are off: on exit
+Qt Quick's QML engine leaves only indirect leaks (cycles) whose stacks reach
+no frame of this code, 671 allocations in the widgets suite. The job also
+drops `strict_string_checks`, under which libxkbcommon's keymap loading fails
+inside `strndup` before any test runs. Checked locally on 6 October 2026 with
+Qt 6.8.3 and GCC 13: the editor (20 passed, 3 skipped) and widgets (44 passed)
+suites report nothing; the project suite fails only its two atomic-write tests,
+which cannot pass as root, and runs as a normal user in CI.
 
 Pull request runs are cancelled by a newer push to the same pull request; runs
 on `main` are never cancelled, so every `main` revision gets a completed run.
@@ -2375,6 +2421,39 @@ revision followed by a newline, which Qt's `$` used to accept.
 Checked on Linux with Qt 6.8.3 (Debug): the test passes, and altering one
 recorded gate revision makes `gateRevisions` fail.
 
+## KAN-218: .fetproject round-trip vectors
+
+`ProjectVectorTests` reads `native/tests/fixtures/project-vectors/vectors.json`.
+Each accepted case is a day as FlappedEar Telemetry saves it, with its
+recordings: `telemetry-day.fetproject` carries every analysis field (lap
+exclusions, comparison group, range and channels, run details, segments and
+their review, newer versions of the versioned fields, unknown keys at the root,
+event and run) and `event-demo.fetproject` is a minimal day with relative paths
+only. The test copies a case into a temporary `day/` folder, opens it in the
+reference analysis app (`TelemetryController`), saves it unchanged to the
+case's `savePath` (in place, or Save As to `archive/2026/`) and compares the
+result, as JSON values, with the expected file. The temporary folder in each
+`absolutePath` becomes `/vectors`, and the generated `documentState.saveId`
+(and `documentState.id` when the day had none) becomes `<generated-uuid>` once
+checked to be a UUID. A second save of the saved day must give the same file,
+and no save may change a run's `lapDerivationKey`. Three documents both apps
+must refuse are validated too: root `sources` in v3, an event in a version 2
+document, and a malformed version tag (`channel-fusion-vX`).
+
+What the expected files pin, as of 6 October 2026: a save keeps every field
+it does not own; Save As rewrites each `relativePath` (`../../day/first.vbo`)
+and keeps `absolutePath`; a day without them gains `absolutePath`,
+`documentState.id`, `savedRevision`, `mapSettings.providerId` `none` and
+`exportSettings.quality` `high`.
+
+FlappedEar Telemetry should copy this folder and run the same cases against
+its Dart save (KAN-218 port; that repository is not reachable from here). A
+deliberate change to how a day is saved regenerates the expected files with
+`FLAPPEDEAR_UPDATE_PROJECT_VECTORS=1` and is agreed with the owner and
+Telemetry, as for the content ids (KAN-170). Checked on Linux with Qt 6.8.3
+(Debug): the test passes; removing an unknown key from an expected file fails
+it.
+
 ## KAN-178: command-line modes
 
 `native/src/app/CommandLine.cpp` decides the mode before Qt starts. A known
@@ -2430,12 +2509,16 @@ cmake -S . -B build-fuzz -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DFLAPPEDEAR_BUILD_FUZZERS=ON
 cmake --build build-fuzz --target flappedear_fuzz_vbo flappedear_fuzz_rcz flappedear_fuzz_gpmf
 mkdir -p corpus/vbo && cp native/fuzz/seeds/vbo/* corpus/vbo/
-build-fuzz/native/fuzz/flappedear_fuzz_vbo corpus/vbo -max_total_time=600 -max_len=65536 \
+build-fuzz/native/fuzz/flappedear_fuzz_vbo corpus/vbo -max_total_time=600 -max_len=1048576 \
   -timeout=30 -rss_limit_mb=2560
 ```
 
 Native CI's `Linux x64 / Fuzz parsers / Qt 6.8.3` job runs each harness for
 60 seconds from the seeds and uploads any crash input with its logs.
+Since KAN-219 the inputs may grow to 1 MiB (`-max_len=1048576`, was 64 KiB), so
+the fuzzer is no longer kept below the parsers' own header, line and channel
+limits. libFuzzer still lengthens inputs gradually, so a 60-second run rarely
+gets near that size; the limit tests remain the check of the limits themselves.
 
 Checked on Linux with Qt 6.8.3, clang 18 and ASan, UBSan and leak detection,
 10 minutes per harness on 5 October 2026: no finding. VBO ran 666,735 inputs
@@ -2467,6 +2550,9 @@ analyzer cannot see.
 Native CI's `Linux x64 / clang-tidy / Qt 6.8.3` job runs on pull requests
 only. It builds with clang 18 for the compile database and the moc files, then
 runs `clang-tidy-18` on each changed `native/**/*.cpp` file in that database.
+Headers are not in the compile database, so since KAN-219 a changed
+`native/**/*.h` adds its sibling `.cpp` file, or, when there is none, up to
+three `.cpp` files that include it; clang-tidy checks the header through them.
 Locally:
 
 ```bash

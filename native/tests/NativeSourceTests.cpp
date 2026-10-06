@@ -22,6 +22,7 @@
 #include <sys/resource.h>
 #endif
 #include <optional>
+#include <stdexcept>
 
 using namespace NativeTestSupport;
 
@@ -1448,12 +1449,10 @@ void SourceTests::gatesWeakSyncCandidates()
     TelemetrySession rectangle;
     TelemetryChannel latitude;
     latitude.name = "latitude";
-    latitude.timestamps = {0.0, 1.0, 2.0, 3.0};
-    latitude.values = {0.0F, 0.0F, 0.001F, 0.001F};
+    latitude.setSamples({0.0, 1.0, 2.0, 3.0}, {0.0F, 0.0F, 0.001F, 0.001F});
     TelemetryChannel longitude;
     longitude.name = "longitude";
-    longitude.timestamps = latitude.timestamps;
-    longitude.values = {0.0F, 0.004F, 0.004F, 0.0F};
+    longitude.setSamples(latitude.timestamps(), {0.0F, 0.004F, 0.004F, 0.0F});
     rectangle.channels.insert(latitude.name, latitude);
     rectangle.channels.insert(longitude.name, longitude);
     rectangle.aliases.insert("latitude", latitude.name);
@@ -1806,13 +1805,13 @@ void SourceTests::fingerprintsSourcesDeterministically()
     TelemetryChannel speed;
     speed.name = QStringLiteral("speed");
     speed.unit = QStringLiteral("km/h");
-    speed.values = {1.0F, 2.0F};
+    speed.setSamples({0.0, 1.0}, {1.0F, 2.0F});
     sessionA.channels.insert(speed.name, speed);
     TelemetrySession sessionB = sessionA;
     TelemetryChannel rpm;
     rpm.name = QStringLiteral("rpm");
     rpm.unit = QStringLiteral("rpm");
-    rpm.values = {1000.0F, 2000.0F};
+    rpm.setSamples({0.0, 1.0}, {1000.0F, 2000.0F});
     sessionB.channels.insert(rpm.name, rpm);
     const QJsonObject telemetryA = ProjectSourceReferenceCodec::telemetryFingerprint(first, sessionA);
     QCOMPARE(ProjectSourceReferenceCodec::compareFingerprints(
@@ -1902,9 +1901,9 @@ void SourceTests::decodesGps9Gpmf()
     QCOMPARE(result.gpsStream, QString("GPS9"));
     QCOMPARE(result.session.sampleCount, 2);
     const TelemetryChannel speed = result.session.channels.value("GoPro GPS speed");
-    QCOMPARE(speed.timestamps, QVector<double>({10.0, 10.5}));
-    QVERIFY(qAbs(speed.values[0] - 4.5F) < 0.001F);
-    QVERIFY(qAbs(speed.values[1] - 5.4F) < 0.001F);
+    QCOMPARE(speed.timestamps(), QVector<double>({10.0, 10.5}));
+    QVERIFY(qAbs(speed.values()[0] - 4.5F) < 0.001F);
+    QVERIFY(qAbs(speed.values()[1] - 5.4F) < 0.001F);
 }
 
 void SourceTests::judgesGoProGpsQuality()
@@ -1937,7 +1936,7 @@ void SourceTests::judgesGoProGpsQuality()
     };
     const auto device = [](const QByteArray &streams) { return klvRecord("DEVC", 0, 1, streams.size(), streams); };
     const auto speedsOf = [](const GoProTelemetryResult &result) {
-        return result.session.channels.value(QStringLiteral("GoPro GPS speed")).values;
+        return result.session.channels.value(QStringLiteral("GoPro GPS speed")).values();
     };
 
     // GPS5 without GPSF: fix quality unknown, so not used.
@@ -1959,7 +1958,7 @@ void SourceTests::judgesGoProGpsQuality()
         {device(gps5Packet(2000, 3)), 1.0, 1.0},
         {device(gps5Packet(3000, 3)), 2.0, 1.0}}, 3.0);
     QCOMPARE(sparse.gpsStream, QStringLiteral("GPS9+GPS5"));
-    QCOMPARE(sparse.session.channels.value(QStringLiteral("GoPro GPS speed")).timestamps,
+    QCOMPARE(sparse.session.channels.value(QStringLiteral("GoPro GPS speed")).timestamps(),
              QVector<double>({0.0, 1.0, 2.0}));
     QVERIFY(qAbs(speedsOf(sparse)[0] - 3.6F) < 0.001F);
     QVERIFY(qAbs(speedsOf(sparse)[1] - 7.2F) < 0.001F);
@@ -2122,9 +2121,9 @@ void SourceTests::normalizesGpmfTimestamps()
     const GoProTelemetryResult result = GoProTelemetrySource::decodeGpsPackets(
         {packetAt(2.0, 1000), packetAt(1.0, 2000), packetAt(1.0, 3000)}, 3.0);
     const TelemetryChannel speed = result.session.channels.value(QStringLiteral("GoPro GPS speed"));
-    QCOMPARE(speed.timestamps, QVector<double>({1.0, 2.0}));
-    QVERIFY(speed.timestamps[1] > speed.timestamps[0]);
-    QVERIFY(qAbs(speed.values[0] - 7.2F) < 0.001F);
+    QCOMPARE(speed.timestamps(), QVector<double>({1.0, 2.0}));
+    QVERIFY(speed.timestamps()[1] > speed.timestamps()[0]);
+    QVERIFY(qAbs(speed.values()[0] - 7.2F) < 0.001F);
 }
 
 void SourceTests::boundsTimeTransforms_data()
@@ -2221,34 +2220,46 @@ void SourceTests::rejectsUnsafeSynchronizationInputs()
     auto telemetry = video;
     auto &a = video.channels["speed"];
     auto &b = telemetry.channels["speed"];
-    if (fault == 0) { a.timestamps.clear(); a.values.clear(); }
-    if (fault == 1) a.values.removeLast();
-    if (fault == 2) a.timestamps[1] = std::numeric_limits<double>::quiet_NaN();
-    if (fault == 3) a.timestamps[1] = std::numeric_limits<double>::infinity();
-    if (fault == 4) a.timestamps[1] = a.timestamps[0];
-    if (fault == 5) a.timestamps[1] = -1;
+    auto ta = a.timestamps();
+    auto va = a.values();
+    auto tb = b.timestamps();
+    auto vb = b.values();
+    if (fault == 0) { ta.clear(); va.clear(); }
+    if (fault == 1) va.removeLast();
+    if (fault == 2) ta[1] = std::numeric_limits<double>::quiet_NaN();
+    if (fault == 3) ta[1] = std::numeric_limits<double>::infinity();
+    if (fault == 4) ta[1] = ta[0];
+    if (fault == 5) ta[1] = -1;
+    if (fault >= 1 && fault <= 5) {
+        // KAN-209: a channel cannot hold these samples at all.
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument, a.setSamples(ta, va));
+        return;
+    }
     if (fault >= 6) {
-        a.timestamps.resize(20); a.values.resize(20);
-        b.timestamps.resize(20); b.values.resize(20);
+        ta.resize(20); va.resize(20);
+        tb.resize(20); vb.resize(20);
         double negative = -std::numeric_limits<double>::max();
         double positive = std::numeric_limits<double>::max() * .9;
         for (int i = 0; i < 20; ++i) {
-            a.timestamps[i] = b.timestamps[i] = i;
-            if (fault == 6) a.timestamps[i] = b.timestamps[i] = 1e16 + i * 2.0;
+            ta[i] = tb[i] = i;
+            if (fault == 6) ta[i] = tb[i] = 1e16 + i * 2.0;
             if (fault == 7) {
-                a.timestamps[i] = negative; b.timestamps[i] = positive;
+                ta[i] = negative; tb[i] = positive;
                 negative = std::nextafter(negative, 0.0);
                 positive = std::nextafter(positive, std::numeric_limits<double>::infinity());
             }
-            if (fault == 8) a.timestamps[i] = b.timestamps[i] = i * 100000.0;
-            if (fault == 9) b.timestamps[i] = i * 100000.0;
-            if (fault == 10) { a.timestamps[i] = i * 1000.0; b.timestamps[i] = i * 1500.0; }
+            if (fault == 8) ta[i] = tb[i] = i * 100000.0;
+            if (fault == 9) tb[i] = i * 100000.0;
+            if (fault == 10) { ta[i] = i * 1000.0; tb[i] = i * 1500.0; }
         }
         if (fault == 11) {
-            a.timestamps.resize(kMaximumSyncSignalSamples + 1);
-            a.values.resize(kMaximumSyncSignalSamples + 1);
+            ta.resize(kMaximumSyncSignalSamples + 1);
+            va.resize(kMaximumSyncSignalSamples + 1);
+            for (qsizetype i = 20; i < ta.size(); ++i) ta[i] = static_cast<double>(i);
         }
     }
+    a.setSamples(ta, va);
+    b.setSamples(tb, vb);
     int checks = 0;
     bool rejected = false;
     try {
@@ -2271,8 +2282,8 @@ void SourceTests::preservesConfirmedTransformForAmbiguousResult()
     controller.setTimeScale(1.003);
     auto video = speedSession(0, 30, 0);
     auto telemetry = speedSession(0, 35, 0);
-    std::fill(video.channels["speed"].values.begin(), video.channels["speed"].values.end(), 42.0F);
-    std::fill(telemetry.channels["speed"].values.begin(), telemetry.channels["speed"].values.end(), 42.0F);
+    for (qsizetype i = 0; i < video.channels["speed"].sampleCount(); ++i) video.channels["speed"].setValue(i, 42.0F);
+    for (qsizetype i = 0; i < telemetry.channels["speed"].sampleCount(); ++i) telemetry.channels["speed"].setValue(i, 42.0F);
     AppController::AutoSyncResult result;
     result.success = true;
     result.generation = controller.m_document.m_sourceGeneration;
@@ -2312,9 +2323,9 @@ void SourceTests::rejectsInvalidAutomaticCandidates()
 void SourceTests::keepsExtremeFiniteSyncSignalsBounded()
 {
     auto session = speedSession(0, 30, 0);
-    auto &values = session.channels["speed"].values;
-    for (qsizetype i = 0; i < values.size(); ++i)
-        values[i] = (i % 2 ? 1.0F : -1.0F) * std::numeric_limits<float>::max();
+    auto &speed = session.channels["speed"];
+    for (qsizetype i = 0; i < speed.sampleCount(); ++i)
+        speed.setValue(i, (i % 2 ? 1.0F : -1.0F) * std::numeric_limits<float>::max());
     const auto candidate = TelemetrySyncEngine::synchronize(session, session);
     QVERIFY(std::isfinite(candidate.offset));
     QVERIFY(std::isfinite(candidate.confidence));
@@ -2348,11 +2359,8 @@ void SourceTests::reportsAmbiguousGpsSpeed()
 {
     TelemetrySession video = speedSession(0.0, 30.0, 0.0);
     TelemetrySession telemetry = speedSession(0.0, 35.0, 0.0);
-    std::fill(video.channels["speed"].values.begin(), video.channels["speed"].values.end(), 42.0F);
-    std::fill(
-        telemetry.channels["speed"].values.begin(),
-        telemetry.channels["speed"].values.end(),
-        42.0F);
+    for (qsizetype i = 0; i < video.channels["speed"].sampleCount(); ++i) video.channels["speed"].setValue(i, 42.0F);
+    for (qsizetype i = 0; i < telemetry.channels["speed"].sampleCount(); ++i) telemetry.channels["speed"].setValue(i, 42.0F);
     const SyncCandidate candidate = TelemetrySyncEngine::synchronize(video, telemetry);
     QCOMPARE(candidate.diagnostics.correlation, -1.0);
     QCOMPARE(candidate.confidence, 0.0);
@@ -2366,8 +2374,7 @@ void SourceTests::retainsGlobalSyncAmbiguity()
         speed.name = QStringLiteral("speed");
         for (int index = 0; index <= seconds * 10; ++index) {
             const double time = index / 10.0;
-            speed.timestamps.append(time);
-            speed.values.append(static_cast<float>(70.0
+            speed.appendSample(time, static_cast<float>(70.0
                 + 20.0 * std::sin(2.0 * std::numbers::pi * time / 20.0)
                 + 8.0 * std::sin(2.0 * std::numbers::pi * time / 5.0)));
         }
@@ -2401,8 +2408,7 @@ void SourceTests::countsANearbyFalseSyncPeak()
         TelemetryChannel speed;
         speed.name = QStringLiteral("speed");
         for (double time = from; time <= to + 1e-9; time += 0.2) {
-            speed.timestamps.append(time);
-            speed.values.append(static_cast<float>(value(time)));
+            speed.appendSample(time, static_cast<float>(value(time)));
         }
         result.channels.insert(speed.name, speed);
         result.aliases.insert(QStringLiteral("speed"), speed.name);
@@ -2456,8 +2462,7 @@ void SourceTests::synchronizesWhenTheRecordingsOnlyPartlyOverlap()
         speed.name = QStringLiteral("speed");
         for (double time = from; time <= to + 1e-9; time += 0.2) {
             const double world = time - clockOffset, base = std::floor(world), fraction = world - base;
-            speed.timestamps.append(time);
-            speed.values.append(static_cast<float>(knot(base) + (knot(base + 1.0) - knot(base)) * fraction));
+            speed.appendSample(time, static_cast<float>(knot(base) + (knot(base + 1.0) - knot(base)) * fraction));
         }
         session.channels.insert(speed.name, speed);
         session.aliases.insert(QStringLiteral("speed"), speed.name);
@@ -2494,8 +2499,7 @@ void SourceTests::neverAutoAppliesAnotherLapOfPeriodicLaps()
         for (double time = from; time <= to + 1e-9; time += 0.1) {
             const double world = time - clockOffset;
             const double phase = 2.0 * std::numbers::pi * std::fmod(world + 9000.0, 90.0) / 90.0;
-            speed.timestamps.append(time);
-            speed.values.append(static_cast<float>(120.0 + 40.0 * std::sin(phase) + 15.0 * std::sin(3.0 * phase + 0.4)));
+            speed.appendSample(time, static_cast<float>(120.0 + 40.0 * std::sin(phase) + 15.0 * std::sin(3.0 * phase + 0.4)));
         }
         session.channels.insert(speed.name, speed);
         session.aliases.insert(QStringLiteral("speed"), speed.name);

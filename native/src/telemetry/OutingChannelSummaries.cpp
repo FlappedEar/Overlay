@@ -102,7 +102,7 @@ OutingChannelSummariesResult summarizeOutingChannels(const QVector<OutingLapRow>
                     section.insert("reference", row.reference.toVariantMap());
                     sections.append(section);
                 }
-                const auto &times = session.channels.value(name).timestamps;
+                const auto times = session.channels.value(name).timestamps();
                 const double start = times.isEmpty() ? 0.0 : times.first();
                 const double end = times.isEmpty() ? 0.0 : times.last();
                 channels.append(QVariantMap{{"channel", name}, {"unit", session.channels.value(name).unit},
@@ -136,7 +136,7 @@ OutingChannelSummariesResult summarizeOutingChannels(const QVector<OutingLapRow>
                     section.insert("reference", row.reference.toVariantMap());
                     sections.append(section);
                 }
-                const auto &times = session.channels.value(heartRate).timestamps;
+                const auto times = session.channels.value(heartRate).timestamps();
                 const double start = times.isEmpty() ? 0.0 : times.first();
                 const double end = times.isEmpty() ? 0.0 : times.last();
                 run.insert("heartRate", QVariantMap{{"channel", heartRate}, {"unit", session.channels.value(heartRate).unit},

@@ -7,7 +7,7 @@
   <li><strong>Missing is not zero.</strong> When a channel has no value at a moment, widgets show a dash and charts leave a gap. Gaps in a recording are never bridged in lap timing or automatic synchronisation: when the GoPro loses its GPS fix, that stretch takes no part in matching the video to the logger.</li>
   <li><strong>Nothing is invented.</strong> A missing brake channel is never estimated from G or speed in the overlay, and one channel is never silently replaced by another.</li>
   <li><strong>Recorded values are not changed.</strong> The overlay smooths what it displays slightly; lap timing uses raw samples.</li>
-  <li>Heart rate comes from the imported VBO or RCZ recording. There is no separate heart-rate import.</li>
+  <li>Heart rate comes from the imported VBO or RCZ recording. There is no separate heart-rate import. A reading below 30 or above 230 bpm, such as the 0 bpm RaceChrono writes when its monitor has no reading, is shown as no data.</li>
 </ul>
 
 <h2 id="vbo">VBO files</h2>
@@ -23,7 +23,7 @@
 <p>For lateral and longitudinal G, export <strong>VBO</strong> from RaceChrono with the calculated acceleration channels (<code>latacc-calc</code>, <code>longacc-calc</code>) enabled. These are preferred automatically. RCZ archives contain only the phone's raw accelerometer axes, which are not aligned with the car, and no calculated G.</p>
 
 <h2 id="rcz">RCZ files</h2>
-<p>An RCZ file is a RaceChrono session archive. Supported: a single, uninterrupted session shared from RaceChrono Pro (developed against version 10.2.4). Each channel keeps its own sample rate; nothing is resampled. A pause longer than three times a channel's normal sample spacing is a gap.</p>
+<p>An RCZ file is a RaceChrono session archive. Supported: a single, uninterrupted session shared from RaceChrono Pro (developed against version 10.2.4). Each channel keeps its own sample rate; nothing is resampled. A pause longer than three times a channel's normal sample spacing is a gap. The spacing is judged around the pause, so a stretch the logger recorded at a slower rate is not treated as a run of gaps.</p>
 <p>Refused with a message: resumed sessions, archives with several sessions, encrypted, split or ZIP64 archives, sessions longer than 24 hours, and archives whose GPS is missing. Unknown channel types are left out with a warning. Video and synchronization data stored inside the archive are not imported.</p>
 <p>Channels read from RCZ:</p>
 <table>

@@ -36,13 +36,17 @@ GoPro GPMF input is likewise bounded independently by packet count, bytes per pa
 
 The parser may retain non-finite numeric values internally as placeholders so channel rows remain aligned. The public `TelemetrySession::valueAt()` API never returns `NaN` or infinity: it returns no data instead.
 
+A `TelemetryChannel` holds finite, strictly increasing timestamps with exactly one value each (KAN-209). Its samples are read through `timestamps()` and `values()` and change only through `setSamples`, `appendSample`, `setValue` and `clear`, which throw `std::invalid_argument` for anything else, so readers never meet a mismatched or unordered channel. Only values may be `NaN`.
+
+Heart rate outside 30 to 230 bpm is no data (KAN-222). The VBO and RCZ parsers turn it into `NaN` (`markImplausibleHeartRate`): RaceChrono writes 0 bpm where its monitor has no reading, as in the final row of the 29 August 14:37 VBO export, whose RCZ reads 133 there.
+
 - A time outside a channel's timestamp range is no data.
 - An exact sample whose value is missing is no data.
 - Linear interpolation requires two adjacent finite samples.
 - Previous returns only the immediately preceding sample; it does not search backward across a gap.
 - Nearest returns the nearest sample even when that nearest value is missing; it does not substitute a farther finite value.
 - No mode bridges a missing gap automatically.
-- **Time gaps (KAN-157).** Two adjacent samples more than three median sample intervals apart (`telemetryGapThreshold`) enclose a gap. A lookup strictly between them is no data in every mode, even though both samples are finite. This covers decoders that drop samples rather than mark them: a GoPro loss of GPS fix, or a VBO logger pause. The rule lives in `telemetryValueAt()`, which `TelemetrySession::valueAt()` and auto-sync both use; The median interval is cached per channel (`ChannelCadenceCache`). The cache is locked, so a session can be read from several threads straight from a parser, and it is recomputed when the channel's timestamp buffer, length or end points change (KAN-209). `TelemetrySource::load` and `GoProTelemetrySource::load` still compute it up front so the first lookups are fast.
+- **Time gaps (KAN-157, KAN-221).** Two adjacent samples enclose a gap when they are more than three median sample intervals of the whole channel apart (`telemetryGapThreshold`) and also more than three times the local cadence: the median of up to eight intervals on each side, the slower side counting (`telemetryIsGap`). A stretch logged at a slower rate (10 Hz after 100 Hz, 1 Hz periods in a 10 Hz channel) is therefore not a run of gaps, while a pause in steady logging still is. A lookup strictly between them is no data in every mode, even though both samples are finite. This covers decoders that drop samples rather than mark them: a GoPro loss of GPS fix, or a VBO logger pause. The rule lives in `telemetryValueAt()`, which `TelemetrySession::valueAt()` and auto-sync both use; The median interval is cached per channel (`ChannelCadenceCache`). The cache is locked, so a session can be read from several threads straight from a parser, and every change to a channel's samples resets it (KAN-209). `TelemetrySource::load` and `GoProTelemetrySource::load` still compute it up front so the first lookups are fast. Every consumer uses `telemetryIsGap` except channel fusion, which compares each source's own threshold.
 
 For example, with samples `0 s = 10`, `1 s = missing`, and `2 s = 30`, a lookup at `1 s` is no data in every mode. A linear lookup at `0.5 s` and `1.5 s` is also no data because one adjacent endpoint is missing.
 

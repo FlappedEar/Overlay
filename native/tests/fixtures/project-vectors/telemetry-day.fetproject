@@ -1,0 +1,277 @@
+{
+  "documentState": {
+    "id": "7c8612e7-d1e3-4525-9c5a-b6ffc69234be",
+    "saveId": "07639ccb-b66b-4350-9322-d44a5602d68a",
+    "savedRevision": "5"
+  },
+  "event": {
+    "activeRunId": "6588d2a3-7c91-4ea9-89ad-130fe84fa99b",
+    "analysisDecisions": {
+      "comparisonChannels": [
+        "speed"
+      ],
+      "comparisonGroupId": "compatibility-v1:7b656faaadd082ecd112b09abdb30fd42dd12b53efd6d7bbb0e034048c84096b",
+      "comparisonRange": {
+        "endMeters": 60,
+        "startMeters": 5
+      }
+    },
+    "futureEventField": 3,
+    "id": "d52d14d3-4200-4821-808f-9007c573a94a",
+    "lapExclusions": [
+      {
+        "reason": "Traffic",
+        "reference": {
+          "algorithm": "source-laps-v1",
+          "derivationKey": "88adad4ea429a72847c329dfb6d268a798e8bda3ff01dc2208e377672b9b9753",
+          "endTime": 5.5,
+          "eventId": "d52d14d3-4200-4821-808f-9007c573a94a",
+          "runId": "6588d2a3-7c91-4ea9-89ad-130fe84fa99b",
+          "sourceId": "076a0336-68bc-45bd-af6e-5cac998329e8",
+          "sourceRevision": "c5e4706e89bc0b9c9a354ee8b3b0656a75f15b3f9281a850a6a4c5444243d50e",
+          "startTime": 1.5,
+          "type": "LAP",
+          "version": 1
+        }
+      }
+    ],
+    "name": "Shared day",
+    "runs": [
+      {
+        "conditions": "Dry",
+        "futureRunField": {
+          "kept": true
+        },
+        "id": "6588d2a3-7c91-4ea9-89ad-130fe84fa99b",
+        "name": "Morning",
+        "notes": "Notes",
+        "primaryTelemetrySourceId": "076a0336-68bc-45bd-af6e-5cac998329e8",
+        "setupChanges": "Softer rear",
+        "sources": {
+          "telemetry": [
+            {
+              "contentSha256": "c5e4706e89bc0b9c9a354ee8b3b0656a75f15b3f9281a850a6a4c5444243d50e",
+              "id": "076a0336-68bc-45bd-af6e-5cac998329e8",
+              "importProvenance": {
+                "fingerprint": {
+                  "channels": [
+                    {
+                      "name": "latitude",
+                      "samples": 15,
+                      "unit": ""
+                    },
+                    {
+                      "name": "longitude",
+                      "samples": 15,
+                      "unit": ""
+                    }
+                  ],
+                  "durationUs": 15000000,
+                  "kind": "telemetry-v1",
+                  "sampleCount": 15,
+                  "sampledSha256": "0d402eb6ed7725a2a9e4c23c96a7b35ec8cc3c697747b1b0d3fa69c6d56aaa98",
+                  "size": 414
+                },
+                "format": "vbo",
+                "sha256": "c5e4706e89bc0b9c9a354ee8b3b0656a75f15b3f9281a850a6a4c5444243d50e"
+              },
+              "reference": {
+                "absolutePath": "/vectors/day/first.vbo",
+                "fingerprint": {
+                  "channels": [
+                    {
+                      "name": "latitude",
+                      "samples": 15,
+                      "unit": ""
+                    },
+                    {
+                      "name": "longitude",
+                      "samples": 15,
+                      "unit": ""
+                    }
+                  ],
+                  "durationUs": 15000000,
+                  "kind": "telemetry-v1",
+                  "sampleCount": 15,
+                  "sampledSha256": "0d402eb6ed7725a2a9e4c23c96a7b35ec8cc3c697747b1b0d3fa69c6d56aaa98",
+                  "size": 414
+                },
+                "relativePath": "first.vbo"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "offset": 0,
+          "timeScale": 1
+        },
+        "trackConfiguration": {
+          "direction": "clockwise",
+          "gateRevision": "gates-v1:761ebb921003e35a228c6ca82f4a4f7fbdf4e7e2db0492a0c202cd265b89a409",
+          "layoutId": "Circuit A",
+          "sourceFingerprint": {
+            "channels": [
+              {
+                "name": "latitude",
+                "samples": 15,
+                "unit": ""
+              },
+              {
+                "name": "longitude",
+                "samples": 15,
+                "unit": ""
+              }
+            ],
+            "durationUs": 15000000,
+            "kind": "telemetry-v1",
+            "sampleCount": 15,
+            "sampledSha256": "0d402eb6ed7725a2a9e4c23c96a7b35ec8cc3c697747b1b0d3fa69c6d56aaa98",
+            "size": 414
+          },
+          "sourceId": "076a0336-68bc-45bd-af6e-5cac998329e8"
+        },
+        "trackSegmentReview": {
+          "proposalAlgorithm": "proposals-v1",
+          "rejected": [],
+          "trackConfigurationReference": "compatibility-v1:7b656faaadd082ecd112b09abdb30fd42dd12b53efd6d7bbb0e034048c84096b",
+          "version": "track-segment-review-v1"
+        },
+        "trackSegments": [
+          {
+            "endProgressMeters": 40,
+            "id": "s1",
+            "name": "Sector 1",
+            "startProgressMeters": 0,
+            "trackConfigurationReference": "compatibility-v1:7b656faaadd082ecd112b09abdb30fd42dd12b53efd6d7bbb0e034048c84096b",
+            "type": "sector"
+          }
+        ]
+      },
+      {
+        "fusion": {
+          "algorithm": "channel-fusion-v2",
+          "sources": [
+            "a",
+            "b"
+          ]
+        },
+        "id": "3db16be8-949f-4116-b374-854239fdf799",
+        "name": "Session 2",
+        "primaryTelemetrySourceId": "f67bce1d-4edb-4e0a-acfb-507eb67a08fe",
+        "sources": {
+          "telemetry": [
+            {
+              "contentSha256": "52eef57299a07e790b2bc188cb5bdc74994287fa704d10728be96d45c42b1c7b",
+              "id": "f67bce1d-4edb-4e0a-acfb-507eb67a08fe",
+              "importProvenance": {
+                "fingerprint": {
+                  "channels": [
+                    {
+                      "name": "latitude",
+                      "samples": 15,
+                      "unit": ""
+                    },
+                    {
+                      "name": "longitude",
+                      "samples": 15,
+                      "unit": ""
+                    }
+                  ],
+                  "durationUs": 15000000,
+                  "kind": "telemetry-v1",
+                  "sampleCount": 15,
+                  "sampledSha256": "3063ead0847d410450fd764550e9b829ad28a54a520a9b25c47e3d0781c36087",
+                  "size": 414
+                },
+                "format": "vbo",
+                "sha256": "52eef57299a07e790b2bc188cb5bdc74994287fa704d10728be96d45c42b1c7b"
+              },
+              "reference": {
+                "absolutePath": "/vectors/day/second.vbo",
+                "fingerprint": {
+                  "channels": [
+                    {
+                      "name": "latitude",
+                      "samples": 15,
+                      "unit": ""
+                    },
+                    {
+                      "name": "longitude",
+                      "samples": 15,
+                      "unit": ""
+                    }
+                  ],
+                  "durationUs": 15000000,
+                  "kind": "telemetry-v1",
+                  "sampleCount": 15,
+                  "sampledSha256": "3063ead0847d410450fd764550e9b829ad28a54a520a9b25c47e3d0781c36087",
+                  "size": 414
+                },
+                "relativePath": "second.vbo"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "offset": 0,
+          "timeScale": 1
+        },
+        "trackConfiguration": {
+          "direction": "unknown",
+          "gateRevision": "gates-v1:761ebb921003e35a228c6ca82f4a4f7fbdf4e7e2db0492a0c202cd265b89a409",
+          "layoutId": null,
+          "sourceFingerprint": {
+            "channels": [
+              {
+                "name": "latitude",
+                "samples": 15,
+                "unit": ""
+              },
+              {
+                "name": "longitude",
+                "samples": 15,
+                "unit": ""
+              }
+            ],
+            "durationUs": 15000000,
+            "kind": "telemetry-v1",
+            "sampleCount": 15,
+            "sampledSha256": "3063ead0847d410450fd764550e9b829ad28a54a520a9b25c47e3d0781c36087",
+            "size": 414
+          },
+          "sourceId": "f67bce1d-4edb-4e0a-acfb-507eb67a08fe"
+        },
+        "trackInference": {
+          "algorithm": "gps-route-v2",
+          "layoutId": "gps-route-v2:next"
+        },
+        "trackSegmentReview": {
+          "axis": {
+            "lap": 3
+          },
+          "version": "track-segment-review-v2"
+        },
+        "trackSegments": [
+          {
+            "endProgressMeters": 30,
+            "id": "s2",
+            "name": "Turn 1",
+            "startProgressMeters": 10,
+            "trackConfigurationReference": "compatibility-v2:next",
+            "type": "corner"
+          }
+        ]
+      }
+    ]
+  },
+  "exportSettings": {
+    "quality": "high"
+  },
+  "futureRootField": {
+    "kept": true
+  },
+  "mapSettings": {
+    "providerId": "none"
+  },
+  "version": 3
+}

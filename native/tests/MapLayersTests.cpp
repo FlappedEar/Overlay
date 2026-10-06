@@ -25,8 +25,7 @@ TelemetryChannel makeChannel(const QString &name, const QString &unit, const std
     for (int k = 0; k < sampleCount; ++k) {
         const double t = k * dt;
         if (!present(t)) continue;
-        channel.timestamps.append(t);
-        channel.values.append(static_cast<float>(value(t)));
+        channel.appendSample(t, static_cast<float>(value(t)));
     }
     return channel;
 }
@@ -170,10 +169,6 @@ void MapLayersTests::rejectsMissingChannelsAndBadInput()
     const auto many = channelAlongProgress(session, "speed", straightTrace(), 200.0, 1'000'000);
     QCOMPARE(many.first().size(), 4000);
     QVERIFY(placeOnMap(session, straightTrace(), TrackGeometry{}, {{{0.0, 1.0}, {10.0, 2.0}}}).polylines.isEmpty());
-    TelemetryChannel mismatched;
-    mismatched.timestamps = {0.0, 1.0};
-    mismatched.values = {1.0f};
-    QVERIFY(!plausibleChannelValue(mismatched, 0.5, {}, false));
 }
 
 QTEST_GUILESS_MAIN(MapLayersTests)

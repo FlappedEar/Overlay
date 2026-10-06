@@ -19,8 +19,8 @@ ChannelSummaryPolicy temperatureSummaryPolicy()
 ChannelSummaryPolicy heartRateSummaryPolicy()
 {
     ChannelSummaryPolicy policy;
-    policy.minimumPlausible = 30.0;
-    policy.maximumPlausible = 230.0;
+    policy.minimumPlausible = kHeartRateMinimumPlausible;
+    policy.maximumPlausible = kHeartRateMaximumPlausible;
     return policy;
 }
 
@@ -29,7 +29,7 @@ bool zeroIsPlaceholder(const TelemetryChannel &channel, const ChannelSummaryPoli
     // The channel's typical value decides whether an exact zero is a placeholder.
     if (!policy.zeroIsPlaceholder) return false;
     QVector<float> finite;
-    for (const float value : channel.values) if (std::isfinite(value)) finite.append(value);
+    for (const float value : channel.values()) if (std::isfinite(value)) finite.append(value);
     if (finite.isEmpty()) return false;
     std::nth_element(finite.begin(), finite.begin() + finite.size() / 2, finite.end());
     return std::abs(finite[finite.size() / 2]) > policy.placeholderTypicalAbove;
@@ -49,7 +49,7 @@ ChannelSummary summarizeChannel(const TelemetrySession &session, const QString &
     result.startTime = startTime;
     result.endTime = endTime;
     const auto found = session.channels.constFind(result.channel);
-    if (found == session.channels.cend() || found->timestamps.size() != found->values.size()) {
+    if (found == session.channels.cend() || found->timestamps().size() != found->values().size()) {
         result.unavailableReason = channelSummaryMissing;
         return result;
     }
@@ -60,13 +60,12 @@ ChannelSummary summarizeChannel(const TelemetrySession &session, const QString &
         return result;
     }
     const bool zeroPlaceholder = zeroIsPlaceholder(channel, policy);
-    const double gapLimit = telemetryGapThreshold(channel);
     std::optional<std::pair<double, double>> previous; // time, value
     double integral = 0.0;
-    for (qsizetype i = 0; i < channel.timestamps.size(); ++i) {
-        const double time = channel.timestamps[i];
+    for (qsizetype i = 0; i < channel.timestamps().size(); ++i) {
+        const double time = channel.timestamps()[i];
         if (time < startTime || time > endTime) continue;
-        const double value = channel.values[i];
+        const double value = channel.values()[i];
         if (!std::isfinite(value)) { previous.reset(); continue; }
         if (value < policy.minimumPlausible || value > policy.maximumPlausible || (zeroPlaceholder && value == 0.0)) {
             ++result.excludedArtifacts;
@@ -76,7 +75,7 @@ ChannelSummary summarizeChannel(const TelemetrySession &session, const QString &
         ++result.sampleCount;
         if (!result.minimum || value < *result.minimum) { result.minimum = value; result.minimumTime = time; }
         if (!result.maximum || value > *result.maximum) { result.maximum = value; result.maximumTime = time; }
-        if (previous && time - previous->first <= gapLimit) {
+        if (previous && !telemetryIsGap(channel, previous->first, time)) {
             const double span = time - previous->first;
             integral += span * (value + previous->second) / 2.0;
             result.coveredSeconds += span;
@@ -144,19 +143,18 @@ QVector<CoolingInterval> findCoolingIntervals(const TelemetrySession &session, c
 {
     QVector<CoolingInterval> intervals;
     const auto found = session.channels.constFind(session.aliases.value(channelOrAlias, channelOrAlias));
-    if (found == session.channels.cend() || found->timestamps.size() != found->values.size()) return intervals;
+    if (found == session.channels.cend() || found->timestamps().size() != found->values().size()) return intervals;
     const auto &channel = *found;
     const bool zeroPlaceholder = zeroIsPlaceholder(channel, policy);
-    const double gapLimit = telemetryGapThreshold(channel);
     // Split into continuously recorded stretches of valid samples.
     QVector<QVector<std::pair<double, double>>> stretches(1);
     double previousTime = -std::numeric_limits<double>::infinity();
-    for (qsizetype i = 0; i < channel.timestamps.size(); ++i) {
-        const double time = channel.timestamps[i];
-        const double value = channel.values[i];
+    for (qsizetype i = 0; i < channel.timestamps().size(); ++i) {
+        const double time = channel.timestamps()[i];
+        const double value = channel.values()[i];
         const bool valid = std::isfinite(value) && value >= policy.minimumPlausible && value <= policy.maximumPlausible
             && !(zeroPlaceholder && value == 0.0);
-        if (!valid || time - previousTime > gapLimit) {
+        if (!valid || telemetryIsGap(channel, previousTime, time)) {
             if (!stretches.last().isEmpty()) stretches.append(QVector<std::pair<double, double>>{});
         }
         if (!valid) continue;

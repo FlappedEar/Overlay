@@ -254,6 +254,15 @@ target_compile_features(flappedear_telemetry_app_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_telemetry_app_tests PRIVATE flappedear_telemetry_app Qt6::Test)
 flappedear_enable_warnings(flappedear_telemetry_app_tests)
 add_test(NAME flappedear_telemetry_app_tests COMMAND flappedear_telemetry_app_tests)
+# KAN-218: .fetproject round-trip vectors shared with FlappedEar Telemetry.
+qt_add_executable(flappedear_project_vector_tests ProjectVectorTests.cpp)
+target_compile_features(flappedear_project_vector_tests PRIVATE cxx_std_20)
+target_link_libraries(flappedear_project_vector_tests PRIVATE flappedear_telemetry_app Qt6::Test)
+target_compile_definitions(flappedear_project_vector_tests PRIVATE
+    PROJECT_VECTORS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/project-vectors"
+)
+flappedear_enable_warnings(flappedear_project_vector_tests)
+add_test(NAME flappedear_project_vector_tests COMMAND flappedear_project_vector_tests)
 qt_add_executable(flappedear_driving_variability_tests DrivingVariabilityTests.cpp)
 target_compile_features(flappedear_driving_variability_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_driving_variability_tests PRIVATE flappedear_telemetry_core Qt6::Test)

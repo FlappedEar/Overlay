@@ -19,8 +19,7 @@ TelemetryChannel channel(const QString &name, const QString &unit, const QVector
     result.name = name;
     result.unit = unit;
     for (const double time : times) {
-        result.timestamps.append(time);
-        result.values.append(static_cast<float>(value(time)));
+        result.appendSample(time, static_cast<float>(value(time)));
     }
     return result;
 }

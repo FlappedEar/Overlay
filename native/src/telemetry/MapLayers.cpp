@@ -8,19 +8,19 @@ namespace FlappedEar {
 std::optional<double> plausibleChannelValue(const TelemetryChannel &channel, const double time,
     const ChannelSummaryPolicy &policy, const bool zeroPlaceholder)
 {
-    const auto &times = channel.timestamps;
-    if (!std::isfinite(time) || times.isEmpty() || times.size() != channel.values.size()) return std::nullopt;
+    const auto &times = channel.timestamps();
+    if (!std::isfinite(time) || times.isEmpty() || times.size() != channel.values().size()) return std::nullopt;
     const auto next = std::lower_bound(times.cbegin(), times.cend(), time);
     if (next == times.cend()) return std::nullopt;
     const auto index = std::distance(times.cbegin(), next);
-    const double nextValue = channel.values[index];
+    const double nextValue = channel.values()[index];
     if (!plausibleSample(nextValue, policy, zeroPlaceholder)) return std::nullopt;
     if (*next == time) return nextValue;
     if (index == 0) return std::nullopt;
-    const double previousTime = times[index - 1], previousValue = channel.values[index - 1];
+    const double previousTime = times[index - 1], previousValue = channel.values()[index - 1];
     if (!plausibleSample(previousValue, policy, zeroPlaceholder)) return std::nullopt;
     const double gapLimit = telemetryGapThreshold(channel);
-    if (gapLimit > 0.0 && *next - previousTime > gapLimit) return std::nullopt;
+    if (gapLimit > 0.0 && telemetryIsGap(channel, previousTime, *next)) return std::nullopt;
     const double span = *next - previousTime;
     if (!(span > 0.0)) return std::nullopt;
     return previousValue + (nextValue - previousValue) * (time - previousTime) / span;

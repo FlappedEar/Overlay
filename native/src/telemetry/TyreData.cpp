@@ -82,7 +82,7 @@ PressureUnit classifyPressureUnit(const TelemetryChannel &channel)
 {
     if (const auto declared = declaredPressureUnit(channel.unit); declared != PressureUnit::Unknown) return declared;
     QVector<float> recorded;
-    for (const float value : channel.values)
+    for (const float value : channel.values())
         if (std::isfinite(value) && value > 0.0f) recorded.append(value);
     if (recorded.isEmpty()) return PressureUnit::Unknown;
     std::nth_element(recorded.begin(), recorded.begin() + recorded.size() / 2, recorded.end());

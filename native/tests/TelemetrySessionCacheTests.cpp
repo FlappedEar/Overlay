@@ -49,10 +49,10 @@ void TelemetrySessionCacheTests::sharesVerifiedSessionsAndSeparatesRevisions()
     const auto cost = cache.usedBytes();
     QCOMPARE(cache.load("fingerprint-a/revision-1", {}, decode, validate), a);
     QCOMPARE(decodes, 1); QCOMPARE(validations, 2); QCOMPARE(cache.usedBytes(), cost);
-    QVERIFY(a->channels["speed"].cadence.isCurrent(a->channels["speed"].timestamps));
-    const auto computations = a->channels["speed"].cadence.computations();
+    QVERIFY(a->channels["speed"].cadence().isCurrent(a->channels["speed"].timestamps()));
+    const auto computations = a->channels["speed"].cadence().computations();
     QVERIFY(a->valueAt("speed", .5).has_value());
-    QCOMPARE(a->channels["speed"].cadence.computations(), computations);
+    QCOMPARE(a->channels["speed"].cadence().computations(), computations);
     const auto b = cache.load("fingerprint-b/revision-1", {}, decode, validate);
     const auto revised = cache.load("fingerprint-b/revision-2", {}, decode, validate);
     QVERIFY(a != b && b != revised); QCOMPARE(decodes, 3);
@@ -139,7 +139,7 @@ void TelemetrySessionCacheTests::boundsVboSamplesAndPreservesMalformedInputPolic
     const auto original = VboParser::parse(text);
     const auto bounded = VboParser::parse(text, {}, 2 * 1024 * 1024);
     QCOMPARE(bounded.sampleCount, original.sampleCount);
-    QCOMPARE(bounded.channels["velocity"].values, original.channels["velocity"].values);
+    QCOMPARE(bounded.channels["velocity"].values(), original.channels["velocity"].values());
     QCOMPARE(bounded.warnings, original.warnings);
     QVERIFY_THROWS_EXCEPTION(ResourceLimitError, static_cast<void>(VboParser::parse(text, {}, 1024)));
     QString wide = "[column names]\ntime";

@@ -159,10 +159,10 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
         fused.rule = QStringLiteral("primary");
         fused.channel = channel;
         QVector<Sample> samples;
-        for (qsizetype index = 0; index < channel.timestamps.size() && index < channel.values.size(); ++index)
-            samples.append({channel.timestamps[index], channel.values[index], 0});
+        for (qsizetype index = 0; index < channel.timestamps().size() && index < channel.values().size(); ++index)
+            samples.append({channel.timestamps()[index], channel.values()[index], 0});
         appendSegments(fused.segments, samples, 0, primarySourceId, {}, telemetryGapThreshold(channel),
-            medianInterval(channel.timestamps));
+            medianInterval(channel.timestamps()));
         byKey.insert(fused.key, result.channels.size());
         result.channels.append(fused);
     }
@@ -178,12 +178,12 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
         for (const auto &name : names) {
             throwIfCancelled(cancelled);
             const auto &channel = source.session->channels[name];
-            if (channel.timestamps.size() != channel.values.size() || channel.timestamps.isEmpty()) continue;
+            if (channel.timestamps().size() != channel.values().size() || channel.timestamps().isEmpty()) continue;
             const auto key = channelKey(*source.session, name);
             QVector<double> times;
-            times.reserve(channel.timestamps.size());
-            for (const double time : channel.timestamps) times.append(toPrimary(time, source.clock));
-            keepMarkersInside(times, channel.values);
+            times.reserve(channel.timestamps().size());
+            for (const double time : channel.timestamps()) times.append(toPrimary(time, source.clock));
+            keepMarkersInside(times, channel.values());
             const double gap = telemetryGapThreshold(channel) * (1.0 + source.clock.driftPpm * 1e-6);
             const double interval = medianInterval(times);
             const auto primaryName = primaryNameFor(primary, key, name);
@@ -198,10 +198,9 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
                 fused.rule = QStringLiteral("added");
                 fused.channel.name = name;
                 fused.channel.unit = channel.unit;
-                fused.channel.timestamps = times;
-                fused.channel.values = channel.values;
+                fused.channel.setSamples(times, channel.values());
                 QVector<Sample> samples;
-                for (qsizetype index = 0; index < times.size(); ++index) samples.append({times[index], channel.values[index], 1});
+                for (qsizetype index = 0; index < times.size(); ++index) samples.append({times[index], channel.values()[index], 1});
                 appendSegments(fused.segments, samples, 1, source.sourceId, source.clock, gap, interval);
                 byKey.insert(key, result.channels.size());
                 result.channels.append(fused);
@@ -221,7 +220,7 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
             QVector<double> differences;
             double low = std::numeric_limits<double>::infinity(), high = -low;
             for (qsizetype index = 0; index < times.size(); ++index) {
-                const double value = channel.values[index];
+                const double value = channel.values()[index];
                 const auto reference = primary.valueAt(fused.name, times[index]);
                 if (!std::isfinite(value) || !reference) continue;
                 differences.append(std::abs(value - *reference));
@@ -264,10 +263,10 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
             // only outside the preferred one's recorded stretches.
             const bool preferAlternative = chosen->second == FusionRule::PreferAlternative;
             QVector<Sample> primarySamples, alternativeSamples;
-            for (qsizetype index = 0; index < fused.channel.timestamps.size(); ++index)
-                primarySamples.append({fused.channel.timestamps[index], fused.channel.values[index], 0});
+            for (qsizetype index = 0; index < fused.channel.timestamps().size(); ++index)
+                primarySamples.append({fused.channel.timestamps()[index], fused.channel.values()[index], 0});
             for (qsizetype index = 0; index < times.size(); ++index)
-                alternativeSamples.append({times[index], channel.values[index], 1});
+                alternativeSamples.append({times[index], channel.values()[index], 1});
             const auto &preferred = preferAlternative ? alternativeSamples : primarySamples;
             const auto &other = preferAlternative ? primarySamples : alternativeSamples;
             QVector<double> preferredTimes;
@@ -293,14 +292,13 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
             output.name = fused.channel.name;
             output.unit = fused.channel.unit;
             for (const auto &sample : ordered) {
-                output.timestamps.append(sample.time);
-                output.values.append(sample.value);
+                output.appendSample(sample.time, sample.value);
             }
             fused.channel = output;
             fused.segments.clear();
             QVector<FusedSegment> primarySegments, alternativeSegments;
             appendSegments(primarySegments, ordered, 0, primarySourceId, {}, primaryGap,
-                medianInterval(primary.channels[fused.name].timestamps));
+                medianInterval(primary.channels[fused.name].timestamps()));
             appendSegments(alternativeSegments, ordered, 1, source.sourceId, source.clock, gap, interval);
             fused.segments = primarySegments + alternativeSegments;
             std::stable_sort(fused.segments.begin(), fused.segments.end(),
@@ -326,8 +324,7 @@ TelemetrySession fusedSession(const TelemetrySession &primary, const ChannelFusi
         TelemetryChannel channel;
         channel.name = it->name;
         channel.unit = it->unit;
-        channel.timestamps = it->timestamps;
-        channel.values = it->values;
+        channel.setSamples(it->timestamps(), it->values());
         session.channels.insert(it.key(), channel);
     }
     QStringList changed;
@@ -338,8 +335,7 @@ TelemetrySession fusedSession(const TelemetrySession &primary, const ChannelFusi
         TelemetryChannel channel;
         channel.name = fused.channel.name;
         channel.unit = fused.channel.unit;
-        channel.timestamps = fused.channel.timestamps;
-        channel.values = fused.channel.values;
+        channel.setSamples(fused.channel.timestamps(), fused.channel.values());
         session.channels.insert(fused.name, channel);
         if (fused.key != fused.name && !session.aliases.contains(fused.key)) session.aliases.insert(fused.key, fused.name);
         changed.append(fused.name);

@@ -300,15 +300,17 @@ private slots:
         for (const auto &alias : {QString("speed"), QString("rpm"), QString("heartRate"), QString("brake")}) {
             const auto &channel = reference.channels[reference.aliases.value(alias)];
             QVector<double> errors;
-            for (qsizetype i = 0; i < channel.timestamps.size(); ++i) {
-                const auto value = native.valueAt(alias, channel.timestamps[i] + shift);
-                if (value && std::isfinite(channel.values[i])) errors.append(std::abs(*value - channel.values[i]));
+            for (qsizetype i = 0; i < channel.timestamps().size(); ++i) {
+                const auto value = native.valueAt(alias, channel.timestamps()[i] + shift);
+                if (value && std::isfinite(channel.values()[i])) errors.append(std::abs(*value - channel.values()[i]));
             }
             QVERIFY(errors.size() > reference.sampleCount / 2);
             std::sort(errors.begin(), errors.end());
             const double median = errors[errors.size() / 2];
             qInfo() << alias << "median/max absolute difference" << median << errors.last();
             QVERIFY(median < (alias == "rpm" ? 5.0 : .2));
+            // KAN-222: the VBO's 0 bpm placeholder is no data, not a reading.
+            if (alias == "heartRate") QVERIFY(errors.last() < 5.0);
         }
         // KAN-203: CAN-bus tyre channels carry the VBO's names and values.
         for (const auto &name : reference.channelNames()) {
@@ -316,11 +318,11 @@ private slots:
             const auto &channel = reference.channels[name];
             QVERIFY2(native.channels.contains(name), qPrintable(name));
             QVector<double> errors;
-            for (qsizetype i = 0; i < channel.timestamps.size(); ++i) {
-                const auto value = native.valueAt(name, channel.timestamps[i] + shift);
-                if (value && std::isfinite(channel.values[i])) errors.append(std::abs(*value - channel.values[i]));
+            for (qsizetype i = 0; i < channel.timestamps().size(); ++i) {
+                const auto value = native.valueAt(name, channel.timestamps()[i] + shift);
+                if (value && std::isfinite(channel.values()[i])) errors.append(std::abs(*value - channel.values()[i]));
             }
-            QVERIFY2(errors.size() > channel.timestamps.size() / 2, qPrintable(name));
+            QVERIFY2(errors.size() > channel.timestamps().size() / 2, qPrintable(name));
             std::sort(errors.begin(), errors.end());
             qInfo() << name << "median/max absolute difference" << errors[errors.size() / 2] << errors.last();
             QVERIFY2(errors[errors.size() / 2] < .5, qPrintable(name));
