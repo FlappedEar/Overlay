@@ -4,7 +4,7 @@
 
 The owner has resumed Cloud CI after the quota pause. Native CI runs on pull
 requests, pushes to `main`, and manual dispatch, with macOS Debug and Release
-builds/tests, Release deployment/startup validation, Linux ASan+UBSan and TSan jobs, a Linux clang-tidy job and a Linux parser fuzz job. Verify successful runs
+builds/tests, Release deployment/startup validation, Linux ASan+UBSan, GUI ASan+UBSan and TSan jobs, a Linux clang-tidy job and a Linux parser fuzz job. Verify successful runs
 for the exact published PR head and resulting main revision; earlier task CI
 results are not evidence for new code.
 Since 2 October 2026, Windows code changes are resumed for defects found by the
@@ -66,6 +66,9 @@ the GUI-free tests except the telemetry-app suite under ThreadSanitizer, with
 the Qt suppressions in `.github/tsan-suppressions.txt`. It is not a required
 check. The clang-tidy job also checks changed headers through the `.cpp` files
 that include them.
+Since the same day Native CI also runs `Linux x64 / GUI ASan+UBSan / Qt 6.8.3`
+(KAN-219): the editor, project and widgets suites on Xvfb under AddressSanitizer
+(no leak checks) and UndefinedBehaviorSanitizer. It is not a required check.
 The macOS jobs fail when Homebrew's FFmpeg is outside the tested range, 8.1 to
 9.x (KAN-154); widening it is a reviewed change to `.github/workflows/build.yml`
 after the export tests pass on the new version.

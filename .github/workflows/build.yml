@@ -359,6 +359,84 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  # KAN-219: the editor suites under AddressSanitizer and UBSan on a virtual
+  # X display with Mesa's software OpenGL. Leak checks are off: Qt Quick's
+  # QML engine leaves cycles at exit that cannot be attributed to this code.
+  linux-gui-sanitizers:
+    name: Linux x64 / GUI ASan+UBSan / Qt 6.8.3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+      QT_QPA_PLATFORM: xcb
+      QSG_RHI_BACKEND: opengl
+      ASAN_OPTIONS: detect_leaks=0:detect_stack_use_after_return=1:quarantine_size_mb=32
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      # The sources and export suites need FFmpeg 8.1, which macOS supplies.
+      GUI_TESTS: flappedear_native_tests_editor flappedear_native_tests_project flappedear_native_tests_widgets
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ninja-build libgl-dev libegl-dev \
+            libxkbcommon-dev libvulkan-dev libfontconfig1-dev libfreetype-dev \
+            xvfb xauth libgl1-mesa-dri libegl-mesa0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-xkb1 fonts-dejavu-core
+
+      - name: Install Qt 6.8.3 and modules
+        uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: '6.8.3'
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtmultimedia qtshadertools
+          cache: true
+          cache-key-prefix: native-ci-qt-6.8.3-linux-v1
+
+      - name: Configure sanitizer build
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          flags='-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined'
+          cmake -S . -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR" \
+            "-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined" 2>&1 | tee ci-logs/configure.log
+
+      - name: Build the editor suites
+        run: |
+          set -o pipefail
+          cmake --build build-native --target $GUI_TESTS 2>&1 | tee ci-logs/build.log
+
+      - name: Run them under the sanitizers
+        timeout-minutes: 30
+        run: |
+          set -o pipefail
+          xvfb-run -a -s '-screen 0 1920x1080x24' ctest --test-dir build-native --output-on-failure \
+            --no-tests=error --timeout 1500 -R "^($(echo $GUI_TESTS | tr ' ' '|'))\$" --output-junit "$GITHUB_WORKSPACE/ci-logs/ctest.xml" \
+            2>&1 | tee ci-logs/ctest.log
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-ci-linux-gui-sanitizers-qt-6.8.3
+          path: |
+            ci-logs/
+            build-native/Testing/Temporary/
+          if-no-files-found: warn
+          retention-days: 14
+
   # KAN-154: clang-tidy (.clang-tidy) on the C++ files a pull request changes.
   # The build is needed for the compile database and the generated moc files.
   linux-clang-tidy:

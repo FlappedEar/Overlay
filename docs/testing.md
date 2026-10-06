@@ -1731,6 +1731,7 @@ and private-media acceptance.
 | `macOS arm64 / Debug or Release / Qt 6.8.3` | Metal; Cocoa for native window interaction | `macos-15`, Apple Clang |
 | `Linux x64 / ASan+UBSan / Qt 6.8.3` | None (offscreen; GUI-free tests only) | `ubuntu-24.04`, GCC, AddressSanitizer with leak checks and UndefinedBehaviorSanitizer |
 | `Linux x64 / TSan / Qt 6.8.3` | None (offscreen; GUI-free tests only) | `ubuntu-24.04`, GCC, ThreadSanitizer |
+| `Linux x64 / GUI ASan+UBSan / Qt 6.8.3` | Mesa software OpenGL on Xvfb | `ubuntu-24.04`, GCC, AddressSanitizer without leak checks and UndefinedBehaviorSanitizer |
 
 A third job (KAN-154) builds a Debug configuration on Linux with
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined` and runs every
@@ -1783,6 +1784,19 @@ cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_C_FLAGS=$fla
 TSAN_OPTIONS="suppressions=$PWD/.github/tsan-suppressions.txt" \
   ./build-tsan/native/tests/flappedear_source_cache_tests
 ```
+
+A fifth job (KAN-219) runs three of the five GUI application suites
+(`flappedear_native_tests_editor`, `_project` and `_widgets`) built with
+`-fsanitize=address,undefined` on Xvfb with Mesa's OpenGL
+(`QT_QPA_PLATFORM=xcb`, `QSG_RHI_BACKEND=opengl`). The sources and export
+suites are left out because they need FFmpeg 8.1. Leak checks are off: on exit
+Qt Quick's QML engine leaves only indirect leaks (cycles) whose stacks reach
+no frame of this code, 671 allocations in the widgets suite. The job also
+drops `strict_string_checks`, under which libxkbcommon's keymap loading fails
+inside `strndup` before any test runs. Checked locally on 6 October 2026 with
+Qt 6.8.3 and GCC 13: the editor (20 passed, 3 skipped) and widgets (44 passed)
+suites report nothing; the project suite fails only its two atomic-write tests,
+which cannot pass as root, and runs as a normal user in CI.
 
 Pull request runs are cancelled by a newer push to the same pull request; runs
 on `main` are never cancelled, so every `main` revision gets a completed run.
