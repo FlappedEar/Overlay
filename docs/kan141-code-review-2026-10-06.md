@@ -18,7 +18,7 @@ filed. Severity is the reviewer's estimate of user impact.
 | Q2 | Medium | The verbose log view drifted when the bounded log trimmed its head. | Fixed, KAN-194 (#180) |
 | Q3 | Medium | The widget editor draws designed-widget panels itself instead of using `TelemetryPanel`. | Fixed, KAN-199 (#185) |
 | Q4 | Low–medium | Canvas gauges repaint their static face on every telemetry tick. | Fixed, KAN-199 (#185) |
-| Q5 | Low | Editor QML uses literal font sizes, colours and radii instead of Theme tokens. | Open, KAN-199 |
+| Q5 | Low | Editor QML uses literal font sizes, colours and radii instead of Theme tokens. | Fixed, KAN-199 (#189) |
 | E1 | Medium | HDR was detected only from the transfer tag; HDR side data or BT.2020 without a transfer passed as unknown. | Fixed, KAN-198 (#184) |
 | E2 | Low | The export worker trusted output and temporary-overlay paths from its configuration. | Fixed, KAN-198 (#184) |
 | E3 | Low (latent) | The frame packer accepted straight RGBA as premultiplied. | Fixed, KAN-198 (#184) |

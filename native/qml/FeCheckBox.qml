@@ -21,7 +21,7 @@ CheckBox {
             text: "✓"
             visible: control.checked
             color: Theme.onPrimary
-            font.pixelSize: 11
+            font.pixelSize: Theme.labelMedium
             font.weight: Font.Bold
         }
     }

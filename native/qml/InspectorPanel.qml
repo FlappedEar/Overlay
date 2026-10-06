@@ -90,14 +90,14 @@ Rectangle {
                     text: root.currentTab === 0 ? qsTr("Widget inspector") : (root.currentTab === 1 ? qsTr("Data & timing") : qsTr("Animation cues"))
                     color: Theme.onSurface
                     font.family: Theme.sans
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.subtitle
                     font.weight: Font.DemiBold
                 }
                 FeLabel {
                     visible: root.currentTab === 0 && root.selectedIndex >= 0
                     text: "#" + (root.selectedIndex + 1)
                     color: Theme.primary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.labelMedium
                 }
             }
         }
@@ -157,7 +157,7 @@ Rectangle {
                         wrapMode: Text.WordWrap
                         horizontalAlignment: Text.AlignHCenter
                         font.family: Theme.sans
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.body
                     }
 
                     ColumnLayout {
@@ -172,7 +172,7 @@ Rectangle {
                                 text: String(root.selectedWidget.type || "").toUpperCase()
                                 color: Theme.primary
                                 font.family: Theme.sans
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.body
                                 font.weight: Font.DemiBold
                                 font.letterSpacing: 1.2
                             }
@@ -220,7 +220,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Font size")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeSpinBox {
                                 Layout.fillWidth: true
@@ -243,7 +243,7 @@ Rectangle {
                         FeLabel {
                             text: qsTr("Layer name")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeTextField {
                             Layout.fillWidth: true
@@ -254,7 +254,7 @@ Rectangle {
                             visible: !root.isLapTimeTile
                             text: qsTr("Title")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeTextField {
                             visible: !root.isLapTimeTile
@@ -274,7 +274,7 @@ Rectangle {
                             visible: root.selectedIndex >= 0 && root.selectedWidget.type !== "designed"
                             text: qsTr("Style")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeComboBox {
                             objectName: "widgetStyle"
@@ -293,7 +293,7 @@ Rectangle {
                             visible: root.hasValueSource
                             text: qsTr("Source channel")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeComboBox {
                             visible: root.hasValueSource
@@ -313,7 +313,7 @@ Rectangle {
                                 visible: root.uses("label")
                                 text: qsTr("Label")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("label")
@@ -325,7 +325,7 @@ Rectangle {
                                 visible: root.uses("unit")
                                 text: qsTr("Unit")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("unit")
@@ -337,7 +337,7 @@ Rectangle {
                                 visible: root.uses("decimals")
                                 text: qsTr("Decimals")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeSpinBox {
                                 visible: root.uses("decimals")
@@ -349,7 +349,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Multiplier")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 Layout.fillWidth: true
@@ -359,7 +359,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Value offset")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 Layout.fillWidth: true
@@ -370,7 +370,7 @@ Rectangle {
                                 visible: root.uses("prefix")
                                 text: qsTr("Prefix")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("prefix")
@@ -382,7 +382,7 @@ Rectangle {
                                 visible: root.uses("suffix")
                                 text: qsTr("Suffix")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("suffix")
@@ -393,7 +393,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Minimum")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 Layout.fillWidth: true
@@ -403,7 +403,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Maximum")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 Layout.fillWidth: true
@@ -434,7 +434,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Accelerator channel")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeComboBox {
                                 Layout.fillWidth: true
@@ -445,7 +445,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Brake channel")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeComboBox {
                                 Layout.fillWidth: true
@@ -461,7 +461,7 @@ Rectangle {
                                 FeLabel {
                                     text: qsTr("Accelerator label")
                                     color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.labelMedium
                                 }
                                 FeTextField {
                                     Layout.fillWidth: true
@@ -471,7 +471,7 @@ Rectangle {
                                 FeLabel {
                                     text: qsTr("Brake label")
                                     color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.labelMedium
                                 }
                                 FeTextField {
                                     Layout.fillWidth: true
@@ -481,7 +481,7 @@ Rectangle {
                                 FeLabel {
                                     text: qsTr("Accelerator min")
                                     color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.labelMedium
                                 }
                                 FeTextField {
                                     Layout.fillWidth: true
@@ -491,7 +491,7 @@ Rectangle {
                                 FeLabel {
                                     text: qsTr("Accelerator max")
                                     color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.labelMedium
                                 }
                                 FeTextField {
                                     Layout.fillWidth: true
@@ -501,7 +501,7 @@ Rectangle {
                                 FeLabel {
                                     text: qsTr("Brake min")
                                     color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.labelMedium
                                 }
                                 FeTextField {
                                     Layout.fillWidth: true
@@ -511,7 +511,7 @@ Rectangle {
                                 FeLabel {
                                     text: qsTr("Brake max")
                                     color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.labelMedium
                                 }
                                 FeTextField {
                                     Layout.fillWidth: true
@@ -522,7 +522,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Accelerator color")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             ColorField {
                                 Layout.fillWidth: true
@@ -532,7 +532,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Brake color")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             ColorField {
                                 Layout.fillWidth: true
@@ -549,7 +549,7 @@ Rectangle {
                                     visible: root.uses("barRadius")
                                     text: qsTr("Bar radius")
                                     color: Theme.onSurfaceVariant
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.labelMedium
                                 }
                                 FeTextField {
                                     visible: root.uses("barRadius")
@@ -566,7 +566,7 @@ Rectangle {
                             Layout.fillWidth: true
                             spacing: 6
                             SectionTitle { text: qsTr("F1 G-Force Radar") }
-                            FeLabel { text: qsTr("Lateral channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { text: qsTr("Lateral channel"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             FeComboBox {
                                 Layout.fillWidth: true
                                 model: root.channelModel(root.settings.lateralSource)
@@ -574,7 +574,7 @@ Rectangle {
                                 onActivated: root.setSetting("lateralSource", currentIndex === 0 ? "" : currentText)
                             }
                             FeCheckBox { visible: root.uses("invertLateral"); text: qsTr("Invert lateral axis"); checked: root.settings.invertLateral ?? false; onToggled: root.setSetting("invertLateral", checked) }
-                            FeLabel { text: qsTr("Longitudinal channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { text: qsTr("Longitudinal channel"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             FeComboBox {
                                 Layout.fillWidth: true
                                 model: root.channelModel(root.settings.longitudinalSource)
@@ -585,21 +585,21 @@ Rectangle {
                             GridLayout {
                                 Layout.fillWidth: true
                                 columns: 2
-                                FeLabel { text: qsTr("Max G"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { text: qsTr("Max G"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeTextField { Layout.fillWidth: true; text: Number(root.settings.maxG ?? 1.5).toString(); onEditingFinished: root.setSetting("maxG", Number(text)) }
-                                FeLabel { text: qsTr("Ring step"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { text: qsTr("Ring step"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeTextField { Layout.fillWidth: true; text: Number(root.settings.ringStepG ?? 0.25).toString(); onEditingFinished: root.setSetting("ringStepG", Number(text)) }
-                                FeLabel { visible: root.isTech; text: qsTr("Trail (s)"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { visible: root.isTech; text: qsTr("Trail (s)"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeTextField { visible: root.isTech; Layout.fillWidth: true; text: Number(root.settings.trailSeconds ?? 1).toString(); onEditingFinished: root.setSetting("trailSeconds", Number(text)) }
                             }
                             FeCheckBox { text: qsTr("Show crosshair"); checked: root.settings.showCrosshair ?? true; onToggled: root.setSetting("showCrosshair", checked) }
                             FeCheckBox { visible: root.isTech; text: qsTr("Show ring label (1.0g)"); checked: root.settings.showRingLabels ?? true; onToggled: root.setSetting("showRingLabels", checked) }
                             FeCheckBox { visible: root.uses("showCenterBox"); text: qsTr("Show center box"); checked: root.settings.showCenterBox ?? true; onToggled: root.setSetting("showCenterBox", checked) }
-                            FeLabel { text: qsTr("Radar background"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { text: qsTr("Radar background"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             ColorField { Layout.fillWidth: true; colorValue: root.settings.radarBackgroundColor || "#2b2d30"; onEdited: value => root.setSetting("radarBackgroundColor", value) }
-                            FeLabel { text: qsTr("Dot color"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { text: qsTr("Dot color"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             ColorField { Layout.fillWidth: true; colorValue: root.settings.dotColor || "#ffad32"; onEdited: value => root.setSetting("dotColor", value) }
-                            FeLabel { visible: root.uses("gridColor"); text: qsTr("Grid color"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { visible: root.uses("gridColor"); text: qsTr("Grid color"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             ColorField { visible: root.uses("gridColor"); Layout.fillWidth: true; colorValue: root.settings.gridColor || "#c5c7c9"; onEdited: value => root.setSetting("gridColor", value) }
                         }
 
@@ -608,7 +608,7 @@ Rectangle {
                             Layout.fillWidth: true
                             spacing: 6
                             SectionTitle { text: qsTr("G-Force Bar") }
-                            FeLabel { text: qsTr("Lateral channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { text: qsTr("Lateral channel"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             FeComboBox {
                                 Layout.fillWidth: true
                                 model: root.channelModel(root.settings.lateralSource)
@@ -616,7 +616,7 @@ Rectangle {
                                 onActivated: root.setSetting("lateralSource", currentIndex === 0 ? "" : currentText)
                             }
                             FeCheckBox { visible: root.uses("invertLateral"); text: qsTr("Invert lateral axis"); checked: root.settings.invertLateral ?? false; onToggled: root.setSetting("invertLateral", checked) }
-                            FeLabel { text: qsTr("Longitudinal channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { text: qsTr("Longitudinal channel"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             FeComboBox {
                                 Layout.fillWidth: true
                                 model: root.channelModel(root.settings.longitudinalSource)
@@ -627,22 +627,22 @@ Rectangle {
                             GridLayout {
                                 Layout.fillWidth: true
                                 columns: 2
-                                FeLabel { visible: root.uses("maxG"); text: qsTr("Max G"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { visible: root.uses("maxG"); text: qsTr("Max G"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeTextField { visible: root.uses("maxG"); Layout.fillWidth: true; text: Number(root.settings.maxG ?? 1.5).toString(); onEditingFinished: root.setSetting("maxG", Number(text)) }
-                                FeLabel { text: qsTr("Label"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { text: qsTr("Label"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeTextField { Layout.fillWidth: true; text: root.settings.labelText || "G-Force"; onEditingFinished: root.setSetting("labelText", text) }
-                                FeLabel { text: qsTr("Decimals"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { text: qsTr("Decimals"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeSpinBox { from: 0; to: 6; value: Number(root.settings.decimals ?? 2); onValueModified: root.setSetting("decimals", value) }
-                                FeLabel { visible: root.uses("barRadius"); text: qsTr("Bar radius"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { visible: root.uses("barRadius"); text: qsTr("Bar radius"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeTextField { visible: root.uses("barRadius"); Layout.fillWidth: true; text: Number(root.settings.barRadius ?? 5).toString(); onEditingFinished: root.setSetting("barRadius", Number(text)) }
                             }
                             RowLayout {
                                 FeCheckBox { visible: root.uses("showLabel"); text: qsTr("Show label"); checked: root.settings.showLabel ?? true; onToggled: root.setSetting("showLabel", checked) }
                                 FeCheckBox { visible: root.uses("showValue"); text: qsTr("Show value"); checked: root.settings.showValue ?? true; onToggled: root.setSetting("showValue", checked) }
                             }
-                            FeLabel { visible: root.uses("barColor"); text: qsTr("Fill color"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { visible: root.uses("barColor"); text: qsTr("Fill color"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             ColorField { visible: root.uses("barColor"); Layout.fillWidth: true; colorValue: root.settings.barColor || "#55e6a5"; onEdited: value => root.setSetting("barColor", value) }
-                            FeLabel { visible: root.uses("barBackgroundColor"); text: qsTr("Bar background"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { visible: root.uses("barBackgroundColor"); text: qsTr("Bar background"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             ColorField { visible: root.uses("barBackgroundColor"); Layout.fillWidth: true; colorValue: root.settings.barBackgroundColor || "#24303d"; onEdited: value => root.setSetting("barBackgroundColor", value) }
                         }
 
@@ -655,7 +655,7 @@ Rectangle {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
                                 text: qsTr("Per corner from the recording's tyre channels. Temperature in °C; pressure converted to the unit below. A dash means no data at that moment.")
-                                color: Theme.onSurfaceVariant; font.pixelSize: 11
+                                color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium
                             }
                             RowLayout {
                                 FeCheckBox { text: qsTr("Label"); checked: root.settings.showLabel ?? true; onToggled: root.setSetting("showLabel", checked) }
@@ -665,9 +665,9 @@ Rectangle {
                             GridLayout {
                                 Layout.fillWidth: true
                                 columns: 2
-                                FeLabel { text: qsTr("Label"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { text: qsTr("Label"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeTextField { Layout.fillWidth: true; text: root.settings.label || "TYRES"; onEditingFinished: root.setSetting("label", text) }
-                                FeLabel { text: qsTr("Pressure unit"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { text: qsTr("Pressure unit"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeComboBox {
                                     objectName: "tyrePressureUnit"
                                     Layout.fillWidth: true
@@ -675,11 +675,11 @@ Rectangle {
                                     currentIndex: root.settings.pressureUnit === "psi" ? 1 : 0
                                     onActivated: index => root.setSetting("pressureUnit", index === 1 ? "psi" : "bar")
                                 }
-                                FeLabel { visible: root.settings.pressureUnit !== "psi"; text: qsTr("Pressure decimals"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { visible: root.settings.pressureUnit !== "psi"; text: qsTr("Pressure decimals"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeSpinBox { visible: root.settings.pressureUnit !== "psi"; from: 0; to: 3; value: Number(root.settings.pressureDecimals ?? 2); onValueModified: root.setSetting("pressureDecimals", value) }
-                                FeLabel { text: qsTr("Cold below (°C)"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { text: qsTr("Cold below (°C)"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeTextField { Layout.fillWidth: true; placeholderText: qsTr("off"); text: Number(root.settings.coldBelow ?? 0) > 0 ? Number(root.settings.coldBelow).toString() : ""; onEditingFinished: root.setSetting("coldBelow", Math.max(0, Number(text) || 0)) }
-                                FeLabel { text: qsTr("Hot above (°C)"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                                FeLabel { text: qsTr("Hot above (°C)"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                                 FeTextField { Layout.fillWidth: true; placeholderText: qsTr("off"); text: Number(root.settings.hotAbove ?? 0) > 0 ? Number(root.settings.hotAbove).toString() : ""; onEditingFinished: root.setSetting("hotAbove", Math.max(0, Number(text) || 0)) }
                             }
                         }
@@ -698,7 +698,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Red zone from (RPM)")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             FeTextField {
                                 objectName: "tachometerWarningValue"
@@ -710,7 +710,7 @@ Rectangle {
                                 visible: !root.isTech
                                 text: qsTr("Red zone color")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             ColorField {
                                 visible: !root.isTech
@@ -722,7 +722,7 @@ Rectangle {
                                 visible: !root.isTech
                                 text: qsTr("Rim color")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             ColorField {
                                 visible: !root.isTech
@@ -734,7 +734,7 @@ Rectangle {
                                 visible: root.uses("dialColor")
                                 text: qsTr("Dial color")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             ColorField {
                                 visible: root.uses("dialColor")
@@ -746,7 +746,7 @@ Rectangle {
                                 visible: root.uses("needleColor")
                                 text: qsTr("Needle color")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             ColorField {
                                 visible: root.uses("needleColor")
@@ -758,7 +758,7 @@ Rectangle {
                                 visible: root.uses("panelColor")
                                 text: qsTr("Dial background")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             ColorField {
                                 visible: root.uses("panelColor")
@@ -770,7 +770,7 @@ Rectangle {
                                 visible: root.uses("panelOpacity")
                                 text: qsTr("Background opacity")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             FeSlider {
                                 visible: root.uses("panelOpacity")
@@ -794,7 +794,7 @@ Rectangle {
                                 visible: root.uses("panelColor")
                                 text: qsTr("Panel color")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             ColorField {
                                 visible: root.uses("panelColor")
@@ -806,7 +806,7 @@ Rectangle {
                                 visible: root.uses("valueColor")
                                 text: qsTr("Value color")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             ColorField {
                                 visible: root.uses("valueColor")
@@ -818,7 +818,7 @@ Rectangle {
                                 visible: root.uses("labelColor")
                                 text: qsTr("Label color")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             ColorField {
                                 visible: root.uses("labelColor")
@@ -829,7 +829,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Text when channel is unavailable")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             FeTextField {
                                 Layout.fillWidth: true
@@ -840,7 +840,7 @@ Rectangle {
                                 visible: !root.isTech
                                 text: qsTr("Icon (a symbol before the label; empty for none)")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             FeTextField {
                                 visible: !root.isTech
@@ -853,7 +853,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Position in a stack")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             FeComboBox {
                                 objectName: "retroCustomStackPosition"
@@ -922,7 +922,7 @@ Rectangle {
                         FeLabel {
                             text: qsTr("Scale  %1×").arg(Number(root.selectedWidget.scale || 1).toFixed(2))
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeSlider {
                             Layout.fillWidth: true
@@ -935,7 +935,7 @@ Rectangle {
                         FeLabel {
                             text: qsTr("Rotation  %1°").arg(Number(root.selectedWidget.rotation || 0).toFixed(0))
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeSlider {
                             Layout.fillWidth: true
@@ -948,7 +948,7 @@ Rectangle {
                         FeLabel {
                             text: qsTr("Opacity  %1%").arg((Number(root.selectedWidget.opacity ?? 1) * 100).toFixed(0))
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeSlider {
                             Layout.fillWidth: true
@@ -967,7 +967,7 @@ Rectangle {
                             visible: root.uses("fontFamily")
                             text: qsTr("Font family")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeTextField {
                             visible: root.uses("fontFamily")
@@ -982,7 +982,7 @@ Rectangle {
                                 visible: root.uses("fontWeight")
                                 text: qsTr("Weight")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeComboBox {
                                 visible: root.uses("fontWeight")
@@ -995,7 +995,7 @@ Rectangle {
                                 visible: root.uses("valueFontScale")
                                 text: qsTr("Value scale")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("valueFontScale")
@@ -1007,7 +1007,7 @@ Rectangle {
                                 visible: root.uses("labelFontScale")
                                 text: qsTr("Label scale")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("labelFontScale")
@@ -1033,7 +1033,7 @@ Rectangle {
                             visible: root.uses("backgroundColor")
                             text: qsTr("Background color")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         ColorField {
                             visible: root.uses("backgroundColor")
@@ -1045,7 +1045,7 @@ Rectangle {
                             visible: root.uses("backgroundOpacity")
                             text: qsTr("Panel opacity  %1%").arg((Number(root.settings.backgroundOpacity ?? 0.78) * 100).toFixed(0))
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeSlider {
                             visible: root.uses("backgroundOpacity")
@@ -1066,7 +1066,7 @@ Rectangle {
                             visible: root.uses("borderColor")
                             text: qsTr("Border color")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         ColorField {
                             visible: root.uses("borderColor")
@@ -1081,7 +1081,7 @@ Rectangle {
                                 visible: root.uses("borderWidth")
                                 text: qsTr("Border width")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("borderWidth")
@@ -1093,7 +1093,7 @@ Rectangle {
                                 visible: root.uses("borderOpacity")
                                 text: qsTr("Border opacity")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("borderOpacity")
@@ -1105,7 +1105,7 @@ Rectangle {
                                 visible: root.uses("cornerRadius")
                                 text: qsTr("Corner radius")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("cornerRadius")
@@ -1117,7 +1117,7 @@ Rectangle {
                                 visible: root.uses("padding")
                                 text: qsTr("Padding")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 visible: root.uses("padding")
@@ -1130,7 +1130,7 @@ Rectangle {
                             visible: root.uses("textColor")
                             text: qsTr("Primary text")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         ColorField {
                             visible: root.uses("textColor")
@@ -1142,7 +1142,7 @@ Rectangle {
                             visible: root.uses("secondaryTextColor")
                             text: qsTr("Secondary text")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         ColorField {
                             visible: root.uses("secondaryTextColor")
@@ -1154,7 +1154,7 @@ Rectangle {
                             visible: root.uses("accentColor")
                             text: qsTr("Primary accent")
                             color: Theme.onSurfaceVariant
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         ColorField {
                             visible: root.uses("accentColor")
@@ -1171,7 +1171,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Label")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeTextField {
                                 objectName: "lapTimeLabel"
@@ -1186,7 +1186,7 @@ Rectangle {
                             FeLabel {
                                 text: qsTr("Lap time decimals")
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.labelMedium
                             }
                             FeComboBox {
                                 objectName: "lapTimeDecimals"
@@ -1210,7 +1210,7 @@ Rectangle {
                             text: qsTr("Shows 0:00 until the lap crosses the start/finish line, counts during the lap, then keeps its final time. Pick the same lap under Export → Single lap · hotlap to export just this lap.")
                             color: Theme.onSurfaceVariant
                             wrapMode: Text.WordWrap
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeComboBox {
                             id: hotlapLapPicker
@@ -1284,11 +1284,11 @@ Rectangle {
                             columns: 2
                             columnSpacing: 8
                             rowSpacing: 6
-                            FeLabel { text: qsTr("Normal from"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { text: qsTr("Normal from"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             FeTextField { Layout.fillWidth: true; text: Number(root.settings.normalLow ?? 0).toString(); onEditingFinished: root.setSetting("normalLow", Number(text)) }
-                            FeLabel { text: qsTr("Normal to"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { text: qsTr("Normal to"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             FeTextField { Layout.fillWidth: true; text: Number(root.settings.normalHigh ?? 0).toString(); onEditingFinished: root.setSetting("normalHigh", Number(text)) }
-                            FeLabel { text: qsTr("Warning at"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+                            FeLabel { text: qsTr("Warning at"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
                             FeTextField { Layout.fillWidth: true; text: Number(root.settings.warningValue ?? 0).toString(); onEditingFinished: root.setSetting("warningValue", Number(text)) }
                         }
 
@@ -1341,7 +1341,7 @@ Rectangle {
                         text: qsTr("Match the GoPro GPS speed trace against the telemetry's speed (VBO or RCZ). Processing runs in the background.")
                         color: Theme.onSurfaceVariant
                         wrapMode: Text.WordWrap
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.labelMedium
                     }
                     FeButton {
                         Layout.fillWidth: true
@@ -1364,19 +1364,19 @@ Rectangle {
                             FeLabel {
                                 text: appController.syncCandidate.automaticallyApplied ? qsTr("SYNC APPLIED") : qsTr("POSSIBLE SYNCHRONIZATION FOUND")
                                 color: appController.syncCandidate.automaticallyApplied ? Theme.tertiary : Theme.warning
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                                 font.weight: Font.DemiBold
                             }
                             FeLabel {
                                 text: qsTr("Offset %1 s").arg(Number(appController.syncCandidate.offset || 0).toFixed(3))
                                 color: Theme.onSurface
-                                font.pixelSize: 14
+                                font.pixelSize: Theme.subtitle
                                 font.weight: Font.DemiBold
                             }
                             FeLabel {
                                 text: qsTr("Correlation %1  ·  Confidence %2%").arg(Number(appController.syncCandidate.correlation || 0).toFixed(3)).arg((Number(appController.syncCandidate.confidence || 0) * 100).toFixed(0))
                                 color: Theme.onSurfaceVariant
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             FeLabel {
                                 visible: !appController.syncCandidate.automaticallyApplied
@@ -1386,7 +1386,7 @@ Rectangle {
                                       : qsTr("Review this candidate before changing timing.")
                                 color: Theme.onErrorContainer
                                 wrapMode: Text.WordWrap
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             RowLayout {
                                 visible: !appController.syncCandidate.automaticallyApplied
@@ -1411,7 +1411,7 @@ Rectangle {
                     FeLabel {
                         text: qsTr("Telemetry offset (seconds)")
                         color: Theme.onSurfaceVariant
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.labelMedium
                     }
                     FeTextField {
                         Layout.fillWidth: true
@@ -1421,7 +1421,7 @@ Rectangle {
                     FeLabel {
                         text: qsTr("Time scale")
                         color: Theme.onSurfaceVariant
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.labelMedium
                     }
                     FeTextField {
                         Layout.fillWidth: true
@@ -1449,7 +1449,7 @@ Rectangle {
                                     text: modelData
                                     color: Theme.onSurfaceVariant
                                     elide: Text.ElideRight
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.labelSmall
                                 }
                                 FeLabel {
                                     text: {
@@ -1458,7 +1458,7 @@ Rectangle {
                                     }
                                     color: Theme.onSurface
                                     font.family: Theme.mono
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.labelSmall
                                 }
                             }
                         }
@@ -1468,7 +1468,7 @@ Rectangle {
                         text: appController.sampleCount > 0 ? qsTr("%1 samples · %2 seconds").arg(appController.sampleCount).arg(appController.telemetryDuration.toFixed(1)) : qsTr("Open a VBO to inspect channels")
                         color: Theme.outline
                         wrapMode: Text.WordWrap
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.labelSmall
                     }
                     Item {
                         height: 18
@@ -1498,7 +1498,7 @@ Rectangle {
                         color: Theme.onSurfaceVariant
                         wrapMode: Text.WordWrap
                         horizontalAlignment: Text.AlignHCenter
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.body
                     }
                     ColumnLayout {
                         visible: root.selectedIndex >= 0
@@ -1512,7 +1512,7 @@ Rectangle {
                             text: qsTr("A widget with cues is hidden outside them. Overlapping cues are supported, and all timing is saved with projects and templates.")
                             color: Theme.onSurfaceVariant
                             wrapMode: Text.WordWrap
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                         }
                         FeButton {
                             Layout.fillWidth: true
@@ -1541,7 +1541,7 @@ Rectangle {
                                             Layout.fillWidth: true
                                             text: qsTr("CUE %1  ·  %2").arg(index + 1).arg(window.formatTime(Number(modelData.start || 0) * 1000))
                                             color: Theme.primary
-                                            font.pixelSize: 10
+                                            font.pixelSize: Theme.labelSmall
                                             font.weight: Font.DemiBold
                                         }
                                         FeButton {
@@ -1559,7 +1559,7 @@ Rectangle {
                                         FeLabel {
                                             text: qsTr("Start (s)")
                                             color: Theme.onSurfaceVariant
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.labelMedium
                                         }
                                         FeTextField {
                                             Layout.fillWidth: true
@@ -1569,7 +1569,7 @@ Rectangle {
                                         FeLabel {
                                             text: qsTr("Duration (s)")
                                             color: Theme.onSurfaceVariant
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.labelMedium
                                         }
                                         FeTextField {
                                             Layout.fillWidth: true
@@ -1579,7 +1579,7 @@ Rectangle {
                                         FeLabel {
                                             text: qsTr("Fade in (s)")
                                             color: Theme.onSurfaceVariant
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.labelMedium
                                         }
                                         FeTextField {
                                             Layout.fillWidth: true
@@ -1589,7 +1589,7 @@ Rectangle {
                                         FeLabel {
                                             text: qsTr("Fade out (s)")
                                             color: Theme.onSurfaceVariant
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.labelMedium
                                         }
                                         FeTextField {
                                             Layout.fillWidth: true
@@ -1599,7 +1599,7 @@ Rectangle {
                                         FeLabel {
                                             text: qsTr("Entrance")
                                             color: Theme.onSurfaceVariant
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.labelMedium
                                         }
                                         FeComboBox {
                                             Layout.fillWidth: true

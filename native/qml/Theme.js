@@ -56,6 +56,8 @@ var outlineVariant = "#2e3035";
 var scrim = "#c40b0c0e";
 var scrimBorder = "#4d5d6068";
 var errorScrim = "#e64d1610";
+// Drop shadows of menus and popups.
+var shadow = "#000000";
 
 // Lap and timing colours (FetColors).
 var you = amber;
@@ -69,10 +71,17 @@ var onLap = "#111214";
 var radius = 3;
 var dialogRadius = 6;
 
-// Type scale for a desktop editor (pixel sizes).
+// Type scale for a desktop editor (pixel sizes). Editor QML takes every font
+// size from here (KAN-199).
+var overline = 9;        // small capitals over a group, the wordmark's OVERLAYS
 var labelSmall = 10;
-var labelMedium = 11;
+var labelMedium = 11;    // most labels and control text
 var body = 12;
 var titleSmall = 13;
+var subtitle = 14;       // panel headings, welcome lines, step-button glyphs
 var titleMedium = 15;
+var dialogTitle = 17;    // dialog and progress titles, medium glyphs
 var titleLarge = 18;
+var glyphLarge = 20;     // the welcome screen's play glyph
+var wordmark = 21;       // "FlappedEar" on the welcome screen
+var headline = 25;       // the welcome screen's headline
