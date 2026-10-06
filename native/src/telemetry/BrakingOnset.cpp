@@ -108,7 +108,7 @@ BrakingOnsetDetection detectBrakingOnsets(const TelemetrySession &session, const
     for (auto index = begin; index < end; ++index) {
         const double time = times[index];
         const double raw = channel.values()[index];
-        const bool gapBefore = haveSample && gapThreshold > 0.0 && time - previousTime > gapThreshold;
+        const bool gapBefore = haveSample && gapThreshold > 0.0 && telemetryIsGap(channel, previousTime, time);
         if (!std::isfinite(raw) || gapBefore) {
             if (!followsGap) ++result.gaps;
             if (episode) close(episode->lastTime, brakingInterruptedByGap);

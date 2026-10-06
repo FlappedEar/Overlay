@@ -99,8 +99,7 @@ std::optional<double> presentationValueAt(
     const auto next = std::lower_bound(channel.timestamps().cbegin(), channel.timestamps().cend(), time);
     if (presented && next != channel.timestamps().cbegin() && next != channel.timestamps().cend()
         && *next != time) {
-        const double gap = *next - *(next - 1);
-        if (gap > telemetryGapThreshold(channel, policy.staleSeconds)) presented.reset();
+        if (telemetryIsGap(channel, *(next - 1), *next, policy.staleSeconds)) presented.reset();
     }
     if (!presented) {
         const auto after = std::upper_bound(channel.timestamps().cbegin(), channel.timestamps().cend(), time);

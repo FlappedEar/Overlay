@@ -147,10 +147,18 @@ void preferAcceleratorPedalForThrottle(TelemetrySession &session);
 [[nodiscard]] std::optional<double> videoToTelemetryTime(double videoTime, const SyncTransform &transform);
 [[nodiscard]] std::optional<double> telemetryToVideoTime(
     double telemetryTime, const SyncTransform &transform);
-// A gap is two adjacent samples more than three median sample intervals apart
-// (or minimumSeconds, if larger). Every consumer uses this one threshold.
+// Three median sample intervals of the whole channel, or minimumSeconds if
+// larger: no span up to this is a gap.
 [[nodiscard]] double telemetryGapThreshold(
     const TelemetryChannel &channel, double minimumSeconds = 0.0);
+// Whether the samples at `before` and `after` enclose a gap (KAN-157). The
+// span must exceed the channel's threshold above and also three times the
+// local cadence: the median of up to eight intervals on each side, the slower
+// side counting (KAN-221). A stretch logged at a slower rate, such as 10 Hz
+// after 100 Hz or 1 Hz periods in a 10 Hz channel, is therefore not a run of
+// gaps, while a pause in steady logging still is.
+[[nodiscard]] bool telemetryIsGap(
+    const TelemetryChannel &channel, double before, double after, double minimumSeconds = 0.0);
 // KAN-157: the shared value lookup behind TelemetrySession::valueAt. Outside the
 // channel, at a non-finite sample, or inside a gap there is no data.
 [[nodiscard]] std::optional<double> telemetryValueAt(

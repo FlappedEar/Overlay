@@ -207,7 +207,9 @@ LapReferenceIssue referenceIssueForLap(const TelemetrySession &session, const Ti
         if ((index & 0xff) == 0) throwIfCancelled(cancelled);
         const auto sample = gpsSampleAt(*latitude, *longitude, index, origin);
         if (!sample) return LapReferenceIssue::InvalidGps;
-        if (previous && (sample->time <= *previous || threshold <= 0.0 || sample->time - *previous > threshold))
+        if (previous && (sample->time <= *previous || threshold <= 0.0
+                         || telemetryIsGap(*latitude, *previous, sample->time)
+                         || telemetryIsGap(*longitude, *previous, sample->time)))
             return LapReferenceIssue::GpsGap;
         previous = sample->time;
     }
@@ -459,7 +461,8 @@ LapSession detectLaps(
             }
             const double interval = current->time - previous->time;
             if (!std::isfinite(interval) || interval <= 0.0 || gapThreshold <= 0.0
-                || interval > gapThreshold) {
+                || (telemetryIsGap(*latitude, previous->time, current->time)
+                    && telemetryIsGap(*longitude, previous->time, current->time))) {
                 discardContinuity();
                 previous = current;
                 continue;

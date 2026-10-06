@@ -50,7 +50,6 @@ GgPairs buildGgPairs(const TelemetrySession &session, const double startTime, co
     }
     result.valid = true;
     const auto &lateralTimes = lateral->timestamps();
-    const double gapLimit = telemetryGapThreshold(*lateral);
     bool shared = true;
     for (qsizetype i = 0; i < longitudinal->timestamps().size(); ++i) {
         const double time = longitudinal->timestamps()[i];
@@ -69,7 +68,7 @@ GgPairs buildGgPairs(const TelemetrySession &session, const double startTime, co
             if (nextIndex > 0 && nextIndex < lateralTimes.size()) {
                 const double before = lateralTimes[nextIndex - 1], after = lateralTimes[nextIndex];
                 const double a = lateral->values()[nextIndex - 1], b = lateral->values()[nextIndex];
-                if (after - before <= gapLimit && std::isfinite(a) && std::isfinite(b)) {
+                if (!telemetryIsGap(*lateral, before, after) && std::isfinite(a) && std::isfinite(b)) {
                     lateralValue = a + (b - a) * (time - before) / (after - before);
                     offset = std::min(time - before, after - time);
                 }

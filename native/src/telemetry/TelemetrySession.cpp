@@ -3,6 +3,7 @@
 #include <QRegularExpression>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cmath>
 #include <limits>
@@ -145,6 +146,31 @@ double telemetryGapThreshold(const TelemetryChannel &channel, const double minim
     return std::max(std::max(0.0, minimumSeconds), telemetryBaseInterval(channel) * 3.0);
 }
 
+bool telemetryIsGap(const TelemetryChannel &channel, const double before, const double after, const double minimumSeconds)
+{
+    const double span = after - before;
+    if (!(span > telemetryGapThreshold(channel, minimumSeconds))) return false;
+    constexpr qsizetype window = 8;
+    const auto &times = channel.timestamps();
+    const auto medianOf = [&times](qsizetype first, const qsizetype last) {
+        // The median of the positive intervals times[i + 1] - times[i], first <= i < last.
+        std::array<double, window> intervals {};
+        qsizetype count = 0;
+        for (first = std::max<qsizetype>(first, 0); first < last && first + 1 < times.size(); ++first) {
+            const double interval = times[first + 1] - times[first];
+            if (interval > 0.0) intervals[count++] = interval;
+        }
+        if (count == 0) return 0.0;
+        const auto middle = intervals.begin() + count / 2;
+        std::nth_element(intervals.begin(), middle, intervals.begin() + count);
+        return *middle;
+    };
+    const qsizetype beforeIndex = std::lower_bound(times.cbegin(), times.cend(), before) - times.cbegin();
+    const qsizetype afterIndex = std::lower_bound(times.cbegin(), times.cend(), after) - times.cbegin();
+    const double local = std::max(medianOf(beforeIndex - window, beforeIndex), medianOf(afterIndex, afterIndex + window));
+    return span > local * 3.0;
+}
+
 void markImplausibleHeartRate(TelemetrySession &session)
 {
     const auto found = session.channels.find(session.aliases.value(QStringLiteral("heartRate")));
@@ -207,11 +233,10 @@ std::optional<double> telemetryValueAt(const TelemetryChannel &channel, const do
         return std::nullopt;
     }
     const qsizetype previous = next - 1;
-    // KAN-157: the one gap rule. Between two samples farther apart than the
-    // channel's gap threshold there is no data in any mode: a held, nearest
-    // or interpolated value would bridge a loss of signal.
-    const double gapThreshold = telemetryGapThreshold(channel);
-    if (gapThreshold > 0.0 && timestamps[next] - timestamps[previous] > gapThreshold) {
+    // KAN-157: the one gap rule. Between two samples that enclose a gap there
+    // is no data in any mode: a held, nearest or interpolated value would
+    // bridge a loss of signal.
+    if (telemetryGapThreshold(channel) > 0.0 && telemetryIsGap(channel, timestamps[previous], timestamps[next])) {
         return std::nullopt;
     }
     if (mode == InterpolationMode::Previous) {
@@ -281,7 +306,7 @@ QVector<QVector<QPointF>> TelemetrySession::rawSegments(
             continue;
         }
         if (!current.isEmpty() && gapThreshold > 0.0
-            && timestamp - current.back().x() > gapThreshold) {
+            && telemetryIsGap(channel, current.back().x(), timestamp)) {
             rawSegments.append(std::exchange(current, {}));
         }
         current.append(QPointF(timestamp, value));

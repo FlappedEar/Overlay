@@ -53,7 +53,7 @@ Rise firstSustainedRise(const TelemetryChannel &channel, const double on, const 
     for (auto index = begin; index < end; ++index) {
         const double time = times[index];
         const double value = values[index];
-        const bool gapBefore = haveSample && gapThreshold > 0.0 && time - previousTime > gapThreshold;
+        const bool gapBefore = haveSample && gapThreshold > 0.0 && telemetryIsGap(channel, previousTime, time);
         if (!std::isfinite(value) || gapBefore) {
             if (rising && previousTime - riseStart >= minimumDuration) {
                 rise.time = riseStart;

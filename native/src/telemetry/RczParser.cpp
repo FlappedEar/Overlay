@@ -381,14 +381,16 @@ TelemetrySession RczParser::parseFile(const QString &path, const CancellationChe
         TelemetryChannel channel;
         channel.name = map.name; channel.unit = map.unit; channel.setSamples(times, std::move(values));
         session.sampleCount = std::max(session.sampleCount, channel.timestamps().size());
-        const double gapLimit = telemetryGapThreshold(channel);
+        const auto isGap = [&channel](const qsizetype i) {
+            return telemetryIsGap(channel, channel.timestamps()[i - 1], channel.timestamps()[i]);
+        };
         QVector<double> gapTimes;
         QVector<float> gapValues;
         if (boundedDecode) {
             qsizetype count = channel.timestamps().size();
             for (qsizetype i = 1; i < channel.timestamps().size(); ++i) {
                 if ((i & 0xfff) == 0) throwIfCancelled(cancelled);
-                if (channel.timestamps()[i] - channel.timestamps()[i - 1] > gapLimit) count += 2;
+                if (isGap(i)) count += 2;
             }
             if (count > 8'000'000 - totalSamples + channel.values().size())
                 fail("Decoded gap/sample budget exceeded.");
@@ -397,7 +399,7 @@ TelemetrySession RczParser::parseFile(const QString &path, const CancellationChe
         for (qsizetype index = 0; index < channel.timestamps().size(); ++index) {
             if ((index & 0xfff) == 0) throwIfCancelled(cancelled);
             const double time = channel.timestamps()[index];
-            if (index && time - channel.timestamps()[index - 1] > gapLimit) {
+            if (index && isGap(index)) {
                 const double previous = channel.timestamps()[index - 1];
                 gapTimes.append(std::nextafter(previous, time));
                 gapTimes.append(std::nextafter(time, previous));

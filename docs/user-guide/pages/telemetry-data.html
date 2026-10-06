@@ -23,7 +23,7 @@
 <p>For lateral and longitudinal G, export <strong>VBO</strong> from RaceChrono with the calculated acceleration channels (<code>latacc-calc</code>, <code>longacc-calc</code>) enabled. These are preferred automatically. RCZ archives contain only the phone's raw accelerometer axes, which are not aligned with the car, and no calculated G.</p>
 
 <h2 id="rcz">RCZ files</h2>
-<p>An RCZ file is a RaceChrono session archive. Supported: a single, uninterrupted session shared from RaceChrono Pro (developed against version 10.2.4). Each channel keeps its own sample rate; nothing is resampled. A pause longer than three times a channel's normal sample spacing is a gap.</p>
+<p>An RCZ file is a RaceChrono session archive. Supported: a single, uninterrupted session shared from RaceChrono Pro (developed against version 10.2.4). Each channel keeps its own sample rate; nothing is resampled. A pause longer than three times a channel's normal sample spacing is a gap. The spacing is judged around the pause, so a stretch the logger recorded at a slower rate is not treated as a run of gaps.</p>
 <p>Refused with a message: resumed sessions, archives with several sessions, encrypted, split or ZIP64 archives, sessions longer than 24 hours, and archives whose GPS is missing. Unknown channel types are left out with a warning. Video and synchronization data stored inside the archive are not imported.</p>
 <p>Channels read from RCZ:</p>
 <table>

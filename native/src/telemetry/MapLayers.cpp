@@ -20,7 +20,7 @@ std::optional<double> plausibleChannelValue(const TelemetryChannel &channel, con
     const double previousTime = times[index - 1], previousValue = channel.values()[index - 1];
     if (!plausibleSample(previousValue, policy, zeroPlaceholder)) return std::nullopt;
     const double gapLimit = telemetryGapThreshold(channel);
-    if (gapLimit > 0.0 && *next - previousTime > gapLimit) return std::nullopt;
+    if (gapLimit > 0.0 && telemetryIsGap(channel, previousTime, *next)) return std::nullopt;
     const double span = *next - previousTime;
     if (!(span > 0.0)) return std::nullopt;
     return previousValue + (nextValue - previousValue) * (time - previousTime) / span;

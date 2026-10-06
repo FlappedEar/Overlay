@@ -54,7 +54,7 @@ void classify(const TelemetryChannel &channel, const std::function<double(double
     for (auto index = begin; index < last; ++index) {
         const double time = times[index];
         const double value = channel.values()[index];
-        const bool gap = havePrevious && gapThreshold > 0.0 && time - previousTime > gapThreshold;
+        const bool gap = havePrevious && gapThreshold > 0.0 && telemetryIsGap(channel, previousTime, time);
         if (gap || !std::isfinite(value)) closeKnown(previousTime);
         if (!std::isfinite(value)) { havePrevious = false; continue; }
         if (!knownStart) knownStart = time;
@@ -213,12 +213,11 @@ double travelledMeters(const TelemetrySession &session, const QVector<DrivingSta
     if (speed == session.channels.cend() || speed->timestamps().size() != speed->values().size()) return 0.0;
     const auto &times = speed->timestamps();
     // KAN-201: no distance is integrated across a telemetry gap.
-    const double gapThreshold = telemetryGapThreshold(*speed);
     double meters = 0.0;
     for (const auto &interval : intervals) {
         auto index = std::distance(times.cbegin(), std::lower_bound(times.cbegin(), times.cend(), interval.start));
         for (; index + 1 < times.size() && times[index + 1] <= interval.end; ++index) {
-            if (times[index + 1] - times[index] > gapThreshold) continue;
+            if (telemetryIsGap(*speed, times[index], times[index + 1])) continue;
             const double a = speed->values()[index], b = speed->values()[index + 1];
             if (std::isfinite(a) && std::isfinite(b)) meters += (a + b) / 2.0 / 3.6 * (times[index + 1] - times[index]);
         }

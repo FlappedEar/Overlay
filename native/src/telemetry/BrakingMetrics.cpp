@@ -131,7 +131,8 @@ BrakingMetrics computeBrakingMetrics(const double axisLengthMeters, const Approv
     for (auto it = first; it != last; ++it) {
         const auto index = std::distance(times.cbegin(), it);
         const double value = values[index];
-        if (!std::isfinite(value) || (previousTime && gapThreshold > 0.0 && *it - *previousTime > gapThreshold)) {
+        if (!std::isfinite(value)
+            || (previousTime && gapThreshold > 0.0 && telemetryIsGap(*decelerationChannel, *previousTime, *it))) {
             gap = true;
             break;
         }
@@ -143,8 +144,8 @@ BrakingMetrics computeBrakingMetrics(const double axisLengthMeters, const Approv
     }
     // The episode must be covered from onset to end, not just somewhere inside.
     const bool reachesEnds = samples > 0 && first != times.cend()
-        && *first - candidate->telemetryTime <= std::max(gapThreshold, 0.0)
-        && previousTime && episodeEnd - *previousTime <= std::max(gapThreshold, 0.0);
+        && !telemetryIsGap(*decelerationChannel, candidate->telemetryTime, *first)
+        && previousTime && !telemetryIsGap(*decelerationChannel, *previousTime, episodeEnd);
     if (gap || samples < 2 || !reachesEnds) {
         result.decelerationUnavailableReason = brakingIncompleteCoverage;
         return result;

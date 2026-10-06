@@ -89,6 +89,7 @@ private slots:
     void cancelsVboParsingDeterministically();
     void cachesTelemetryChannelCadence();
     void keepsChannelSamplesOrdered();
+    void judgesGapsByLocalCadence();
     void readsAnUnwarmedSessionFromManyThreads();
     void keepsEverySegmentWhenDownsampling();
     void enforcesVboResourceLimits();
@@ -711,6 +712,53 @@ void TelemetryCoreTests::cachesTelemetryChannelCadence()
     QCOMPARE(telemetryGapThreshold(copy, 0.0), 0.6);
     QVERIFY(regular.cadence().isCurrent(regular.timestamps()));
     QCOMPARE(telemetryGapThreshold(regular, 0.0), 0.3);
+}
+
+void TelemetryCoreTests::judgesGapsByLocalCadence()
+{
+    // KAN-221: a gap is judged against the cadence around it, not only the
+    // whole channel's median interval.
+    const auto sessionOf = [](const QVector<double> &times) {
+        TelemetrySession session;
+        TelemetryChannel channel(QStringLiteral("speed"), QStringLiteral("km/h"));
+        for (const double time : times) channel.appendSample(time, static_cast<float>(time));
+        session.channels.insert(channel.name, channel);
+        session.duration = times.last();
+        return session;
+    };
+    // 100 Hz for 10 s, then 10 Hz: the 10 Hz stretch is not a run of gaps,
+    // while a 0.5 s pause in the 100 Hz part still is.
+    QVector<double> times;
+    for (int tick = 0; tick < 1'000; ++tick)
+        if (tick <= 300 || tick >= 350) times.append(tick / 100.0);
+    for (int tick = 100; tick <= 150; ++tick) times.append(tick / 10.0);
+    auto session = sessionOf(times);
+    QVERIFY(qAbs(session.valueAt("speed", 12.05).value_or(-1) - 12.05) < 1e-4);
+    QVERIFY(qAbs(session.valueAt("speed", 9.995).value_or(-1) - 9.995) < 1e-4);
+    QVERIFY(!session.valueAt("speed", 3.25));
+
+    // 10 Hz with a valid 1 Hz period from 20 to 40 s; an isolated 1 s pause
+    // at 50 s is still a gap.
+    times.clear();
+    for (int tick = 0; tick <= 600; ++tick) {
+        const double time = tick / 10.0;
+        if (time > 20.0 && time < 40.0 && tick % 10 != 0) continue;
+        if (time > 50.0 && time < 51.0) continue;
+        times.append(time);
+    }
+    session = sessionOf(times);
+    QVERIFY(qAbs(session.valueAt("speed", 30.5).value_or(-1) - 30.5) < 1e-4);
+    QVERIFY(qAbs(session.valueAt("speed", 39.5).value_or(-1) - 39.5) < 1e-4);
+    QVERIFY(!session.valueAt("speed", 50.5));
+
+    // Alternating bursts: 2 s at 10 Hz, then 1 s without samples.
+    times.clear();
+    for (int burst = 0; burst < 10; ++burst)
+        for (int tick = 0; tick <= 20; ++tick) times.append(burst * 3.0 + tick / 10.0);
+    session = sessionOf(times);
+    QVERIFY(qAbs(session.valueAt("speed", 4.05).value_or(-1) - 4.05) < 1e-4);
+    QVERIFY(!session.valueAt("speed", 2.5));
+    QCOMPARE(session.sampledSegments("speed", 0.0, 30.0, 1'000).size(), 10);
 }
 
 void TelemetryCoreTests::keepsChannelSamplesOrdered()
