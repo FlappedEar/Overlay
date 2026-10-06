@@ -106,7 +106,7 @@
   <figcaption>Retro RPM</figcaption>
 </figure>
 <p>A round analog tachometer with numerals in thousands, a red warning zone, needle and digital value. Settings: <strong>Dial color</strong>, <strong>Needle color</strong>, <strong>Dial background</strong>, <strong>Background opacity</strong>.</p>
-<div class="warning"><p>A new Retro RPM is bound to the RaceChrono OBD channel name <code>rpm-obd</code>. If your file uses another name, the widget shows no data. Select the correct channel, or <strong>Automatic</strong>, in <strong>Source channel</strong>. The selector may already display <em>Automatic</em> while the stored name is not in your file; select it again to apply it.</p></div>
+<p>A new Retro RPM reads the <code>rpm</code> channel, which VBO files and RaceChrono sessions (from <code>rpm-obd</code>) both provide. If your file has no such channel, the widget shows no data; select another channel in <strong>Source channel</strong>. A stored channel that the loaded file lacks still appears in the selector, so it never shows <em>Automatic</em> for a different stored name.</p>
 
 <h2 id="styles">Styles: Classic and Tech</h2>
 <p>Every widget except a designed widget has a <strong>Style</strong> setting in the Identity section of the WIDGET tab. <strong>Classic</strong> is the look shown above and the default, so projects saved before 5 October 2026 look as they did. <strong>Tech</strong> is the bottom-strip look chosen on 5 October 2026: dark plates with two cut corners and a short amber tab, the Chakra Petch font with fixed-width digits, and the colours below. The <a href="templates.html#built-in">Tech HUD</a> template applies it to a whole layout.</p>

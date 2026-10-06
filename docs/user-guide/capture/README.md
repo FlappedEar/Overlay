@@ -91,4 +91,3 @@ Output goes to `docs/user-guide/assets/screens/`. Re-run the scripts whenever th
 
 - **Video priming:** the editor primes video playback at `previewInitialPositionMilliseconds()`, so the capture starts the clip at the chosen moment.
 - **Seeking:** with Qt Multimedia's FFmpeg backend, a seek re-reports `LoadedMedia`. Main.qml's priming handler then returns to the initial position. AVFoundation on macOS does not behave this way; the full product review (KAN-141) should check other backends.
-- **Retro speed arc:** the clipped segments in its picture are real. Its default geometry cuts them off (KAN-140).

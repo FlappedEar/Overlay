@@ -28,8 +28,13 @@ Rectangle {
         if (selectedIndex >= 0)
             appController.widgetModel.setSetting(selectedIndex, key, value);
     }
-    function channelModel() {
-        return [qsTr("Automatic")].concat(appController.channelNames);
+    // A stored source that the open recording lacks (an alias such as "rpm", or a
+    // channel of another file) stays listed, so the combo never shows Automatic for it.
+    function channelModel(current) {
+        const names = [qsTr("Automatic")].concat(appController.channelNames);
+        if (current && names.indexOf(current) < 0)
+            names.push(current);
+        return names;
     }
 
     ColumnLayout {
@@ -255,7 +260,7 @@ Rectangle {
                         FeComboBox {
                             visible: root.hasValueSource
                             Layout.fillWidth: true
-                            model: root.channelModel()
+                            model: root.channelModel(root.settings.source)
                             currentIndex: Math.max(0, model.indexOf(root.settings.source || qsTr("Automatic")))
                             onActivated: root.setSetting("source", currentIndex === 0 ? "" : currentText)
                         }
@@ -384,7 +389,7 @@ Rectangle {
                             }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.acceleratorSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.acceleratorSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("acceleratorSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -395,7 +400,7 @@ Rectangle {
                             }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.brakeSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.brakeSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("brakeSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -513,7 +518,7 @@ Rectangle {
                             FeLabel { text: qsTr("Lateral channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.lateralSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.lateralSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("lateralSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -521,7 +526,7 @@ Rectangle {
                             FeLabel { text: qsTr("Longitudinal channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.longitudinalSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.longitudinalSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("longitudinalSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -554,7 +559,7 @@ Rectangle {
                             FeLabel { text: qsTr("Lateral channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.lateralSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.lateralSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("lateralSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -562,7 +567,7 @@ Rectangle {
                             FeLabel { text: qsTr("Longitudinal channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.longitudinalSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.longitudinalSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("longitudinalSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -675,7 +680,7 @@ Rectangle {
                                 Layout.fillWidth: true
                                 from: 0
                                 to: 1
-                                value: Number(root.settings.panelOpacity ?? 0.58)
+                                value: Number(root.settings.panelOpacity ?? 0.86)
                                 onMoved: root.setSetting("panelOpacity", value)
                             }
                         }
@@ -886,7 +891,7 @@ Rectangle {
                             onEdited: value => root.setSetting("backgroundColor", value)
                         }
                         FeLabel {
-                            text: qsTr("Panel opacity  %1%").arg((Number(root.settings.backgroundOpacity ?? 0.82) * 100).toFixed(0))
+                            text: qsTr("Panel opacity  %1%").arg((Number(root.settings.backgroundOpacity ?? 0.78) * 100).toFixed(0))
                             color: Theme.onSurfaceVariant
                             font.pixelSize: 11
                         }
@@ -895,7 +900,7 @@ Rectangle {
                             from: 0
                             to: 1
                             stepSize: 0.01
-                            value: Number(root.settings.backgroundOpacity ?? 0.82)
+                            value: Number(root.settings.backgroundOpacity ?? 0.78)
                             onMoved: root.setSetting("backgroundOpacity", value)
                         }
                         FeCheckBox {
@@ -933,7 +938,7 @@ Rectangle {
                             }
                             FeTextField {
                                 Layout.fillWidth: true
-                                text: Number(root.settings.borderOpacity ?? 0.75).toString()
+                                text: Number(root.settings.borderOpacity ?? 0.45).toString()
                                 onEditingFinished: root.setSetting("borderOpacity", Number(text))
                             }
                             FeLabel {
@@ -943,7 +948,7 @@ Rectangle {
                             }
                             FeTextField {
                                 Layout.fillWidth: true
-                                text: Number(root.settings.cornerRadius ?? 14).toString()
+                                text: Number(root.settings.cornerRadius ?? 12).toString()
                                 onEditingFinished: root.setSetting("cornerRadius", Number(text))
                             }
                             FeLabel {
@@ -953,7 +958,7 @@ Rectangle {
                             }
                             FeTextField {
                                 Layout.fillWidth: true
-                                text: Number(root.settings.padding ?? 12).toString()
+                                text: Number(root.settings.padding ?? 10).toString()
                                 onEditingFinished: root.setSetting("padding", Number(text))
                             }
                         }
@@ -1004,7 +1009,7 @@ Rectangle {
                         FeCheckBox {
                             visible: root.selectedWidget.type === "speed"
                             text: qsTr("Show speed gauge")
-                            checked: root.settings.showGauge ?? true
+                            checked: root.settings.showGauge ?? false
                             onToggled: root.setSetting("showGauge", checked)
                         }
                         // Lap time precision: tenths, hundredths or thousandths.
@@ -1095,7 +1100,7 @@ Rectangle {
                         FeComboBox {
                             visible: root.isTech && root.selectedWidget.type === "retroTachometer" && (root.settings.showSpeed ?? true)
                             Layout.fillWidth: true
-                            model: root.channelModel()
+                            model: root.channelModel(root.settings.speedSource)
                             currentIndex: Math.max(0, model.indexOf(root.settings.speedSource || qsTr("Automatic")))
                             onActivated: root.setSetting("speedSource", currentIndex === 0 ? "" : currentText)
                         }
