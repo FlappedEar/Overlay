@@ -1461,14 +1461,12 @@ void TelemetryCoreTests::acceptsOnlyRealCrossingsOfTheStartLine()
         TelemetryChannel longitude;
         longitude.name = QStringLiteral("longitude");
         for (qsizetype index = 0; index < path.times.size(); ++index) {
-            latitude.values.append(float(origin.latitudeDegrees
+            latitude.appendSample(path.times[index], float(origin.latitudeDegrees
                 + path.north[index] / earthRadiusMeters / radiansPerDegree));
-            longitude.values.append(float(origin.longitudeDegrees
+            longitude.appendSample(path.times[index], float(origin.longitudeDegrees
                 + path.east[index] / (earthRadiusMeters
                     * std::cos(origin.latitudeDegrees * radiansPerDegree)) / radiansPerDegree));
         }
-        latitude.timestamps = path.times;
-        longitude.timestamps = path.times;
         for (TelemetryChannel *channel : {&latitude, &longitude}) {
             session.channels.insert(channel->name, *channel);
             session.aliases.insert(channel->name, channel->name);
