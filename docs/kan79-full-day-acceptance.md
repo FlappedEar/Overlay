@@ -6,7 +6,7 @@ v10.2.4 VBO recordings, 33.6 MiB in total. The recordings are private and
 stay out of the repository (`jastrzab/` is git-ignored), and so do the
 screenshots.
 
-To reproduce:
+To reproduce, at commit `7eae6cd` (the last main with the Analysis window, which KAN-166 removed):
 
 ```bash
 FLAPPEDEAR_REAL_DAY=$PWD/jastrzab \
