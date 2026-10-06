@@ -36,6 +36,7 @@ private slots:
     void cleanupTestCase();
     void exportsSyntheticRczThroughWorker_data();
     void exportsSyntheticRczThroughWorker();
+    void workerRefusesPathsOutsideItsManifest();
     void exportsEditListSourceThroughWorker();
     void protectsEveryDaySourceFromExport();
     void keepsOutputSafeWhenTheDestinationFills_data();
@@ -1275,6 +1276,62 @@ void ExportTests::boundsProcessOutputAndProgressLines()
     const QList<FfmpegProgress> progress = parser.append(QByteArrayLiteral("frame=12\nprogress=end\n"));
     QCOMPARE(progress.size(), 1);
     QCOMPARE(progress.first().encodedFrames, qsizetype(12));
+}
+
+void ExportTests::workerRefusesPathsOutsideItsManifest()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    QVERIFY2(!ffmpeg.isEmpty(), "FFmpeg is required for the worker manifest check.");
+    const auto source = directory.filePath("synthetic.rcz");
+    const auto video = directory.filePath("input.mov");
+    QVERIFY(writeBytes(source, RczFixture::zip(RczFixture::members())));
+    QProcess encoder;
+    encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                           "color=c=black:s=320x180:r=30:d=1", "-c:v", "libx264", "-pix_fmt", "yuv420p", video});
+    QVERIFY(encoder.waitForFinished(30'000));
+    QCOMPARE(encoder.exitCode(), 0);
+    ExportOutputTransaction transaction;
+    QCOMPARE(transaction.prepare(directory.filePath("output.mp4"), video, {source}, false).status,
+             ExportOutputTransaction::PreparationStatus::Ready);
+    const auto id = transaction.transactionId();
+    const auto overlay = QDir::temp().filePath(QStringLiteral("flappedear-overlay-%1.mkv").arg(id));
+    const auto manifestPath = ExportArtifactManifest::manifestPathFor(id);
+    QString error;
+    QVERIFY2(ExportArtifactManifest::create({id, QDateTime::currentMSecsSinceEpoch(), overlay,
+        transaction.stagingPath(), directory.filePath("output.mp4"), QCoreApplication::applicationPid(), "preparing"},
+        &error), qPrintable(error));
+    const auto cleanup = qScopeGuard([&] { static_cast<void>(ExportArtifactManifest::cleanupOwned(manifestPath)); });
+    const QString rogueOutput = directory.filePath("rogue.mp4");
+    const QString rogueOverlay = directory.filePath("rogue.mkv");
+    WidgetModel widgets;
+    const QJsonObject base{{"vboPath", source}, {"inputPath", video}, {"outputPath", transaction.stagingPath()},
+        {"manifestPath", manifestPath}, {"temporaryOverlayPath", overlay},
+        {"widgets", widgets.toJson()}, {"sync", QJsonObject{{"offset", .1}, {"timeScale", 1.0}}},
+        {"firstFrame", 0}, {"lastFrame", 9}, {"audioEnabled", false}, {"encoder", "libx265"}};
+    const QList<std::pair<QJsonObject, QString>> cases{
+        {QJsonObject{{"manifestPath", QString()}}, "no ownership manifest"},
+        {QJsonObject{{"outputPath", rogueOutput}}, "output path does not match"},
+        {QJsonObject{{"temporaryOverlayPath", rogueOverlay}}, "overlay path does not match"},
+        {QJsonObject{{"manifestPath", directory.filePath("missing.json")}}, "Could not read export ownership manifest"},
+    };
+    for (const auto &[override, expected] : cases) {
+        QJsonObject settings = base;
+        for (auto it = override.begin(); it != override.end(); ++it) settings.insert(it.key(), it.value());
+        const auto config = directory.filePath("worker.json");
+        QVERIFY(writeBytes(config, QJsonDocument(settings).toJson()));
+        QProcess worker;
+        worker.start(QStringLiteral(FLAPPEDEAR_NATIVE_PATH), {"--export-worker", config});
+        QVERIFY(worker.waitForStarted());
+        QVERIFY2(worker.waitForFinished(60'000), qPrintable(worker.errorString()));
+        const auto events = worker.readAllStandardOutput() + worker.readAllStandardError();
+        QVERIFY2(worker.exitCode() != 0, qPrintable(expected));
+        QVERIFY2(events.contains(expected.toUtf8()), events.right(2000).constData());
+        QVERIFY(!QFileInfo::exists(rogueOutput));
+        QVERIFY(!QFileInfo::exists(rogueOverlay));
+        QVERIFY(!QFileInfo::exists(transaction.stagingPath()) || QFileInfo(transaction.stagingPath()).size() == 0);
+    }
 }
 
 void ExportTests::exportsSyntheticRczThroughWorker_data()

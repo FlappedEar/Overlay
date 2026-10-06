@@ -304,9 +304,7 @@ QVariantMap AppController::exportSourceInfo() const
         ? QStringLiteral("Rec.709 SDR")
         : sourceColorClassName(m_exportSourceInfo.sourceColorClass);
     const bool unsupportedColorManagedSource =
-        m_exportSourceInfo.sourceColorClass == SourceColorClass::HdrHlg
-        || m_exportSourceInfo.sourceColorClass == SourceColorClass::HdrPq
-        || m_exportSourceInfo.sourceColorClass == SourceColorClass::LogOrExtended;
+        isUnsupportedColorManagedClass(m_exportSourceInfo.sourceColorClass);
     return {
         {"width", m_exportSourceInfo.videoSize.width()},
         {"height", m_exportSourceInfo.videoSize.height()},
@@ -1413,9 +1411,7 @@ bool AppController::startExport(
         emit exportChanged();
         return false;
     }
-    if (m_exportSourceInfo.sourceColorClass == SourceColorClass::HdrHlg
-        || m_exportSourceInfo.sourceColorClass == SourceColorClass::HdrPq
-        || m_exportSourceInfo.sourceColorClass == SourceColorClass::LogOrExtended) {
+    if (isUnsupportedColorManagedClass(m_exportSourceInfo.sourceColorClass)) {
         m_exportError = QStringLiteral(
             "%1 source detected. Color-managed HDR/Log preservation is not yet supported; "
             "export will not silently convert it to SDR.")

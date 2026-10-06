@@ -395,6 +395,11 @@ int exportWorker(const QString &configPath)
         settings.cancelled = [parent] { return parent->parentExited(); };
         settings.temporaryOverlayPath = config.value("temporaryOverlayPath").toString();
         settings.manifestPath = config.value("manifestPath").toString();
+        // The worker writes only where the controller's ownership manifest says it may.
+        if (settings.manifestPath.isEmpty()) {
+            writeExportEvent({{"state", "failed"}, {"error", "Export configuration has no ownership manifest."}});
+            return EXIT_FAILURE;
+        }
         const double sourceRangeStart = FlappedEar::ExportEngine::exportRelativeTime(
             static_cast<qsizetype>(settings.frameRange.firstFrame), settings.frameRate);
         const double sourceRangeEnd = FlappedEar::ExportEngine::exportRelativeTime(

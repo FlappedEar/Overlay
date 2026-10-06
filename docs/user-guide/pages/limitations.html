@@ -12,7 +12,7 @@
 <h2 id="video">Video and export</h2>
 <ul>
   <li>Only MP4 and MOV files can be opened. Export writes H.265/HEVC MP4 only, at the source frame rate or half of it, never upscaled.</li>
-  <li>HDR (HLG, PQ) and Log footage, video with rotation metadata, and video with non-square pixels can be edited but not exported. HDR is never silently converted to SDR.</li>
+  <li>HDR (HLG, PQ) and Log footage (including files whose HDR metadata cannot be verified), video with rotation metadata, and video with non-square pixels can be edited but not exported. HDR is never silently converted to SDR.</li>
   <li>GoPro chapter recordings play as one timeline but cannot be exported yet. Automatic synchronization reads GPS from the first chapter only, and relinking moves only the first chapter.</li>
   <li>FFmpeg is not included and must support the required filters; FFmpeg 8.1 or newer is needed, and older versions such as 8.0.1 or 6.1.1 fail.</li>
   <li>The HEVC encoder is chosen automatically and cannot be selected.</li>

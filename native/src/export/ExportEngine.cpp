@@ -35,8 +35,8 @@ QByteArray rgbaBytes(const QImage &image, const QSize &size)
     const qint64 bytesPerRow = static_cast<qint64>(size.width()) * 4;
     if (!expectedBytes || *expectedBytes > std::numeric_limits<qsizetype>::max()
         || bytesPerRow > std::numeric_limits<int>::max()) return {};
-    if ((image.format() == QImage::Format_RGBA8888
-         || image.format() == QImage::Format_RGBA8888_Premultiplied)
+    // Stage A carries premultiplied RGBA; straight RGBA goes through the conversion below.
+    if (image.format() == QImage::Format_RGBA8888_Premultiplied
         && image.size() == size
         && image.bytesPerLine() == bytesPerRow) {
         return QByteArray::fromRawData(
@@ -61,6 +61,31 @@ bool isCancelled(const ExportSettings &settings)
 {
     return (!settings.cancellationFilePath.isEmpty() && QFileInfo::exists(settings.cancellationFilePath))
         || (settings.cancelled && settings.cancelled());
+}
+
+// The ownership manifest the controller created is the authority for which paths this export
+// may write and the janitor later removes; a configuration naming other paths is refused
+// before anything is written.
+QString manifestOwnershipError(const ExportSettings &settings)
+{
+    if (settings.manifestPath.isEmpty()) return {};
+    const auto samePath = [](const QString &left, const QString &right) {
+        return QDir::cleanPath(QFileInfo(left).absoluteFilePath())
+            == QDir::cleanPath(QFileInfo(right).absoluteFilePath());
+    };
+    ExportArtifactManifestData manifest;
+    QString error;
+    if (!ExportArtifactManifest::read(settings.manifestPath, &manifest, &error)) {
+        return QStringLiteral("Could not read export ownership manifest: %1").arg(error);
+    }
+    if (settings.outputPath.isEmpty() || !samePath(settings.outputPath, manifest.outputStagingPath)) {
+        return QStringLiteral("Export output path does not match its ownership manifest.");
+    }
+    if (settings.temporaryOverlayPath.isEmpty()
+        || !samePath(settings.temporaryOverlayPath, manifest.temporaryOverlayPath)) {
+        return QStringLiteral("Temporary overlay path does not match its ownership manifest.");
+    }
+    return {};
 }
 
 bool updateManifestState(const ExportSettings &settings, const QString &state)
@@ -710,6 +735,11 @@ ExportResult ExportEngine::exportVideo(
     try {
         observe(settings, QStringLiteral("log"), QStringLiteral("preparing"),
                 QStringLiteral("probeInput"), QStringLiteral("Export requested"));
+        if (const QString ownershipError = manifestOwnershipError(settings);
+            !ownershipError.isEmpty()) {
+            result.error = ownershipError;
+            return result;
+        }
         if (settings.stateCallback) {
             settings.stateCallback(QStringLiteral("starting"));
         }

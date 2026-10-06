@@ -26,9 +26,7 @@ ExportMediaProfile ExportMediaProfile::derive(
         profile.error = displayTransformError;
         return profile;
     }
-    if (source.sourceColorClass == SourceColorClass::HdrHlg
-        || source.sourceColorClass == SourceColorClass::HdrPq
-        || source.sourceColorClass == SourceColorClass::LogOrExtended) {
+    if (isUnsupportedColorManagedClass(source.sourceColorClass)) {
         profile.error = QStringLiteral(
             "%1 source detected. Color-managed HDR/Log overlay preservation is not yet supported; "
             "FlappedEar Overlays will not silently convert this material to SDR.")
