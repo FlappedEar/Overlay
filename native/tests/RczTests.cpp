@@ -309,6 +309,8 @@ private slots:
             const double median = errors[errors.size() / 2];
             qInfo() << alias << "median/max absolute difference" << median << errors.last();
             QVERIFY(median < (alias == "rpm" ? 5.0 : .2));
+            // KAN-222: the VBO's 0 bpm placeholder is no data, not a reading.
+            if (alias == "heartRate") QVERIFY(errors.last() < 5.0);
         }
         // KAN-203: CAN-bus tyre channels carry the VBO's names and values.
         for (const auto &name : reference.channelNames()) {

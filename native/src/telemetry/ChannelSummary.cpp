@@ -19,8 +19,8 @@ ChannelSummaryPolicy temperatureSummaryPolicy()
 ChannelSummaryPolicy heartRateSummaryPolicy()
 {
     ChannelSummaryPolicy policy;
-    policy.minimumPlausible = 30.0;
-    policy.maximumPlausible = 230.0;
+    policy.minimumPlausible = kHeartRateMinimumPlausible;
+    policy.maximumPlausible = kHeartRateMaximumPlausible;
     return policy;
 }
 

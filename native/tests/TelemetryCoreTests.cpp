@@ -78,6 +78,7 @@ private slots:
     void preservesRepeatedDataSections();
     void rejectsMissingSections();
     void rejectsVboWithoutTimeColumn();
+    void dropsImplausibleHeartRate();
     void interpolatesByTime();
     void parsesTextFirstVboTimeFormats();
     void keepsVboTimestampsStrictlyMonotonic();
@@ -494,6 +495,24 @@ void TelemetryCoreTests::preservesRepeatedDataSections()
 void TelemetryCoreTests::rejectsMissingSections()
 {
     QVERIFY_THROWS_EXCEPTION(VboParseError, (void) VboParser::parse(u"[header]\nfoo=bar"));
+}
+
+void TelemetryCoreTests::dropsImplausibleHeartRate()
+{
+    // KAN-222: RaceChrono's VBO export of the 29 August 14:37 session ends
+    // with a 0 bpm row where its RCZ still reads 133. A 0 is no data, so the
+    // last real reading is not dragged towards it.
+    const QString text = QStringLiteral(
+        "[column names]\ntime heart_rate-hrm velocity\n[data]\n"
+        "000000.00 +133.000 010.0\n000000.10 +133.000 010.0\n000000.20 +250.000 010.0\n"
+        "000000.30 +133.000 010.0\n000000.40 +000.000 010.0\n");
+    const auto session = VboParser::parse(text);
+    QCOMPARE(session.valueAt("heartRate", 0.1).value(), 133.0);
+    QVERIFY(!session.valueAt("heartRate", 0.2));
+    QVERIFY(!session.valueAt("heartRate", 0.4));
+    QVERIFY(!session.valueAt("heartRate", 0.35));
+    QCOMPARE(session.channels.value("heart_rate-hrm").sampleCount(), qsizetype(5));
+    QCOMPARE(session.valueAt("speed", 0.4).value(), 10.0);
 }
 
 void TelemetryCoreTests::rejectsVboWithoutTimeColumn()

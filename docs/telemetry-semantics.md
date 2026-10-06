@@ -38,6 +38,8 @@ The parser may retain non-finite numeric values internally as placeholders so ch
 
 A `TelemetryChannel` holds finite, strictly increasing timestamps with exactly one value each (KAN-209). Its samples are read through `timestamps()` and `values()` and change only through `setSamples`, `appendSample`, `setValue` and `clear`, which throw `std::invalid_argument` for anything else, so readers never meet a mismatched or unordered channel. Only values may be `NaN`.
 
+Heart rate outside 30 to 230 bpm is no data (KAN-222). The VBO and RCZ parsers turn it into `NaN` (`markImplausibleHeartRate`): RaceChrono writes 0 bpm where its monitor has no reading, as in the final row of the 29 August 14:37 VBO export, whose RCZ reads 133 there.
+
 - A time outside a channel's timestamp range is no data.
 - An exact sample whose value is missing is no data.
 - Linear interpolation requires two adjacent finite samples.

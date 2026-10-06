@@ -163,4 +163,11 @@ void preferAcceleratorPedalForThrottle(TelemetrySession &session);
 // a newly loaded session do not pay for it. Not required for thread safety.
 void freezeCachedStatistics(const TelemetrySession &session, const CancellationCheck &cancelled = {});
 
+// RaceChrono writes 0 bpm where its heart-rate monitor has no reading, for
+// example in the final row of a VBO export (KAN-222). No driver's heart rate
+// lies outside this range, so the parsers turn such values into no data.
+inline constexpr double kHeartRateMinimumPlausible = 30.0;
+inline constexpr double kHeartRateMaximumPlausible = 230.0;
+void markImplausibleHeartRate(TelemetrySession &session);
+
 } // namespace FlappedEar

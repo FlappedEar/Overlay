@@ -809,6 +809,7 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
     session.sampleCount = rawTimes.size();
     session.aliases = resolveAliases(session.channelNames());
     preferAcceleratorPedalForThrottle(session);
+    markImplausibleHeartRate(session);
     throwIfCancelled(cancelled);
     return session;
 }

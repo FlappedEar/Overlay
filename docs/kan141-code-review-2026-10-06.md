@@ -54,4 +54,4 @@ Run against the owner's Jastrząb day of 29 August 2026 from `FlappedEar/refdata
 - `derivesOptionalRealVboLaps`, session 14:37:25: 5 laps, fastest 113.277 s.
 - RCZ against VBO pair: speed median difference 0.038, maximum 0.34; RPM median 2.24, maximum 50;
   brake maximum 0.88; lap times within 0.0098 s. Heart rate has a median difference of 0 but a
-  maximum of 133, recorded as an observation and not investigated further.
+  maximum of 133, recorded as an observation and not investigated further. KAN-222 traced it to the VBO export of the 14:37:25 session: its final row has 0 bpm where the RCZ reads 133. Heart rate outside 30 to 230 bpm is now no data, and the maximum difference is 0.06.

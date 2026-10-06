@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -142,6 +143,18 @@ double telemetryBaseInterval(const TelemetryChannel &channel)
 double telemetryGapThreshold(const TelemetryChannel &channel, const double minimumSeconds)
 {
     return std::max(std::max(0.0, minimumSeconds), telemetryBaseInterval(channel) * 3.0);
+}
+
+void markImplausibleHeartRate(TelemetrySession &session)
+{
+    const auto found = session.channels.find(session.aliases.value(QStringLiteral("heartRate")));
+    if (found == session.channels.end()) return;
+    TelemetryChannel &channel = found.value();
+    for (qsizetype index = 0; index < channel.sampleCount(); ++index) {
+        const float value = channel.values()[index];
+        if (std::isfinite(value) && (value < kHeartRateMinimumPlausible || value > kHeartRateMaximumPlausible))
+            channel.setValue(index, std::numeric_limits<float>::quiet_NaN());
+    }
 }
 
 void freezeCachedStatistics(const TelemetrySession &session, const CancellationCheck &cancelled)

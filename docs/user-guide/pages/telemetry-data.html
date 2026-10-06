@@ -7,7 +7,7 @@
   <li><strong>Missing is not zero.</strong> When a channel has no value at a moment, widgets show a dash and charts leave a gap. Gaps in a recording are never bridged in lap timing or automatic synchronisation: when the GoPro loses its GPS fix, that stretch takes no part in matching the video to the logger.</li>
   <li><strong>Nothing is invented.</strong> A missing brake channel is never estimated from G or speed in the overlay, and one channel is never silently replaced by another.</li>
   <li><strong>Recorded values are not changed.</strong> The overlay smooths what it displays slightly; lap timing uses raw samples.</li>
-  <li>Heart rate comes from the imported VBO or RCZ recording. There is no separate heart-rate import.</li>
+  <li>Heart rate comes from the imported VBO or RCZ recording. There is no separate heart-rate import. A reading below 30 or above 230 bpm, such as the 0 bpm RaceChrono writes when its monitor has no reading, is shown as no data.</li>
 </ul>
 
 <h2 id="vbo">VBO files</h2>

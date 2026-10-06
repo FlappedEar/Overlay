@@ -509,6 +509,7 @@ TelemetrySession RczParser::parseFile(const QString &path, const CancellationChe
             session.warnings.append("The session's track is from RaceChrono's track library, so the archive has no start/finish line. It was rebuilt from RaceChrono's own lap times.");
         }
     }
+    markImplausibleHeartRate(session);
     session.warnings.append("Recorded accelerometer channels, when present, are available as x_acc-acc, y_acc-acc and z_acc-acc in g. These are device axes, not calibrated vehicle lateral/longitudinal G. Calculated G and lean channels are not reconstructed.");
     throwIfCancelled(cancelled);
     return session;
