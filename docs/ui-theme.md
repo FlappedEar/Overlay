@@ -71,9 +71,11 @@ desktop density (12 px body text, 32 and 38 px control heights); Telemetry's
 ## App icon
 
 The app icon (KAN-202) uses the same language: the FlappedEar ears in amber, as
-in FlappedEar Telemetry's icon, inside grey video-frame corners over a timeline
-bar, on a charcoal tile. Its colours are the theme's `surface`, `outline`,
-`surfaceContainerHigh` and `amber`. The master is
+in FlappedEar Telemetry's icon, inside an amber gauge arc (the Tech RPM widget's
+arc) and grey video-frame corners, on a charcoal tile. Overlays presents data, so
+the icon shows a readout rather than Telemetry's speed traces (owner direction,
+6 October 2026). Its colours are the theme's `surface`, `outline` and `amber`.
+The master is
 `native/resources/branding/app-icon.svg`; after editing it, run
 `python3 scripts/make_app_icons.py` (needs CairoSVG and Pillow), which renders
 every size of `FlappedEar.icns` (macOS), `FlappedEar.ico` (Windows) and
