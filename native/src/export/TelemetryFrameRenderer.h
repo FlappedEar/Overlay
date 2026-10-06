@@ -11,6 +11,7 @@
 class QQmlEngine;
 class QQuickItem;
 class QQuickWindow;
+class WidgetTests;
 
 namespace FlappedEar {
 
@@ -30,6 +31,8 @@ struct RendererCapabilityResult {
 // thread; export workers may consume the returned QImage, but never move the
 // QML/scene-graph objects themselves.
 class TelemetryFrameRenderer final {
+    friend class ::WidgetTests;
+
 public:
     struct TimingMetrics {
         qsizetype frames = 0;

@@ -30,13 +30,14 @@ Item {
                 Number(lon) * ((settings.invertLongitudinal ?? false) ? -1 : 1)];
     }
 
+    // The face (background, rings, crosshair, label) changes only with size or settings; the
+    // trail and dot repaint on every telemetry tick in a canvas above it (KAN-199).
     Canvas {
-        id: radar
+        id: face
+        objectName: "techRadarFace"
         anchors.centerIn: parent
         width: Math.min(root.width, root.height)
         height: width
-        property real time: root.frame.renderContext.time
-        onTimeChanged: requestPaint()
         onWidthChanged: requestPaint()
         onPaint: {
             const ctx = getContext("2d");
@@ -71,6 +72,22 @@ Item {
                 ctx.font = "600 " + Math.max(7, width * 0.055) + "px 'Chakra Petch'";
                 ctx.fillText("1.0g", m + scale * 0.72, m - scale * 0.72);
             }
+        }
+    }
+
+    Canvas {
+        id: radar
+        objectName: "techRadarDot"
+        anchors.fill: face
+        property real time: root.frame.renderContext.time
+        onTimeChanged: requestPaint()
+        onWidthChanged: requestPaint()
+        onPaint: {
+            const ctx = getContext("2d");
+            ctx.reset();
+            const m = width / 2;
+            const field = m * 0.92;
+            const scale = field / root.maxG;
             const place = (lat, lon) => {
                 const g = Math.sqrt(lat * lat + lon * lon);
                 const k = g > root.maxG ? root.maxG / g : 1;
@@ -109,6 +126,7 @@ Item {
         target: frame.widgetModel
         ignoreUnknownSignals: true
         function onRevisionChanged() {
+            face.requestPaint();
             radar.requestPaint();
         }
     }
