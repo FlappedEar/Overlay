@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <numbers>
 
 using namespace FlappedEar;
 namespace {
@@ -158,6 +159,51 @@ private slots:
         files["channel_12_500_99318_99318_0"] = RczFixture::ints({192, 208});
         QVERIFY_THROWS_EXCEPTION(std::runtime_error, parse(RczFixture::zip(files)));
     }
+    void rebuildsLibraryTrackLine()
+    {
+        // KAN-204: a library-track session's trackId.json holds only an id.
+        // The line is rebuilt from RaceChrono's lap times: here a 100 m radius
+        // circle, 20 s a lap at 10 Hz, crossing the north point at 2, 22, 42 s.
+        auto files = RczFixture::members();
+        QByteArray times, positions, speeds;
+        for (int sample = 0; sample <= 500; ++sample) {
+            const double time = sample / 10.0, angle = 2 * std::numbers::pi * (time - 2.0) / 20.0;
+            const double east = 100 * std::sin(angle), north = 100 * std::cos(angle);
+            const double lat = 50.0 + north / 111'194.93, lon = 20.0 + east / (111'194.93 * std::cos(50.0 * std::numbers::pi / 180));
+            RczFixture::append(times, RczFixture::origin + qint64(sample) * 100);
+            RczFixture::append(positions, qint32(std::lround(lat * 6'000'000)));
+            RczFixture::append(positions, qint32(std::lround(lon * 6'000'000)));
+            RczFixture::append(speeds, qint32(31'416)); // 31.4 m/s in mm/s
+        }
+        files["channel_1_300_0_1_1"] = times;
+        files["channel_1_300_0_3_1"] = positions;
+        files["channel_1_300_0_4_0"] = speeds;
+        files["trackId.json"] = R"({"id":32920})";
+        const auto lap = [](qint64 start, qint64 finish) {
+            return QStringLiteral(R"({"number":1,"isInvalid":false,"sessionResume":0,"startTimestamp":%1,"finishTimestamp":%2})")
+                .arg(RczFixture::origin + start).arg(RczFixture::origin + finish);
+        };
+        files["session.json"] = QStringLiteral(R"({"version":1,"firstTimestamp":%1,"trackName":"Library","laps":[%2,%3]})")
+            .arg(RczFixture::origin).arg(lap(2000, 22000), lap(22000, 42000)).toUtf8();
+        const auto session = parse(RczFixture::zip(files));
+        QCOMPARE(session.timingGates.size(), 1);
+        QCOMPARE(session.timingGates.first().sourceDescription, QString("Rebuilt from RaceChrono lap times"));
+        QVERIFY(session.warnings.join('\n').contains("track library"));
+        const auto laps = deriveSourceLapSession(session);
+        QCOMPARE(laps.timedLaps.size(), 2);
+        for (const auto &timed : laps.timedLaps) QVERIFY2(std::abs(timed.durationSeconds - 20.0) < .05, qPrintable(QString::number(timed.durationSeconds)));
+        QVERIFY(std::abs(laps.timedLaps.first().startTelemetryTime - 2.0) < .05);
+
+        // Crossings that disagree (here one boundary on the far side) give no line.
+        files["session.json"] = QStringLiteral(R"({"version":1,"firstTimestamp":%1,"trackName":"Library","laps":[%2]})")
+            .arg(RczFixture::origin).arg(lap(2000, 12000)).toUtf8();
+        const auto opposite = parse(RczFixture::zip(files));
+        QVERIFY(opposite.timingGates.isEmpty());
+        QCOMPARE(deriveSourceLapSession(opposite).status, LapSessionStatus::NoSourceStartGate);
+        // Inline traps still win.
+        files["trackId.json"] = RczFixture::members().value("trackId.json");
+        QCOMPARE(parse(RczFixture::zip(files)).timingGates.first().sourceDescription, QString());
+    }
     void missingValuesAndPrimaryGps()
     {
         auto files = RczFixture::members();
@@ -245,7 +291,11 @@ private slots:
         const auto native = TelemetrySource::load(rczPath);
         const auto reference = VboParser::parseFile(vboPath);
         QVERIFY(native.sampleCount > reference.sampleCount);
-        QCOMPARE(native.timingGates.size(), reference.timingGates.size());
+        const auto startGates = [](const TelemetrySession &session) {
+            return std::count_if(session.timingGates.cbegin(), session.timingGates.cend(),
+                [](const TimingGate &gate) { return gate.type == TimingGateType::Start; });
+        };
+        QCOMPARE(startGates(native), startGates(reference));
         const double shift = reference.startTime - native.startTime;
         for (const auto &alias : {QString("speed"), QString("rpm"), QString("heartRate"), QString("brake")}) {
             const auto &channel = reference.channels[reference.aliases.value(alias)];

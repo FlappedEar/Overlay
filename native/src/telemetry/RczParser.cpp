@@ -195,6 +195,81 @@ qint64 integer(const QJsonObject &object, const QString &name)
         fail(QStringLiteral("Invalid %1 metadata.").arg(name));
     return static_cast<qint64>(number);
 }
+constexpr double degreesToRadians = std::numbers::pi / 180.0, earthRadiusMeters = 6'371'000;
+
+// A RaceChrono trap: its centre, its width and the travel bearing (degrees
+// clockwise from north). The finite gate spans half the width on each side,
+// perpendicular to travel.
+TimingGate gateAcrossTravel(const double lat, const double lon, const double width, const double bearing,
+    const QString &description)
+{
+    const double east = width * .5 * std::cos(bearing * degreesToRadians);
+    const double north = -width * .5 * std::sin(bearing * degreesToRadians);
+    const double deltaLat = north / (earthRadiusMeters * degreesToRadians);
+    const double deltaLon = east / (earthRadiusMeters * degreesToRadians * std::cos(lat * degreesToRadians));
+    TimingGate gate;
+    gate.type = TimingGateType::Start; gate.sourceName = "Start";
+    gate.sourceDescription = description;
+    gate.endpointA = {lat - deltaLat, lon - deltaLon};
+    gate.endpointB = {lat + deltaLat, lon + deltaLon};
+    return gate;
+}
+
+// KAN-204: a session on a RaceChrono library track stores only the track's id
+// in trackId.json, not its traps. RaceChrono's own lap boundaries in
+// session.json are moments the car crossed the start/finish line, so the line
+// is rebuilt there: centred on the mean crossing position, across the mean
+// direction of travel, and wide enough to cover every crossing (at least
+// RaceChrono's default 20 m trap).
+std::optional<TimingGate> gateFromLapBoundaries(const TelemetrySession &session, const QJsonObject &info, const qint64 origin)
+{
+    QVector<double> times;
+    for (const auto &value : info.value("laps").toArray()) {
+        const auto lap = value.toObject();
+        for (const char *key : {"startTimestamp", "finishTimestamp"}) {
+            const double stamp = lap.value(QLatin1String(key)).toDouble(-1);
+            if (stamp >= origin && stamp - origin <= 86'400'000 && std::floor(stamp) == stamp)
+                times.append((stamp - origin) / 1000.0);
+        }
+        if (times.size() > 4096) return std::nullopt;
+    }
+    std::sort(times.begin(), times.end());
+    times.erase(std::unique(times.begin(), times.end()), times.end());
+    struct Crossing { double lat, lon, east, north; };
+    QVector<Crossing> crossings;
+    for (const double time : times) {
+        const auto lat = session.valueAt("latitude", time), lon = session.valueAt("longitude", time);
+        const auto beforeLat = session.valueAt("latitude", time - .5), beforeLon = session.valueAt("longitude", time - .5);
+        const auto afterLat = session.valueAt("latitude", time + .5), afterLon = session.valueAt("longitude", time + .5);
+        if (!lat || !lon || !beforeLat || !beforeLon || !afterLat || !afterLon) continue;
+        const double east = (*afterLon - *beforeLon) * degreesToRadians * earthRadiusMeters * std::cos(*lat * degreesToRadians);
+        const double north = (*afterLat - *beforeLat) * degreesToRadians * earthRadiusMeters;
+        const double length = std::hypot(east, north);
+        if (length < 1.0) continue; // standing still: no direction of travel
+        crossings.append({*lat, *lon, east / length, north / length});
+    }
+    if (crossings.size() < 2) return std::nullopt;
+    double lat = 0, lon = 0, east = 0, north = 0;
+    for (const auto &crossing : crossings) {
+        lat += crossing.lat; lon += crossing.lon; east += crossing.east; north += crossing.north;
+    }
+    lat /= crossings.size(); lon /= crossings.size();
+    const double agreement = std::hypot(east, north) / crossings.size();
+    if (agreement < .9) return std::nullopt; // crossings in different directions
+    const double bearing = std::fmod(std::atan2(east, north) / degreesToRadians + 360.0, 360.0);
+    // Offsets along the line (perpendicular to travel) and across it.
+    const double alongEast = std::cos(bearing * degreesToRadians), alongNorth = -std::sin(bearing * degreesToRadians);
+    double halfWidth = 10.0;
+    for (const auto &crossing : crossings) {
+        const double dx = (crossing.lon - lon) * degreesToRadians * earthRadiusMeters * std::cos(lat * degreesToRadians);
+        const double dy = (crossing.lat - lat) * degreesToRadians * earthRadiusMeters;
+        if (std::abs(dx * -alongNorth + dy * alongEast) > 25.0) return std::nullopt; // not one line
+        halfWidth = std::max(halfWidth, std::abs(dx * alongEast + dy * alongNorth) + 5.0);
+    }
+    if (halfWidth > 100.0) return std::nullopt;
+    return gateAcrossTravel(lat, lon, 2.0 * halfWidth, bearing, QStringLiteral("Rebuilt from RaceChrono lap times"));
+}
+
 struct Mapping { QString name, unit, alias; double scale = 1.0; };
 Mapping mapping(int kind, int channel)
 {
@@ -420,23 +495,19 @@ TelemetrySession RczParser::parseFile(const QString &path, const CancellationChe
                 const double bearing = trap.value("bearing").toDouble(-1) / 1000.0;
                 if (std::abs(lat) >= 89.0 || std::abs(lon) > 180 || width <= 0 || width > 1000 || bearing < 0 || bearing >= 360)
                     fail("Invalid timing gate coordinates or geometry.");
-                constexpr double radians = std::numbers::pi / 180.0, radius = 6'371'000;
-                // The RCZ trap stores its centre and travel bearing. The finite
-                // gate spans half its width on each side, perpendicular to travel.
-                const double east = width * .5 * std::cos(bearing * radians);
-                const double north = -width * .5 * std::sin(bearing * radians);
-                const double deltaLat = north / (radius * radians);
-                const double deltaLon = east / (radius * radians * std::cos(lat * radians));
-                TimingGate gate;
-                gate.type = TimingGateType::Start; gate.sourceName = "Start";
-                gate.sourceDescription = trap.value("name").toString();
-                gate.endpointA = {lat - deltaLat, lon - deltaLon};
-                gate.endpointB = {lat + deltaLat, lon + deltaLon};
-                if (!isValidCoordinate(gate.endpointB)) fail("Invalid timing gate endpoint.");
+                const TimingGate gate = gateAcrossTravel(lat, lon, width, bearing, trap.value("name").toString());
+                if (!isValidCoordinate(gate.endpointA) || !isValidCoordinate(gate.endpointB)) fail("Invalid timing gate endpoint.");
                 session.timingGates.append(gate);
             }
         } catch (const OperationCancelled &) { throw; }
         catch (const std::exception &error) { session.warnings.append(QString::fromUtf8(error.what())); }
+    }
+    if (session.timingGates.isEmpty()) {
+        if (const auto gate = gateFromLapBoundaries(session, info, origin); gate && isValidCoordinate(gate->endpointA)
+            && isValidCoordinate(gate->endpointB)) {
+            session.timingGates.append(*gate);
+            session.warnings.append("The session's track is from RaceChrono's track library, so the archive has no start/finish line. It was rebuilt from RaceChrono's own lap times.");
+        }
     }
     session.warnings.append("Recorded accelerometer channels, when present, are available as x_acc-acc, y_acc-acc and z_acc-acc in g. These are device axes, not calibrated vehicle lateral/longitudinal G. Calculated G and lean channels are not reconstructed.");
     throwIfCancelled(cancelled);
