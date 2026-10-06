@@ -2021,6 +2021,15 @@ ApplicationWindow {
                         font.pixelSize: 11
                         wrapMode: Text.Wrap
                     }
+                    // Shown while the custom template file cannot be read, so a restored
+                    // file can be picked up without restarting the app.
+                    FeButton {
+                        objectName: "reloadTemplatesButton"
+                        Layout.fillWidth: true
+                        visible: !appController.widgetModel.templateStoreWritable
+                        text: qsTr("Reload templates")
+                        onClicked: appController.widgetModel.reloadTemplates()
+                    }
                     FeComboBox {
                         id: templatePicker
                         Layout.fillWidth: true

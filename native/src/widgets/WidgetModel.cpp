@@ -1009,7 +1009,7 @@ bool WidgetModel::deleteTemplate(const QString &templateId)
     return false;
 }
 
-bool WidgetModel::exportTemplate(const QString &templateId, const QUrl &url) const
+bool WidgetModel::exportTemplate(const QString &templateId, const QUrl &url)
 {
     QJsonObject selected;
     for (const QJsonValue &value : allTemplates()) {
@@ -1018,7 +1018,12 @@ bool WidgetModel::exportTemplate(const QString &templateId, const QUrl &url) con
             break;
         }
     }
-    if (selected.isEmpty() || !url.isLocalFile()) {
+    if (selected.isEmpty()) {
+        setLastError(tr("The template to export no longer exists."));
+        return false;
+    }
+    if (!url.isLocalFile()) {
+        setLastError(tr("Templates can only be exported to a local file."));
         return false;
     }
     QString path = url.toLocalFile();
@@ -1026,22 +1031,35 @@ bool WidgetModel::exportTemplate(const QString &templateId, const QUrl &url) con
         path.append(".fettemplate");
     }
     QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
+    const QJsonObject package{{"flappedEarTemplateVersion", 1}, {"template", selected}};
+    if (!file.open(QIODevice::WriteOnly)
+        || file.write(QJsonDocument(package).toJson(QJsonDocument::Indented)) < 0
+        || !file.commit()) {
+        setLastError(tr("Could not export the template to %1: %2")
+                         .arg(QDir::toNativeSeparators(path), file.errorString()));
         return false;
     }
-    const QJsonObject package{{"flappedEarTemplateVersion", 1}, {"template", selected}};
-    return file.write(QJsonDocument(package).toJson(QJsonDocument::Indented)) >= 0
-        && file.commit();
+    setLastError({});
+    return true;
 }
 
 QString WidgetModel::importTemplate(const QUrl &url)
 {
     if (!url.isLocalFile()) {
+        setLastError(tr("Templates can only be imported from a local file."));
         return {};
     }
+    if (!m_templateStoreWritable) {
+        setLastError(tr("Custom templates could not be loaded, so nothing can be imported. "
+                       "Restore the template file and reload templates first."));
+        return {};
+    }
+    const QString path = QDir::toNativeSeparators(url.toLocalFile());
     const auto loaded = BoundedJsonLoader::loadFile(
         url.toLocalFile(), ProjectLimits::templateBytes, QStringLiteral("Template"));
     if (!loaded.success() || !loaded.document.isObject()) {
+        setLastError(tr("Could not import %1: %2").arg(
+            path, loaded.success() ? tr("the file is not a template") : loaded.error));
         return {};
     }
     const QJsonObject root = loaded.document.object();
@@ -1051,10 +1069,11 @@ QString WidgetModel::importTemplate(const QUrl &url)
     }
     item.insert("id", QStringLiteral("user-%1").arg(
                           QUuid::createUuid().toString(QUuid::WithoutBraces)));
-    if (!validTemplateObject(item)) {
+    if (!validTemplateObject(item) || !normalizeTemplateObject(&item)) {
+        setLastError(tr("Could not import %1: it is not a valid template or uses an "
+                       "unsupported widget.").arg(path));
         return {};
     }
-    if (!normalizeTemplateObject(&item)) return {};
     m_userTemplates.append(item);
     if (!saveUserTemplates()) {
         m_userTemplates.removeLast();

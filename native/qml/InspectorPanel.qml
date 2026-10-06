@@ -65,8 +65,13 @@ Rectangle {
         if (selectedIndex >= 0)
             appController.widgetModel.setSetting(selectedIndex, key, value);
     }
-    function channelModel() {
-        return [qsTr("Automatic")].concat(appController.channelNames);
+    // A stored source that the open recording lacks (an alias such as "rpm", or a
+    // channel of another file) stays listed, so the combo never shows Automatic for it.
+    function channelModel(current) {
+        const names = [qsTr("Automatic")].concat(appController.channelNames);
+        if (current && names.indexOf(current) < 0)
+            names.push(current);
+        return names;
     }
 
     ColumnLayout {
@@ -293,7 +298,7 @@ Rectangle {
                         FeComboBox {
                             visible: root.hasValueSource
                             Layout.fillWidth: true
-                            model: root.channelModel()
+                            model: root.channelModel(root.settings.source)
                             currentIndex: Math.max(0, model.indexOf(root.settings.source || qsTr("Automatic")))
                             onActivated: root.setSetting("source", currentIndex === 0 ? "" : currentText)
                         }
@@ -433,7 +438,7 @@ Rectangle {
                             }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.acceleratorSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.acceleratorSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("acceleratorSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -444,7 +449,7 @@ Rectangle {
                             }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.brakeSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.brakeSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("brakeSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -564,7 +569,7 @@ Rectangle {
                             FeLabel { text: qsTr("Lateral channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.lateralSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.lateralSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("lateralSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -572,7 +577,7 @@ Rectangle {
                             FeLabel { text: qsTr("Longitudinal channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.longitudinalSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.longitudinalSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("longitudinalSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -606,7 +611,7 @@ Rectangle {
                             FeLabel { text: qsTr("Lateral channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.lateralSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.lateralSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("lateralSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -614,7 +619,7 @@ Rectangle {
                             FeLabel { text: qsTr("Longitudinal channel"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
                             FeComboBox {
                                 Layout.fillWidth: true
-                                model: root.channelModel()
+                                model: root.channelModel(root.settings.longitudinalSource)
                                 currentIndex: Math.max(0, model.indexOf(root.settings.longitudinalSource || qsTr("Automatic")))
                                 onActivated: root.setSetting("longitudinalSource", currentIndex === 0 ? "" : currentText)
                             }
@@ -1263,7 +1268,7 @@ Rectangle {
                         FeComboBox {
                             visible: root.isTech && root.selectedWidget.type === "retroTachometer" && (root.settings.showSpeed ?? true)
                             Layout.fillWidth: true
-                            model: root.channelModel()
+                            model: root.channelModel(root.settings.speedSource)
                             currentIndex: Math.max(0, model.indexOf(root.settings.speedSource || qsTr("Automatic")))
                             onActivated: root.setSetting("speedSource", currentIndex === 0 ? "" : currentText)
                         }

@@ -29,6 +29,7 @@ class WidgetModel final : public QAbstractListModel {
     Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
     Q_PROPERTY(QVariantList templates READ templates NOTIFY templatesChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    Q_PROPERTY(bool templateStoreWritable READ templateStoreWritable NOTIFY templatesChanged)
     // KAN-191: the user's "My widgets" library.
     Q_PROPERTY(QVariantList libraryWidgets READ libraryWidgets NOTIFY libraryWidgetsChanged)
     Q_PROPERTY(QString libraryError READ libraryError NOTIFY libraryErrorChanged)
@@ -59,6 +60,7 @@ public:
     [[nodiscard]] int revision() const;
     [[nodiscard]] QVariantList templates() const;
     [[nodiscard]] QString lastError() const { return m_lastError; }
+    [[nodiscard]] bool templateStoreWritable() const { return m_templateStoreWritable; }
     [[nodiscard]] QVariantList libraryWidgets() const;
     [[nodiscard]] QString libraryError() const { return m_libraryError; }
     [[nodiscard]] const WidgetData *widgetAt(int index) const;
@@ -86,7 +88,7 @@ public:
     Q_INVOKABLE QString saveCurrentAsTemplate(const QString &name, const QString &description);
     Q_INVOKABLE bool updateTemplate(const QString &templateId);
     Q_INVOKABLE bool deleteTemplate(const QString &templateId);
-    Q_INVOKABLE bool exportTemplate(const QString &templateId, const QUrl &url) const;
+    Q_INVOKABLE bool exportTemplate(const QString &templateId, const QUrl &url);
     Q_INVOKABLE QString importTemplate(const QUrl &url);
     Q_INVOKABLE void reloadTemplates();
 

@@ -11,6 +11,8 @@
 #include "telemetry/VboParser.h"
 #include "project/ProjectLimits.h"
 
+#include <QRegularExpression>
+
 using namespace NativeTestSupport;
 
 class WidgetTests final : public QObject {
@@ -42,6 +44,8 @@ private slots:
     void rejectsTemplateStoreCountGrowth();
     void rejectsTemplateStoreByteGrowth();
     void preservesRejectedTemplateStores();
+    void reportsTemplateImportExportFailures();
+    void alignsInspectorFallbacksWithWidgetDefaults();
     void boundsLiveWidgetAndCueMutations();
     void preservesTemplatePickerSelectionById();
     void preservesOptionalFontSettings();
@@ -667,6 +671,97 @@ void WidgetTests::preservesRejectedTemplateStores()
     model.reloadTemplates();
     QVERIFY(model.lastError().isEmpty());
     QVERIFY(model.updateTemplate(id));
+}
+
+// KAN-140: a failed template import or export says why instead of doing nothing.
+void WidgetTests::reportsTemplateImportExportFailures()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QByteArray previous = qgetenv("FLAPPEDEAR_TEMPLATE_STORE");
+    const auto restore = qScopeGuard([previous] {
+        if (previous.isNull()) qunsetenv("FLAPPEDEAR_TEMPLATE_STORE");
+        else qputenv("FLAPPEDEAR_TEMPLATE_STORE", previous);
+    });
+    const QString storePath = directory.filePath("templates.json");
+    qputenv("FLAPPEDEAR_TEMPLATE_STORE", storePath.toUtf8());
+    WidgetModel model;
+    QVERIFY(model.templateStoreWritable());
+    QVERIFY(model.addWidget("speed") == 0);
+    const QString id = model.saveCurrentAsTemplate("Shared", "");
+    QVERIFY(!id.isEmpty());
+
+    QVERIFY(!model.exportTemplate("missing-template", QUrl::fromLocalFile(directory.filePath("a"))));
+    QVERIFY(!model.lastError().isEmpty());
+    QVERIFY(!model.exportTemplate(id, QUrl("https://example.com/shared.fettemplate")));
+    QVERIFY(!model.lastError().isEmpty());
+    QVERIFY(!model.exportTemplate(id, QUrl::fromLocalFile(directory.filePath("missing/dir/shared"))));
+    QVERIFY(model.lastError().contains("shared.fettemplate"));
+    const QUrl exported = QUrl::fromLocalFile(directory.filePath("shared.fettemplate"));
+    QVERIFY(model.exportTemplate(id, exported));
+    QVERIFY(model.lastError().isEmpty());
+
+    QVERIFY(model.importTemplate(QUrl("https://example.com/shared.fettemplate")).isEmpty());
+    QVERIFY(!model.lastError().isEmpty());
+    QVERIFY(model.importTemplate(QUrl::fromLocalFile(directory.filePath("absent.fettemplate"))).isEmpty());
+    QVERIFY(model.lastError().contains("absent.fettemplate"));
+    const QString invalidPath = directory.filePath("invalid.fettemplate");
+    QVERIFY(writeBytes(invalidPath, QJsonDocument(QJsonObject{
+        {"template", QJsonObject{{"name", "Retired"},
+                                 {"widgets", QJsonArray{QJsonObject{{"type", "noSuchWidget"}}}}}}})
+                                     .toJson()));
+    QVERIFY(model.importTemplate(QUrl::fromLocalFile(invalidPath)).isEmpty());
+    QVERIFY(model.lastError().contains("invalid.fettemplate"));
+    const QString importedId = model.importTemplate(exported);
+    QVERIFY(!importedId.isEmpty());
+    QVERIFY(model.lastError().isEmpty());
+
+    // An unreadable store blocks imports with a message, and reloading after a
+    // restore makes the store writable again.
+    const QByteArray good = readBytes(storePath);
+    QVERIFY(writeBytes(storePath, "{invalid"));
+    model.reloadTemplates();
+    QVERIFY(!model.templateStoreWritable());
+    QVERIFY(model.importTemplate(exported).isEmpty());
+    QVERIFY(!model.lastError().isEmpty());
+    QCOMPARE(readBytes(storePath), QByteArray("{invalid"));
+    QVERIFY(writeBytes(storePath, good));
+    model.reloadTemplates();
+    QVERIFY(model.templateStoreWritable());
+    QVERIFY(model.lastError().isEmpty());
+}
+
+// KAN-140: what the inspector shows for a setting a widget lacks matches the default a new
+// widget gets, and the Retro tachometer reads the "rpm" alias that VBO and RCZ both provide.
+void WidgetTests::alignsInspectorFallbacksWithWidgetDefaults()
+{
+    WidgetModel model;
+    QVERIFY(model.addWidget("speed") == 0 && model.addWidget("retroTachometer") == 1);
+    const QVariantMap speed = model.widget(0).value("settings").toMap();
+    const QVariantMap tachometer = model.widget(1).value("settings").toMap();
+    QCOMPARE(tachometer.value("source").toString(), QString("rpm"));
+
+    QFile inspector(qmlSourcePath("InspectorPanel.qml"));
+    QVERIFY(inspector.open(QIODevice::ReadOnly));
+    const QString qml = QString::fromUtf8(inspector.readAll());
+    const QList<std::pair<QString, QVariantMap>> checks{
+        {"backgroundOpacity", speed}, {"borderOpacity", speed}, {"cornerRadius", speed},
+        {"padding", speed}, {"panelOpacity", tachometer}};
+    for (const auto &[key, defaults] : checks) {
+        QVERIFY2(defaults.contains(key), qPrintable(key));
+        const QVariant expected = defaults.value(key);
+        QRegularExpressionMatchIterator matches = QRegularExpression(
+            QStringLiteral("settings\\.%1 \\?\\? ([A-Za-z0-9.]+)").arg(key)).globalMatch(qml);
+        QVERIFY2(matches.hasNext(), qPrintable(key));
+        while (matches.hasNext()) {
+            const QString fallback = matches.next().captured(1);
+            const bool same = expected.typeId() == QMetaType::Bool
+                ? fallback == (expected.toBool() ? "true" : "false")
+                : fallback.toDouble() == expected.toDouble();
+            QVERIFY2(same, qPrintable(QString("%1: inspector %2, default %3")
+                                          .arg(key, fallback, expected.toString())));
+        }
+    }
 }
 
 void WidgetTests::boundsLiveWidgetAndCueMutations()

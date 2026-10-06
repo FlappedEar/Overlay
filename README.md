@@ -37,7 +37,7 @@ field saved by Telemetry are kept. The
 
 ## Keyboard controls
 
-Space plays or pauses. Left/Right seek five seconds; Shift+Left/Right seek thirty seconds; Home/End seek to the first/last actual video frame. These playback shortcuts are disabled while typing or operating a focused editor control. Ctrl/Cmd+E opens Export. The platform full-screen shortcut (⌃⌘F on macOS) enters full screen and Escape leaves it; the F1 help still lists F11 (KAN-140). Full-screen preview provides the same visible transport and scrubber as the editor.
+Space plays or pauses. Left/Right seek five seconds; Shift+Left/Right seek thirty seconds; Home/End seek to the first/last actual video frame. These playback shortcuts are disabled while typing or operating a focused editor control. Ctrl/Cmd+E opens Export. The platform full-screen shortcut (⌃⌘F on macOS) enters full screen and Escape leaves it. Full-screen preview provides the same visible transport and scrubber as the editor.
 
 Very Verbose export diagnostics follow the live tail until the user scrolls into history. Historical inspection stays fixed while new lines arrive; **Jump to latest** explicitly resumes following.
 
