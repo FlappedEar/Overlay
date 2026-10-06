@@ -256,7 +256,8 @@ class SampleRenderContext(QObject):
         return self._fixed
 
     @Slot(result="QVariantMap")
-    def tyreValues(self):
+    @Slot("QVariantMap", result="QVariantMap")
+    def tyreValues(self, _settings=None):
         return self._tyres
 
 

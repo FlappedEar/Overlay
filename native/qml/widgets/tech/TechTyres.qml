@@ -9,7 +9,7 @@ Item {
     anchors.fill: parent
     readonly property var values: {
         frame.renderContext.time;
-        return frame.renderContext.tyreValues();
+        return frame.renderContext.tyreValues(frame.widgetSettings);
     }
     readonly property string pressureUnit: frame.widgetSettings.pressureUnit === "psi" ? "psi" : "bar"
     readonly property real cold: Number(frame.widgetSettings.coldBelow ?? 0) > 0 ? Number(frame.widgetSettings.coldBelow) : 60

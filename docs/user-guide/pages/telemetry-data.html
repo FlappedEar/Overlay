@@ -37,6 +37,7 @@
   <tr><td><code>velocity-obd</code></td><td>OBD vehicle speed</td><td>km/h</td></tr>
   <tr><td><code>coolant_temp-obd</code>, <code>intake_temp-obd</code>, <code>engine_oil_temp-obd</code>, <code>gearbox_temp-obd</code></td><td>Temperatures</td><td>°C</td></tr>
   <tr><td><code>heart_rate-hrm</code></td><td>Heart rate</td><td>bpm</td></tr>
+  <tr><td><code>tyre_temp_fl-canbus</code> … <code>tyre_pressure_rr-canbus</code></td><td>Tyre temperature and pressure per corner from a CAN-bus tyre logger</td><td>°C, kPa</td></tr>
   <tr><td><code>x/y/z_acc-acc</code>, <code>…-gyro</code>, <code>…-magn</code></td><td>Phone accelerometer, gyroscope, magnetometer axes</td><td>g, deg/s, µT</td></tr>
   <tr><td><code>device_battery_level</code></td><td>Phone battery</td><td>%</td></tr>
 </table>
@@ -58,12 +59,14 @@
 <p>Any channel can still be chosen by name in a widget's <strong>Source channel</strong>.</p>
 
 <h3 id="tyres">Tyre channels</h3>
-<p>The Tyres widget finds channels whose name contains <code>tyre</code> or <code>tire</code>, either <code>temp</code>/<code>temperature</code> or <code>pressure</code>/<code>press</code>, and one corner: <code>fl</code>, <code>fr</code>, <code>rl</code> or <code>rr</code> (also <code>lf</code>, <code>rf</code>, <code>lr</code>). Example: <code>tyre_temp_fl</code>.</p>
+<p>By default the Tyres widget finds channels whose name contains <code>tyre</code> or <code>tire</code>, either <code>temp</code>/<code>temperature</code> or <code>pressure</code>/<code>press</code>, and one corner: <code>fl</code>, <code>fr</code>, <code>rl</code> or <code>rr</code> (also <code>lf</code>, <code>rf</code>, <code>lr</code>). Example: <code>tyre_temp_fl</code>. Any channel can instead be chosen per corner in the Tyres inspector; a chosen channel's pressure unit is judged the same way.</p>
 <ul>
-  <li>Temperature is shown in °C. A channel declared in °F is converted; units are only read from RCZ files, so a VBO channel is always treated as °C.</li>
+  <li>Tyre channels are read from VBO files and, for RaceChrono's CAN-bus tyre channels, from RCZ files under the same names. Other CAN-bus channels in an RCZ are not imported.</li>
+  <li>Temperature is shown in °C. VBO files do not declare units, so a VBO tyre temperature is always treated as °C; a channel declared in °F is converted.</li>
   <li>Pressure in bar, psi or kPa is converted to the chosen display unit. If the unit is not declared (always the case for VBO files), it is judged from typical values.</li>
   <li>An exact 0 is treated as "no reading yet", because tyre-pressure sensors report 0 before their first reading.</li>
 </ul>
+<p>RaceChrono only records tyre data when a TPMS or CAN tyre logger feeds it; a phone-and-OBD setup records none. When no channel of the loaded recording is named as a tyre value and none is chosen, the Tyres inspector says so and every corner shows a dash.</p>
 
 <h2 id="lap-timing">How laps are found</h2>
 <p>Laps, the lap widgets and hot-lap export come from the start/finish line (timing gate) recorded in the telemetry file, for example the RaceChrono track's start line, and from GPS:</p>

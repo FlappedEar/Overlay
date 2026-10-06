@@ -2481,3 +2481,26 @@ use-after-move fails the file with exit code 1. It flagged
 two use-after-move false positives (a moved `QVector` reused after `clear()`,
 now `std::exchange`) and an optional unwrapped and wrapped again
 (`CornerSpeeds.cpp`); both are rewritten.
+
+## KAN-153: editor UI invariants
+
+Three `AGENTS.md` UI invariants now have automated tests:
+
+- **Sidebar at the minimum** (`EditorTests::keepsSidebarReachableAtMinimumSize`). The editor
+  window is opened at 1180×720 with a Retro Custom widget selected (the most inspector controls).
+  For the WIDGET, DATA and CUES tabs, the test checks that the tab's scroll view lies inside the
+  window and that no nested scroller holds content it cannot show. It then scrolls that one
+  surface to each visible control and checks the control comes fully into view. The window is
+  never larger than 1180×720; a smaller CI display only makes the check stricter.
+- **Transport shortcuts while editing**
+  (`EditorTests::disablesTransportShortcutsWhileEditing`). Space, Left, Right, Shift+Left,
+  Shift+Right, Home and End are off while an inspector text field or spin box has focus, and
+  come back when focus leaves it.
+- **Very Verbose viewport** (`ExportTests::showsVeryVerboseDiagnosticsLive`). Dragging the
+  scroll bar to the very end with the mouse no longer resumes following, even as new lines arrive;
+  only Jump to latest does. This assertion failed before the fix, when a drag into the last 2 %
+  re-attached the log.
+
+The audit's other two items were already gone: the A/B comparison video left with the analysis
+(KAN-166), and the Dial, Arc and Retro Grand Prix gauges were removed (KAN-192). The remaining
+tachometers draw their faces on a separate canvas (KAN-199).

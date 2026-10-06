@@ -222,6 +222,19 @@ Mapping mapping(int kind, int channel)
         case 10071: return {"accelerator_pos-obd", "%", {}, 1};
         }
     }
+    if (kind == 12) {
+        // KAN-203: RaceChrono CAN-bus tyre channels. The id is (position << 15)
+        // | type: type 1013 is the temperature in °C, 1014 the pressure in kPa,
+        // and positions 3 to 6 are RR, RL, FR, FL. Checked against RaceChrono's
+        // own VBO export of the same session (owner's Silesia Ring recording,
+        // 27 September 2026), whose tyre_*-canbus columns match sample for sample.
+        static const char *const corners[] = {"rr", "rl", "fr", "fl"};
+        const int position = channel >> 15, type = channel & 0x7fff;
+        if (position >= 3 && position <= 6 && type == 1013)
+            return {QStringLiteral("tyre_temp_%1-canbus").arg(QLatin1String(corners[position - 3])), "°C", {}, 1};
+        if (position >= 3 && position <= 6 && type == 1014)
+            return {QStringLiteral("tyre_pressure_%1-canbus").arg(QLatin1String(corners[position - 3])), "kPa", {}, 1};
+    }
     if (kind == 6 && channel == 41) return {"heart_rate-hrm", "bpm", "heartRate", .001};
     if (kind == 2 && channel >= 9 && channel <= 11)
         return {QStringLiteral("%1_acc-acc").arg(QChar('x' + channel - 9)), "g", {}, .0001};
@@ -343,8 +356,9 @@ TelemetrySession RczParser::parseFile(const QString &path, const CancellationChe
             session.warnings.append(QStringLiteral("Unsupported recorded channel: %1").arg(i.key()));
             continue;
         }
-        if ((kind == 5 && (storage != 3 || match.captured(1) != "channel2"))
-            || (kind != 5 && !position && storage != 0) || (position && storage != 1))
+        const bool doubleValued = kind == 5 || kind == 12; // OBD and CAN-bus channels
+        if ((doubleValued && (storage != 3 || match.captured(1) != "channel2"))
+            || (!doubleValued && !position && storage != 0) || (position && storage != 1))
             fail("Unsupported channel value encoding.");
         const QString timeName = QStringLiteral("channel_%1_%2_%3_1_1")
             .arg(match.captured(2), match.captured(3), match.captured(4));

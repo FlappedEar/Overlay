@@ -68,6 +68,22 @@ corner radius or colour in editor QML; widget colour defaults written as
 desktop density (12 px body text, 32 and 38 px control heights); Telemetry's
 44 to 48 px touch targets are a mobile rule.
 
+## App icon
+
+The app icon (KAN-202) uses the same language: the FlappedEar ears in amber, as
+in FlappedEar Telemetry's icon, inside grey video-frame corners above a
+lower-third data plate (throttle and brake bars, a value and a filled bar), on a
+charcoal tile. Overlays presents data, so the icon shows a readout rather than
+Telemetry's speed traces (owner choice of design D, 6 October 2026). Its colours
+are the theme's `surface`, `outline`, `surfaceContainerHigh`, `onSurface` and
+`amber`.
+The master is
+`native/resources/branding/app-icon.svg`; after editing it, run
+`python3 scripts/make_app_icons.py` (needs CairoSVG and Pillow), which renders
+every size of `FlappedEar.icns` (macOS), `FlappedEar.ico` (Windows) and
+`app-logo.png` (window icon and the logo in the header and on the welcome
+screen) from the SVG.
+
 ## Scope
 
 Restyled (KAN-187): the shared controls and `FeLabel`; `Main.qml` (bars,
