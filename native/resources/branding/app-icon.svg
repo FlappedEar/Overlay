@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <!-- FlappedEar Overlays app icon, master (KAN-202). Colours are Theme.js tokens:
-       surface #111214, outline #5d6068 (also the gauge track, at 45 %) and
-       amber #fcb203.
+       surface #111214, outline #5d6068 (also the bar tracks, at 45 %),
+       surfaceContainerHigh #24262a, onSurface #f2f2f2 and amber #fcb203.
        The tile sits on Apple's 1024 px icon grid (824 px, 100 px margin) for macOS;
        scripts/make_app_icons.py crops to the tile for Windows and the in-app logo.
        Regenerate the platform files with that script after editing. -->
@@ -13,12 +13,21 @@
     <path d="M214 714 L214 810 L310 810"/>
     <path d="M810 714 L810 810 L714 810"/>
   </g>
-  <!-- Gauge arc: the data the overlay shows, as in the Tech RPM widget. -->
-  <path d="M335.2 696.8 A250 250 0 1 1 688.8 696.8" fill="none" stroke="#5d6068" stroke-opacity="0.45" stroke-width="24" stroke-linecap="round"/>
-  <path d="M335.2 696.8 A250 250 0 1 1 703.5 359.3" fill="none" stroke="#fcb203" stroke-width="24" stroke-linecap="round"/>
   <!-- FlappedEar ears, the same shape as FlappedEar Telemetry's icon. -->
-  <g fill="#fcb203" transform="translate(512 500) scale(0.66) translate(-527 -487.5) translate(0 1024) scale(0.1 -0.1)">
+  <g fill="#fcb203" transform="translate(512 430) scale(0.74) translate(-527 -487.5) translate(0 1024) scale(0.1 -0.1)">
     <path d="M3059 7240 c-48 -25 -108 -94 -147 -168 -107 -200 -170 -633 -142 -977 20 -250 63 -450 172 -790 80 -250 96 -323 109 -474 19 -238 49 -313 214 -530 169 -224 168 -216 96 -567 -28 -137 -51 -253 -51 -257 0 -3 38 23 84 58 140 105 344 218 541 300 141 58 430 151 543 175 125 26 162 41 229 92 98 75 160 198 207 409 70 312 121 825 88 885 -31 59 -79 69 -239 51 -67 -8 -72 -7 -78 12 -20 65 -348 620 -473 801 -407 593 -824 986 -1057 997 -45 2 -69 -2 -96 -17z m437 -492 c299 -311 659 -963 778 -1407 l25 -91 -22 -12 c-43 -22 -207 -148 -291 -223 -100 -89 -191 -199 -284 -344 -36 -56 -68 -98 -70 -92 -12 37 122 334 233 516 67 110 86 165 92 266 12 189 -59 479 -197 810 -75 179 -230 472 -322 607 -16 23 -25 42 -20 42 5 0 40 -33 78 -72z
              M6381 6364 c-84 -22 -167 -72 -249 -148 -142 -134 -259 -299 -437 -619 l-87 -158 -72 8 c-140 16 -172 12 -208 -25 l-33 -33 3 -127 c5 -243 60 -638 117 -837 50 -176 140 -312 243 -364 23 -12 99 -35 169 -51 440 -105 806 -263 1076 -466 45 -34 83 -61 85 -59 2 1 -9 58 -23 126 -81 380 -86 437 -47 518 10 20 63 97 119 172 98 132 128 178 121 183 -395 284 -658 745 -758 1331 -22 129 -25 175 -11 175 5 0 18 -24 29 -52 62 -165 119 -302 166 -401 174 -371 403 -670 640 -838 90 -64 164 -92 247 -93 57 -1 70 3 102 27 70 53 129 213 179 490 30 166 33 516 5 616 -26 91 -53 145 -102 199 -63 70 -121 97 -282 131 -164 34 -267 73 -493 187 -234 118 -360 145 -499 108z"/>
   </g>
+  <!-- Data plate, a lower third like the overlay widgets: throttle and brake
+       bars beside a value and a filled bar. -->
+  <rect x="300" y="636" width="424" height="120" rx="14" fill="#24262a"/>
+  <g fill="#5d6068" fill-opacity="0.45">
+    <rect x="330" y="662" width="22" height="68" rx="6"/>
+    <rect x="368" y="662" width="22" height="68" rx="6"/>
+    <rect x="420" y="706" width="270" height="22" rx="8"/>
+  </g>
+  <rect x="330" y="690" width="22" height="40" rx="6" fill="#fcb203"/>
+  <rect x="368" y="716" width="22" height="14" rx="6" fill="#f2f2f2"/>
+  <rect x="420" y="664" width="270" height="26" rx="8" fill="#f2f2f2"/>
+  <rect x="420" y="706" width="180" height="22" rx="8" fill="#fcb203"/>
 </svg>
