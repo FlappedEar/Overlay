@@ -33,7 +33,7 @@
   <img src="assets/screens/widget-speed.png" alt="Speed widget showing 67 km/h" width="344" height="229" loading="lazy">
   <figcaption>Speed: 59 km/h.</figcaption>
 </figure>
-<p>Label, large value and unit on a panel. Automatic source: speed. The value is converted from km/h to mph only when <strong>Unit</strong> is exactly <code>mph</code> (lower case); any other unit text only changes the label. The <em>Show speed gauge</em> option currently has no visible effect.</p>
+<p>Label, large value and unit on a panel. Automatic source: speed. The value is converted from km/h to mph only when <strong>Unit</strong> is exactly <code>mph</code> (lower case); any other unit text only changes the label.</p>
 
 <h3 id="w-heart-rate">Heart rate</h3>
 <figure class="inline-widget">
@@ -71,8 +71,8 @@
 </div>
 <p>Both use a lateral and a longitudinal channel. Each axis has its own channel selector and an <strong>Invert … axis</strong> option, which flips only the display, not the data. Both axes must have a value; otherwise the dot is hidden and the value shows <code>—</code>.</p>
 <ul>
-  <li><strong>F1 G-Force Radar</strong>: a dark circular field with concentric rings. The dot's distance from the centre is the combined G. Settings: <strong>Max G</strong> (default 1.5), <strong>Ring step</strong> (default 0.25), <strong>Show crosshair</strong>, <strong>Show center box</strong>, <strong>Radar background</strong>, <strong>Dot color</strong>, <strong>Grid color</strong>.</li>
-  <li><strong>G-Force Bar</strong>: a horizontal bar filled by combined G ÷ <strong>Max G</strong>, with a label and value. The number shows the true combined G even when the bar is full. Settings: <strong>Max G</strong>, <strong>Label</strong>, <strong>Decimals</strong>, <strong>Bar radius</strong>, <strong>Show label</strong>, <strong>Show value</strong>, <strong>Fill color</strong>, <strong>Bar background</strong>.</li>
+  <li><strong>F1 G-Force Radar</strong>: a dark circular field with concentric rings. The dot's distance from the centre is the combined G. Settings: <strong>Max G</strong> (default 1.5), <strong>Ring step</strong> (default 0.25), <strong>Show crosshair</strong>, <strong>Show center box</strong>, <strong>Radar background</strong>, <strong>Dot color</strong>, <strong>Grid color</strong>. The radar draws its own field, so the Appearance and Typography sections are not offered for it; <strong>Panel opacity</strong> sets the field's opacity.</li>
+  <li><strong>G-Force Bar</strong>: a horizontal bar filled by combined G ÷ <strong>Max G</strong>, with a label and value. The number shows the true combined G even when the bar is full. Settings: <strong>Max G</strong>, <strong>Label</strong>, <strong>Decimals</strong>, <strong>Bar radius</strong>, <strong>Show label</strong>, <strong>Show value</strong>, <strong>Fill color</strong>, <strong>Bar background</strong>. Combined G does not depend on the sign of either axis, so the bar has no <strong>Invert</strong> options.</li>
 </ul>
 <p>Combined G is √(lateral² + longitudinal²). For RaceChrono data, the calculated G channels from a VBO export give the best result; see <a href="telemetry-data.html#racechrono-g">RaceChrono G channels</a>.</p>
 
@@ -82,21 +82,21 @@
   <figcaption>This recording has no tyre channels, so every value shows a dash.</figcaption>
 </figure>
 <p>A top-down car with four corners (FL, FR, RL, RR) showing tyre temperature and pressure. Channels are detected from their names (see <a href="telemetry-data.html#tyres">Tyre channels</a>); there is no channel selector. Temperature is shown in °C. Pressure is shown in the chosen <strong>Pressure unit</strong>, bar or psi, converted from the recorded unit. A dash means that corner has no data at that moment.</p>
-<p>Settings: <strong>Label</strong>, <strong>Temperature</strong> and <strong>Pressure</strong> check boxes, label text (default <em>TYRES</em>), <strong>Pressure unit</strong>, <strong>Cold below (°C)</strong> (blue) and <strong>Hot above (°C)</strong> (red). Leave the thresholds empty to turn colouring off.</p>
+<p>Settings: <strong>Label</strong>, <strong>Temperature</strong> and <strong>Pressure</strong> check boxes, label text (default <em>TYRES</em>), <strong>Pressure unit</strong>, <strong>Pressure decimals</strong> (0–3, bar only; psi always shows one decimal), <strong>Cold below (°C)</strong> (blue) and <strong>Hot above (°C)</strong> (red). Leave the thresholds empty to turn colouring off.</p>
 
 <h3 id="w-retro-custom">Retro Custom</h3>
 <figure class="inline-widget">
   <img src="assets/screens/widget-retro-custom.png" alt="Retro Custom widget showing COOLANT 91 °C" width="440" height="121" loading="lazy">
   <figcaption>Retro Custom bound to <code>coolant_temp-obd</code>, label COOLANT.</figcaption>
 </figure>
-<p>A single-row panel: icon, label, value and unit. Labels <code>OIL</code>, <code>ATF</code> and <code>COOLANT</code> get a matching icon automatically. It has no automatic channel: choose a <strong>Source channel</strong> first. If <strong>Label</strong> is empty, the channel name is shown. Extra settings: <strong>Panel color</strong>, <strong>Value color</strong>, <strong>Label color</strong> and <strong>Text when channel is unavailable</strong>.</p>
+<p>A single-row panel: icon, label, value and unit. Labels <code>OIL</code>, <code>ATF</code> and <code>COOLANT</code> get a matching icon automatically. It has no automatic channel: choose a <strong>Source channel</strong> first. If <strong>Label</strong> is empty, the channel name is shown. Extra settings: <strong>Panel color</strong>, <strong>Value color</strong>, <strong>Label color</strong>, <strong>Text when channel is unavailable</strong>, <strong>Icon</strong> (any symbol of up to four characters shown before the label; it replaces the automatic icon) and <strong>Position in a stack</strong>. To stack rows into one plate, as OIL, ATF and COOLANT in the templates, place them directly above each other and set the top row to <em>Top of a stack</em>, the bottom row to <em>Bottom of a stack</em> and any rows between to <em>Middle of a stack</em>; the inner corners become square. Middle and bottom rows offer <strong>Divider line above</strong>. The widget uses its own panel and text colours, so <strong>Background color</strong>, <strong>Primary text</strong>, <strong>Secondary text</strong> and <strong>Weight</strong> are not offered for it.</p>
 
 <h3 id="w-lap-current">Current lap time</h3>
 <figure class="inline-widget">
   <img src="assets/screens/widget-lap-current.png" alt="Current lap time tile: lap 4, 0:27.00" width="382" height="207" loading="lazy">
   <figcaption>Current lap time</figcaption>
 </figure>
-<p>The running time of the current lap and its lap number. It shows <em>READY</em> before the first start-line crossing. It needs lap timing, which requires a start/finish gate in the telemetry and usable GPS (see <a href="telemetry-data.html#lap-timing">How laps are found</a>). <strong>Lap time decimals</strong> (1, 2 or 3) sets the precision.</p>
+<p>The running time of the current lap and its lap number. It shows <em>READY</em> before the first start-line crossing. It needs lap timing, which requires a start/finish gate in the telemetry and usable GPS (see <a href="telemetry-data.html#lap-timing">How laps are found</a>). <strong>Label</strong> sets the heading (default <em>Current</em>) and <strong>Lap time decimals</strong> (1, 2 or 3) the precision. <strong>Primary accent</strong> colours the final time of a finished hotlap.</p>
 <h4 id="hotlap">Hotlap mode</h4>
 <p>On the <strong>Current lap time</strong> tile, <strong>Show one lap only (hotlap)</strong> makes the tile show <code>0:00</code> until the chosen lap starts, count during that lap, and then keep its final time. Choose the lap from the list (<em>Best lap of this recording</em> or a specific lap) or click <strong>Use the lap at the playhead</strong>. When you then open Export, it starts in <a href="export.html#range">Single lap · hotlap</a> mode with the same lap.</p>
 
@@ -105,7 +105,7 @@
   <img src="assets/screens/widget-retro-rpm.png" alt="Retro RPM tachometer at 3205" width="536" height="445" loading="lazy">
   <figcaption>Retro RPM</figcaption>
 </figure>
-<p>A round analog tachometer with numerals in thousands, a red warning zone, needle and digital value. Settings: <strong>Dial color</strong>, <strong>Needle color</strong>, <strong>Dial background</strong>, <strong>Background opacity</strong>.</p>
+<p>A round analog tachometer with numerals in thousands, a red warning zone, needle and digital value. Settings: <strong>Red zone from (RPM)</strong> (default 7500), <strong>Red zone color</strong>, <strong>Rim color</strong>, <strong>Dial color</strong>, <strong>Needle color</strong>, <strong>Dial background</strong>, <strong>Background opacity</strong>, plus <strong>Font family</strong> and <strong>Font size</strong> for the numerals. The dial draws its own background and shows the RPM as a whole number, so the Appearance section and <strong>Unit</strong>, <strong>Decimals</strong>, <strong>Prefix</strong>, <strong>Suffix</strong> and <strong>Show unit</strong> are not offered for it.</p>
 <p>A new Retro RPM reads the <code>rpm</code> channel, which VBO files and RaceChrono sessions (from <code>rpm-obd</code>) both provide. If your file has no such channel, the widget shows no data; select another channel in <strong>Source channel</strong>. A stored channel that the loaded file lacks still appears in the selector, so it never shows <em>Automatic</em> for a different stored name.</p>
 
 <h2 id="styles">Styles: Classic and Tech</h2>
@@ -116,7 +116,7 @@
 </figure>
 <table>
   <tr><th>Widget</th><th>In the Tech style</th></tr>
-  <tr><td>Retro RPM</td><td>A thin 270° arc with the scale in thousands and a red zone from <strong>Warning at</strong> (default 7500), with the speed in the middle and the RPM value under it. <strong>Show speed inside the gauge</strong> and its channel (default <code>speed</code>) can be changed; the speed is shown in km/h.</td></tr>
+  <tr><td>Retro RPM</td><td>A thin 270° arc with the scale in thousands and a red zone from <strong>Red zone from (RPM)</strong> (default 7500), with the speed in the middle and the RPM value under it. <strong>Show speed inside the gauge</strong> and its channel (default <code>speed</code>) can be changed; the speed is shown in km/h.</td></tr>
   <tr><td>Speed</td><td>Label, large value and unit on a plate.</td></tr>
   <tr><td>Pedals</td><td>Throttle and brake as slanted horizontal bars with percentages.</td></tr>
   <tr><td>Current lap time</td><td>Lap number in amber, the running time, and <strong>BEST</strong> with the best completed lap so far (<strong>Show best lap</strong>). Hotlap mode works as in Classic.</td></tr>
@@ -126,14 +126,14 @@
   <tr><td>F1 G-Force Radar</td><td>Rings every <strong>Ring step</strong>, the amber dot and a fading trail of the last <strong>Trail (s)</strong> seconds (0 to 5, default 1; 0 turns it off). The trail is read from the recording, so preview and export show the same trail.</td></tr>
   <tr><td>G-Force Bar</td><td>A readout: combined G, then lateral (LAT) and longitudinal (LON) G.</td></tr>
 </table>
-<p>In the Tech style the <strong>Font family</strong>, <strong>Weight</strong> and most colour settings have no effect; <strong>Background panel</strong> and <strong>Panel opacity</strong> still apply. Missing data shows a dash, as in Classic.</p>
+<p>The Tech style sets its own font, colours, corners and padding, so the WIDGET tab hides <strong>Font family</strong>, <strong>Weight</strong>, the scales, the border and corner settings and the text and accent colours while a widget is in Tech; <strong>Background panel</strong> and <strong>Panel opacity</strong> still apply, and the radar adds <strong>Show ring label (1.0g)</strong>. Missing data shows a dash, as in Classic.</p>
 
 <h2 id="removed">Removed widgets</h2>
 <p>On 5 October 2026 the widget list was reduced to the widgets above. These types were removed: RPM, G-Force, Track, Custom, Arc gauge, Dial gauge, Data strip, Best lap time, Lap delta, Best-lap speed, Current speed, Speed delta, Retro Grand Prix, Retro gear, Retro pedal, Retro speed, Nameplate and Logo.</p>
 <p>A project, custom template or <strong>My widgets</strong> entry that still contains one of them opens normally without those widgets. When a project leaves widgets out, the status bar says how many. Saving the project then stores it without them. Rebuild a removed widget with the <a href="widget-editor.html">widget editor</a> if you need it.</p>
 
 <h2 id="common-settings">Widget settings (WIDGET tab)</h2>
-<p>With a widget selected, the WIDGET tab shows the following sections. Some sections appear only for widget types where they apply.</p>
+<p>With a widget selected, the WIDGET tab shows the following sections. The tab offers only the settings that change the selected widget in its current style, so some sections and controls appear only for the widget types where they apply.</p>
 <table>
   <tr><th>Section</th><th>Settings</th></tr>
   <tr><td>Header</td><td>Widget type, <strong>Visible</strong>, and <strong>Font size</strong> (see below).</td></tr>
@@ -142,7 +142,7 @@
   <tr><td>Type-specific</td><td>The settings listed for each widget in the <a href="#catalog">catalog</a>.</td></tr>
   <tr><td>Geometry</td><td><strong>X</strong>, <strong>Y</strong>, <strong>W</strong>, <strong>H</strong>, <strong>Scale</strong> (0.25–3×), <strong>Rotation</strong> (−180° to 180°), <strong>Opacity</strong>.</td></tr>
   <tr><td>Typography</td><td><strong>Font family</strong> (typed name, default Helvetica Neue; the application also includes Sora, JetBrains Mono and Chakra Petch, which look the same on every computer), <strong>Weight</strong> (400–800), <strong>Value scale</strong>, <strong>Label scale</strong>.</td></tr>
-  <tr><td>Appearance</td><td><strong>Background panel</strong>, <strong>Background color</strong>, <strong>Panel opacity</strong>, <strong>Border</strong>, <strong>Border color</strong>, <strong>Border width</strong>, <strong>Border opacity</strong>, <strong>Corner radius</strong>, <strong>Padding</strong>, <strong>Primary text</strong>, <strong>Secondary text</strong>, <strong>Primary accent</strong>, <strong>Secondary accent</strong>.</td></tr>
+  <tr><td>Appearance</td><td><strong>Background panel</strong>, <strong>Background color</strong>, <strong>Panel opacity</strong>, <strong>Border</strong>, <strong>Border color</strong>, <strong>Border width</strong>, <strong>Border opacity</strong>, <strong>Corner radius</strong>, <strong>Padding</strong>, <strong>Primary text</strong>, <strong>Secondary text</strong>, <strong>Primary accent</strong>.</td></tr>
   <tr><td>Actions</td><td><strong>Duplicate</strong>, <strong>Delete</strong>.</td></tr>
 </table>
 
@@ -160,7 +160,7 @@
 </ul>
 
 <h3 id="font-size">Font size</h3>
-<p><strong>Auto</strong> (the value 0) lets the widget size its text from its box. A number from 1 to 200 sets the main text size in pixels on a 1920 × 1080 frame; it is scaled proportionally for other frame sizes, so preview and every export resolution look the same. The control is offered on Speed, Heart rate, Retro Custom, Retro RPM, G-Force Bar and Tyres.</p>
+<p><strong>Auto</strong> (the value 0) lets the widget size its text from its box. A number from 1 to 200 sets the main text size in pixels on a 1920 × 1080 frame; it is scaled proportionally for other frame sizes, so preview and every export resolution look the same. The control is offered on Speed, Heart rate, Retro Custom, Retro RPM, G-Force Bar and Tyres in the Classic style, and on Speed, Heart rate and Retro Custom in the Tech style.</p>
 
 <h3 id="colors">Colours</h3>
 <p>Each colour has a swatch that opens the system colour picker and a text field for a hex value such as <code>#55d76a</code>. An invalid value reverts to the default.</p>
