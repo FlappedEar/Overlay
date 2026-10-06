@@ -32,6 +32,7 @@ private slots:
     void boundsAndPreservesRunMetadata();
     void boundsSourceFusionAndRecoversIt();
     void keepsNewerVersionsOfKnownFields();
+    void boundsReferenceContentIdentity();
     void boundsAndRebasesVideoChapters();
     void persistsTrackConfigurationAndUnknownLegacyState();
     void rejectsInvalidTrackConfigurations_data();
@@ -363,6 +364,40 @@ void EventProjectTests::keepsNewerVersionsOfKnownFields()
         copyEvent.insert("analysisDecisions", QJsonObject{{"comparisonGroupId", value}});
         copy.insert("event", copyEvent);
         QVERIFY(!ProjectLimits::validateProject(copy));
+    }
+}
+
+void EventProjectTests::boundsReferenceContentIdentity()
+{
+    // KAN-208: a reference may carry its file's full SHA-256. It survives a
+    // save and Save As, is validated when present, and an event's telemetry
+    // source keeps it on the source, not duplicated into the reference.
+    const QString digest(64, 'a');
+    auto project = Fixture::project(); auto runs = Fixture::runs(project); auto run = runs[1].toObject();
+    auto sources = run.value("sources").toObject();
+    sources.insert("video", QJsonObject{{"relativePath", "run-b.mp4"}, {"contentSha256", digest}});
+    run.insert("sources", sources); runs[1] = run; Fixture::setRuns(project, runs);
+    QString error; QVERIFY2(ProjectLimits::validateProject(project, &error), qPrintable(error));
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto saved = EventProjectCodec::withEditorState(project, EventProjectCodec::editorProjection(project),
+        directory.filePath("a/event.fetproject"), directory.filePath("b/event.fetproject"));
+    QCOMPARE(Fixture::runs(saved)[1].toObject().value("sources").toObject().value("video").toObject()
+                 .value("contentSha256").toString(), digest);
+
+    auto editor = EventProjectCodec::editorProjection(project);
+    auto editorSources = editor.value("sources").toObject();
+    auto telemetry = editorSources.value("telemetry").toObject();
+    telemetry.insert("contentSha256", QString(64, 'b'));
+    editorSources.insert("telemetry", telemetry); editor.insert("sources", editorSources);
+    const auto merged = EventProjectCodec::withEditorState(project, editor, {}, {});
+    QVERIFY(!Fixture::reference(Fixture::runs(merged)[0].toObject()).contains("contentSha256"));
+
+    for (const QJsonValue &bad : {QJsonValue(QString(64, 'A')), QJsonValue(QString(63, 'a')), QJsonValue(7)}) {
+        auto invalid = project; auto invalidRuns = Fixture::runs(invalid); auto invalidRun = invalidRuns[1].toObject();
+        auto invalidSources = invalidRun.value("sources").toObject();
+        invalidSources.insert("video", QJsonObject{{"relativePath", "run-b.mp4"}, {"contentSha256", bad}});
+        invalidRun.insert("sources", invalidSources); invalidRuns[1] = invalidRun; Fixture::setRuns(invalid, invalidRuns);
+        QVERIFY(!ProjectLimits::validateProject(invalid));
     }
 }
 

@@ -350,6 +350,15 @@ private:
         QJsonObject fingerprint;
         QJsonObject expectedFingerprint;
         bool relink = false;
+        QString expectedContentSha256;     // KAN-208: the saved first chapter's identity
+    };
+    // KAN-208: full-content SHA-256 of the committed video, chapter by
+    // chapter, computed after it opens. Empty for a chapter that is a gap.
+    struct VideoHashResult {
+        quint64 generation = 0;
+        QString path;
+        QStringList digests;
+        bool cancelled = false;
     };
 
     struct VboLoadResult {
@@ -376,19 +385,24 @@ private:
         QJsonObject expectedFingerprint;
         bool relink = false;
         QVector<VideoChapterInput> chapters;
+        QString expectedContentSha256;
     };
     [[nodiscard]] quint64 beginSourceReplacement(bool replacingVideo);
     [[nodiscard]] quint64 beginSourceGeneration(bool preserveOuting = false) override;
     void cancelSourceJobs();
     void startVideoProbe(const QString &path, quint64 generation, bool markDocumentDirty,
                          QJsonObject expectedFingerprint = {}, bool relink = false,
-                         QVector<VideoChapterInput> chapters = {});
+                         QVector<VideoChapterInput> chapters = {}, const QString &expectedContentSha256 = {});
+    void startVideoHash(const VideoProbeResult &committed);
     // KAN-105: the video as chapters played as one timeline.
     [[nodiscard]] bool videoChaptered() const { return m_videoTimeline.chapterCount() > 1; }
     [[nodiscard]] QVector<VideoChapterInput> videoChapterInputs() const;
     [[nodiscard]] std::optional<qint64> timelineLastFrame() const;
+    // KAN-208: expectedContentSha256 is the saved reference's full-content
+    // identity; a recording with other bytes is a mismatch.
     void startVboLoad(const QString &path, quint64 generation, bool markDocumentDirty,
-                      QJsonObject expectedFingerprint = {}, bool relink = false);
+                      QJsonObject expectedFingerprint = {}, bool relink = false,
+                      const QString &expectedContentSha256 = {});
     void commitVideoProbe(const VideoProbeResult &result, bool markDocumentDirty);
     void commitVboLoad(const VboLoadResult &result, bool markDocumentDirty);
     [[nodiscard]] static QString normalizedSourcePath(const QString &path) { return DocumentController::normalizedSourcePath(path); }
@@ -447,6 +461,9 @@ private:
     SyncTransform m_sync;
     QFutureWatcher<AutoSyncResult> m_syncWatcher;
     QFutureWatcher<VideoProbeResult> m_videoProbeWatcher;
+    QFutureWatcher<VideoHashResult> m_videoHashWatcher;
+    std::shared_ptr<std::atomic_bool> m_videoHashCancellation;
+    VideoProbeResult m_hashedVideoProbe; // the probe being hashed, for a late mismatch prompt
     VideoChapterReview m_videoChapters;
     QVector<VideoChapterState> m_videoChapterStates; // empty for an ordinary video
     // KAN-106: the chapters an export reads as one source, or why it cannot.

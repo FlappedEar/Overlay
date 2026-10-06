@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QRegularExpression>
 #include <algorithm>
 #include <cmath>
 
@@ -49,6 +50,8 @@ ProjectSourceReference ProjectSourceReferenceCodec::fromProject(
         QDir::fromNativeSeparators(source.value(QStringLiteral("relativePath")).toString()),
         source.value(QStringLiteral("absolutePath")).toString(),
         source.value(QStringLiteral("fingerprint")).toObject(),
+        isContentSha256(source.value(QStringLiteral("contentSha256")).toString())
+            ? source.value(QStringLiteral("contentSha256")).toString() : QString(),
     };
     if (reference.isEmpty()) {
         reference.absolutePath = project.value(legacyPathKey).toString();
@@ -91,6 +94,9 @@ QJsonObject ProjectSourceReferenceCodec::toJson(
     if (!reference.fingerprint.isEmpty()) {
         result.insert(QStringLiteral("fingerprint"), reference.fingerprint);
     }
+    if (isContentSha256(reference.contentSha256)) {
+        result.insert(QStringLiteral("contentSha256"), reference.contentSha256);
+    }
     return result;
 }
 
@@ -124,9 +130,33 @@ QString ProjectSourceReferenceCodec::resolve(
 }
 
 ProjectSourceReference ProjectSourceReferenceCodec::forLoadedSource(
-    const QString &sourcePath, const QJsonObject &fingerprint)
+    const QString &sourcePath, const QJsonObject &fingerprint, const QString &contentSha256)
 {
-    return {{}, cleanAbsolutePath(sourcePath), fingerprint};
+    return {{}, cleanAbsolutePath(sourcePath), fingerprint, contentSha256};
+}
+
+bool ProjectSourceReferenceCodec::isContentSha256(const QString &value)
+{
+    static const QRegularExpression pattern(QStringLiteral("^[0-9a-f]{64}\\z"));
+    return pattern.match(value).hasMatch();
+}
+
+QString ProjectSourceReferenceCodec::fileSha256(const QString &path, const std::function<bool()> &cancelled)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return {};
+    const qint64 size = file.size();
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    qint64 remaining = size;
+    while (remaining > 0) {
+        if (cancelled && cancelled()) return {};
+        const QByteArray bytes = file.read(std::min<qint64>(remaining, 1024 * 1024));
+        if (bytes.isEmpty()) return {};
+        hash.addData(bytes);
+        remaining -= bytes.size();
+    }
+    if (file.size() != size || !file.atEnd()) return {};
+    return QString::fromLatin1(hash.result().toHex());
 }
 
 QString ProjectSourceReferenceCodec::sampledDigest(const QString &path)
