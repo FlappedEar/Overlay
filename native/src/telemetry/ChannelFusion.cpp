@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace FlappedEar {
 namespace {
@@ -25,6 +26,46 @@ bool validClock(const SourceClock &clock)
 double toPrimary(const double time, const SourceClock &clock)
 {
     return time + clock.offsetSeconds + clock.driftPpm * 1e-6 * time;
+}
+
+// A gap marker (a NaN one step inside a gap, RczParser) can round onto its
+// neighbour when mapped through the clock (KAN-188). Keep each non-finite
+// sample strictly between its neighbours, so no two times are equal and no
+// marker swaps places with a real sample.
+void keepMarkersInside(QVector<double> &times, const QVector<float> &values)
+{
+    constexpr double infinity = std::numeric_limits<double>::infinity();
+    for (qsizetype index = 1; index < times.size(); ++index)
+        if (!std::isfinite(values[index]) && times[index] <= times[index - 1])
+            times[index] = std::nextafter(times[index - 1], infinity);
+    for (qsizetype index = times.size() - 2; index >= 0; --index)
+        if (!std::isfinite(values[index]) && times[index] >= times[index + 1])
+            times[index] = std::nextafter(times[index + 1], -infinity);
+}
+
+// Gap markers where two neighbouring real samples are farther apart than the
+// gap threshold of their sources (KAN-188): a merged channel mixes cadences,
+// so the threshold read back from it can be longer than either source's and
+// bridge a gap neither recorded across. A marker has source -1.
+QVector<Sample> markGaps(const QVector<Sample> &samples, const double primaryGap, const double alternativeGap)
+{
+    const auto gapOf = [&](const Sample &sample) { return sample.source == 0 ? primaryGap : alternativeGap; };
+    QVector<Sample> result;
+    result.reserve(samples.size());
+    for (qsizetype index = 0; index < samples.size(); ++index) {
+        if (index > 0) {
+            const auto &before = samples[index - 1], &after = samples[index];
+            const double gap = std::max(gapOf(before), gapOf(after));
+            if (gap > 0.0 && std::isfinite(before.value) && std::isfinite(after.value)
+                && after.time - before.time > gap) {
+                constexpr float missing = std::numeric_limits<float>::quiet_NaN();
+                result.append({std::nextafter(before.time, after.time), missing, -1});
+                result.append({std::nextafter(after.time, before.time), missing, -1});
+            }
+        }
+        result.append(samples[index]);
+    }
+    return result;
 }
 
 double medianInterval(const QVector<double> &times)
@@ -142,6 +183,7 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
             QVector<double> times;
             times.reserve(channel.timestamps.size());
             for (const double time : channel.timestamps) times.append(toPrimary(time, source.clock));
+            keepMarkersInside(times, channel.values);
             const double gap = telemetryGapThreshold(channel) * (1.0 + source.clock.driftPpm * 1e-6);
             const double interval = medianInterval(times);
             const auto primaryName = primaryNameFor(primary, key, name);
@@ -235,16 +277,17 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
             QVector<Sample> merged = preferred;
             for (const auto &sample : other)
                 if (!covered(coverage, sample.time)) merged.append(sample);
-            std::sort(merged.begin(), merged.end(), [](const Sample &a, const Sample &b) { return a.time < b.time; });
+            std::stable_sort(merged.begin(), merged.end(), [](const Sample &a, const Sample &b) { return a.time < b.time; });
             // Strictly increasing timestamps: an equal time keeps the preferred sample.
-            QVector<Sample> ordered;
+            QVector<Sample> sorted;
             for (const auto &sample : merged) {
-                if (!ordered.isEmpty() && sample.time <= ordered.last().time) {
-                    if (sample.source == (preferAlternative ? 1 : 0)) ordered.last() = sample;
+                if (!sorted.isEmpty() && sample.time <= sorted.last().time) {
+                    if (sample.source == (preferAlternative ? 1 : 0)) sorted.last() = sample;
                     continue;
                 }
-                ordered.append(sample);
+                sorted.append(sample);
             }
+            const auto ordered = markGaps(sorted, primaryGap, gap);
             // A fresh channel: a copy would carry the primary's cached cadence.
             TelemetryChannel output;
             output.name = fused.channel.name;
@@ -260,7 +303,7 @@ ChannelFusionResult fuseChannels(const TelemetrySession &primary, const QString 
                 medianInterval(primary.channels[fused.name].timestamps));
             appendSegments(alternativeSegments, ordered, 1, source.sourceId, source.clock, gap, interval);
             fused.segments = primarySegments + alternativeSegments;
-            std::sort(fused.segments.begin(), fused.segments.end(),
+            std::stable_sort(fused.segments.begin(), fused.segments.end(),
                 [](const FusedSegment &a, const FusedSegment &b) { return a.start < b.start; });
             fused.rule = preferAlternative ? QStringLiteral("preferAlternative") : QStringLiteral("fillGaps");
         }

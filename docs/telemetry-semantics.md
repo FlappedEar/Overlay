@@ -609,6 +609,20 @@ its timestamp transformed; nothing is interpolated. Gaps that neither
 source covers stay gaps. When both have a sample at the same instant, the
 preferred source's sample is kept, so timestamps stay strictly increasing.
 
+**Gap markers (KAN-188).** An RCZ marks a gap with two NaN samples one
+step inside it. Moved onto the primary clock, such a marker can round onto
+its real neighbour; it is kept one step inside the gap instead, so no two
+timestamps are equal and no real sample is replaced by its marker. A
+merged channel (`FillGaps`, `PreferAlternative`) mixes two cadences, so the
+gap threshold read back from it can be longer than either source's: a 1 Hz
+primary filled by a 10 Hz alternative reads as 1 Hz and would bridge a 2 s
+gap in the alternative. Wherever two neighbouring real samples of a merged
+channel are farther apart than the larger of their sources' gap thresholds,
+fusion writes the same two NaN markers, so every lookup sees the gap. A
+marker belongs to no source's stretch. On the private Jastrząb day (six
+VBO/RCZ pairs, `fillGaps` on all 31 shared channels each) the fused output
+is unchanged.
+
 **Real day (4 October 2026, KAN-184).** On the same six VBO/RCZ pairs,
 with no rules, no channel is added, 31 of the 34 shared channels are
 compared and none conflict; 3 are unit mismatches (longitude and two gyro
