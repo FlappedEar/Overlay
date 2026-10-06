@@ -1730,6 +1730,7 @@ and private-media acceptance.
 | --- | --- | --- |
 | `macOS arm64 / Debug or Release / Qt 6.8.3` | Metal; Cocoa for native window interaction | `macos-15`, Apple Clang |
 | `Linux x64 / ASan+UBSan / Qt 6.8.3` | None (offscreen; GUI-free tests only) | `ubuntu-24.04`, GCC, AddressSanitizer with leak checks and UndefinedBehaviorSanitizer |
+| `Linux x64 / TSan / Qt 6.8.3` | None (offscreen; GUI-free tests only) | `ubuntu-24.04`, GCC, ThreadSanitizer |
 
 A third job (KAN-154) builds a Debug configuration on Linux with
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined` and runs every
@@ -1752,6 +1753,34 @@ same locally:
 flags='-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined'
 cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_C_FLAGS=$flags" \
   "-DCMAKE_CXX_FLAGS=$flags" "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"
+```
+
+A fourth job (KAN-219) builds the same GUI-free tests with
+`-fsanitize=thread -O1 -g` and runs them under ThreadSanitizer; any report
+fails it. Qt's prebuilt libraries are not instrumented, so
+[`.github/tsan-suppressions.txt`](../.github/tsan-suppressions.txt) ignores the
+calls Qt Core and Qt Test make into intercepted functions (`memmove`,
+`pthread_cond_destroy`, ...) with `called_from_lib`; our own loads and stores
+are still checked. The job also leaves out `flappedear_telemetry_app_tests`:
+its `QtConcurrent::run` tasks reach the worker through `QThreadPool`, whose
+futex-based locking ThreadSanitizer cannot see, so every value a task captures
+reads as a race with the main thread that wrote it (over 300 reports, all of
+that shape). Checking that suite needs a Qt built with `-sanitize thread`.
+`TelemetrySessionCache::load` now polls `std::mutex::try_lock` every 2 ms
+instead of `std::timed_mutex::try_lock_for`: GCC 13's ThreadSanitizer does not
+intercept `pthread_mutex_clocklock`, so it saw every unlock of the cache lock
+without the lock. Checked locally on 6 October 2026 with Qt 6.8.3 and GCC 13:
+the other 36 suites pass with no report, and a race injected between two threads
+(one on a `QVector`, one through `QThreadPool::start`) is still reported with
+the suppressions in place. The job lowers `vm.mmap_rnd_bits` to
+28, which GCC 13's runtime needs on the runner kernel. Locally:
+
+```bash
+flags='-fsanitize=thread -fno-omit-frame-pointer -O1 -g'
+cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_C_FLAGS=$flags" \
+  "-DCMAKE_CXX_FLAGS=$flags" "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread"
+TSAN_OPTIONS="suppressions=$PWD/.github/tsan-suppressions.txt" \
+  ./build-tsan/native/tests/flappedear_source_cache_tests
 ```
 
 Pull request runs are cancelled by a newer push to the same pull request; runs
@@ -2430,12 +2459,16 @@ cmake -S . -B build-fuzz -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DFLAPPEDEAR_BUILD_FUZZERS=ON
 cmake --build build-fuzz --target flappedear_fuzz_vbo flappedear_fuzz_rcz flappedear_fuzz_gpmf
 mkdir -p corpus/vbo && cp native/fuzz/seeds/vbo/* corpus/vbo/
-build-fuzz/native/fuzz/flappedear_fuzz_vbo corpus/vbo -max_total_time=600 -max_len=65536 \
+build-fuzz/native/fuzz/flappedear_fuzz_vbo corpus/vbo -max_total_time=600 -max_len=1048576 \
   -timeout=30 -rss_limit_mb=2560
 ```
 
 Native CI's `Linux x64 / Fuzz parsers / Qt 6.8.3` job runs each harness for
 60 seconds from the seeds and uploads any crash input with its logs.
+Since KAN-219 the inputs may grow to 1 MiB (`-max_len=1048576`, was 64 KiB), so
+the fuzzer is no longer kept below the parsers' own header, line and channel
+limits. libFuzzer still lengthens inputs gradually, so a 60-second run rarely
+gets near that size; the limit tests remain the check of the limits themselves.
 
 Checked on Linux with Qt 6.8.3, clang 18 and ASan, UBSan and leak detection,
 10 minutes per harness on 5 October 2026: no finding. VBO ran 666,735 inputs
@@ -2467,6 +2500,9 @@ analyzer cannot see.
 Native CI's `Linux x64 / clang-tidy / Qt 6.8.3` job runs on pull requests
 only. It builds with clang 18 for the compile database and the moc files, then
 runs `clang-tidy-18` on each changed `native/**/*.cpp` file in that database.
+Headers are not in the compile database, so since KAN-219 a changed
+`native/**/*.h` adds its sibling `.cpp` file, or, when there is none, up to
+three `.cpp` files that include it; clang-tidy checks the header through them.
 Locally:
 
 ```bash

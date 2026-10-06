@@ -1,0 +1,8 @@
+# KAN-219: ThreadSanitizer suppressions for Native CI's TSan job.
+# Qt's prebuilt libraries are not instrumented, and QMutex, QWaitCondition and
+# QThreadPool hand work over with futexes and atomics that ThreadSanitizer
+# cannot see. It then reports the memmove, pthread_cond_destroy and similar
+# calls Qt makes itself. called_from_lib ignores only those intercepted calls
+# from inside Qt; our own (instrumented) loads and stores are still checked.
+called_from_lib:libQt6Core.so.6
+called_from_lib:libQt6Test.so.6
