@@ -82,7 +82,10 @@ QVariantList DocumentController::runRecordings(const QString &runId) const
                 if (other.toObject().value("id").toString() == primary) primarySource = other.toObject();
             const bool current = EventProjectCodec::sourceContentRevision(source) == fusion.value("alternativeSourceRevision").toString().toLatin1()
                 && EventProjectCodec::sourceContentRevision(primarySource) == fusion.value("primarySourceRevision").toString().toLatin1();
-            row.insert("fusion", current ? QStringLiteral("applied") : QStringLiteral("needsRevalidation"));
+            // KAN-170: a newer app's fusion is kept but never applied here.
+            const bool newer = fusion.value("algorithm").toString() != QLatin1String(channelFusionAlgorithm);
+            row.insert("fusion", newer ? QStringLiteral("newerVersion")
+                : current ? QStringLiteral("applied") : QStringLiteral("needsRevalidation"));
             row.insert("fusionRules", fusion.value("rules").toArray().size());
         }
         result.append(row);

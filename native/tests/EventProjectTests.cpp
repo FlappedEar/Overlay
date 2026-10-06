@@ -31,6 +31,7 @@ private slots:
     void boundsInferenceProvenanceAndRecoversIt();
     void boundsAndPreservesRunMetadata();
     void boundsSourceFusionAndRecoversIt();
+    void keepsNewerVersionsOfKnownFields();
     void boundsAndRebasesVideoChapters();
     void persistsTrackConfigurationAndUnknownLegacyState();
     void rejectsInvalidTrackConfigurations_data();
@@ -300,6 +301,69 @@ void EventProjectTests::boundsSourceFusionAndRecoversIt()
     auto notObject = Fixture::project(); auto notRuns = Fixture::runs(notObject); auto notRun = notRuns[0].toObject();
     notRun.insert("fusion", 7); notRuns[0] = notRun; Fixture::setRuns(notObject, notRuns);
     QVERIFY(!ProjectLimits::validateProject(notObject));
+}
+
+void EventProjectTests::keepsNewerVersionsOfKnownFields()
+{
+    // KAN-170: a well-formed version tag this build does not know comes from
+    // a newer app. The document opens, the field round-trips unchanged and
+    // lap derivation ignores it. A malformed tag is still refused.
+    const auto with = [](const QString &field, const QJsonValue &value) {
+        auto project = Fixture::project(); auto runs = Fixture::runs(project); auto run = runs[0].toObject();
+        run.insert(field, value); runs[0] = run; Fixture::setRuns(project, runs);
+        return project;
+    };
+    const auto segment = [](const QString &reference) {
+        return QJsonObject{{"id", reference}, {"type", "sector"}, {"name", "Sector 1"},
+            {"startProgressMeters", 0.0}, {"endProgressMeters", 40.0}, {"trackConfigurationReference", reference}};
+    };
+    const QJsonObject newerFusion{{"algorithm", "channel-fusion-v2"}, {"sources", QJsonArray{"a", "b"}}};
+    const QList<QJsonObject> accepted{
+        with("fusion", newerFusion),
+        with("trackSegmentReview", QJsonObject{{"version", "track-segment-review-v2"}, {"axis", 3}}),
+        with("trackSegmentReview", QJsonObject{{"version", "track-segment-review-v1"},
+            {"trackConfigurationReference", "compatibility-v2:next"}, {"proposalAlgorithm", "p"}, {"rejected", QJsonArray{}}}),
+        with("trackInference", QJsonObject{{"algorithm", "gps-route-v2"}, {"layoutId", "gps-route-v2:next"}}),
+        with("trackSegments", QJsonArray{segment("compatibility-v1:" + QString(64, 'a')), segment("compatibility-v2:next")}),
+    };
+    for (const auto &project : accepted) {
+        QString error; QVERIFY2(ProjectLimits::validateProject(project, &error), qPrintable(error));
+        QCOMPARE(EventProjectCodec::withEditorState(project, EventProjectCodec::editorProjection(project), {}, {}), project);
+        QTemporaryDir directory; ProjectRecoveryStore store(directory.filePath("recovery.json"));
+        QVERIFY2(store.write({{}, "event-document", 5, 4, "2026-10-06T00:00:00.000Z", project, true}, &error), qPrintable(error));
+        ProjectRecoverySnapshot restored; QVERIFY2(store.load(&restored, &error), qPrintable(error));
+        QCOMPARE(restored.project, project);
+    }
+    auto group = Fixture::project(); auto event = group.value("event").toObject();
+    event.insert("analysisDecisions", QJsonObject{{"comparisonGroupId", "compatibility-v2:next"}});
+    group.insert("event", event);
+    QVERIFY(ProjectLimits::validateProject(group));
+    // The newer fusion is not handed to lap derivation.
+    const auto sources = EventProjectCodec::outingLapSources(with("fusion", newerFusion));
+    QVERIFY(!sources[0].toObject().contains("fusion"));
+    QVERIFY(!sources[0].toObject().contains("fusionNeedsRevalidation"));
+
+    // Malformed tags, a current tag with a malformed body and a newer
+    // segment reference with a malformed segment are refused.
+    for (const auto &project : {
+             with("fusion", QJsonObject{{"algorithm", "Channel Fusion 2"}}),
+             with("fusion", QJsonObject{{"algorithm", "channel-fusion-v0"}}),
+             with("fusion", QJsonObject{{"algorithm", "channel-fusion-v1"}}),
+             with("trackSegmentReview", QJsonObject{{"version", "track-segment-review"}}),
+             with("trackSegmentReview", QJsonObject{{"version", "track-segment-review-v1"}}),
+             with("trackInference", QJsonObject{{"algorithm", "gps-route-v1"}, {"layoutId", "gps-route-v2:next"}}),
+             with("trackInference", QJsonObject{{"algorithm", QString("gps-route-v2") + QChar::Null}}),
+             with("trackSegments", QJsonArray{[&] { auto s = segment("compatibility-v2:next"); s.insert("extra", 1); return s; }()}),
+             with("trackSegments", QJsonArray{segment("compatibility-v2:")}),
+             with("trackSegments", QJsonArray{segment("Compatibility-v2:next")}),
+         })
+        QVERIFY(!ProjectLimits::validateProject(project));
+    for (const auto &value : {QJsonValue("compatibility-v1:next"), QJsonValue("compatibility:next"), QJsonValue("compatibility-v2: ")}) {
+        auto copy = Fixture::project(); auto copyEvent = copy.value("event").toObject();
+        copyEvent.insert("analysisDecisions", QJsonObject{{"comparisonGroupId", value}});
+        copy.insert("event", copyEvent);
+        QVERIFY(!ProjectLimits::validateProject(copy));
+    }
 }
 
 void EventProjectTests::boundsAndRebasesVideoChapters()

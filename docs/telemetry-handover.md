@@ -193,7 +193,7 @@ The `.fetproject` document is the only thing the two apps share ([KAN-170]). A d
     * a comparison group or configuration reference that does not match `compatibility-v1:<64 hex>`;
     * a malformed `trackConfiguration`, comparison slot or source reference.
 
-  As a result, a newer Telemetry that writes a new version of one of these fields makes Overlays refuse the whole document.
+  Since KAN-170 (6 October 2026), a well-formed *newer* version tag on the fusion algorithm, the review version, the inference algorithm or a `compatibility-v1:` identity is kept and ignored instead. See the [compatibility rules](event-project-format.md#compatibility-between-the-two-apps-kan-170).
 
 **Hash identities stored in documents.** These ids are SHA-256 hashes over Qt's compact JSON bytes ([`OutingLaps.cpp`](../native/src/telemetry/OutingLaps.cpp), [`LapTiming.cpp`](../native/src/telemetry/LapTiming.cpp), [`TrackSegments.cpp`](../native/src/telemetry/TrackSegments.cpp), [`EventProjectCodec.cpp`](../native/src/project/EventProjectCodec.cpp)):
 - `gates-v1`, the timing-gate revision;
@@ -245,12 +245,9 @@ Two consequences:
 - **Fusion:** 64 rules; offset up to 86,400 s; drift up to 1,000 ppm.
 
 **Known gaps ([KAN-170])**
-- **Tests:**
-    * There is no test that Overlays keeps every analysis field when it re-saves a day written by another app.
-    * Overlays opening a document without `scene` is untested.
+- **Closed since 6 October 2026:** `SourceTests::keepsEveryTelemetryFieldThroughAnOverlayEdit` shows that Overlays keeps every analysis field when it re-saves a day, including a day without `scene`. Newer versions of the versioned fields are kept rather than rejected.
 - **Format:**
-    * Newer versions of known fields are rejected instead of kept.
-    * The hash serialization is unspecified.
+    * The hash serialization is pinned only by test vectors (`QtHashVectorTests`).
     * Fingerprints depend on the parser's output.
     * There is no cross-process lock.
 

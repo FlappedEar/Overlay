@@ -46,7 +46,10 @@ that check over this file.
   the full analysis). Steps 3 to 6 removed the Lap Analysis window, its QML and
   tests, `AnalysisController` from `AppController`, and day import (KAN-186);
   step 7 cleans up. Overlays opens days saved by Telemetry and keeps every
-  analysis field. Both apps keep one `.fetproject` format (KAN-170).
+  analysis field. Both apps keep one `.fetproject` format (KAN-170). Since 6 October
+  2026, a newer version tag on a versioned analysis field is kept and ignored rather
+  than rejected; the rules are in
+  [`docs/event-project-format.md`](docs/event-project-format.md#compatibility-between-the-two-apps-kan-170).
 - **Widget list reduced (owner decision, 5 October 2026, KAN-192):** only the
   widgets of the owner's track video stay (Speed, Heart rate, Pedals, F1 G-Force
   Radar, G-Force Bar, Retro Custom, Current lap time, Retro RPM), plus Tyres and

@@ -1,4 +1,6 @@
 #include "project/EventProjectCodec.h"
+#include "project/FormatVersion.h"
+#include "telemetry/ChannelFusion.h"
 #include "telemetry/OutingLaps.h"
 #include "telemetry/TrackInference.h"
 #include "telemetry/TrackSegments.h"
@@ -82,9 +84,11 @@ bool validFusion(const QJsonObject &run)
     if (!run.contains("fusion")) return true;
     if (!run.value("fusion").isObject()) return false;
     const auto fusion = run.value("fusion").toObject();
+    // KAN-170: a newer app's fusion is kept as written and not applied.
+    if (FormatVersion::isNewerTag(fusion.value("algorithm"), channelFusionAlgorithm)) return true;
     static const QRegularExpression digest("^[0-9a-f]{64}$");
     const auto alternative = fusion.value("alternativeSourceId").toString();
-    if (fusion.value("algorithm").toString() != QLatin1String("channel-fusion-v1")
+    if (fusion.value("algorithm").toString() != QLatin1String(channelFusionAlgorithm)
         || !validText(fusion.value("alternativeSourceId"), ProjectLimits::maximumIdCharacters)
         || alternative == run.value("primaryTelemetrySourceId").toString())
         return false;
@@ -116,6 +120,33 @@ bool validFusion(const QJsonObject &run)
         keys.insert(key);
     }
     return true;
+}
+
+// KAN-170: a segment or review bound to a newer compatibility identity is
+// checked like a current one, with that identity read as an opaque value.
+QJsonObject withCurrentReference(QJsonObject object)
+{
+    static const QString placeholder = QStringLiteral("compatibility-v1:") + QString(64, QLatin1Char('0'));
+    if (FormatVersion::isNewerTaggedIdentity(object.value("trackConfigurationReference"), "compatibility-v1"))
+        object.insert("trackConfigurationReference", placeholder);
+    return object;
+}
+
+bool validSegments(const QJsonValue &value)
+{
+    if (!value.isArray()) return validTrackSegments(value);
+    QJsonArray segments;
+    for (const auto &item : value.toArray())
+        segments.append(item.isObject() ? QJsonValue(withCurrentReference(item.toObject())) : item);
+    return validTrackSegments(segments);
+}
+
+bool validSegmentReview(const QJsonValue &value)
+{
+    if (!value.isObject()) return validTrackSegmentReview(value);
+    // A newer review version is the newer app's; its shape is not checked.
+    if (FormatVersion::isNewerTag(value.toObject().value("version"), trackSegmentReviewAlgorithm)) return true;
+    return validTrackSegmentReview(withCurrentReference(value.toObject()));
 }
 
 ProjectSourceReference sourceReference(const QJsonObject &object)
@@ -172,7 +203,7 @@ bool EventProjectCodec::validate(const QJsonObject &project, QString *error)
         if (!decisions.isObject()) return fail(error, "Analysis decisions must be an object.");
         const auto group = decisions.toObject().value("comparisonGroupId");
         static const QRegularExpression groupPattern("^compatibility-v1:[0-9a-f]{64}$");
-        if (!group.isUndefined() && !group.isNull()
+        if (!group.isUndefined() && !group.isNull() && !FormatVersion::isNewerTaggedIdentity(group, "compatibility-v1")
             && (!group.isString() || group.toString().size() != 81 || !groupPattern.match(group.toString()).hasMatch()))
             return fail(error, "Saved comparison group is malformed.");
         const auto savedComparisonSlots = decisions.toObject().value("comparisonSlots");
@@ -272,10 +303,10 @@ bool EventProjectCodec::validate(const QJsonObject &project, QString *error)
         if (!validConfiguration(run)) {
             return fail(error, QStringLiteral("Track configuration or its primary source binding is invalid."));
         }
-        if (!validTrackSegments(run.value("trackSegments"))) {
+        if (!validSegments(run.value("trackSegments"))) {
             return fail(error, QStringLiteral("Track segments are invalid, out of order, or exceed the bound."));
         }
-        if (!validTrackSegmentReview(run.value("trackSegmentReview"))) {
+        if (!validSegmentReview(run.value("trackSegmentReview"))) {
             return fail(error, QStringLiteral("Track segment review decisions are invalid or exceed the bound."));
         }
         if (run.contains("trackInference")) {
@@ -284,13 +315,15 @@ bool EventProjectCodec::validate(const QJsonObject &project, QString *error)
             static const QRegularExpression gates("^gates-v1:[0-9a-f]{64}$");
             const auto revision = inference.value("sourceRevision").toString();
             const auto gate = inference.value("gateRevision");
-            if (!inferenceValue.isObject() || !validText(inference.value("algorithm"), 128)
+            // KAN-170: a newer inference is kept as written; this build infers afresh.
+            const bool newer = inferenceValue.isObject() && FormatVersion::isNewerTag(inference.value("algorithm"), trackInferenceVersion);
+            if (!newer && (!inferenceValue.isObject() || !validText(inference.value("algorithm"), 128)
                 || revision.size() != 64 || !digest.match(revision).hasMatch()
                 || !(gate.isNull() || (gate.toString().size() == 73 && gates.match(gate.toString()).hasMatch()))
                 || !validText(inference.value("layoutId"), 128)
                 || inference.value("layoutId").toString().size() <= 13
                 || !inference.value("layoutId").toString().startsWith("gps-route-v1:")
-                || !QStringList{"clockwise", "counterclockwise"}.contains(inference.value("direction").toString()))
+                || !QStringList{"clockwise", "counterclockwise"}.contains(inference.value("direction").toString())))
                 return fail(error, "Track inference provenance is malformed.");
         }
         if (!validFusion(run)) {
@@ -384,7 +417,9 @@ QJsonArray EventProjectCodec::outingLapSources(const QJsonObject &project)
                 {"inference", run.value(QStringLiteral("trackInference"))}, {"inferenceVersion", trackInferenceVersion},
                 {"trackConfiguration", trackConfiguration(run)},
                 {"derivationKey", QString::fromLatin1(lapDerivationKey(run))}};
-            if (run.contains(QStringLiteral("fusion"))) {
+            // KAN-170: a newer app's fusion is not applied; the primary loads alone.
+            if (run.contains(QStringLiteral("fusion"))
+                && run.value(QStringLiteral("fusion")).toObject().value(QStringLiteral("algorithm")) == QLatin1String(channelFusionAlgorithm)) {
                 auto fusion = run.value(QStringLiteral("fusion")).toObject();
                 QJsonObject alternative;
                 for (const QJsonValue &other : telemetry)
