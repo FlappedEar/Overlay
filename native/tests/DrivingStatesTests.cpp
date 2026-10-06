@@ -32,8 +32,7 @@ TelemetryChannel makeChannel(const QString &name, const QString &unit, const std
     for (int k = 0; k < sampleCount; ++k) {
         const double t = k * dt;
         if (!present(t)) continue;
-        channel.timestamps.append(t);
-        channel.values.append(static_cast<float>(value(t)));
+        channel.appendSample(t, static_cast<float>(value(t)));
     }
     return channel;
 }

@@ -56,20 +56,16 @@ FlappedEar::TelemetrySession syntheticTrackSession(const qsizetype pointCount = 
     FlappedEar::TelemetrySession session;
     FlappedEar::TelemetryChannel latitude;
     latitude.name = QStringLiteral("latitude");
-    latitude.timestamps.reserve(pointCount);
-    latitude.values.reserve(pointCount);
+    latitude.reserve(pointCount);
     FlappedEar::TelemetryChannel longitude;
     longitude.name = QStringLiteral("longitude");
-    longitude.timestamps.reserve(pointCount);
-    longitude.values.reserve(pointCount);
+    longitude.reserve(pointCount);
     for (qsizetype index = 0; index < pointCount; ++index) {
         const double progress = static_cast<double>(index) / static_cast<double>(pointCount - 1);
         const double angle = progress * 2.0 * std::numbers::pi;
         const double timestamp = static_cast<double>(index) / 10.0;
-        latitude.timestamps.append(timestamp);
-        longitude.timestamps.append(timestamp);
-        latitude.values.append(static_cast<float>(52.0 + 0.001 * std::sin(angle)));
-        longitude.values.append(static_cast<float>(21.0 + 0.0015 * std::cos(angle)));
+        latitude.appendSample(timestamp, static_cast<float>(52.0 + 0.001 * std::sin(angle)));
+        longitude.appendSample(timestamp, static_cast<float>(21.0 + 0.0015 * std::cos(angle)));
     }
     session.channels.insert(latitude.name, latitude);
     session.channels.insert(longitude.name, longitude);
@@ -77,7 +73,7 @@ FlappedEar::TelemetrySession syntheticTrackSession(const qsizetype pointCount = 
     session.aliases.insert(QStringLiteral("longitude"), longitude.name);
     session.sampleCount = pointCount;
     session.startTime = 0.0;
-    session.duration = latitude.timestamps.back();
+    session.duration = latitude.timestamps().back();
     return session;
 }
 

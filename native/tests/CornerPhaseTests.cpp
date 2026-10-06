@@ -92,14 +92,11 @@ Lap driveLap(const QVector<Step> &half, const std::function<double(double)> &spe
         const double fraction = (s - cumulative[segment - 1]) / (cumulative[segment] - cumulative[segment - 1]);
         const QPointF position = points[segment - 1] + (points[segment] - points[segment - 1]) * fraction;
         if (!(s >= gpsGap.first && s <= gpsGap.second)) {
-            lat.timestamps.append(time);
-            lat.values.append(static_cast<float>(degreesForMeters(position.y())));
-            lon.timestamps.append(time);
-            lon.values.append(static_cast<float>(degreesForMeters(position.x())));
+            lat.appendSample(time, static_cast<float>(degreesForMeters(position.y())));
+            lon.appendSample(time, static_cast<float>(degreesForMeters(position.x())));
         }
         const bool speedMissing = s >= speedGap.first && s <= speedGap.second;
-        velocity.timestamps.append(time);
-        velocity.values.append(speedMissing ? std::numeric_limits<float>::quiet_NaN()
+        velocity.appendSample(time, speedMissing ? std::numeric_limits<float>::quiet_NaN()
                                             : static_cast<float>(speed(s) * 3.6));
         s += speed(s) * dt;
         time += dt;
@@ -344,9 +341,8 @@ void CornerPhaseTests::limitsOrWithholdsCornerSpeedsOnPoorData()
     TelemetryChannel thinned;
     thinned.name = velocity.name;
     thinned.unit = velocity.unit;
-    for (qsizetype i = 0; i < velocity.timestamps.size(); i += 40) {
-        thinned.timestamps.append(velocity.timestamps[i]);
-        thinned.values.append(velocity.values[i]);
+    for (qsizetype i = 0; i < velocity.timestamps().size(); i += 40) {
+        thinned.appendSample(velocity.timestamps()[i], velocity.values()[i]);
     }
     velocity = thinned;
     const auto sparseTrace = projectLapTrace(corner.axis, sparse.session, 0.0, sparse.endTime);

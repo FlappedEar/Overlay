@@ -53,12 +53,35 @@ private:
     mutable Entry m_entry;
 };
 
-struct TelemetryChannel {
+// One telemetry channel (KAN-209). Its timestamps are finite and strictly
+// increasing, with one value per timestamp; a value may be NaN, which marks a
+// gap. The samples change only through the setters, which reject anything
+// else with std::invalid_argument, so every reader can rely on that order.
+class TelemetryChannel {
+public:
     QString name;
     QString unit;
-    QVector<double> timestamps;
-    QVector<float> values;
-    ChannelCadenceCache cadence {};
+
+    TelemetryChannel() = default;
+    TelemetryChannel(QString name, QString unit, QVector<double> timestamps = {}, QVector<float> values = {});
+
+    [[nodiscard]] const QVector<double> &timestamps() const noexcept { return m_timestamps; }
+    [[nodiscard]] const QVector<float> &values() const noexcept { return m_values; }
+    [[nodiscard]] qsizetype sampleCount() const noexcept { return m_timestamps.size(); }
+    [[nodiscard]] bool isEmpty() const noexcept { return m_timestamps.isEmpty(); }
+    [[nodiscard]] const ChannelCadenceCache &cadence() const noexcept { return m_cadence; }
+
+    void setSamples(QVector<double> timestamps, QVector<float> values);
+    // The time must be finite and later than the last sample's.
+    void appendSample(double time, float value);
+    void setValue(qsizetype index, float value);
+    void reserve(qsizetype size);
+    void clear();
+
+private:
+    QVector<double> m_timestamps;
+    QVector<float> m_values;
+    ChannelCadenceCache m_cadence {};
 };
 
 struct SyncTransform {
@@ -97,7 +120,22 @@ public:
         double endTime,
         int maximumPoints,
         SampledSegmentsStatus *status = nullptr) const;
+    // The same runs of actual samples (time, value) without any reduction.
+    [[nodiscard]] QVector<QVector<QPointF>> rawSegments(
+        const QString &channelName,
+        double startTime,
+        double endTime,
+        SampledSegmentsStatus *status = nullptr) const;
 };
+
+// Up to `budget` of `count` items spread evenly by index, first item included
+// (KAN-220). Keeps close to the budget where a whole-number stride would keep
+// about half of it once the count is just over it.
+[[nodiscard]] inline bool keepEvenlySpread(const qsizetype index, const qsizetype count, const qsizetype budget)
+{
+    if (count <= budget) return true;
+    return index == 0 || (index * budget) / count != ((index - 1) * budget) / count;
+}
 
 // The driver's throttle input (KAN-118). When a recording has an
 // accelerator-pedal channel with numeric data, the "throttle" alias refers to
@@ -109,10 +147,18 @@ void preferAcceleratorPedalForThrottle(TelemetrySession &session);
 [[nodiscard]] std::optional<double> videoToTelemetryTime(double videoTime, const SyncTransform &transform);
 [[nodiscard]] std::optional<double> telemetryToVideoTime(
     double telemetryTime, const SyncTransform &transform);
-// A gap is two adjacent samples more than three median sample intervals apart
-// (or minimumSeconds, if larger). Every consumer uses this one threshold.
+// Three median sample intervals of the whole channel, or minimumSeconds if
+// larger: no span up to this is a gap.
 [[nodiscard]] double telemetryGapThreshold(
     const TelemetryChannel &channel, double minimumSeconds = 0.0);
+// Whether the samples at `before` and `after` enclose a gap (KAN-157). The
+// span must exceed the channel's threshold above and also three times the
+// local cadence: the median of up to eight intervals on each side, the slower
+// side counting (KAN-221). A stretch logged at a slower rate, such as 10 Hz
+// after 100 Hz or 1 Hz periods in a 10 Hz channel, is therefore not a run of
+// gaps, while a pause in steady logging still is.
+[[nodiscard]] bool telemetryIsGap(
+    const TelemetryChannel &channel, double before, double after, double minimumSeconds = 0.0);
 // KAN-157: the shared value lookup behind TelemetrySession::valueAt. Outside the
 // channel, at a non-finite sample, or inside a gap there is no data.
 [[nodiscard]] std::optional<double> telemetryValueAt(
@@ -124,5 +170,12 @@ void preferAcceleratorPedalForThrottle(TelemetrySession &session);
 // Computes every channel's cadence statistic up front, so the first lookups on
 // a newly loaded session do not pay for it. Not required for thread safety.
 void freezeCachedStatistics(const TelemetrySession &session, const CancellationCheck &cancelled = {});
+
+// RaceChrono writes 0 bpm where its heart-rate monitor has no reading, for
+// example in the final row of a VBO export (KAN-222). No driver's heart rate
+// lies outside this range, so the parsers turn such values into no data.
+inline constexpr double kHeartRateMinimumPlausible = 30.0;
+inline constexpr double kHeartRateMaximumPlausible = 230.0;
+void markImplausibleHeartRate(TelemetrySession &session);
 
 } // namespace FlappedEar

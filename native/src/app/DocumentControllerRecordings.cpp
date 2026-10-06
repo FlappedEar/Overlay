@@ -394,7 +394,7 @@ bool DocumentController::reviewRunFusion(const QString &runId, const QString &so
                     if (channel.rule != QLatin1String("added")) {
                         // Overlapping channels: the alternative's own coverage on the primary clock.
                         const auto &raw = candidate.channels.value(candidate.aliases.value(channel.key, channel.key));
-                        covered = raw.timestamps.isEmpty() ? 0.0 : (raw.timestamps.last() - raw.timestamps.first()) * (1.0 + clock.driftPpm * 1e-6);
+                        covered = raw.timestamps().isEmpty() ? 0.0 : (raw.timestamps().last() - raw.timestamps().first()) * (1.0 + clock.driftPpm * 1e-6);
                     }
                     channels.append(QVariantMap{{"key", channel.key}, {"name", channel.name}, {"unit", channel.unit},
                         {"rule", channel.rule}, {"added", channel.rule == QLatin1String("added")},

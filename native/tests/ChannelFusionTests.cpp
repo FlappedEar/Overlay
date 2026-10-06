@@ -21,8 +21,7 @@ TelemetryChannel makeChannel(const QString &name, const QString &unit, double st
     channel.unit = unit;
     for (double time = start; time <= end + 1e-9; time += 1.0 / rate) {
         if (!present(time)) continue;
-        channel.timestamps.append(time);
-        channel.values.append(static_cast<float>(value(time)));
+        channel.appendSample(time, static_cast<float>(value(time)));
     }
     return channel;
 }
@@ -96,8 +95,8 @@ void ChannelFusionTests::addsAlternativeOnlyChannelsOnThePrimaryClock()
     QVERIFY(coolant);
     QCOMPARE(coolant->rule, QString("added"));
     QCOMPARE(coolant->unit, QString("C"));
-    QCOMPARE(coolant->channel.timestamps.first(), 5.0);  // alternative 0 s is primary 5 s
-    QCOMPARE(coolant->channel.timestamps.size(), alternative.channels["coolant_temp-obd"].timestamps.size()); // not resampled
+    QCOMPARE(coolant->channel.timestamps().first(), 5.0);  // alternative 0 s is primary 5 s
+    QCOMPARE(coolant->channel.timestamps().size(), alternative.channels["coolant_temp-obd"].timestamps().size()); // not resampled
     QCOMPARE(coolant->segments.size(), 1);
     QCOMPARE(coolant->segments.first().sourceId, QString("rcz"));
     QCOMPARE(coolant->segments.first().clock.offsetSeconds, 5.0);
@@ -127,7 +126,7 @@ void ChannelFusionTests::keepsThePrimaryWhenMeasurementsAgree()
     QVERIFY(std::abs(speed->medianDifference - 0.5) < 0.1);
     QVERIFY(!speed->conflicting);
     // Not overwritten: the primary's samples and its gap are exactly as recorded.
-    QCOMPARE(speed->channel.timestamps, primary.channels["velocity"].timestamps);
+    QCOMPARE(speed->channel.timestamps(), primary.channels["velocity"].timestamps());
     QCOMPARE(speed->segments.size(), 2);
     QVERIFY(result.unresolved.isEmpty());
 }
@@ -141,7 +140,7 @@ void ChannelFusionTests::reportsConflictsWithoutARule()
     QVERIFY(speed->conflicting);
     QCOMPARE(speed->rule, QString("unresolvedConflict"));
     QCOMPARE(result.unresolved, QStringList{"speed"});
-    QCOMPARE(speed->channel.timestamps, primary.channels["velocity"].timestamps); // still the primary, never replaced
+    QCOMPARE(speed->channel.timestamps(), primary.channels["velocity"].timestamps()); // still the primary, never replaced
     // Choosing the primary explicitly resolves it.
     FusionPolicy policy;
     policy.rules.insert("speed", {"rcz", FusionRule::PrimaryOnly});
@@ -164,7 +163,7 @@ void ChannelFusionTests::fillsPrimaryGapsOnlyWhenChosen()
     const auto result = fuseChannels(primary, "vbo", {{"rcz", &alternative, {5.0, 0.0}, "aligned"}}, policy);
     const auto *speed = find(result, "speed");
     QCOMPARE(speed->rule, QString("fillGaps"));
-    QVERIFY(strictlyIncreasing(speed->channel.timestamps));
+    QVERIFY(strictlyIncreasing(speed->channel.timestamps()));
     // The primary everywhere it recorded; the alternative only inside its gap (40-50 s).
     int fromAlternative = 0;
     for (const auto &segment : speed->segments) {
@@ -177,12 +176,12 @@ void ChannelFusionTests::fillsPrimaryGapsOnlyWhenChosen()
         }
     }
     QCOMPARE(fromAlternative, 1);
-    for (qsizetype index = 0; index < speed->channel.timestamps.size(); ++index) {
-        const double t = speed->channel.timestamps[index];
-        QVERIFY(std::abs(speed->channel.values[index] - speedAt(t)) < 0.01); // real samples, each where it was recorded
+    for (qsizetype index = 0; index < speed->channel.timestamps().size(); ++index) {
+        const double t = speed->channel.timestamps()[index];
+        QVERIFY(std::abs(speed->channel.values()[index] - speedAt(t)) < 0.01); // real samples, each where it was recorded
     }
     // Gaps neither source covers stay gaps: the alternative starts at 5 s.
-    QCOMPARE(speed->channel.timestamps.first(), 0.0);
+    QCOMPARE(speed->channel.timestamps().first(), 0.0);
 }
 
 void ChannelFusionTests::prefersTheAlternativeOnlyWhenChosen()
@@ -194,7 +193,7 @@ void ChannelFusionTests::prefersTheAlternativeOnlyWhenChosen()
     const auto result = fuseChannels(primary, "vbo", {{"rcz", &alternative, {5.0, 0.0}, "aligned"}}, policy);
     const auto *speed = find(result, "speed");
     QCOMPARE(speed->rule, QString("preferAlternative"));
-    QVERIFY(strictlyIncreasing(speed->channel.timestamps));
+    QVERIFY(strictlyIncreasing(speed->channel.timestamps()));
     // The alternative covers 5-95 s; the primary only outside it.
     for (const auto &segment : speed->segments) {
         if (segment.sourceId == "vbo") QVERIFY(segment.end < 5.0 || segment.start > 95.0);
@@ -209,8 +208,8 @@ void ChannelFusionTests::appliesClockDrift()
     // 1000 ppm: alternative 90 s is primary 90 + 5 + 0.09 s.
     const auto result = fuseChannels(primary, "vbo", {{"rcz", &alternative, {5.0, 1000.0}, "aligned"}});
     const auto *coolant = find(result, "coolant_temp-obd");
-    QVERIFY(std::abs(coolant->channel.timestamps[90] - 95.09) < 1e-9);
-    QVERIFY(strictlyIncreasing(coolant->channel.timestamps));
+    QVERIFY(std::abs(coolant->channel.timestamps()[90] - 95.09) < 1e-9);
+    QVERIFY(strictlyIncreasing(coolant->channel.timestamps()));
     QCOMPARE(coolant->segments.first().clock.driftPpm, 1000.0);
 }
 
@@ -234,7 +233,7 @@ void ChannelFusionTests::refusesUnalignedSourcesAndUnitMismatches()
     const auto mismatch = fuseChannels(primary, "vbo", {{"rcz", &metric, {5.0, 0.0}, "aligned"}}, policy);
     QCOMPARE(mismatch.unitMismatches, QStringList{"speed: rcz"});
     QCOMPARE(find(mismatch, "speed")->rule, QString("primary"));
-    QCOMPARE(find(mismatch, "speed")->channel.timestamps, primary.channels["velocity"].timestamps);
+    QCOMPARE(find(mismatch, "speed")->channel.timestamps(), primary.channels["velocity"].timestamps());
     // Tolerances by unit.
     QCOMPARE(fusionConflictTolerance("km/h", 50.0), 2.0);
     QCOMPARE(fusionConflictTolerance("g", 2.0), 0.05);
@@ -265,7 +264,7 @@ void ChannelFusionTests::comparesAChannelWithAnUndeclaredUnit()
     QCOMPARE(result.unitMismatches, QStringList{"speed: rcz"});
     QCOMPARE(find(result, "speed")->rule, QString("primary"));
     QCOMPARE(find(result, "speed")->comparedSourceId, QString());
-    QCOMPARE(find(result, "speed")->channel.timestamps, primary.channels["velocity"].timestamps);
+    QCOMPARE(find(result, "speed")->channel.timestamps(), primary.channels["velocity"].timestamps());
     // Fewer than 10 overlapping samples cannot show the units agree.
     const auto brief = fuseChannels(primary, "vbo", {{"rcz", &agreeing, {98.5, 0.0}, "aligned"}}, policy);
     QCOMPARE(brief.unitMismatches, QStringList{"speed: rcz"});
@@ -290,31 +289,30 @@ void ChannelFusionTests::keepsGapMarkersInsideTheirGapOnThePrimaryClock()
     marked.unit = rpm.unit;
     constexpr float missing = std::numeric_limits<float>::quiet_NaN();
     int collisions = 0;
-    for (qsizetype index = 0; index < rpm.timestamps.size(); ++index) {
-        if (index && rpm.timestamps[index] - rpm.timestamps[index - 1] > 1.0) {
-            const double before = rpm.timestamps[index - 1], after = rpm.timestamps[index];
-            marked.timestamps << std::nextafter(before, after) << std::nextafter(after, before);
-            marked.values << missing << missing;
+    for (qsizetype index = 0; index < rpm.timestamps().size(); ++index) {
+        if (index && rpm.timestamps()[index] - rpm.timestamps()[index - 1] > 1.0) {
+            const double before = rpm.timestamps()[index - 1], after = rpm.timestamps()[index];
+            marked.appendSample(std::nextafter(before, after), missing);
+            marked.appendSample(std::nextafter(after, before), missing);
             collisions += (std::nextafter(before, after) + 3000.0 == before + 3000.0)
                 + (std::nextafter(after, before) + 3000.0 == after + 3000.0);
         }
-        marked.timestamps << rpm.timestamps[index];
-        marked.values << rpm.values[index];
+        marked.appendSample(rpm.timestamps()[index], rpm.values()[index]);
     }
     QCOMPARE(collisions, 2); // the case this test is for: both markers round onto a real sample
     TelemetrySession alternative;
     add(alternative, marked, "rpm");
     const auto check = [&](const FusedChannel &fused, const QString &source) {
-        QVERIFY(strictlyIncreasing(fused.channel.timestamps));
+        QVERIFY(strictlyIncreasing(fused.channel.timestamps()));
         int real = 0;
-        for (qsizetype index = 0; index < fused.channel.timestamps.size(); ++index) {
-            const double t = fused.channel.timestamps[index];
-            const float value = fused.channel.values[index];
+        for (qsizetype index = 0; index < fused.channel.timestamps().size(); ++index) {
+            const double t = fused.channel.timestamps()[index];
+            const float value = fused.channel.values()[index];
             if (!std::isfinite(value)) continue;
             QVERIFY(std::abs(value - t) < 0.01); // a real sample, where it was recorded
             if (t >= 4000.0 - 1e-9 && t <= 4010.0 + 1e-9) ++real;
         }
-        QCOMPARE(real, rpm.timestamps.size()); // no real sample replaced by a marker
+        QCOMPARE(real, rpm.timestamps().size()); // no real sample replaced by a marker
         QVERIFY(!telemetryValueAt(fused.channel, 4005.0)); // the gap stays a gap
         QVERIFY(telemetryValueAt(fused.channel, 4003.85).has_value());
         QVERIFY(std::any_of(fused.segments.cbegin(), fused.segments.cend(),
@@ -334,13 +332,13 @@ void ChannelFusionTests::keepsGapMarkersInsideTheirGapOnThePrimaryClock()
     const auto merged = fuseChannels(primary, "vbo", {{"rcz", &alternative, {3000.0, 0.0}, "aligned"}}, policy);
     const auto *fused = find(merged, "rpm");
     QCOMPARE(fused->rule, QString("preferAlternative"));
-    QVERIFY(strictlyIncreasing(fused->channel.timestamps));
+    QVERIFY(strictlyIncreasing(fused->channel.timestamps()));
     int real = 0;
-    for (qsizetype index = 0; index < fused->channel.timestamps.size(); ++index) {
-        const double t = fused->channel.timestamps[index];
-        if (std::abs(fused->channel.values[index] - t) < 0.01) ++real; // the alternative's (the primary's read 0.5 higher)
+    for (qsizetype index = 0; index < fused->channel.timestamps().size(); ++index) {
+        const double t = fused->channel.timestamps()[index];
+        if (std::abs(fused->channel.values()[index] - t) < 0.01) ++real; // the alternative's (the primary's read 0.5 higher)
     }
-    QCOMPARE(real, rpm.timestamps.size()); // every alternative sample kept, none replaced by its marker
+    QCOMPARE(real, rpm.timestamps().size()); // every alternative sample kept, none replaced by its marker
     QVERIFY(telemetryValueAt(fused->channel, 4005.0).has_value()); // the primary fills the alternative's gap
 }
 
@@ -360,13 +358,13 @@ void ChannelFusionTests::marksGapsAMergedChannelWouldBridge()
     const auto result = fuseChannels(primary, "vbo", {{"rcz", &alternative, {95.0, 0.0}, "aligned"}}, policy);
     const auto *speed = find(result, "speed");
     QCOMPARE(speed->rule, QString("fillGaps"));
-    QVERIFY(strictlyIncreasing(speed->channel.timestamps));
+    QVERIFY(strictlyIncreasing(speed->channel.timestamps()));
     QVERIFY(telemetryGapThreshold(speed->channel) >= 3.0); // the mixed channel's own threshold would bridge 2 s
     QVERIFY(!telemetryValueAt(speed->channel, 109.0)); // ...but the alternative's gap stays a gap
     QVERIFY(telemetryValueAt(speed->channel, 105.0).has_value());
     QVERIFY(telemetryValueAt(speed->channel, 50.5).has_value()); // the 1 Hz primary is not cut up
     int markers = 0;
-    for (const float value : speed->channel.values) markers += !std::isfinite(value);
+    for (const float value : speed->channel.values()) markers += !std::isfinite(value);
     QCOMPARE(markers, 2);
     // Markers are no source's samples: the segments still say who recorded what.
     for (const auto &segment : speed->segments)

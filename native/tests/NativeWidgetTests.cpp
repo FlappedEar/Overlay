@@ -1146,7 +1146,7 @@ void WidgetTests::projectsWestPositiveTracksWithoutMirroring()
     // Projection must never rewrite the source or fabricate missing marker data.
     QCOMPARE(westSession.valueAt("longitude", 0).value(), -longitude);
     auto missing = westSession;
-    missing.channels["longitude"].values[1] = std::numeric_limits<float>::quiet_NaN();
+    missing.channels["longitude"].setValue(1, std::numeric_limits<float>::quiet_NaN());
     QVERIFY(!currentTrackPoint(missing, 1, westMap));
     TelemetryRenderContext context;
     context.setSession(&westSession);
@@ -1171,21 +1171,17 @@ void WidgetTests::cachesStaticTrackGeometry()
     TelemetrySession session;
     TelemetryChannel latitude;
     latitude.name = QStringLiteral("latitude");
-    latitude.timestamps.reserve(pointCount);
-    latitude.values.reserve(pointCount);
+    latitude.reserve(pointCount);
     TelemetryChannel longitude;
     longitude.name = QStringLiteral("longitude");
-    longitude.timestamps.reserve(pointCount);
-    longitude.values.reserve(pointCount);
+    longitude.reserve(pointCount);
     for (qsizetype index = 0; index < pointCount; ++index) {
         const double progress = static_cast<double>(index) / static_cast<double>(pointCount - 1);
         geometry.points.append(
             {progress, 0.5 + 0.4 * std::sin(progress * 8.0 * std::numbers::pi)});
         const double timestamp = static_cast<double>(index) / 10.0;
-        latitude.timestamps.append(timestamp);
-        longitude.timestamps.append(timestamp);
-        latitude.values.append(static_cast<float>(52.0 + progress * 0.001));
-        longitude.values.append(static_cast<float>(21.0 + progress * 0.001));
+        latitude.appendSample(timestamp, static_cast<float>(52.0 + progress * 0.001));
+        longitude.appendSample(timestamp, static_cast<float>(21.0 + progress * 0.001));
     }
     session.channels.insert(latitude.name, latitude);
     session.channels.insert(longitude.name, longitude);
@@ -1767,7 +1763,7 @@ void WidgetTests::rendersTyresInExportScene()
         const TelemetrySession real = TelemetrySource::load(file.absoluteFilePath());
         const TyreChannelMap map = mapTyreChannels(real);
         if (!map.hasAny()) continue;
-        const auto &timestamps = real.channels.value(map.pressure[0]).timestamps;
+        const auto timestamps = real.channels.value(map.pressure[0]).timestamps();
         const double time = timestamps[timestamps.size() / 2];
         TelemetryFrameRenderer realRenderer;
         QVERIFY2(realRenderer.initialize(&widgets, &real, nullptr, SyncTransform{}, QSize(1280, 720)),
@@ -1837,8 +1833,7 @@ void WidgetTests::repaintsOnlyMovingGaugeLayers()
         TelemetryChannel channel;
         channel.name = name;
         for (double time = 0.0; time <= 6.0; time += 0.05) {
-            channel.timestamps.append(time);
-            channel.values.append(static_cast<float>(amplitude * (1.0 + std::sin(time * 1.3))));
+            channel.appendSample(time, static_cast<float>(amplitude * (1.0 + std::sin(time * 1.3))));
         }
         session.channels.insert(name, channel);
         session.aliases.insert(name, name);

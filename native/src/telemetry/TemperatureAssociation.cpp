@@ -70,16 +70,16 @@ LapAcceleration lapStrongAcceleration(const TelemetrySession &session, const dou
     LapAcceleration result;
     result.channel = session.aliases.value(QStringLiteral("longitudinalAcceleration"));
     const auto found = session.channels.constFind(result.channel);
-    if (result.channel.isEmpty() || found == session.channels.cend() || found->timestamps.size() != found->values.size()
+    if (result.channel.isEmpty() || found == session.channels.cend() || found->timestamps().size() != found->values().size()
         || !std::isfinite(startTime) || !std::isfinite(endTime) || endTime <= startTime)
         return result;
     const auto unit = found->unit.trimmed();
     if (!unit.isEmpty() && unit.compare(QStringLiteral("g"), Qt::CaseInsensitive) != 0) return result;
-    const auto &times = found->timestamps;
+    const auto &times = found->timestamps();
     QVector<double> positive;
     for (auto index = std::distance(times.cbegin(), std::lower_bound(times.cbegin(), times.cend(), startTime));
          index < times.size() && times[index] <= endTime; ++index) {
-        const double value = found->values[index];
+        const double value = found->values()[index];
         if (std::isfinite(value) && value > 0.0 && value <= 4.0) positive.append(value);
     }
     result.sampleCount = positive.size();

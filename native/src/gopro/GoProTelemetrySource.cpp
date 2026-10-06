@@ -301,12 +301,10 @@ TelemetryChannel channel(
     TelemetryChannel result;
     result.name = name;
     result.unit = unit;
-    result.timestamps.reserve(samples.size());
-    result.values.reserve(samples.size());
+    result.reserve(samples.size());
     for (const GpsSample &sample : samples) {
-        if ((result.timestamps.size() & 0xfff) == 0) throwIfCancelled(cancelled);
-        result.timestamps.append(sample.time);
-        result.values.append(value(sample));
+        if ((result.timestamps().size() & 0xfff) == 0) throwIfCancelled(cancelled);
+        result.appendSample(sample.time, value(sample));
     }
     return result;
 }

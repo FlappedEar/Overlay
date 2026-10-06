@@ -69,10 +69,8 @@ TelemetrySession hairpinGpsSessionWithOutlierAndGap()
     auto &lat = session.channels["lat"];
     auto &lon = session.channels["lon"];
     const auto addFix = [&](const double time, const double east, const double north) {
-        lat.timestamps.append(time);
-        lat.values.append(static_cast<float>(degreesForMeters(north)));
-        lon.timestamps.append(time);
-        lon.values.append(static_cast<float>(degreesForMeters(east)));
+        lat.appendSample(time, static_cast<float>(degreesForMeters(north)));
+        lon.appendSample(time, static_cast<float>(degreesForMeters(east)));
     };
     for (int i = 0; i <= 20; ++i) addFix(i * 1.0, i * 2.0, 0.0); // t=0..20s, east 0..40m, steady 2 m/s
     addFix(21.0, 10.0, 50.0); // one sample far off either leg: a GPS outlier
@@ -162,6 +160,7 @@ private slots:
     void anchorsProgressZeroWhereTheGateCrossesTheAxis();
     void rejectsAStartGateThatMissesTheTrack();
     void anchorsAtTheTimedCrossingWhenTheGateCrossesTwice();
+    void spreadsDenseLapTracesEvenly();
     void unwrapsAFirstFixJustBeforeTheGate();
     void obliqueOffLineGateKeepsEveryLapsSectors();
     void deltaAtTheFinishEqualsTheLapTimeDifference();
@@ -224,8 +223,11 @@ void TrackProgressTests::knownDelayHasCorrectSignAndFinishLineMagnitude()
     // Lap B: the identical physical path, uniformly 10% slower.
     constexpr double slowdownFactor = 1.10;
     TelemetrySession sessionB = fixture.session;
-    for (auto &channel : sessionB.channels)
-        for (auto &timestamp : channel.timestamps) timestamp *= slowdownFactor;
+    for (auto &channel : sessionB.channels) {
+        auto times = channel.timestamps();
+        for (auto &timestamp : times) timestamp *= slowdownFactor;
+        channel.setSamples(times, channel.values());
+    }
     sessionB.duration *= slowdownFactor;
     const auto lapB = projectLapTrace(
         fixture.axis, sessionB, lap.startTelemetryTime * slowdownFactor, lap.endTelemetryTime * slowdownFactor);
@@ -425,6 +427,55 @@ void TrackProgressTests::anchorsAtTheTimedCrossingWhenTheGateCrossesTwice()
              qPrintable(QString("%1, %2").arg(axis.points.first().x()).arg(axis.points.first().y())));
 }
 
+void TrackProgressTests::spreadsDenseLapTracesEvenly()
+{
+    // KAN-220: 100 Hz GPS around the 500 m rectangle at 10 m/s, 5,000 fixes
+    // a lap. A whole-number stride kept every second fix (about 2,500 of the
+    // 4,096 a trace may hold); latitude buckets kept one fix per bucket on
+    // the east-west straights, where latitude does not change.
+    const TimingGate gate = gateBetween({100, -10}, {100, 10});
+    TelemetrySession session;
+    session.aliases = {{"latitude", "lat"}, {"longitude", "lon"}};
+    session.timingGates = {gate};
+    TelemetryChannel lat(QStringLiteral("lat"), {}), lon(QStringLiteral("lon"), {});
+    const auto position = [](double distance) {
+        distance = std::fmod(distance, 500.0);
+        if (distance < 200) return QPointF(distance, 0);
+        if (distance < 250) return QPointF(200, distance - 200);
+        if (distance < 450) return QPointF(200 - (distance - 250), 50);
+        return QPointF(0, 50 - (distance - 450));
+    };
+    for (int fix = 0; fix <= 16'500; ++fix) {
+        const double time = fix / 100.0;
+        const QPointF at = position(50.0 + 10.0 * time);
+        lat.appendSample(time, static_cast<float>(degreesForMeters(at.y())));
+        lon.appendSample(time, static_cast<float>(degreesForMeters(at.x())));
+    }
+    session.channels.insert(lat.name, lat);
+    session.channels.insert(lon.name, lon);
+    session.duration = 165.0;
+
+    const auto laps = deriveSourceLapSession(session);
+    QVERIFY(!laps.lapTraces.isEmpty());
+    for (const auto &trace : laps.lapTraces) {
+        QVERIFY2(trace.points.size() > 4'000 && trace.points.size() <= 4'096,
+                 qPrintable(QString::number(trace.points.size())));
+    }
+
+    const auto axis = buildProgressAxis(rectangleLap(), GeoCoordinate{0.0, 0.0}, gate);
+    QVERIFY(axis.valid);
+    const auto projected = projectLapTrace(axis, session, 5.0, 105.0);
+    qsizetype count = 0;
+    double widest = 0.0;
+    for (const auto &segment : projected) {
+        count += segment.samples.size();
+        for (qsizetype index = 1; index < segment.samples.size(); ++index)
+            widest = std::max(widest, segment.samples[index].telemetryTime - segment.samples[index - 1].telemetryTime);
+    }
+    QVERIFY2(count >= 7'900 && count <= 8'010, qPrintable(QString::number(count)));
+    QVERIFY2(widest <= 0.0201, qPrintable(QString::number(widest)));
+}
+
 void TrackProgressTests::unwrapsAFirstFixJustBeforeTheGate()
 {
     // The hairpin's gate is a point, so progress 0 is the axis point nearest
@@ -436,10 +487,8 @@ void TrackProgressTests::unwrapsAFirstFixJustBeforeTheGate()
     auto &lat = session.channels["lat"];
     auto &lon = session.channels["lon"];
     const auto addFix = [&](const double time, const double east, const double north) {
-        lat.timestamps.append(time);
-        lat.values.append(static_cast<float>(degreesForMeters(north)));
-        lon.timestamps.append(time);
-        lon.values.append(static_cast<float>(degreesForMeters(east)));
+        lat.appendSample(time, static_cast<float>(degreesForMeters(north)));
+        lon.appendSample(time, static_cast<float>(degreesForMeters(east)));
     };
     addFix(0.0, 0.0, 1.0);
     for (int i = 1; i <= 20; ++i) addFix(i * 1.0, i * 2.0 - 0.5, 0.0);
@@ -495,8 +544,11 @@ void TrackProgressTests::deltaAtTheFinishEqualsTheLapTimeDifference()
     constexpr double slowdownFactor = 1.10;
     constexpr double shiftSeconds = 0.13;
     TelemetrySession sessionB = fixture.session;
-    for (auto &channel : sessionB.channels)
-        for (auto &timestamp : channel.timestamps) timestamp = timestamp * slowdownFactor + shiftSeconds;
+    for (auto &channel : sessionB.channels) {
+        auto times = channel.timestamps();
+        for (auto &timestamp : times) timestamp = timestamp * slowdownFactor + shiftSeconds;
+        channel.setSamples(times, channel.values());
+    }
     sessionB.duration = sessionB.duration * slowdownFactor + shiftSeconds;
     const auto lapsB = deriveSourceLapSession(sessionB);
     QVERIFY(!lapsB.timedLaps.isEmpty());

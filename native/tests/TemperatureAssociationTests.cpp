@@ -117,8 +117,7 @@ void TemperatureAssociationTests::measuresALapsStrongAcceleration()
     TelemetryChannel channel;
     channel.name = "longacc-calc";
     for (int k = 0; k < 100; ++k) {
-        channel.timestamps.append(k * 0.1);
-        channel.values.append(k == 50 ? 9.0f : k % 2 ? static_cast<float>(0.01 * (k / 2 + 1)) : -0.6f);
+        channel.appendSample(k * 0.1, k == 50 ? 9.0f : k % 2 ? static_cast<float>(0.01 * (k / 2 + 1)) : -0.6f);
     }
     session.channels.insert(channel.name, channel);
     session.aliases.insert("longitudinalAcceleration", channel.name);

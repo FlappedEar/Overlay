@@ -34,6 +34,7 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
+#include <stdexcept>
 
 #if defined(Q_OS_UNIX)
 #include <sys/resource.h>
@@ -77,6 +78,7 @@ private slots:
     void preservesRepeatedDataSections();
     void rejectsMissingSections();
     void rejectsVboWithoutTimeColumn();
+    void dropsImplausibleHeartRate();
     void interpolatesByTime();
     void parsesTextFirstVboTimeFormats();
     void keepsVboTimestampsStrictlyMonotonic();
@@ -86,6 +88,8 @@ private slots:
     void rejectsOverflowingTelemetryChartRanges();
     void cancelsVboParsingDeterministically();
     void cachesTelemetryChannelCadence();
+    void keepsChannelSamplesOrdered();
+    void judgesGapsByLocalCadence();
     void readsAnUnwarmedSessionFromManyThreads();
     void keepsEverySegmentWhenDownsampling();
     void enforcesVboResourceLimits();
@@ -410,7 +414,7 @@ void TelemetryCoreTests::parsesRealisticFixture()
     QCOMPARE(session.aliases.value("throttle"), QString("throttle"));
     QCOMPARE(session.aliases.value("brake"), QString("brake"));
     QCOMPARE(session.aliases.value("heartRate"), QString("heart_rate"));
-    QCOMPARE(session.channels.value("velocity").values, QVector<float>({0.0F, 50.0F, 100.0F}));
+    QCOMPARE(session.channels.value("velocity").values(), QVector<float>({0.0F, 50.0F, 100.0F}));
 }
 
 void TelemetryCoreTests::toleratesMalformedRows()
@@ -418,7 +422,7 @@ void TelemetryCoreTests::toleratesMalformedRows()
     const auto session = VboParser::parse(
         u"[column names]\ntime speed unknown\n[data]\n0   10  1\n1 bad\n2 30 3 extra");
     QCOMPARE(session.sampleCount, 3);
-    QVERIFY(std::isnan(session.channels.value("speed").values[1]));
+    QVERIFY(std::isnan(session.channels.value("speed").values()[1]));
     QVERIFY(!session.valueAt("speed", 0.5));
     QVERIFY(!session.valueAt("speed", 1.0));
     QVERIFY(!session.valueAt("speed", 1.5));
@@ -434,8 +438,7 @@ void TelemetryCoreTests::neverBridgesALossOfSignal()
     speed.name = QStringLiteral("speed");
     for (int tick = 0; tick <= 600; ++tick) {
         if (tick > 200 && tick < 500) continue; // no fix from 20.0 s to 50.0 s
-        speed.timestamps.append(tick / 10.0);
-        speed.values.append(static_cast<float>(tick));
+        speed.appendSample(tick / 10.0, static_cast<float>(tick));
     }
     session.channels.insert(speed.name, speed);
     freezeCachedStatistics(session);
@@ -467,8 +470,7 @@ void TelemetryCoreTests::syncIgnoresALossOfGpsFix()
             const double time = tick * 0.2;
             const bool lost = lossOfFix && time > 40.0 && time < 70.0;
             if (lost && !markLoss) continue;
-            speed.timestamps.append(time);
-            speed.values.append(lost ? std::numeric_limits<float>::quiet_NaN() : speedAt(time));
+            speed.appendSample(time, lost ? std::numeric_limits<float>::quiet_NaN() : speedAt(time));
         }
         result.channels.insert(speed.name, speed);
         result.aliases.insert(QStringLiteral("speed"), speed.name);
@@ -488,12 +490,30 @@ void TelemetryCoreTests::preservesRepeatedDataSections()
     const TelemetrySession session = VboParser::parse(
         u"[column names]\ntime speed\n[data]\n0 10\n[data]\n1 20");
     QCOMPARE(session.sampleCount, 2);
-    QCOMPARE(session.channels.value("speed").values, QVector<float>({10.0F, 20.0F}));
+    QCOMPARE(session.channels.value("speed").values(), QVector<float>({10.0F, 20.0F}));
 }
 
 void TelemetryCoreTests::rejectsMissingSections()
 {
     QVERIFY_THROWS_EXCEPTION(VboParseError, (void) VboParser::parse(u"[header]\nfoo=bar"));
+}
+
+void TelemetryCoreTests::dropsImplausibleHeartRate()
+{
+    // KAN-222: RaceChrono's VBO export of the 29 August 14:37 session ends
+    // with a 0 bpm row where its RCZ still reads 133. A 0 is no data, so the
+    // last real reading is not dragged towards it.
+    const QString text = QStringLiteral(
+        "[column names]\ntime heart_rate-hrm velocity\n[data]\n"
+        "000000.00 +133.000 010.0\n000000.10 +133.000 010.0\n000000.20 +250.000 010.0\n"
+        "000000.30 +133.000 010.0\n000000.40 +000.000 010.0\n");
+    const auto session = VboParser::parse(text);
+    QCOMPARE(session.valueAt("heartRate", 0.1).value(), 133.0);
+    QVERIFY(!session.valueAt("heartRate", 0.2));
+    QVERIFY(!session.valueAt("heartRate", 0.4));
+    QVERIFY(!session.valueAt("heartRate", 0.35));
+    QCOMPARE(session.channels.value("heart_rate-hrm").sampleCount(), qsizetype(5));
+    QCOMPARE(session.valueAt("speed", 0.4).value(), 10.0);
 }
 
 void TelemetryCoreTests::rejectsVboWithoutTimeColumn()
@@ -542,7 +562,7 @@ void TelemetryCoreTests::parsesTextFirstVboTimeFormats()
     const auto timestampsFor = [](QStringView rows) {
         return VboParser::parse(QStringLiteral("[column names]\ntime speed\n[data]\n")
                                     + rows.toString())
-            .channels.value(QStringLiteral("speed")).timestamps;
+            .channels.value(QStringLiteral("speed")).timestamps();
     };
     const auto verifyTimes = [](const QVector<double> &actual, const QVector<double> &expected) {
         QCOMPARE(actual.size(), expected.size());
@@ -569,12 +589,12 @@ void TelemetryCoreTests::keepsVboTimestampsStrictlyMonotonic()
         u"[column names]\ntime speed rpm\n[data]\n"
         "235959.800 1 10\n235959.900 2 20\n000000.000 3 30\n000000.100 4 40");
     const TelemetryChannel midnightSpeed = midnight.channels.value(QStringLiteral("speed"));
-    QCOMPARE(midnightSpeed.timestamps.size(), 4);
-    QVERIFY(qAbs(midnightSpeed.timestamps[0]) < 0.000001);
-    QVERIFY(qAbs(midnightSpeed.timestamps[1] - 0.1) < 0.000001);
-    QVERIFY(qAbs(midnightSpeed.timestamps[2] - 0.2) < 0.000001);
-    QVERIFY(qAbs(midnightSpeed.timestamps[3] - 0.3) < 0.000001);
-    QCOMPARE(midnight.channels.value(QStringLiteral("rpm")).timestamps.size(), 4);
+    QCOMPARE(midnightSpeed.timestamps().size(), 4);
+    QVERIFY(qAbs(midnightSpeed.timestamps()[0]) < 0.000001);
+    QVERIFY(qAbs(midnightSpeed.timestamps()[1] - 0.1) < 0.000001);
+    QVERIFY(qAbs(midnightSpeed.timestamps()[2] - 0.2) < 0.000001);
+    QVERIFY(qAbs(midnightSpeed.timestamps()[3] - 0.3) < 0.000001);
+    QCOMPARE(midnight.channels.value(QStringLiteral("rpm")).timestamps().size(), 4);
     QVERIFY(std::any_of(midnight.warnings.cbegin(), midnight.warnings.cend(), [](const QString &warning) {
         return warning.contains(QStringLiteral("midnight rollover"));
     }));
@@ -584,11 +604,11 @@ void TelemetryCoreTests::keepsVboTimestampsStrictlyMonotonic()
         "120000.000 1 10\n120000.100 2 20\n120000.100 3 30\n115959.900 4 40\n"
         "126199 5 50\n246000 6 60\n12:61:00 7 70\n12:00:60 8 80\n120000.200 9 90");
     const TelemetryChannel speed = guarded.channels.value(QStringLiteral("speed"));
-    QCOMPARE(speed.timestamps.size(), 3);
-    QCOMPARE(speed.values, QVector<float>({1.0F, 2.0F, 9.0F}));
-    QCOMPARE(guarded.channels.value(QStringLiteral("rpm")).values.size(), speed.timestamps.size());
-    for (qsizetype index = 1; index < speed.timestamps.size(); ++index) {
-        QVERIFY(speed.timestamps[index] > speed.timestamps[index - 1]);
+    QCOMPARE(speed.timestamps().size(), 3);
+    QCOMPARE(speed.values(), QVector<float>({1.0F, 2.0F, 9.0F}));
+    QCOMPARE(guarded.channels.value(QStringLiteral("rpm")).values().size(), speed.timestamps().size());
+    for (qsizetype index = 1; index < speed.timestamps().size(); ++index) {
+        QVERIFY(speed.timestamps()[index] > speed.timestamps()[index - 1]);
     }
     QVERIFY(guarded.warnings.size() >= 6);
 }
@@ -627,11 +647,11 @@ void TelemetryCoreTests::preservesMixedVboClocksAcrossMidnight()
         "00:00:01 70 700\n00:00:03 80 800");
     QCOMPARE(session.duration, 4.0);
     QCOMPARE(session.sampleCount, 5);
-    QCOMPARE(session.channels.value("speed").values, QVector<float>({10, 30, 40, 50, 80}));
-    QCOMPARE(session.channels.value("rpm").values, QVector<float>({100, 300, 400, 500, 800}));
+    QCOMPARE(session.channels.value("speed").values(), QVector<float>({10, 30, 40, 50, 80}));
+    QCOMPARE(session.channels.value("rpm").values(), QVector<float>({100, 300, 400, 500, 800}));
     for (const auto &channel : session.channels) {
-        QCOMPARE(channel.timestamps, QVector<double>({0, 1, 2, 3, 4}));
-        for (const double timestamp : channel.timestamps) QVERIFY(std::isfinite(timestamp));
+        QCOMPARE(channel.timestamps(), QVector<double>({0, 1, 2, 3, 4}));
+        for (const double timestamp : channel.timestamps()) QVERIFY(std::isfinite(timestamp));
     }
     QCOMPARE(session.warnings.size(), 4); // Backward, rollover, duplicate, backward.
 }
@@ -663,41 +683,110 @@ void TelemetryCoreTests::cancelsVboParsingDeterministically()
 
 void TelemetryCoreTests::cachesTelemetryChannelCadence()
 {
-    TelemetryChannel regular;
-    regular.timestamps = {0.0, 0.1, 0.2, 0.3, 0.4};
+    const auto zeros = [](qsizetype count) { return QVector<float>(count, 0.0F); };
+    TelemetryChannel regular(QStringLiteral("regular"), {}, {0.0, 0.1, 0.2, 0.3, 0.4}, zeros(5));
     QCOMPARE(telemetryGapThreshold(regular, 0.0), 0.3);
     QCOMPARE(telemetryGapThreshold(regular, 0.75), 0.75);
-    QCOMPARE(regular.cadence.computations(), qsizetype(1));
+    QCOMPARE(regular.cadence().computations(), qsizetype(1));
 
-    TelemetryChannel sparse;
-    sparse.timestamps = {0.0, 0.5, 2.0, 3.5};
+    TelemetryChannel sparse(QStringLiteral("sparse"), {}, {0.0, 0.5, 2.0, 3.5}, zeros(4));
     QCOMPARE(telemetryGapThreshold(sparse, 0.0), 4.5);
-    QCOMPARE(sparse.cadence.computations(), qsizetype(1));
-
-    TelemetryChannel guarded;
-    guarded.timestamps = {0.0, 0.2, 0.2, std::numeric_limits<double>::quiet_NaN(), 0.8};
-    QCOMPARE(telemetryGapThreshold(guarded, 0.4), 0.6);
     for (int lookup = 0; lookup < 10'000; ++lookup) {
-        QCOMPARE(telemetryGapThreshold(guarded, 0.4), 0.6);
+        QCOMPARE(telemetryGapThreshold(sparse, 0.0), 4.5);
     }
-    QCOMPARE(guarded.cadence.computations(), qsizetype(1));
+    QCOMPARE(sparse.cadence().computations(), qsizetype(1));
 
-    // KAN-209: editing a channel after a lookup recomputes the statistic
-    // instead of keeping the old cadence.
-    regular.timestamps = {0.0, 1.0, 2.0, 3.0};
+    // KAN-209: changing a channel's samples recomputes the statistic instead
+    // of keeping the old cadence, and a copy keeps its own.
+    regular.setSamples({0.0, 1.0, 2.0, 3.0}, zeros(4));
     QCOMPARE(telemetryGapThreshold(regular, 0.0), 3.0);
-    regular.timestamps.append(3.5);
     QCOMPARE(telemetryGapThreshold(regular, 0.0), 3.0);
-    regular.timestamps.last() = 13.0;
+    regular.appendSample(3.1, 0.0F);
     QCOMPARE(telemetryGapThreshold(regular, 0.0), 3.0);
-    regular.timestamps = {0.0, 0.1, 0.2};
+    regular.setSamples({0.0, 0.1, 0.2}, zeros(3));
     QCOMPARE(telemetryGapThreshold(regular, 0.0), 0.3);
-    QCOMPARE(regular.cadence.computations(), qsizetype(5));
     TelemetryChannel copy = regular;
-    QVERIFY(copy.cadence.isCurrent(copy.timestamps));
-    copy.timestamps[2] = 0.4;
-    QVERIFY(!copy.cadence.isCurrent(copy.timestamps));
-    QVERIFY(regular.cadence.isCurrent(regular.timestamps));
+    QVERIFY(copy.cadence().isCurrent(copy.timestamps()));
+    copy.setSamples({0.0, 0.2, 0.4}, zeros(3));
+    QVERIFY(!copy.cadence().isCurrent(copy.timestamps()));
+    QCOMPARE(telemetryGapThreshold(copy, 0.0), 0.6);
+    QVERIFY(regular.cadence().isCurrent(regular.timestamps()));
+    QCOMPARE(telemetryGapThreshold(regular, 0.0), 0.3);
+}
+
+void TelemetryCoreTests::judgesGapsByLocalCadence()
+{
+    // KAN-221: a gap is judged against the cadence around it, not only the
+    // whole channel's median interval.
+    const auto sessionOf = [](const QVector<double> &times) {
+        TelemetrySession session;
+        TelemetryChannel channel(QStringLiteral("speed"), QStringLiteral("km/h"));
+        for (const double time : times) channel.appendSample(time, static_cast<float>(time));
+        session.channels.insert(channel.name, channel);
+        session.duration = times.last();
+        return session;
+    };
+    // 100 Hz for 10 s, then 10 Hz: the 10 Hz stretch is not a run of gaps,
+    // while a 0.5 s pause in the 100 Hz part still is.
+    QVector<double> times;
+    for (int tick = 0; tick < 1'000; ++tick)
+        if (tick <= 300 || tick >= 350) times.append(tick / 100.0);
+    for (int tick = 100; tick <= 150; ++tick) times.append(tick / 10.0);
+    auto session = sessionOf(times);
+    QVERIFY(qAbs(session.valueAt("speed", 12.05).value_or(-1) - 12.05) < 1e-4);
+    QVERIFY(qAbs(session.valueAt("speed", 9.995).value_or(-1) - 9.995) < 1e-4);
+    QVERIFY(!session.valueAt("speed", 3.25));
+
+    // 10 Hz with a valid 1 Hz period from 20 to 40 s; an isolated 1 s pause
+    // at 50 s is still a gap.
+    times.clear();
+    for (int tick = 0; tick <= 600; ++tick) {
+        const double time = tick / 10.0;
+        if (time > 20.0 && time < 40.0 && tick % 10 != 0) continue;
+        if (time > 50.0 && time < 51.0) continue;
+        times.append(time);
+    }
+    session = sessionOf(times);
+    QVERIFY(qAbs(session.valueAt("speed", 30.5).value_or(-1) - 30.5) < 1e-4);
+    QVERIFY(qAbs(session.valueAt("speed", 39.5).value_or(-1) - 39.5) < 1e-4);
+    QVERIFY(!session.valueAt("speed", 50.5));
+
+    // Alternating bursts: 2 s at 10 Hz, then 1 s without samples.
+    times.clear();
+    for (int burst = 0; burst < 10; ++burst)
+        for (int tick = 0; tick <= 20; ++tick) times.append(burst * 3.0 + tick / 10.0);
+    session = sessionOf(times);
+    QVERIFY(qAbs(session.valueAt("speed", 4.05).value_or(-1) - 4.05) < 1e-4);
+    QVERIFY(!session.valueAt("speed", 2.5));
+    QCOMPARE(session.sampledSegments("speed", 0.0, 30.0, 1'000).size(), 10);
+}
+
+void TelemetryCoreTests::keepsChannelSamplesOrdered()
+{
+    // KAN-209: a channel only ever holds finite, strictly increasing
+    // timestamps with one value each; values may be NaN gap markers.
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double infinity = std::numeric_limits<double>::infinity();
+    TelemetryChannel channel(QStringLiteral("speed"), QStringLiteral("km/h"), {0.0, 0.1},
+        {1.0F, std::numeric_limits<float>::quiet_NaN()});
+    QCOMPARE(channel.sampleCount(), qsizetype(2));
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, channel.setSamples({0.0, 1.0}, {1.0F}));
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, channel.setSamples({0.0, nan}, {1.0F, 2.0F}));
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, channel.setSamples({0.0, infinity}, {1.0F, 2.0F}));
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, channel.setSamples({0.2, 0.2}, {1.0F, 2.0F}));
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, channel.setSamples({0.2, 0.1}, {1.0F, 2.0F}));
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, channel.appendSample(0.1, 3.0F));
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, channel.appendSample(nan, 3.0F));
+    QVERIFY_THROWS_EXCEPTION(std::out_of_range, channel.setValue(2, 3.0F));
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument,
+        TelemetryChannel(QStringLiteral("bad"), {}, {1.0, 0.0}, {1.0F, 2.0F}));
+    // A rejected change leaves the samples as they were.
+    QCOMPARE(channel.timestamps(), (QVector<double>{0.0, 0.1}));
+    channel.appendSample(0.3, 3.0F);
+    channel.setValue(1, 2.0F);
+    QCOMPARE(channel.values(), (QVector<float>{1.0F, 2.0F, 3.0F}));
+    channel.clear();
+    QVERIFY(channel.isEmpty());
 }
 
 void TelemetryCoreTests::readsAnUnwarmedSessionFromManyThreads()
@@ -708,7 +797,7 @@ void TelemetryCoreTests::readsAnUnwarmedSessionFromManyThreads()
     for (int row = 0; row < 2000; ++row)
         text += QStringLiteral("%1 %2\n").arg(row / 10.0 + (row >= 1000 ? 5.0 : 0.0), 0, 'f', 1).arg(row);
     const TelemetrySession session = VboParser::parse(text);
-    QCOMPARE(session.channels.value("speed").cadence.computations(), qsizetype(0));
+    QCOMPARE(session.channels.value("speed").cadence().computations(), qsizetype(0));
     const TelemetryChannel &speed = *session.channels.constFind(QStringLiteral("speed"));
     std::atomic_int wrong{0};
     std::vector<std::thread> readers;
@@ -722,7 +811,7 @@ void TelemetryCoreTests::readsAnUnwarmedSessionFromManyThreads()
     }
     for (auto &reader : readers) reader.join();
     QCOMPARE(wrong.load(), 0);
-    QCOMPARE(speed.cadence.computations(), qsizetype(1));
+    QCOMPARE(speed.cadence().computations(), qsizetype(1));
 }
 
 void TelemetryCoreTests::keepsEverySegmentWhenDownsampling()
@@ -733,11 +822,10 @@ void TelemetryCoreTests::keepsEverySegmentWhenDownsampling()
     channel.name = QStringLiteral("brake");
     QVector<double> burstStarts;
     for (int index = 0; index < 200; ++index) {
-        channel.timestamps.append(index / 10.0);
         const int burst = index / 10;
         const int offset = index % 10;
         const bool sampled = offset == 0 || (offset == 1 && burst % 2 == 0);
-        channel.values.append(sampled ? float(burst + offset) : std::numeric_limits<float>::quiet_NaN());
+        channel.appendSample(index / 10.0, sampled ? float(burst + offset) : std::numeric_limits<float>::quiet_NaN());
         if (offset == 0) burstStarts.append(index / 10.0);
     }
     TelemetrySession session;
@@ -889,12 +977,12 @@ void TelemetryCoreTests::normalizesVboHeaderEdgeCases()
     QStringList names = session.channelNames();
     names.sort();
     QCOMPARE(names.size(), 5);
-    QCOMPARE(session.channels.value("a").values.first(), 1.0F);
-    QCOMPARE(session.channels.value("a (2)").values.first(), 3.0F); // the header's own "a (2)"
+    QCOMPARE(session.channels.value("a").values().first(), 1.0F);
+    QCOMPARE(session.channels.value("a (2)").values().first(), 3.0F); // the header's own "a (2)"
     QVERIFY(session.channels.contains("a (3)"));
-    QCOMPARE(session.channels.value("a (3)").values.first(), 2.0F);
-    QCOMPARE(session.channels.value("column 5").values.first(), 4.0F);
-    QCOMPARE(session.channels.value("b").values.first(), 5.0F);
+    QCOMPARE(session.channels.value("a (3)").values().first(), 2.0F);
+    QCOMPARE(session.channels.value("column 5").values().first(), 4.0F);
+    QCOMPARE(session.channels.value("b").values().first(), 5.0F);
     for (const auto &name : names) QVERIFY2(!name.isEmpty(), "an empty column name");
 
     // More than one data or column-names section is ambiguous: rejected.
@@ -910,14 +998,14 @@ void TelemetryCoreTests::normalizesVboHeaderEdgeCases()
     const QString mixedFile = writeVboFile(directory, "mixed.vbo", mixed);
     const auto fromFile = VboParser::parseFile(mixedFile);
     const auto fromText = VboParser::parse(QString::fromUtf8(mixed));
-    QCOMPARE(fromFile.channels.value("speed").values, fromText.channels.value("speed").values);
-    QCOMPARE(fromFile.channels.value("speed").timestamps, fromText.channels.value("speed").timestamps);
+    QCOMPARE(fromFile.channels.value("speed").values(), fromText.channels.value("speed").values());
+    QCOMPARE(fromFile.channels.value("speed").timestamps(), fromText.channels.value("speed").timestamps());
 
     // A value beyond float range is no data, never infinity.
     const QString huge = writeVboFile(directory, "huge.vbo",
         "[column names]\ntime speed\n[data]\n0 1e39\n1 2\n2 -1e40\n");
     const auto hugeSession = VboParser::parseFile(huge);
-    const auto &values = hugeSession.channels.value("speed").values;
+    const auto values = hugeSession.channels.value("speed").values();
     QCOMPARE(values.size(), qsizetype(3));
     QVERIFY(std::isnan(values[0]) && std::isnan(values[2]));
     QCOMPARE(values[1], 2.0F);
@@ -930,12 +1018,12 @@ void TelemetryCoreTests::preservesVboScannerFormats()
         "rpm, sensor\u00a0name\r\n[data]\r\n0, 10, , 7, extra,\r\n"
         "1, 20, 200, 8\r\n2, 30\r\n");
     QCOMPARE(comma.sampleCount, 3);
-    QCOMPARE(comma.channels.value("speed").values, QVector<float>({10, 20, 30}));
-    QCOMPARE(comma.channels.value("speed").timestamps, QVector<double>({0, 1, 2}));
-    QVERIFY(std::isnan(comma.channels.value("rpm").values[0]));
-    QCOMPARE(comma.channels.value("rpm").values[1], 200.0F);
-    QVERIFY(std::isnan(comma.channels.value("rpm").values[2]));
-    QCOMPARE(comma.channels.value(QStringLiteral("sensor\u00a0name")).values[0], 7.0F);
+    QCOMPARE(comma.channels.value("speed").values(), QVector<float>({10, 20, 30}));
+    QCOMPARE(comma.channels.value("speed").timestamps(), QVector<double>({0, 1, 2}));
+    QVERIFY(std::isnan(comma.channels.value("rpm").values()[0]));
+    QCOMPARE(comma.channels.value("rpm").values()[1], 200.0F);
+    QVERIFY(std::isnan(comma.channels.value("rpm").values()[2]));
+    QCOMPARE(comma.channels.value(QStringLiteral("sensor\u00a0name")).values()[0], 7.0F);
     QCOMPARE(comma.warnings, QStringList({"Row 1: ignored 2 extra value(s).",
                                         "Row 3: missing 2 value(s)."}));
 
@@ -943,8 +1031,8 @@ void TelemetryCoreTests::preservesVboScannerFormats()
         u"[column names]\ntime\tspeed\nrpm\vsensor\u00a0name\n[data]\n"
         "0\t10\v100\f7\n1 20\r200 8");
     QCOMPARE(whitespace.sampleCount, 2);
-    QCOMPARE(whitespace.channels.value("rpm").values, QVector<float>({100, 200}));
-    QCOMPARE(whitespace.channels.value(QStringLiteral("sensor\u00a0name")).values,
+    QCOMPARE(whitespace.channels.value("rpm").values(), QVector<float>({100, 200}));
+    QCOMPARE(whitespace.channels.value(QStringLiteral("sensor\u00a0name")).values(),
              QVector<float>({7, 8}));
     QVERIFY(whitespace.warnings.isEmpty());
 }
@@ -955,7 +1043,7 @@ void TelemetryCoreTests::boundsSeparatorHeavyVboRows()
     const QString prefix = QStringLiteral("[column names]\ntime,speed\n[data]\n0,42");
     const auto parsed = VboParser::parse(prefix + separators);
     QCOMPARE(parsed.sampleCount, 1);
-    QCOMPARE(parsed.channels.value("speed").values, QVector<float>({42}));
+    QCOMPARE(parsed.channels.value("speed").values(), QVector<float>({42}));
     QCOMPARE(parsed.warnings, QStringList({"Row 1: ignored 200000 extra value(s)."}));
     // Ignored values still have to respect the field limit.
     QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
@@ -1002,7 +1090,7 @@ void TelemetryCoreTests::enforcesVboScannerBoundaries()
     const QString padding(VboParser::kMaximumFieldCharacters + 1, QChar(0x00a0));
     const QString padded = QStringLiteral("[column names]\ntime,speed\n[data]\n0,")
         + padding + QStringLiteral("42") + padding + QLatin1Char(',');
-    QCOMPARE(VboParser::parse(padded).channels.value("speed").values[0], 42.0F);
+    QCOMPARE(VboParser::parse(padded).channels.value("speed").values()[0], 42.0F);
     QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
         (void) VboParser::parse(QStringLiteral("[column names]\ntime,speed\n[data]\n0,4")
             + padding + QStringLiteral("2")));
@@ -1056,8 +1144,8 @@ void TelemetryCoreTests::convertsArcMinuteCoordinates()
 {
     const auto session = VboParser::parse(
         u"[header]\ncoordinate units = arc-minutes\n[column names]\ntime latitude longitude\n[data]\n0 3120 -1260\n1 3126 -1266");
-    QCOMPARE(session.channels.value("latitude").values[0], 52.0F);
-    QCOMPARE(session.channels.value("longitude").values[0], -21.0F);
+    QCOMPARE(session.channels.value("latitude").values()[0], 52.0F);
+    QCOMPARE(session.channels.value("longitude").values()[0], -21.0F);
 }
 
 void TelemetryCoreTests::resolvesCoordinateEvidence_data()
@@ -1181,8 +1269,8 @@ void TelemetryCoreTests::validatesDeclaredCoordinateBounds()
     QVERIFY(geometry.valid);
     QVERIFY(!currentTrackPoint(session, 1, geometry));
     auto arbitrary = session;
-    arbitrary.channels["latitude"].values[1] = 91;
-    arbitrary.channels["longitude"].values[1] = 181;
+    arbitrary.channels["latitude"].setValue(1, 91);
+    arbitrary.channels["longitude"].setValue(1, 181);
     QVERIFY(!currentTrackPoint(arbitrary, 1, geometry));
 }
 
@@ -1229,12 +1317,10 @@ void TelemetryCoreTests::derivesDirectionalPassesAndCompleteLaps()
         TelemetrySession session;
         TelemetryChannel latitude;
         latitude.name = QStringLiteral("latitude");
-        latitude.timestamps = times;
-        latitude.values = latitudes;
+        latitude.setSamples(times, latitudes);
         TelemetryChannel longitude;
         longitude.name = QStringLiteral("longitude");
-        longitude.timestamps = times;
-        longitude.values = longitudes;
+        longitude.setSamples(times, longitudes);
         session.channels.insert(latitude.name, latitude);
         session.channels.insert(longitude.name, longitude);
         session.aliases.insert(latitude.name, latitude.name);
@@ -1282,10 +1368,10 @@ void TelemetryCoreTests::derivesDirectionalPassesAndCompleteLaps()
     QVector<float> latitudes{northLatitude, midLatitude, midLatitude, northLatitude};
     QVector<float> longitudes{westLongitude, westLongitude, eastLongitude, eastLongitude};
     const auto lapChannel = laps.channels.value(QStringLiteral("latitude"));
-    for (qsizetype index = 0; index < lapChannel.timestamps.size(); ++index) {
-        times.append(lapChannel.timestamps[index] + 10.0);
-        latitudes.append(lapChannel.values[index]);
-        longitudes.append(laps.channels.value(QStringLiteral("longitude")).values[index]);
+    for (qsizetype index = 0; index < lapChannel.timestamps().size(); ++index) {
+        times.append(lapChannel.timestamps()[index] + 10.0);
+        latitudes.append(lapChannel.values()[index]);
+        longitudes.append(laps.channels.value(QStringLiteral("longitude")).values()[index]);
     }
     const LapSession majority = detectLaps(sessionFor(times, latitudes, longitudes), startGate);
     QCOMPARE(majority.status, LapSessionStatus::Available);
@@ -1302,8 +1388,7 @@ void TelemetryCoreTests::finalizesGatePassWhenTelemetryEndsInsideCorridor()
                                           const QString &name, const QVector<float> &values) {
         TelemetryChannel channel;
         channel.name = name;
-        channel.timestamps = {0.0, 1.0, 2.0};
-        channel.values = values;
+        channel.setSamples({0.0, 1.0, 2.0}, values);
         session.channels.insert(name, channel);
         session.aliases.insert(name, name);
     };
@@ -1336,11 +1421,11 @@ void TelemetryCoreTests::parsesOptionalRealVbo()
     qsizetype nonFiniteSamples = 0;
     qsizetype finiteSamples = 0;
     for (const TelemetryChannel &channel : session.channels) {
-        QCOMPARE(channel.timestamps.size(), session.sampleCount);
-        QCOMPARE(channel.values.size(), session.sampleCount);
-        for (qsizetype index = 0; index < channel.values.size(); ++index) {
-            if (index > 0) QVERIFY(channel.timestamps[index] > channel.timestamps[index - 1]);
-            const float value = channel.values[index];
+        QCOMPARE(channel.timestamps().size(), session.sampleCount);
+        QCOMPARE(channel.values().size(), session.sampleCount);
+        for (qsizetype index = 0; index < channel.values().size(); ++index) {
+            if (index > 0) QVERIFY(channel.timestamps()[index] > channel.timestamps()[index - 1]);
+            const float value = channel.values()[index];
             if (!std::isfinite(value)) {
                 ++nonFiniteSamples;
             } else {
@@ -1435,15 +1520,11 @@ void TelemetryCoreTests::cancelsTrackGeometryConstruction()
     TelemetryChannel longitude;
     longitude.name = QStringLiteral("longitude");
     constexpr qsizetype count = 50'000;
-    latitude.timestamps.reserve(count);
-    latitude.values.reserve(count);
-    longitude.timestamps.reserve(count);
-    longitude.values.reserve(count);
+    latitude.reserve(count);
+    longitude.reserve(count);
     for (qsizetype index = 0; index < count; ++index) {
-        latitude.timestamps.append(static_cast<double>(index) / 10.0);
-        longitude.timestamps.append(static_cast<double>(index) / 10.0);
-        latitude.values.append(static_cast<float>(52.0 + index * 0.000001));
-        longitude.values.append(static_cast<float>(21.0 + index * 0.000001));
+        latitude.appendSample(static_cast<double>(index) / 10.0, static_cast<float>(52.0 + index * 0.000001));
+        longitude.appendSample(static_cast<double>(index) / 10.0, static_cast<float>(21.0 + index * 0.000001));
     }
     session.channels.insert(latitude.name, latitude);
     session.channels.insert(longitude.name, longitude);
@@ -1590,8 +1671,9 @@ TelemetryChannel tyreChannel(const QString &name, const QVector<float> &values, 
     TelemetryChannel channel;
     channel.name = name;
     channel.unit = unit;
-    for (qsizetype index = 0; index < values.size(); ++index) channel.timestamps.append(index / 10.0);
-    channel.values = values;
+    QVector<double> times;
+    for (qsizetype index = 0; index < values.size(); ++index) times.append(index / 10.0);
+    channel.setSamples(times, values);
     return channel;
 }
 
@@ -1692,7 +1774,9 @@ void TelemetryCoreTests::readsTyreValuesWithoutPlaceholdersOrGaps()
     auto temperature = tyreChannel(QStringLiteral("tyre_temp_fl-canbus"), {0, 0, 0, 40, 42, 44, 46});
     auto pressure = tyreChannel(QStringLiteral("tyre_pressure_fl-canbus"), {0, 0, 0, 200, 210, 220, 230});
     // A 2 s gap before the last pressure sample: nothing is bridged.
-    pressure.timestamps.last() = 2.5;
+    auto pressureTimes = pressure.timestamps();
+    pressureTimes.last() = 2.5;
+    pressure.setSamples(pressureTimes, pressure.values());
     session.channels.insert(temperature.name, temperature);
     session.channels.insert(pressure.name, pressure);
     const auto fahrenheit = tyreChannel(QStringLiteral("tyre_temp_fr"), {104, 104}, QStringLiteral("F"));
@@ -1735,7 +1819,7 @@ void TelemetryCoreTests::readsPrivateTyreData()
         const auto names = session.channelNames();
         double start = std::numeric_limits<double>::infinity(), end = -start;
         for (const auto &name : names) {
-            const auto &timestamps = session.channels.value(name).timestamps;
+            const auto timestamps = session.channels.value(name).timestamps();
             if (timestamps.isEmpty()) continue;
             start = std::min(start, timestamps.first());
             end = std::max(end, timestamps.last());

@@ -190,7 +190,7 @@ QJsonObject ProjectSourceReferenceCodec::telemetryFingerprint(
         const TelemetryChannel channel = session.channels.value(name);
         channels.append(QJsonObject{{QStringLiteral("name"), name},
                                     {QStringLiteral("unit"), channel.unit},
-                                    {QStringLiteral("samples"), channel.values.size()}});
+                                    {QStringLiteral("samples"), channel.values().size()}});
     }
     return {
         {QStringLiteral("kind"), QStringLiteral("telemetry-v1")},

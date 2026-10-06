@@ -771,8 +771,7 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         }
         TelemetryChannel channel;
         channel.name = names[column];
-        channel.timestamps = rawTimes;
-        channel.values = std::move(rawValues[column]);
+        channel.setSamples(rawTimes, std::move(rawValues[column]));
         session.channels.insert(channel.name, std::move(channel));
     }
     session.duration = checkedTime(rawTimes.back() - rawTimes.front());
@@ -810,6 +809,7 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
     session.sampleCount = rawTimes.size();
     session.aliases = resolveAliases(session.channelNames());
     preferAcceleratorPedalForThrottle(session);
+    markImplausibleHeartRate(session);
     throwIfCancelled(cancelled);
     return session;
 }

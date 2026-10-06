@@ -31,14 +31,14 @@ namespace {
 
 void validateSignal(const TelemetryChannel &signal, const CancellationCheck &cancelled)
 {
-    if (signal.timestamps.size() != signal.values.size() || signal.values.size() < 20)
+    if (signal.timestamps().size() != signal.values().size() || signal.values().size() < 20)
         throw std::runtime_error("Synchronization requires at least 20 aligned GPS speed samples.");
-    if (signal.values.size() > kMaximumSyncSignalSamples)
+    if (signal.values().size() > kMaximumSyncSignalSamples)
         throw ResourceLimitError("Synchronization signal exceeds the 1000000-sample limit.");
-    for (qsizetype i = 0; i < signal.timestamps.size(); ++i) {
+    for (qsizetype i = 0; i < signal.timestamps().size(); ++i) {
         if ((i & 0xff) == 0) throwIfCancelled(cancelled);
-        const double time = signal.timestamps[i];
-        if (!std::isfinite(time) || (i && time <= signal.timestamps[i - 1]))
+        const double time = signal.timestamps()[i];
+        if (!std::isfinite(time) || (i && time <= signal.timestamps()[i - 1]))
             throw std::runtime_error("Synchronization timestamps must be finite and strictly increasing.");
     }
 }
@@ -122,7 +122,7 @@ SyncCandidate calculate(
     if (!std::isfinite(firstOffset) || !std::isfinite(lastOffset))
         throw std::runtime_error("Synchronization offset range is not finite.");
     const int offsets = gridCount(lastOffset - firstOffset + step / 2.0, step, kMaximumSyncOffsets);
-    const int samples = gridCount(video.timestamps.constLast() - video.timestamps.constFirst(),
+    const int samples = gridCount(video.timestamps().constLast() - video.timestamps().constFirst(),
                                   step, kMaximumSyncGridSamples);
     const qint64 pairs = static_cast<qint64>(offsets) * samples;
     if (pairs > remainingPairs)
@@ -130,7 +130,7 @@ SyncCandidate calculate(
     remainingPairs -= pairs;
     // Validate the grid's precision before allocating or doing correlation work.
     (void) gridTime(firstOffset, step, offsets - 1);
-    (void) gridTime(video.timestamps.constFirst(), step, samples - 1);
+    (void) gridTime(video.timestamps().constFirst(), step, samples - 1);
     QVector<Result> results;
     results.reserve(offsets);
     for (int offsetIndex = 0; offsetIndex < offsets; ++offsetIndex) {
@@ -142,7 +142,7 @@ SyncCandidate calculate(
         b.reserve(samples);
         for (int sampleIndex = 0; sampleIndex < samples; ++sampleIndex) {
             if ((sampleIndex & 0xff) == 0) throwIfCancelled(cancelled);
-            const double time = gridTime(video.timestamps.constFirst(), step, sampleIndex);
+            const double time = gridTime(video.timestamps().constFirst(), step, sampleIndex);
             // KAN-157: the shared lookup, so a loss of GPS fix is not bridged
             // into a ramp that correlates.
             const auto av = telemetryValueAt(video, time);
@@ -239,8 +239,8 @@ SyncCandidate TelemetrySyncEngine::synchronize(
     // overlap, in both directions: the camera may start before the logger or
     // stop after it (KAN-146). When either recording is shorter than that,
     // the shorter one must lie fully inside the other.
-    const double videoFirst = videoSpeed.timestamps.constFirst(), videoLast = videoSpeed.timestamps.constLast();
-    const double telemetryFirst = telemetrySpeed.timestamps.constFirst(), telemetryLast = telemetrySpeed.timestamps.constLast();
+    const double videoFirst = videoSpeed.timestamps().constFirst(), videoLast = videoSpeed.timestamps().constLast();
+    const double telemetryFirst = telemetrySpeed.timestamps().constFirst(), telemetryLast = telemetrySpeed.timestamps().constLast();
     const double requiredOverlap = std::min({kMinimumSyncOverlapSeconds, videoLast - videoFirst, telemetryLast - telemetryFirst});
     double minimum = telemetryFirst - videoLast + requiredOverlap;
     double maximum = telemetryLast - videoFirst - requiredOverlap;

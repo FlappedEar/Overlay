@@ -58,13 +58,13 @@ BrakingOnsetDetection detectBrakingOnsets(const TelemetrySession &session, const
         result.unresolvedReason = brakingUnitMismatch;
         return result;
     }
-    if (channel.timestamps.size() != channel.values.size()) {
+    if (channel.timestamps().size() != channel.values().size()) {
         result.unresolvedReason = brakingNoSamples;
         return result;
     }
 
     const double gapThreshold = telemetryGapThreshold(channel);
-    const auto &times = channel.timestamps;
+    const auto &times = channel.timestamps();
     const auto first = std::lower_bound(times.cbegin(), times.cend(), startTime);
     const auto last = std::upper_bound(times.cbegin(), times.cend(), endTime);
     const auto begin = std::distance(times.cbegin(), first);
@@ -107,8 +107,8 @@ BrakingOnsetDetection detectBrakingOnsets(const TelemetrySession &session, const
 
     for (auto index = begin; index < end; ++index) {
         const double time = times[index];
-        const double raw = channel.values[index];
-        const bool gapBefore = haveSample && gapThreshold > 0.0 && time - previousTime > gapThreshold;
+        const double raw = channel.values()[index];
+        const bool gapBefore = haveSample && gapThreshold > 0.0 && telemetryIsGap(channel, previousTime, time);
         if (!std::isfinite(raw) || gapBefore) {
             if (!followsGap) ++result.gaps;
             if (episode) close(episode->lastTime, brakingInterruptedByGap);
