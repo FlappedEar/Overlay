@@ -87,8 +87,8 @@ screen) from the SVG.
 ## Scope
 
 Restyled (KAN-187): the shared controls and `FeLabel`; `Main.qml` (bars,
-preview surround, timeline and cue marks, status bar, welcome screen, export
-dialog, recovery and other dialogs, menus); the `WidgetOverlay` selection
+preview surround, timeline and cue marks, status bar, welcome screen, recovery
+and other dialogs, menus); `ExportDialog`; the `WidgetOverlay` selection
 outline and resize handle; `InspectorPanel.qml`; `VideoChaptersDialog`;
 `StartupError`. `Main.qml` sets the full Basic-style palette from the theme, so
 standard dialogs, menus and dialog buttons follow it. Editor text uses

@@ -393,6 +393,7 @@ qt_add_qml_module(flappedear_native
         qml/FeSlider.qml
         qml/FeSpinBox.qml
         qml/FeTextField.qml
+        qml/ExportDialog.qml
         qml/InspectorPanel.qml
         qml/StartupError.qml
         qml/Main.qml
