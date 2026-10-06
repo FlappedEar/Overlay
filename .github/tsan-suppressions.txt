@@ -6,3 +6,9 @@
 # from inside Qt; our own (instrumented) loads and stores are still checked.
 called_from_lib:libQt6Core.so.6
 called_from_lib:libQt6Test.so.6
+# Qt Test's watchdog locks its std::mutex inside libQt6Test, which the line
+# above hides, and then waits on it with std::condition_variable::wait in
+# libstdc++, which ThreadSanitizer sees unlock a mutex it never saw locked.
+# Only that mutex-misuse report inside condition_variable::wait is ignored;
+# std::thread and condition variables in our own code stay checked.
+mutex:std::condition_variable::wait

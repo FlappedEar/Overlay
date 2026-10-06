@@ -1,0 +1,63 @@
+{
+  "analysis": {
+    "channels": [
+      "speed"
+    ]
+  },
+  "event": {
+    "activeRunId": "demo-laps",
+    "id": "synthetic-event-demo",
+    "name": "Synthetic event \u2014 development fixture",
+    "runs": [
+      {
+        "id": "demo-laps",
+        "name": "Run 1 \u2014 synthetic GPS laps",
+        "notes": "Synthetic gate crossings; not real driving or a reference lap.",
+        "primaryTelemetrySourceId": "demo-laps-source",
+        "sources": {
+          "telemetry": [
+            {
+              "id": "demo-laps-source",
+              "reference": {
+                "relativePath": "event-laps.vbo"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "offset": 0,
+          "timeScale": 1
+        }
+      },
+      {
+        "id": "demo-channels",
+        "name": "Run 2 \u2014 synthetic channels",
+        "notes": "Independent three-sample parser fixture; not a comparable lap.",
+        "primaryTelemetrySourceId": "demo-channels-source",
+        "sources": {
+          "telemetry": [
+            {
+              "id": "demo-channels-source",
+              "reference": {
+                "relativePath": "basic.vbo"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "offset": 0,
+          "timeScale": 1
+        }
+      }
+    ]
+  },
+  "scene": {
+    "widgets": []
+  },
+  "sources": {
+    "telemetry": {
+      "relativePath": "x.vbo"
+    }
+  },
+  "version": 3
+}

@@ -1762,7 +1762,9 @@ fails it. Qt's prebuilt libraries are not instrumented, so
 [`.github/tsan-suppressions.txt`](../.github/tsan-suppressions.txt) ignores the
 calls Qt Core and Qt Test make into intercepted functions (`memmove`,
 `pthread_cond_destroy`, ...) with `called_from_lib`; our own loads and stores
-are still checked. The job also leaves out `flappedear_telemetry_app_tests` and
+are still checked. Qt Test's watchdog then waits in libstdc++'s
+`std::condition_variable::wait` on a mutex locked inside Qt Test, so one `mutex:`
+entry ignores that misuse report there and nothing else. The job also leaves out `flappedear_telemetry_app_tests` and
 `flappedear_project_vector_tests`, which drive the reference app: its
 `QtConcurrent::run` tasks reach the worker through `QThreadPool`, whose
 futex-based locking ThreadSanitizer cannot see, so every value a task captures

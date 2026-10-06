@@ -392,7 +392,7 @@ jobs:
             libxkbcommon-dev libvulkan-dev libfontconfig1-dev libfreetype-dev \
             xvfb xauth libgl1-mesa-dri libegl-mesa0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
             libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
-            libxcb-xinerama0 libxcb-xkb1 fonts-dejavu-core
+            libxcb-xinerama0 libxcb-xkb1 fonts-dejavu-core ffmpeg
 
       - name: Install Qt 6.8.3 and modules
         uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
