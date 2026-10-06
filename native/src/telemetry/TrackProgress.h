@@ -7,6 +7,7 @@
 #include "telemetry/TimingGate.h"
 
 #include <QPointF>
+#include <QString>
 #include <QVector>
 #include <optional>
 
@@ -19,7 +20,8 @@ inline constexpr double gateCoverageToleranceMeters = 15.0;
 // A dense (~2m spacing), gate-anchored polyline built once per compatible
 // track group from one representative lap. progress=0 sits where the lap's
 // path crosses the timing gate (KAN-152), or at the point nearest the gate
-// midpoint when the path never crosses the gate's segment. Points are local east/north meters relative to
+// midpoint when the path passes within gateCoverageToleranceMeters of the
+// gate's segment without crossing it; a gate farther away gives no axis. Points are local east/north meters relative to
 // `origin` -- the same convention TrackInference/LapTiming already use for a
 // lap trace, deliberately ignoring the west-positive display flip: that only
 // matters for map presentation, not for this internal distance math.
@@ -30,6 +32,10 @@ struct ProgressAxis {
     double spacingMeters = 0.0; // ~ lengthMeters / points.size(), points are evenly arc-spaced by construction
     GeoCoordinate origin;
     bool valid = false;
+    // Why there is no axis, when the reason is the gate rather than the lap
+    // (KAN-212): the start/finish line is farther than
+    // gateCoverageToleranceMeters from the lap's path.
+    QString problem;
 };
 
 [[nodiscard]] ProgressAxis buildProgressAxis(
