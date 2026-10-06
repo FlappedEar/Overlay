@@ -11,6 +11,8 @@
 #include <iterator>
 #include <limits>
 #include <stdexcept>
+#include <tuple>
+#include <utility>
 
 namespace FlappedEar {
 namespace {
@@ -146,6 +148,11 @@ void validateOptions(const LapDetectionOptions &options)
         options.maximumClusterSeconds,
         options.minimumGateLengthMeters,
         options.maximumGateLengthMeters,
+        options.minimumLapSeconds,
+        options.maximumLapSeconds,
+        options.minimumLapDistanceMeters,
+        options.maximumAverageSpeedMetersPerSecond,
+        options.minimumLapDistanceRatio,
     };
     if (std::any_of(std::begin(values), std::end(values), [](const double value) {
             return !std::isfinite(value) || value < 0.0;
@@ -160,7 +167,10 @@ void validateOptions(const LapDetectionOptions &options)
         || options.maximumGateLengthMeters > 1'000.0
         || options.maximumGateLengthMeters < options.minimumGateLengthMeters
         || options.maximumAcceptedPasses <= 0
-        || options.maximumAcceptedPasses > 100'000) {
+        || options.maximumAcceptedPasses > 100'000
+        || options.maximumLapSeconds <= options.minimumLapSeconds
+        || options.maximumAverageSpeedMetersPerSecond <= 0.0
+        || options.minimumLapDistanceRatio >= 1.0) {
         throw std::invalid_argument("Invalid lap-detection options.");
     }
 }
@@ -189,7 +199,11 @@ std::optional<GpsSample> gpsSampleAt(
     return GpsSample{latitudeTime, {projected.eastMeters, projected.northMeters}};
 }
 
-LapReferenceIssue referenceIssueForLap(const TelemetrySession &session, const TimedLap &lap,
+// Whether the GPS covers the lap without a gap or invalid fix, from the sample
+// at or before its start through the first sample at or after its end, and
+// the length of that path (empty when it is not covered).
+std::pair<LapReferenceIssue, std::optional<double>> referenceIssueForLap(
+    const TelemetrySession &session, const TimedLap &lap,
     const GeoCoordinate &origin, const CancellationCheck &cancelled)
 {
     const auto latitude = session.channels.constFind(session.aliases.value("latitude"));
@@ -198,31 +212,75 @@ LapReferenceIssue referenceIssueForLap(const TelemetrySession &session, const Ti
         || latitude->timestamps().size() != latitude->values().size()
         || longitude->timestamps().size() != longitude->values().size()
         || latitude->timestamps().size() != longitude->timestamps().size()
-        || latitude->timestamps().isEmpty()) return LapReferenceIssue::InvalidGps;
+        || latitude->timestamps().isEmpty()) return {LapReferenceIssue::InvalidGps, std::nullopt};
     const auto &times = latitude->timestamps();
     auto first = std::lower_bound(times.cbegin(), times.cend(), lap.startTelemetryTime);
     if (first != times.cbegin() && (first == times.cend() || *first > lap.startTelemetryTime)) --first;
     const auto last = std::lower_bound(first, times.cend(), lap.endTelemetryTime);
     if (first == times.cend() || *first > lap.startTelemetryTime || last == times.cend())
-        return LapReferenceIssue::GpsGap;
+        return {LapReferenceIssue::GpsGap, std::nullopt};
     const double threshold = std::min(telemetryGapThreshold(*latitude), telemetryGapThreshold(*longitude));
-    std::optional<double> previous;
+    std::optional<GpsSample> previous;
+    double distance = 0.0;
     for (auto it = first; it <= last; ++it) {
         const qsizetype index = std::distance(times.cbegin(), it);
         if ((index & 0xff) == 0) throwIfCancelled(cancelled);
         const auto sample = gpsSampleAt(*latitude, *longitude, index, origin);
-        if (!sample) return LapReferenceIssue::InvalidGps;
-        if (previous && (sample->time <= *previous || threshold <= 0.0
-                         || telemetryIsGap(*latitude, *previous, sample->time)
-                         || telemetryIsGap(*longitude, *previous, sample->time)))
-            return LapReferenceIssue::GpsGap;
-        previous = sample->time;
+        if (!sample) return {LapReferenceIssue::InvalidGps, std::nullopt};
+        if (previous) {
+            if (sample->time <= previous->time || threshold <= 0.0
+                || telemetryIsGap(*latitude, previous->time, sample->time)
+                || telemetryIsGap(*longitude, previous->time, sample->time))
+                return {LapReferenceIssue::GpsGap, std::nullopt};
+            distance += length(subtract(sample->point, previous->point));
+        }
+        previous = sample;
     }
-    return LapReferenceIssue::None;
+    return {LapReferenceIssue::None,
+            std::isfinite(distance) ? std::optional<double>(distance) : std::nullopt};
+}
+
+// Marks the laps that cannot be a lap of the circuit ImplausibleLap (KAN-225,
+// as Telemetry FET-199): a time outside minimumLapSeconds ... maximumLapSeconds,
+// a GPS path shorter than minimumLapDistanceMeters or than
+// minimumLapDistanceRatio of the median path of the recording's laps, or an
+// average speed above maximumAverageSpeedMetersPerSecond. They stay listed.
+void markImplausibleLaps(LapSession &result, const LapDetectionOptions &options)
+{
+    // Absolute limits first; the median is taken from the laps within them,
+    // so a parked hour of GPS jitter cannot move it.
+    const auto outsideLimits = [&options](const TimedLap &lap) {
+        const double duration = lap.durationSeconds;
+        if (duration < options.minimumLapSeconds || duration > options.maximumLapSeconds) return true;
+        if (!lap.distanceMeters) return false;
+        return *lap.distanceMeters < options.minimumLapDistanceMeters
+            || *lap.distanceMeters / duration > options.maximumAverageSpeedMetersPerSecond;
+    };
+    QVector<double> distances;
+    for (const auto &lap : result.timedLaps)
+        if (lap.referenceIssue == LapReferenceIssue::None && !outsideLimits(lap) && lap.distanceMeters)
+            distances.append(*lap.distanceMeters);
+    std::sort(distances.begin(), distances.end());
+    std::optional<double> median;
+    if (!distances.isEmpty()) {
+        const qsizetype middle = distances.size() / 2;
+        median = distances.size() % 2 == 1 ? distances[middle]
+                                           : (distances[middle - 1] + distances[middle]) / 2.0;
+    }
+    for (auto &lap : result.timedLaps) {
+        if (lap.referenceIssue != LapReferenceIssue::None) continue;
+        const bool shortOfMedian = lap.distanceMeters && distances.size() >= 2 && median
+            && *lap.distanceMeters < options.minimumLapDistanceRatio * *median;
+        if (outsideLimits(lap) || shortOfMedian) {
+            lap.referenceIssue = LapReferenceIssue::ImplausibleLap;
+            ++result.diagnostics.implausibleLaps;
+        }
+    }
 }
 
 void deriveTimedLaps(const TelemetrySession &session, LapSession &result,
-    const GeoCoordinate &origin, const CancellationCheck &cancelled)
+    const GeoCoordinate &origin, const LapDetectionOptions &options,
+    const CancellationCheck &cancelled)
 {
     for (qsizetype index = 1; index < result.acceptedPasses.size(); ++index) {
         const double start = result.acceptedPasses[index - 1].telemetryTime;
@@ -235,8 +293,10 @@ void deriveTimedLaps(const TelemetrySession &session, LapSession &result,
         result.timedLaps.append({
             static_cast<int>(result.timedLaps.size() + 1), start, end, duration, 0.0});
         auto &lap = result.timedLaps.last();
-        lap.referenceIssue = referenceIssueForLap(session, lap, origin, cancelled);
+        std::tie(lap.referenceIssue, lap.distanceMeters)
+            = referenceIssueForLap(session, lap, origin, cancelled);
     }
+    markImplausibleLaps(result, options);
     recomputeLapRanking(result);
 }
 
@@ -555,7 +615,7 @@ LapSession detectLaps(
         result.status = LapSessionStatus::NoUsableGps;
         return result;
     }
-    deriveTimedLaps(session, result, origin, cancelled);
+    deriveTimedLaps(session, result, origin, options, cancelled);
     if (result.acceptedPasses.isEmpty()) {
         result.status = LapSessionStatus::NoAcceptedPasses;
     } else if (result.timedLaps.isEmpty()) {

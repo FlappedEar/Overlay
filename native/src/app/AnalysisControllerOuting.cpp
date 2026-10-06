@@ -260,7 +260,8 @@ void AnalysisController::refreshOutingCompatibility()
         const auto config = configurations.value(runId); const auto resolvedId = lapCompatibilityGroupId(config);
         const auto id = resolvedId.isEmpty() ? "unresolved:" + runId : resolvedId;
         const auto issue = row.value("referenceIssue") == "GPS gap" ? LapReferenceIssue::GpsGap
-            : row.value("referenceIssue") == "Invalid GPS" ? LapReferenceIssue::InvalidGps : LapReferenceIssue::None;
+            : row.value("referenceIssue") == "Invalid GPS" ? LapReferenceIssue::InvalidGps
+            : row.value("referenceIssue") == "Implausible lap" ? LapReferenceIssue::ImplausibleLap : LapReferenceIssue::None;
         auto reasons = lapCompatibilityReasons(config, referenceConfig, issue, row.value("excluded").toBool());
         if (!row.value("layoutIssue").toString().isEmpty()) reasons.append(row.value("layoutIssue").toString());
         if (row.value("type") != "LAP") reasons.append("not-timed-lap");
@@ -359,7 +360,8 @@ void AnalysisController::refreshLapExclusionPolicy()
             {"layoutIssue", row.layoutIssue},
             {"bestOfRun", row.type == LapSectionType::Lap && bestNumbers.value(row.runId, -1) == row.lapNumber},
             {"referenceIssue", row.referenceIssue == LapReferenceIssue::GpsGap ? QStringLiteral("GPS gap")
-                : row.referenceIssue == LapReferenceIssue::InvalidGps ? QStringLiteral("Invalid GPS") : QString()},
+                : row.referenceIssue == LapReferenceIssue::InvalidGps ? QStringLiteral("Invalid GPS")
+                : row.referenceIssue == LapReferenceIssue::ImplausibleLap ? QStringLiteral("Implausible lap") : QString()},
             {"chronologyKnown", row.timestampMilliseconds.has_value()}};
         m_outingLapRows.append(item);
         if (!m_selectedOutingLap.isEmpty() && m_selectedOutingLap.value("reference") == item.value("reference")) {

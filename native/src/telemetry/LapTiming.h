@@ -30,6 +30,16 @@ struct LapDetectionOptions {
     double minimumGateLengthMeters = 1.0;
     double maximumGateLengthMeters = 200.0;
     qsizetype maximumAcceptedPasses = 100'000;
+    // Lap plausibility (KAN-225, as Telemetry FET-199). A lap outside these
+    // limits stays listed but is never ranked, used for statistics or as a
+    // reference. minimumLapSeconds is a floor only: the distance and speed
+    // limits already rule out laps under 2 s, and minimumLapDistanceRatio of
+    // the recording's median lap path is what catches a fake lap among real ones.
+    double minimumLapSeconds = 3.0;
+    double maximumLapSeconds = 3'600.0;
+    double minimumLapDistanceMeters = 200.0;
+    double maximumAverageSpeedMetersPerSecond = 100.0;
+    double minimumLapDistanceRatio = 0.8;
 };
 
 struct LapDetectionDiagnostics {
@@ -43,6 +53,9 @@ struct LapDetectionDiagnostics {
     qsizetype rejectedNotCrossingClusters = 0;
     qsizetype rejectedOppositeDirectionClusters = 0;
     qsizetype invalidLapDurations = 0;
+    // Laps kept visible but not ranked because their time or length is not
+    // plausible (KAN-225).
+    qsizetype implausibleLaps = 0;
 };
 
 struct GatePass {
@@ -54,7 +67,9 @@ struct GatePass {
     double normalSpeedMetersPerSecond = 0.0;
 };
 
-enum class LapReferenceIssue { None, GpsGap, InvalidGps };
+// ImplausibleLap: its time, GPS path length or average speed cannot be a lap
+// of the circuit (KAN-225); see LapDetectionOptions.
+enum class LapReferenceIssue { None, GpsGap, InvalidGps, ImplausibleLap };
 
 struct TimedLap {
     int number = 0;
@@ -66,6 +81,9 @@ struct TimedLap {
     // coverage cannot support ranking or a spatial reference.
     LapReferenceIssue referenceIssue = LapReferenceIssue::None;
     QString userExclusionReason = {};
+    // Length of the lap's GPS path, from the fix at or before its start to the
+    // first at or after its end; empty when its GPS is not complete.
+    std::optional<double> distanceMeters = {};
     [[nodiscard]] bool referenceEligible() const { return referenceIssue == LapReferenceIssue::None && userExclusionReason.isEmpty(); }
 };
 

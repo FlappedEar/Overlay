@@ -91,6 +91,7 @@ QStringList lapCompatibilityReasons(const QJsonObject &config, const QJsonObject
     }
     if (issue == LapReferenceIssue::GpsGap) reasons.append("incomplete-gps");
     if (issue == LapReferenceIssue::InvalidGps) reasons.append("invalid-gps");
+    if (issue == LapReferenceIssue::ImplausibleLap) reasons.append("implausible-lap");
     if (userExcluded) reasons.append("user-exclusion");
     return reasons;
 }
@@ -114,6 +115,7 @@ QString lapCompatibilityReasonText(const QString &reason)
     if (reason == "changed-timing-gate") return "Different timing gates";
     if (reason == "incomplete-gps") return "Incomplete GPS";
     if (reason == "invalid-gps") return "Invalid GPS";
+    if (reason == "implausible-lap") return "Lap time or length is not plausible for this circuit";
     if (reason == "user-exclusion") return "User exclusion";
     if (reason == "not-timed-lap") return "Not a complete timed lap";
     if (reason == "stale-source") return "Source changed; reload recording";
@@ -400,6 +402,7 @@ QVector<OutingLapRow> outingLapRows(const TelemetrySession &session, const LapSe
         if (lap) {
             row.referenceEligible = lap->referenceEligible();
             row.referenceIssue = lap->referenceIssue;
+            row.distanceMeters = lap->distanceMeters;
             row.bestOfRun = lap->referenceEligible() && laps.fastestLapIndex && *laps.fastestLapIndex >= 0
                 && *laps.fastestLapIndex < laps.timedLaps.size()
                 && laps.timedLaps[*laps.fastestLapIndex].number == lap->number;

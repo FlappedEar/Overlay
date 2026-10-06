@@ -55,6 +55,14 @@ struct OutingLapDerivation {
 [[nodiscard]] OutingLapDerivation deriveOutingLaps(const QJsonArray &sources, const QString &projectPath,
     const QHash<QString, OutingRunDerivation> &cache, const std::shared_ptr<std::atomic_bool> &cancellation);
 
+// Marks every eligible lap whose GPS path is shorter than 80 % of the median of
+// its compatibility group's laps with layoutIssue "implausible-lap" (KAN-225, as
+// Telemetry FET-199), so one session's single short "lap" cannot become the best
+// of the day. The median takes the laps that pass every per-recording check and
+// are on the group's route, from at least two recordings. deriveOutingLaps
+// applies it after marking laps off the recorded route.
+void markShortLapsOfGroups(QVector<OutingLapRow> &rows, const QHash<QString, QJsonObject> &configurations);
+
 // Each run's track configuration for ranking: the inferred one when the
 // route was grouped, otherwise the configuration saved with the run.
 [[nodiscard]] QHash<QString, QJsonObject> outingRunConfigurations(const QJsonArray &sources,
