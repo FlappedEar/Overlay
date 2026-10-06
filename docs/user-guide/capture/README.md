@@ -35,6 +35,27 @@ python3 docs/user-guide/build.py
   the Video chapters dialog.
 - It runs on macOS with a display, in about two and a half minutes. The test
   export goes to `/tmp/FlappedEar/` and is deleted afterwards.
+- `FLAPPEDEAR_GUIDE_SYNC_OFFSET` (optional, seconds) replaces Auto Sync for a
+  video without GoPro GPS, and `editor-sync-result.png` is then not taken. The
+  pictures of 6 October 2026 (KAN-189) used it with offset 0 and a neutral
+  backdrop clip, because the GoPro footage was not available:
+
+  ```bash
+  ffmpeg -f lavfi -i "gradients=s=1920x1080:c0=0x5d6b78:c1=0x2a3138:x0=0:y0=0:x1=0:y1=1080:speed=0" -frames:v 1 frame.png
+  ffmpeg -loop 1 -framerate 60000/1001 -i frame.png -frames:v 600 \
+    -vf "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p" \
+    -c:v libx264 -preset ultrafast -tune stillimage -g 600 -an short.mp4
+  ffmpeg -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 1501.5 -c:a aac silence.m4a
+  ffmpeg -stream_loop 149 -i short.mp4 -i silence.m4a -map 0:v -map 1:a -c copy -shortest \
+    -bsf:v h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0 \
+    backdrop.mp4
+  ```
+
+  Export refuses a source without colour tags or with a frame rate below the
+  output's, hence the tags and the exact 600-frame loop.
+- On Linux (Xvfb with a PulseAudio null sink) the window has an in-window menu
+  bar that macOS does not; crop the top 40 px of the window-sized pictures
+  and the two inspector pictures.
 - The pictures show the moment 38 s into the recording's best lap. Captions
   quote values from the pictures: when the media or the application changes,
   check the captions too.
