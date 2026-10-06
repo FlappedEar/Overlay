@@ -17,6 +17,10 @@
 #include "project/ProjectRecoveryStore.h"
 #include "project/ProjectLimits.h"
 
+#if defined(Q_OS_UNIX)
+#include <sys/resource.h>
+#endif
+
 using namespace NativeTestSupport;
 
 class SourceTests final : public QObject {
@@ -54,6 +58,7 @@ private slots:
     void boundsGoProProbeOutput();
     void rejectsOutOfFileGpmfPackets();
     void boundsGpmfDepthAndRecordCount();
+    void decodesNestedGpmfWithoutCopies();
     void normalizesGpmfTimestamps();
     void boundsTimeTransforms_data();
     void boundsTimeTransforms();
@@ -1862,6 +1867,43 @@ void SourceTests::boundsGpmfDepthAndRecordCount()
         QVERIFY(diagnostic.contains(QStringLiteral("packet 1")));
         QVERIFY(diagnostic.contains(QStringLiteral("KLV header")));
     }
+}
+
+// KAN-197: nested GPMF containers are parsed in place. Copying each level's
+// payload made a 15 MiB packet nested 31 deep cost about 470 MiB.
+void SourceTests::decodesNestedGpmfWithoutCopies()
+{
+    QByteArray nested = klvRecord("JUNK", 'c', 255, 61'680, QByteArray(255 * 61'680, 'x'));
+    for (int depth = 1; depth < GoProTelemetrySource::kMaximumContainerDepth; ++depth) {
+        nested.append(QByteArray((255 - nested.size() % 255) % 255, '\0'));
+        nested = klvRecord("DEVC", 0, 255, static_cast<quint16>(nested.size() / 255), nested);
+    }
+    QVERIFY(nested.size() < GoProTelemetrySource::kMaximumPacketBytes);
+    const auto peakResidentMiB = [] {
+#if defined(Q_OS_UNIX)
+        rusage usage{};
+        getrusage(RUSAGE_SELF, &usage);
+#if defined(Q_OS_MACOS)
+        return static_cast<double>(usage.ru_maxrss) / (1024.0 * 1024.0);
+#else
+        return static_cast<double>(usage.ru_maxrss) / 1024.0;
+#endif
+#else
+        return 0.0; // Not measured on Windows.
+#endif
+    };
+    const double before = peakResidentMiB();
+    // No GPS stream: the decode reports that after walking every level.
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error,
+        (void) GoProTelemetrySource::decodeGpsPackets({{nested, 0.0, 1.0}}, 1.0));
+    const double growth = peakResidentMiB() - before;
+    qInfo().noquote() << QString("peak resident growth %1 MiB").arg(growth, 0, 'f', 1);
+    QVERIFY2(growth < 150.0, qPrintable(QString("peak memory grew by %1 MiB").arg(growth)));
+
+    // One packet may not take the whole metadata budget.
+    const QByteArray oversized(GoProTelemetrySource::kMaximumPacketBytes + 1, '\0');
+    QVERIFY_THROWS_EXCEPTION(ResourceLimitError,
+        (void) GoProTelemetrySource::decodeGpsPackets({{oversized, 0.0, 1.0}}, 1.0));
 }
 
 void SourceTests::normalizesGpmfTimestamps()

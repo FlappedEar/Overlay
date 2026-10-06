@@ -17,12 +17,14 @@
 namespace FlappedEar {
 namespace {
 
+// A KLV record viewed in place: key and data point into the packet, which
+// outlives the decode, so nesting never copies a payload (KAN-197).
 struct Record {
-    QByteArray key;
+    QByteArrayView key;
     char type = 0;
     int size = 0;
     int repeat = 0;
-    QByteArray data;
+    QByteArrayView data;
 };
 
 struct GpsSample {
@@ -121,7 +123,7 @@ QJsonObject runProbe(
     return document.object();
 }
 
-QVector<Record> records(const QByteArray &bytes, DecodeState &state, const QString &context)
+QVector<Record> records(const QByteArrayView bytes, DecodeState &state, const QString &context)
 {
     QVector<Record> result;
     qsizetype offset = 0;
@@ -146,11 +148,11 @@ QVector<Record> records(const QByteArray &bytes, DecodeState &state, const QStri
             break;
         }
         result.append({
-            QByteArray(header, 4),
+            QByteArrayView(header, 4),
             header[4],
             size,
             repeat,
-            bytes.mid(offset + 8, dataSize),
+            bytes.sliced(offset + 8, dataSize),
         });
         offset += 8 + ((dataSize + 3) & ~qint64(3));
     }
@@ -187,7 +189,7 @@ QVector<double> scalers(const Record &record)
 }
 
 void appendGpsStream(
-    const QByteArray &streamData,
+    const QByteArrayView streamData,
     const double packetPts,
     const double packetDuration,
     QVector<GpsSample> &gps5,
@@ -254,7 +256,7 @@ void appendGpsStream(
 }
 
 void visitContainers(
-    const QByteArray &bytes,
+    const QByteArrayView bytes,
     const double pts,
     const double duration,
     QVector<GpsSample> &gps5,
@@ -370,6 +372,9 @@ GoProTelemetryResult GoProTelemetrySource::load(
         if (packet.position > fileSize || packet.size > fileSize - packet.position) {
             fail("A GPMF packet lies outside the media file.");
         }
+        if (packet.size > kMaximumPacketBytes) {
+            throw ResourceLimitError("A GPMF packet exceeds the supported 16 MiB limit.");
+        }
         if (packet.size > kMaximumMetadataBytes - totalSize) {
             throw ResourceLimitError("The GPMF metadata track exceeds the supported 512 MiB limit.");
         }
@@ -426,6 +431,9 @@ GoProTelemetryResult GoProTelemetrySource::decodeGpsPackets(
         const GpmfPacket &packet = packets[packetIndex];
         if (!std::isfinite(packet.pts) || !std::isfinite(packet.duration) || packet.duration < 0.0) {
             fail("A GPMF packet has invalid timing metadata.");
+        }
+        if (packet.data.size() > kMaximumPacketBytes) {
+            throw ResourceLimitError("A GPMF packet exceeds the supported 16 MiB limit.");
         }
         if (packet.data.size() > kMaximumMetadataBytes - totalBytes) {
             throw ResourceLimitError("GPMF metadata exceeds the supported 512 MiB limit.");
