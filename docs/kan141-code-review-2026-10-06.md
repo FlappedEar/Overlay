@@ -22,8 +22,8 @@ filed. Severity is the reviewer's estimate of user impact.
 | E1 | Medium | HDR was detected only from the transfer tag; HDR side data or BT.2020 without a transfer passed as unknown. | Fixed, KAN-198 (#184) |
 | E2 | Low | The export worker trusted output and temporary-overlay paths from its configuration. | Fixed, KAN-198 (#184) |
 | E3 | Low (latent) | The frame packer accepted straight RGBA as premultiplied. | Fixed, KAN-198 (#184) |
-| T1 | Medium | Channel fusion maps RCZ gap markers through the offset, producing equal timestamps. | KAN-188 |
-| T2 | Medium | A merged fused channel recomputes its gap threshold over mixed rates and can bridge real gaps. | KAN-188 |
+| T1 | Medium | Channel fusion maps RCZ gap markers through the offset, producing equal timestamps. | Fixed, KAN-188 (#190) |
+| T2 | Medium | A merged fused channel recomputes its gap threshold over mixed rates and can bridge real gaps. | Fixed, KAN-188 (#190) |
 | T3 | Medium (policy) | Overlays hold the last value for up to 0.75 s (heart rate 2 s) into gaps and past the end. | Kept by owner decision, KAN-200 |
 | T4 | Medium–high | GoPro GPMF parsing copied nested containers, multiplying memory, with no packet cap. | Fixed, KAN-197 (#182) |
 | T5 | Low | ffprobe output is buffered without a bound before the size cap is checked. | Fixed, KAN-201 (#188) |

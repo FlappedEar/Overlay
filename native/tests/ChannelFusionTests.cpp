@@ -7,6 +7,7 @@
 #include <QtTest>
 #include <cmath>
 #include <functional>
+#include <limits>
 
 using namespace FlappedEar;
 
@@ -82,6 +83,8 @@ private slots:
     void appliesClockDrift();
     void refusesUnalignedSourcesAndUnitMismatches();
     void comparesAChannelWithAnUndeclaredUnit();
+    void keepsGapMarkersInsideTheirGapOnThePrimaryClock();
+    void marksGapsAMergedChannelWouldBridge();
 };
 
 void ChannelFusionTests::addsAlternativeOnlyChannelsOnThePrimaryClock()
@@ -272,6 +275,103 @@ void ChannelFusionTests::comparesAChannelWithAnUndeclaredUnit()
     result = fuseChannels(primarySession(), "vbo", {{"rcz", &unitless, {5.0, 0.0}, "aligned"}});
     QVERIFY(result.unitMismatches.isEmpty());
     QCOMPARE(find(result, "speed")->comparedSourceId, QString("rcz"));
+}
+
+// KAN-188 (KAN-141 T1): an RCZ marks a gap with NaN samples one step inside
+// it. Mapped through a large offset they can round onto their neighbours.
+void ChannelFusionTests::keepsGapMarkersInsideTheirGapOnThePrimaryClock()
+{
+    // The alternative's rpm, 10 Hz from 1000 to 1010 s, missing 1004-1006 s,
+    // with the markers RczParser writes; the primary clock is 3000 s ahead.
+    TelemetryChannel rpm = makeChannel("rpm-obd", "rpm", 1000.0, 1010.0, 10.0, [](double c) { return 3000.0 + c; },
+        [](double c) { return c < 1004.0 || c > 1006.0; });
+    TelemetryChannel marked;
+    marked.name = rpm.name;
+    marked.unit = rpm.unit;
+    constexpr float missing = std::numeric_limits<float>::quiet_NaN();
+    int collisions = 0;
+    for (qsizetype index = 0; index < rpm.timestamps.size(); ++index) {
+        if (index && rpm.timestamps[index] - rpm.timestamps[index - 1] > 1.0) {
+            const double before = rpm.timestamps[index - 1], after = rpm.timestamps[index];
+            marked.timestamps << std::nextafter(before, after) << std::nextafter(after, before);
+            marked.values << missing << missing;
+            collisions += (std::nextafter(before, after) + 3000.0 == before + 3000.0)
+                + (std::nextafter(after, before) + 3000.0 == after + 3000.0);
+        }
+        marked.timestamps << rpm.timestamps[index];
+        marked.values << rpm.values[index];
+    }
+    QCOMPARE(collisions, 2); // the case this test is for: both markers round onto a real sample
+    TelemetrySession alternative;
+    add(alternative, marked, "rpm");
+    const auto check = [&](const FusedChannel &fused, const QString &source) {
+        QVERIFY(strictlyIncreasing(fused.channel.timestamps));
+        int real = 0;
+        for (qsizetype index = 0; index < fused.channel.timestamps.size(); ++index) {
+            const double t = fused.channel.timestamps[index];
+            const float value = fused.channel.values[index];
+            if (!std::isfinite(value)) continue;
+            QVERIFY(std::abs(value - t) < 0.01); // a real sample, where it was recorded
+            if (t >= 4000.0 - 1e-9 && t <= 4010.0 + 1e-9) ++real;
+        }
+        QCOMPARE(real, rpm.timestamps.size()); // no real sample replaced by a marker
+        QVERIFY(!telemetryValueAt(fused.channel, 4005.0)); // the gap stays a gap
+        QVERIFY(telemetryValueAt(fused.channel, 4003.85).has_value());
+        QVERIFY(std::any_of(fused.segments.cbegin(), fused.segments.cend(),
+            [&](const FusedSegment &segment) { return segment.sourceId == source; }));
+    };
+
+    TelemetrySession primary;
+    add(primary, makeChannel("velocity", "km/h", 3990.0, 4020.0, 10.0, speedAt), "speed");
+    const auto added = fuseChannels(primary, "vbo", {{"rcz", &alternative, {3000.0, 0.0}, "aligned"}});
+    QCOMPARE(find(added, "rpm")->rule, QString("added"));
+    check(*find(added, "rpm"), "rcz");
+
+    // Preferred over a primary that has no gap there, so the primary fills it.
+    add(primary, makeChannel("rpm-obd", "rpm", 3990.0, 4020.0, 10.0, [](double t) { return t + 0.5; }), "rpm");
+    FusionPolicy policy;
+    policy.rules.insert("rpm", {"rcz", FusionRule::PreferAlternative});
+    const auto merged = fuseChannels(primary, "vbo", {{"rcz", &alternative, {3000.0, 0.0}, "aligned"}}, policy);
+    const auto *fused = find(merged, "rpm");
+    QCOMPARE(fused->rule, QString("preferAlternative"));
+    QVERIFY(strictlyIncreasing(fused->channel.timestamps));
+    int real = 0;
+    for (qsizetype index = 0; index < fused->channel.timestamps.size(); ++index) {
+        const double t = fused->channel.timestamps[index];
+        if (std::abs(fused->channel.values[index] - t) < 0.01) ++real; // the alternative's (the primary's read 0.5 higher)
+    }
+    QCOMPARE(real, rpm.timestamps.size()); // every alternative sample kept, none replaced by its marker
+    QVERIFY(telemetryValueAt(fused->channel, 4005.0).has_value()); // the primary fills the alternative's gap
+}
+
+// KAN-188 (KAN-141 T2): the gap threshold read back from a merged channel is
+// over mixed cadences. A 1 Hz primary filled by a 10 Hz alternative reads as
+// 1 Hz, so a 2 s gap in the alternative would be bridged without markers.
+void ChannelFusionTests::marksGapsAMergedChannelWouldBridge()
+{
+    TelemetrySession primary;
+    add(primary, makeChannel("velocity", "km/h", 0.0, 400.0, 1.0, speedAt, [](double t) { return t < 100.0 || t > 120.0; }),
+        "speed");
+    TelemetrySession alternative;
+    add(alternative, makeChannel("velocity", "km/h", 0.0, 30.0, 10.0, [](double c) { return speedAt(c + 95.0); },
+        [](double c) { return c < 13.0 || c > 15.0; }), "speed");
+    FusionPolicy policy;
+    policy.rules.insert("speed", {"rcz", FusionRule::FillGaps});
+    const auto result = fuseChannels(primary, "vbo", {{"rcz", &alternative, {95.0, 0.0}, "aligned"}}, policy);
+    const auto *speed = find(result, "speed");
+    QCOMPARE(speed->rule, QString("fillGaps"));
+    QVERIFY(strictlyIncreasing(speed->channel.timestamps));
+    QVERIFY(telemetryGapThreshold(speed->channel) >= 3.0); // the mixed channel's own threshold would bridge 2 s
+    QVERIFY(!telemetryValueAt(speed->channel, 109.0)); // ...but the alternative's gap stays a gap
+    QVERIFY(telemetryValueAt(speed->channel, 105.0).has_value());
+    QVERIFY(telemetryValueAt(speed->channel, 50.5).has_value()); // the 1 Hz primary is not cut up
+    int markers = 0;
+    for (const float value : speed->channel.values) markers += !std::isfinite(value);
+    QCOMPARE(markers, 2);
+    // Markers are no source's samples: the segments still say who recorded what.
+    for (const auto &segment : speed->segments)
+        QVERIFY(segment.sourceId == "vbo" ? (segment.end <= 100.0 || segment.start >= 120.0)
+                                          : (segment.end < 108.0 || segment.start > 110.0));
 }
 
 QTEST_GUILESS_MAIN(ChannelFusionTests)
