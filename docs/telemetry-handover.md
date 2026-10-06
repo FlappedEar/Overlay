@@ -386,6 +386,7 @@ The modules below are in dependency order. Code: `native/src/telemetry/`; tests:
 
 **Check before re-implementing.** These are findings in the current code, not decisions.
 - **Thresholds differ between modules.** Inferred braking is 0.30 / 0.15 g in `BrakingOnset` and 0.15 / 0.08 g in `DrivingStates`. Throttle is 20 / 10 % for pickup and 15 / 8 % for driving states. Whether this is intentional is unclear.
+- **Trace density.** Fixed in KAN-220: a lap trace keeps up to 4,096 points and `projectLapTrace` up to 8,000 fixes per lap, each spread evenly by time order (`keepEvenlySpread`). A whole-number stride used to keep about half the budget once a lap was just over it, and the projection used to pick fixes by latitude extremes.
 - **Progress order.** Fixed in KAN-152: projection may step back up to 3 m without losing lock, and `projectLapTrace` holds such a fix at the previous progress, so progress never falls within a segment (`TrackProgress.h` now says non-decreasing).
 - **Different axes.** Segments are approved on the reviewed lap's axis but timed on the canonical lap's axis, so boundaries can shift by a few metres ([testing](testing.md)).
 - **Theoretical-best ties.** A tie keeps the first lap in population order, which is not defined within one run.

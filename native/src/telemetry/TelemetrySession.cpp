@@ -226,27 +226,19 @@ QStringList TelemetrySession::channelNames() const
     return names;
 }
 
-QVector<QVector<QPointF>> TelemetrySession::sampledSegments(
+QVector<QVector<QPointF>> TelemetrySession::rawSegments(
     const QString &channelName,
     double rangeStart,
     double rangeEnd,
-    const int maximumPoints,
     SampledSegmentsStatus *status) const
 {
     if (status) *status = SampledSegmentsStatus::Ok;
-    if (!std::isfinite(rangeStart) || !std::isfinite(rangeEnd) || maximumPoints < 2) {
+    if (!std::isfinite(rangeStart) || !std::isfinite(rangeEnd)) {
         if (status) *status = SampledSegmentsStatus::InvalidRange;
         return {};
     }
     if (rangeStart > rangeEnd) {
         std::swap(rangeStart, rangeEnd);
-    }
-    const double span = rangeEnd - rangeStart;
-    // Finite endpoints can still subtract to infinity. Reject before bucket
-    // arithmetic can produce NaN and reach a floating-to-integer conversion.
-    if (!std::isfinite(span)) {
-        if (status) *status = SampledSegmentsStatus::InvalidRange;
-        return {};
     }
     const QString resolved = aliases.value(channelName, channelName);
     const auto channelIterator = channels.constFind(resolved);
@@ -284,6 +276,32 @@ QVector<QVector<QPointF>> TelemetrySession::sampledSegments(
     if (!current.isEmpty()) {
         rawSegments.append(std::move(current));
     }
+    return rawSegments;
+}
+
+QVector<QVector<QPointF>> TelemetrySession::sampledSegments(
+    const QString &channelName,
+    double rangeStart,
+    double rangeEnd,
+    const int maximumPoints,
+    SampledSegmentsStatus *status) const
+{
+    if (status) *status = SampledSegmentsStatus::Ok;
+    if (!std::isfinite(rangeStart) || !std::isfinite(rangeEnd) || maximumPoints < 2) {
+        if (status) *status = SampledSegmentsStatus::InvalidRange;
+        return {};
+    }
+    if (rangeStart > rangeEnd) {
+        std::swap(rangeStart, rangeEnd);
+    }
+    const double span = rangeEnd - rangeStart;
+    // Finite endpoints can still subtract to infinity. Reject before bucket
+    // arithmetic can produce NaN and reach a floating-to-integer conversion.
+    if (!std::isfinite(span)) {
+        if (status) *status = SampledSegmentsStatus::InvalidRange;
+        return {};
+    }
+    const auto rawSegments = this->rawSegments(channelName, rangeStart, rangeEnd, status);
     if (rawSegments.isEmpty()) {
         return {};
     }

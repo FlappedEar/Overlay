@@ -120,7 +120,22 @@ public:
         double endTime,
         int maximumPoints,
         SampledSegmentsStatus *status = nullptr) const;
+    // The same runs of actual samples (time, value) without any reduction.
+    [[nodiscard]] QVector<QVector<QPointF>> rawSegments(
+        const QString &channelName,
+        double startTime,
+        double endTime,
+        SampledSegmentsStatus *status = nullptr) const;
 };
+
+// Up to `budget` of `count` items spread evenly by index, first item included
+// (KAN-220). Keeps close to the budget where a whole-number stride would keep
+// about half of it once the count is just over it.
+[[nodiscard]] inline bool keepEvenlySpread(const qsizetype index, const qsizetype count, const qsizetype budget)
+{
+    if (count <= budget) return true;
+    return index == 0 || (index * budget) / count != ((index - 1) * budget) / count;
+}
 
 // The driver's throttle input (KAN-118). When a recording has an
 // accelerator-pedal channel with numeric data, the "throttle" alias refers to

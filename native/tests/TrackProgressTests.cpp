@@ -160,6 +160,7 @@ private slots:
     void anchorsProgressZeroWhereTheGateCrossesTheAxis();
     void rejectsAStartGateThatMissesTheTrack();
     void anchorsAtTheTimedCrossingWhenTheGateCrossesTwice();
+    void spreadsDenseLapTracesEvenly();
     void unwrapsAFirstFixJustBeforeTheGate();
     void obliqueOffLineGateKeepsEveryLapsSectors();
     void deltaAtTheFinishEqualsTheLapTimeDifference();
@@ -424,6 +425,55 @@ void TrackProgressTests::anchorsAtTheTimedCrossingWhenTheGateCrossesTwice()
     QVERIFY(axis.valid);
     QVERIFY2(std::hypot(axis.points.first().x() - 100.0, axis.points.first().y()) < 0.5,
              qPrintable(QString("%1, %2").arg(axis.points.first().x()).arg(axis.points.first().y())));
+}
+
+void TrackProgressTests::spreadsDenseLapTracesEvenly()
+{
+    // KAN-220: 100 Hz GPS around the 500 m rectangle at 10 m/s, 5,000 fixes
+    // a lap. A whole-number stride kept every second fix (about 2,500 of the
+    // 4,096 a trace may hold); latitude buckets kept one fix per bucket on
+    // the east-west straights, where latitude does not change.
+    const TimingGate gate = gateBetween({100, -10}, {100, 10});
+    TelemetrySession session;
+    session.aliases = {{"latitude", "lat"}, {"longitude", "lon"}};
+    session.timingGates = {gate};
+    TelemetryChannel lat(QStringLiteral("lat"), {}), lon(QStringLiteral("lon"), {});
+    const auto position = [](double distance) {
+        distance = std::fmod(distance, 500.0);
+        if (distance < 200) return QPointF(distance, 0);
+        if (distance < 250) return QPointF(200, distance - 200);
+        if (distance < 450) return QPointF(200 - (distance - 250), 50);
+        return QPointF(0, 50 - (distance - 450));
+    };
+    for (int fix = 0; fix <= 16'500; ++fix) {
+        const double time = fix / 100.0;
+        const QPointF at = position(50.0 + 10.0 * time);
+        lat.appendSample(time, static_cast<float>(degreesForMeters(at.y())));
+        lon.appendSample(time, static_cast<float>(degreesForMeters(at.x())));
+    }
+    session.channels.insert(lat.name, lat);
+    session.channels.insert(lon.name, lon);
+    session.duration = 165.0;
+
+    const auto laps = deriveSourceLapSession(session);
+    QVERIFY(!laps.lapTraces.isEmpty());
+    for (const auto &trace : laps.lapTraces) {
+        QVERIFY2(trace.points.size() > 4'000 && trace.points.size() <= 4'096,
+                 qPrintable(QString::number(trace.points.size())));
+    }
+
+    const auto axis = buildProgressAxis(rectangleLap(), GeoCoordinate{0.0, 0.0}, gate);
+    QVERIFY(axis.valid);
+    const auto projected = projectLapTrace(axis, session, 5.0, 105.0);
+    qsizetype count = 0;
+    double widest = 0.0;
+    for (const auto &segment : projected) {
+        count += segment.samples.size();
+        for (qsizetype index = 1; index < segment.samples.size(); ++index)
+            widest = std::max(widest, segment.samples[index].telemetryTime - segment.samples[index - 1].telemetryTime);
+    }
+    QVERIFY2(count >= 7'900 && count <= 8'010, qPrintable(QString::number(count)));
+    QVERIFY2(widest <= 0.0201, qPrintable(QString::number(widest)));
 }
 
 void TrackProgressTests::unwrapsAFirstFixJustBeforeTheGate()

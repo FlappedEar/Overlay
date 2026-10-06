@@ -280,15 +280,14 @@ void buildLapTraces(
         const auto latitudeEnd = std::lower_bound(
             latitudeTime, latitude->timestamps().cend(), lap.endTelemetryTime);
         const qsizetype rawPointCount = std::distance(latitudeTime, latitudeEnd);
-        const qsizetype stride = std::max<qsizetype>(
-            1, (rawPointCount + MaximumPointsPerLapTrace - 3)
-                   / (MaximumPointsPerLapTrace - 2));
         qsizetype ordinal = 0;
         for (; latitudeTime != latitude->timestamps().cend() && *latitudeTime < lap.endTelemetryTime;
              ++latitudeTime, ++ordinal) {
             const qsizetype index = std::distance(latitude->timestamps().cbegin(), latitudeTime);
             if ((index & 0xff) == 0) throwIfCancelled(cancelled);
-            if (ordinal % stride != 0) continue;
+            // KAN-220: spread evenly, so a lap just over the budget keeps
+            // close to it rather than about half.
+            if (!keepEvenlySpread(ordinal, rawPointCount, MaximumPointsPerLapTrace - 2)) continue;
             if (index >= longitude->timestamps().size()
                 || latitude->timestamps()[index] != longitude->timestamps()[index]) {
                 continue;
