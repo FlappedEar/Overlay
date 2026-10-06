@@ -293,20 +293,36 @@ QVector<QVector<QPointF>> TelemetrySession::sampledSegments(
         for (const QPointF &point : result[segmentIndex]) candidates.append({segmentIndex, point});
     }
     QVector<bool> selected(candidates.size(), false);
-    qsizetype minimumIndex = 0;
-    qsizetype maximumIndex = 0;
-    for (qsizetype index = 1; index < candidates.size(); ++index) {
-        if (candidates[index].point.y() < candidates[minimumIndex].point.y()) minimumIndex = index;
-        if (candidates[index].point.y() > candidates[maximumIndex].point.y()) maximumIndex = index;
+    // KAN-210: every segment keeps at least its first point, so a short burst
+    // between gaps never disappears. When there are more segments than the
+    // budget, a uniform choice of segments is kept and the caller is told.
+    QVector<qsizetype> segmentStarts;
+    segmentStarts.reserve(result.size());
+    for (qsizetype index = 0; index < candidates.size(); ++index) {
+        if (index == 0 || candidates[index].segment != candidates[index - 1].segment)
+            segmentStarts.append(index);
     }
-    selected[minimumIndex] = true;
-    selected[maximumIndex] = true;
-    const qsizetype uniformBudget = std::max<qsizetype>(1, pointLimit - 2);
-    for (qsizetype slot = 0; slot < uniformBudget; ++slot) {
-        const qsizetype index = uniformBudget == 1
-            ? 0
-            : slot * (candidates.size() - 1) / (uniformBudget - 1);
-        selected[index] = true;
+    if (segmentStarts.size() > pointLimit) {
+        if (status) *status = SampledSegmentsStatus::SegmentsTruncated;
+        for (qsizetype slot = 0; slot < pointLimit; ++slot)
+            selected[segmentStarts[slot * (segmentStarts.size() - 1) / (pointLimit - 1)]] = true;
+    } else {
+        for (const qsizetype start : std::as_const(segmentStarts)) selected[start] = true;
+        qsizetype minimumIndex = 0;
+        qsizetype maximumIndex = 0;
+        for (qsizetype index = 1; index < candidates.size(); ++index) {
+            if (candidates[index].point.y() < candidates[minimumIndex].point.y()) minimumIndex = index;
+            if (candidates[index].point.y() > candidates[maximumIndex].point.y()) maximumIndex = index;
+        }
+        selected[minimumIndex] = true;
+        selected[maximumIndex] = true;
+        const qsizetype uniformBudget = pointLimit - segmentStarts.size() - 2;
+        for (qsizetype slot = 0; slot < uniformBudget; ++slot) {
+            const qsizetype index = uniformBudget == 1
+                ? 0
+                : slot * (candidates.size() - 1) / (uniformBudget - 1);
+            selected[index] = true;
+        }
     }
     QVector<QVector<QPointF>> bounded;
     qsizetype previousSegment = -1;

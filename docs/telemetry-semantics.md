@@ -69,7 +69,7 @@ For a finite timestamp jump, three times the channel's median positive sample in
 
 Analysis reads actual raw channel samples, not presentation-filtered values. Non-finite values start a new segment. A timestamp jump greater than three times the median positive channel interval also starts a new segment, so the renderer issues a new path rather than drawing across a real gap.
 
-Display decimation divides the requested range into time buckets and retains each bucket's minimum and maximum in timestamp order. This preserves short braking, RPM, throttle, and acceleration extrema where practical. Returned data is bounded to at most twice the requested bucket count; pathological high-gap input may omit some runs to respect that bound, but retained runs are still separate and never connected across a gap. Analysis never inserts zero, interpolates a replacement sample, or applies overlay smoothing.
+Display decimation divides the requested range into time buckets and retains each bucket's minimum and maximum in timestamp order. This preserves short braking, RPM, throttle, and acceleration extrema where practical. Returned data is bounded to at most twice the requested bucket count; when the bound is exceeded every run keeps at least its first sample (KAN-210). Only when there are more separate runs than the bound allows points is a uniform choice of runs kept, one sample each; the lookup then reports `SegmentsTruncated` and the chart series carries `truncated: true`. Retained runs are still separate and never connected across a gap. Analysis never inserts zero, interpolates a replacement sample, or applies overlay smoothing.
 
 ## GPS tracks
 

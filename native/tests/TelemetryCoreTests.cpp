@@ -87,6 +87,7 @@ private slots:
     void cancelsVboParsingDeterministically();
     void cachesTelemetryChannelCadence();
     void readsAnUnwarmedSessionFromManyThreads();
+    void keepsEverySegmentWhenDownsampling();
     void enforcesVboResourceLimits();
     void boundsVboHeaderAndDecodedValues();
     void normalizesVboHeaderEdgeCases();
@@ -722,6 +723,39 @@ void TelemetryCoreTests::readsAnUnwarmedSessionFromManyThreads()
     for (auto &reader : readers) reader.join();
     QCOMPARE(wrong.load(), 0);
     QCOMPARE(speed.cadence.computations(), qsizetype(1));
+}
+
+void TelemetryCoreTests::keepsEverySegmentWhenDownsampling()
+{
+    // KAN-210: 20 one- or two-sample bursts on a 10 Hz grid, separated by
+    // missing values, competing for a small point budget.
+    TelemetryChannel channel;
+    channel.name = QStringLiteral("brake");
+    QVector<double> burstStarts;
+    for (int index = 0; index < 200; ++index) {
+        channel.timestamps.append(index / 10.0);
+        const int burst = index / 10;
+        const int offset = index % 10;
+        const bool sampled = offset == 0 || (offset == 1 && burst % 2 == 0);
+        channel.values.append(sampled ? float(burst + offset) : std::numeric_limits<float>::quiet_NaN());
+        if (offset == 0) burstStarts.append(index / 10.0);
+    }
+    TelemetrySession session;
+    session.channels.insert(channel.name, channel);
+
+    SampledSegmentsStatus status = SampledSegmentsStatus::Ok;
+    const auto everySegment = session.sampledSegments("brake", 0.0, 19.9, 10, &status);
+    QCOMPARE(status, SampledSegmentsStatus::Ok);
+    QCOMPARE(everySegment.size(), 20);
+    for (qsizetype index = 0; index < everySegment.size(); ++index)
+        QCOMPARE(everySegment[index].front().x(), burstStarts[index]);
+
+    const auto truncated = session.sampledSegments("brake", 0.0, 19.9, 4, &status);
+    QCOMPARE(status, SampledSegmentsStatus::SegmentsTruncated);
+    QCOMPARE(truncated.size(), 8);
+    QCOMPARE(truncated.front().front().x(), burstStarts.front());
+    QCOMPARE(truncated.back().front().x(), burstStarts.back());
+    for (const auto &segment : truncated) QCOMPARE(segment.size(), 1);
 }
 
 void TelemetryCoreTests::enforcesVboResourceLimits()

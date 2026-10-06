@@ -23,7 +23,8 @@ QVariantMap channelSeries(const TelemetrySession &session, const QString &channe
         case SampledSegmentsStatus::InvalidRange: reason = QStringLiteral("invalidRange"); break;
         case SampledSegmentsStatus::ChannelMissing: reason = QStringLiteral("channelMissing"); break;
         case SampledSegmentsStatus::ChannelMalformed: reason = QStringLiteral("channelMalformed"); break;
-        case SampledSegmentsStatus::Ok: break;
+        case SampledSegmentsStatus::Ok:
+        case SampledSegmentsStatus::SegmentsTruncated: break;
         }
         return {{"reason", reason}};
     }
@@ -61,6 +62,8 @@ QVariantMap channelSeries(const TelemetrySession &session, const QString &channe
         {"minimum", minimum},
         {"maximum", maximum},
         {"unit", channel == session.channels.cend() ? QString() : channel->unit},
+        // More separate segments than points: some are left out (KAN-210).
+        {"truncated", status == SampledSegmentsStatus::SegmentsTruncated},
     };
 }
 
