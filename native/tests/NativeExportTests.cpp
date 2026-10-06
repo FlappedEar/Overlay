@@ -1501,6 +1501,8 @@ void ExportTests::showsVeryVerboseDiagnosticsLive()
     for (int entry = 5; entry < 1000; ++entry)
         controller.appendExportDiagnostic(QStringLiteral("entry %1").arg(entry));
     QTRY_VERIFY(log->property("text").toString().endsWith(QStringLiteral("entry 999")));
+    // Let the deferred tail scroll of that update finish before detaching from the tail.
+    QTRY_VERIFY(!log->property("programmaticScroll").toBool());
     auto *flickable = scroll->property("contentItem").value<QQuickItem *>();
     QVERIFY(flickable);
     QTRY_VERIFY(flickable->property("contentHeight").toDouble() > scroll->height() * 2);
