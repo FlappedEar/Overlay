@@ -10,6 +10,10 @@
 #include "project/ProjectDocumentState.h"
 #include "project/ProjectRecoveryStore.h"
 #include "project/ProjectSourceReference.h"
+#include "telemetry/TelemetrySource.h"
+#include "export/FfmpegTools.h"
+#include <QCryptographicHash>
+#include <cctype>
 
 using namespace NativeTestSupport;
 
@@ -41,6 +45,8 @@ private slots:
     void serializesPortableProjectSourcesAndMovesFolder();
     void opensProjectsWithMissingSources();
     void relinksTelemetryWithMismatchPolicy();
+    void detectsTelemetryChangedOutsideSampledWindows();
+    void detectsVideoChangedOutsideSampledWindows();
     void rejectsStaleRelinkResults();
     void restoresSavedProjectsAndPreservesUnknownFields();
     void recoversAndDiscardsSavedChanges();
@@ -826,6 +832,134 @@ void ProjectTests::relinksTelemetryWithMismatchPolicy()
     controller.relinkVbo(QUrl::fromLocalFile(invalid));
     QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
     QCOMPARE(controller.telemetryName(), QStringLiteral("basic.vbo"));
+}
+
+void ProjectTests::detectsTelemetryChangedOutsideSampledWindows()
+{
+    // KAN-208: the fingerprint samples three 64 KiB windows. A same-sized
+    // recording changed at 80 KiB of about 256 KiB keeps the fingerprint but
+    // not its full-content identity, so the project reports a mismatch.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    QByteArray vbo = "[column names]\ntime speed\n[data]\n";
+    for (int row = 0; vbo.size() < 256 * 1024; ++row)
+        vbo += QByteArray::number(row * 0.1, 'f', 1) + ' ' + QByteArray::number(100 + row % 50) + '\n';
+    const auto recording = directory.filePath("day.vbo");
+    QVERIFY(writeBytes(recording, vbo));
+    const auto projectPath = directory.filePath("day.fetproject");
+    {
+        AppController controller(nullptr, directory.filePath("recovery.json"));
+        controller.loadVbo(QUrl::fromLocalFile(recording));
+        QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
+    }
+    const auto saved = QJsonDocument::fromJson(readBytes(projectPath)).object();
+    const auto reference = saved.value("sources").toObject().value("telemetry").toObject();
+    QCOMPARE(reference.value("contentSha256").toString(),
+             QString::fromLatin1(QCryptographicHash::hash(vbo, QCryptographicHash::Sha256).toHex()));
+
+    // One digit at 80 KiB, between the first and the middle window.
+    qsizetype at = 80 * 1024;
+    while (!std::isdigit(static_cast<unsigned char>(vbo[at]))) ++at;
+    auto changed = vbo;
+    changed[at] = changed[at] == '9' ? '8' : static_cast<char>(changed[at] + 1);
+    QVERIFY(at < 96 * 1024);
+    QVERIFY(writeBytes(recording, changed));
+    const auto session = TelemetrySource::load(recording);
+    QCOMPARE(ProjectSourceReferenceCodec::compareFingerprints(reference.value("fingerprint").toObject(),
+                 ProjectSourceReferenceCodec::telemetryFingerprint(recording, session)),
+             SourceFingerprintMatch::Match);
+    {
+        AppController controller(nullptr, directory.filePath("recovery.json"));
+        controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
+        QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("mismatch"));
+        QVERIFY(!controller.dirty());
+    }
+
+    // A document from before KAN-208 has no content identity: it opens, and
+    // the next save records one without the open marking it changed.
+    auto legacy = saved;
+    auto sources = legacy.value("sources").toObject();
+    auto legacyReference = reference;
+    legacyReference.remove("contentSha256");
+    legacyReference.insert("fingerprint", ProjectSourceReferenceCodec::telemetryFingerprint(recording, session));
+    sources.insert("telemetry", legacyReference);
+    legacy.insert("sources", sources);
+    QVERIFY(writeBytes(projectPath, QJsonDocument(legacy).toJson()));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
+    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+    QVERIFY(!controller.dirty());
+    QVERIFY(controller.saveCurrentProject());
+    QCOMPARE(QJsonDocument::fromJson(readBytes(projectPath)).object().value("sources").toObject()
+                 .value("telemetry").toObject().value("contentSha256").toString(),
+             QString::fromLatin1(QCryptographicHash::hash(changed, QCryptographicHash::Sha256).toHex()));
+}
+
+void ProjectTests::detectsVideoChangedOutsideSampledWindows()
+{
+    // KAN-208: a video opens at once and is hashed in full behind it. A
+    // same-sized file changed between the sampled windows keeps its
+    // fingerprint, so only that hash reports the mismatch; choosing the file
+    // again and accepting it records the new identity.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto video = directory.filePath("clip.mp4");
+    QProcess encoder;
+    encoder.start(FfmpegTools::ffmpegPath(), {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+        "testsrc2=s=320x180:r=30:d=10", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", video});
+    QVERIFY(encoder.waitForFinished(60'000));
+    QCOMPARE(encoder.exitCode(), 0);
+    const auto bytes = readBytes(video);
+    QVERIFY2(bytes.size() > 320 * 1024, qPrintable(QString::number(bytes.size())));
+    const auto digestOf = [](const QByteArray &data) {
+        return QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
+    };
+    const auto projectPath = directory.filePath("clip.fetproject");
+    {
+        AppController controller(nullptr, directory.filePath("recovery.json"));
+        controller.loadVideo(QUrl::fromLocalFile(video));
+        QTRY_COMPARE(controller.videoLoadState(), QStringLiteral("ready"));
+        QTRY_COMPARE(controller.m_videoReference.contentSha256, digestOf(bytes));
+        QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
+    }
+    const auto reference = QJsonDocument::fromJson(readBytes(projectPath)).object()
+        .value("sources").toObject().value("video").toObject();
+    QCOMPARE(reference.value("contentSha256").toString(), digestOf(bytes));
+
+    // One byte of the encoded frames at 80 KiB, before the middle window.
+    auto changed = bytes;
+    changed[80 * 1024] = static_cast<char>(changed[80 * 1024] ^ 0x01);
+    QVERIFY(80 * 1024 + 1 < bytes.size() / 2 - 32 * 1024);
+    QVERIFY(writeBytes(video, changed));
+    QCOMPARE(ProjectSourceReferenceCodec::sampledDigest(video),
+             reference.value("fingerprint").toObject().value("sampledSha256").toString());
+
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
+    QTRY_COMPARE(controller.videoLoadState(), QStringLiteral("mismatch"));
+    QVERIFY(controller.sourceMismatchType().isEmpty()); // opening reports it; it does not ask
+    QVERIFY(!controller.dirty());
+    controller.relinkVideo(QUrl::fromLocalFile(video));
+    QTRY_COMPARE(controller.sourceMismatchType(), QStringLiteral("video"));
+    controller.resolveSourceMismatch(true);
+    QCOMPARE(controller.videoLoadState(), QStringLiteral("ready"));
+    QVERIFY(controller.dirty());
+    QTRY_COMPARE(controller.m_videoReference.contentSha256, digestOf(changed));
+    QVERIFY(controller.saveCurrentProject());
+    QCOMPARE(QJsonDocument::fromJson(readBytes(projectPath)).object().value("sources").toObject()
+                 .value("video").toObject().value("contentSha256").toString(), digestOf(changed));
+
+    // Re-encoded with the same duration, size and rate: other bytes, other identity.
+    const auto reencoded = directory.filePath("reencoded.mp4");
+    encoder.start(FfmpegTools::ffmpegPath(), {"-hide_banner", "-loglevel", "error", "-y", "-i", video,
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-pix_fmt", "yuv420p", reencoded});
+    QVERIFY(encoder.waitForFinished(60'000));
+    QCOMPARE(encoder.exitCode(), 0);
+    QVERIFY(ProjectSourceReferenceCodec::fileSha256(reencoded) != digestOf(changed));
+    QVERIFY(ProjectSourceReferenceCodec::fileSha256(reencoded).size() == 64);
 }
 
 void ProjectTests::rejectsStaleRelinkResults()

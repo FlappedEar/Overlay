@@ -18,8 +18,10 @@ bool validPath(const QJsonObject &object, const QString &key, const bool absolut
 
 ProjectSourceReference referenceOf(const QJsonObject &object)
 {
+    const auto digest = object.value("contentSha256").toString();
     return {object.value("relativePath").toString(), object.value("absolutePath").toString(),
-        object.value("fingerprint").toObject()};
+        object.value("fingerprint").toObject(),
+        ProjectSourceReferenceCodec::isContentSha256(digest) ? digest : QString()};
 }
 
 } // namespace
@@ -39,6 +41,9 @@ bool valid(const QJsonObject &video)
             && chapter.value("absolutePath").toString().trimmed().isEmpty())
             return false;
         if (chapter.contains("fingerprint") && !chapter.value("fingerprint").isObject()) return false;
+        if (chapter.contains("contentSha256")
+            && !ProjectSourceReferenceCodec::isContentSha256(chapter.value("contentSha256").toString()))
+            return false;
         const auto duration = chapter.value("durationSeconds");
         if (!duration.isDouble() || !std::isfinite(duration.toDouble()) || duration.toDouble() <= 0.0
             || duration.toDouble() > maximumChapterSeconds)

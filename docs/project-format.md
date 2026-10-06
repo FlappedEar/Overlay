@@ -85,6 +85,15 @@ Fingerprints are deterministic identity metadata, not cryptographic proof of com
 
 The bounded byte sampling reads at most 192 KiB per source and is cheap relative to video probing or VBO/RCZ parsing. It detects common accidental substitutions, including size, media-metadata, telemetry-structure, and sampled-content changes. Changes confined to unsampled bytes can collide, so the value is deliberately called a source fingerprint rather than a content hash.
 
+### Full-content identity (KAN-208)
+
+Since 6 October 2026 a reference (`sources.video`, `sources.telemetry` and each entry of `sources.video.chapters`) may also hold `contentSha256`: the SHA-256 of every byte of the file, as 64 lowercase hex digits. It catches what the fingerprint cannot, such as a same-sized file changed at 80 KiB of 256 KiB. The fingerprint itself is unchanged, so saved projects and FlappedEar Telemetry keep matching.
+
+- **Telemetry:** hashed in full while it loads (VBO and RCZ files are at most 128 MiB). A file whose hash differs from the saved `contentSha256` is a mismatch, like a fingerprint mismatch. In an event, the telemetry source keeps its identity in the source's own `contentSha256` ([event projects](event-project-format.md)), not in the reference.
+- **Video:** opens at once after its probe. A full hash of the video, chapter by chapter, then runs in the background; it is cancelled when the source or project changes. If a saved `contentSha256` differs, the video becomes `mismatch`: the preview hides and export is unavailable. Opening a project only reports it. Choosing the file again with **Locate…** asks whether to replace the source; accepting records the new identity. Until the hash finishes, the saved identity is kept and an export can start.
+- **Older documents** have no `contentSha256`. They open as before; the identity is computed and written at the next save, without marking the project changed.
+- A present `contentSha256` that is not 64 lowercase hex digits makes an event document invalid; in a single-recording project it is ignored.
+
 ## Opening and relinking
 
 The project document is valid independently of external assets. After JSON, scene, and synchronization validation, the document commits first. Video and telemetry source jobs start only when applying the widget scene succeeds; a rejected document cannot launch jobs that later mutate the prior document. After a successful document commit, sources resolve and load independently with `loading`, `ready`, `missing`, `mismatch`, or `error` state. Missing one or both assets does not replace the widget layout, synchronization, analysis settings, or other project fields.

@@ -5,12 +5,18 @@
 #include <QJsonObject>
 #include <QString>
 
+#include <functional>
+
 namespace FlappedEar {
 
 struct ProjectSourceReference {
     QString relativePath;
     QString absolutePath;
     QJsonObject fingerprint;
+    // KAN-208: SHA-256 of every byte, lowercase hex. The fingerprint samples
+    // three 64 KiB windows; this catches a change anywhere in the file.
+    // Empty when unknown (older documents), never inferred from a path.
+    QString contentSha256 = {};
 
     [[nodiscard]] bool isEmpty() const;
     [[nodiscard]] QString displayPath() const;
@@ -27,7 +33,13 @@ public:
     [[nodiscard]] static QString resolve(
         const ProjectSourceReference &reference, const QString &projectPath);
     [[nodiscard]] static ProjectSourceReference forLoadedSource(
-        const QString &sourcePath, const QJsonObject &fingerprint);
+        const QString &sourcePath, const QJsonObject &fingerprint, const QString &contentSha256 = {});
+    // A well-formed contentSha256 value (64 lowercase hex digits).
+    [[nodiscard]] static bool isContentSha256(const QString &value);
+    // SHA-256 of every byte of a file of any size, lowercase hex. Empty when
+    // the file cannot be read, changes size while it is read, or `cancelled`
+    // returns true.
+    [[nodiscard]] static QString fileSha256(const QString &path, const std::function<bool()> &cancelled = {});
 
     // Video fingerprints are built by the overlay layer (export/VideoFingerprint)
     // from these shared, video-free building blocks (KAN-123).

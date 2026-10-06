@@ -215,6 +215,7 @@ Two consequences:
     * contents: size; the SHA-256 of the first, middle and last 64 KiB; sample count; duration; the sorted channel list (name, unit, samples) **as the C++ parser reads it**;
     * matching: Overlays' day analysis requires an exact match and refuses a run without one;
     * so the new parser must agree on channel names, units and sample counts, or [KAN-170] must change how fingerprints are matched.
+- **`contentSha256` in a reference** (KAN-208): Overlays may write the full SHA-256 of a video or chapter into its reference (an open object). Telemetry keeps it unchanged. See [full-content identity](project-format.md#full-content-identity-kan-208).
 - **Relinking:** the same content keeps `trackConfiguration`. New content rewrites `contentSha256` and resets `trackConfiguration`. A mismatching file needs explicit confirmation.
 
 **Saving and recovery: rules for both apps**

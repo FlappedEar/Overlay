@@ -46,6 +46,9 @@ bool validReference(const QJsonValue &value)
     if (relative.trimmed().isEmpty() && absolute.trimmed().isEmpty()) return false;
     if (!relative.isEmpty() && QDir::isAbsolutePath(relative)) return false;
     if (!absolute.isEmpty() && !QDir::isAbsolutePath(absolute)) return false;
+    if (reference.contains(QStringLiteral("contentSha256"))
+        && !ProjectSourceReferenceCodec::isContentSha256(reference.value(QStringLiteral("contentSha256")).toString()))
+        return false;
     return !reference.contains(QStringLiteral("fingerprint"))
         || reference.value(QStringLiteral("fingerprint")).isObject();
 }
@@ -151,9 +154,11 @@ bool validSegmentReview(const QJsonValue &value)
 
 ProjectSourceReference sourceReference(const QJsonObject &object)
 {
+    const auto digest = object.value(QStringLiteral("contentSha256")).toString();
     return {object.value(QStringLiteral("relativePath")).toString(),
             object.value(QStringLiteral("absolutePath")).toString(),
-            object.value(QStringLiteral("fingerprint")).toObject()};
+            object.value(QStringLiteral("fingerprint")).toObject(),
+            ProjectSourceReferenceCodec::isContentSha256(digest) ? digest : QString()};
 }
 
 QDir referenceDirectory(const QString &projectPath)
@@ -481,7 +486,7 @@ QJsonObject EventProjectCodec::referenceForSave(
     if (absolute.isEmpty()) absolute = reference.absolutePath;
     if (absolute.isEmpty()) return ProjectSourceReferenceCodec::toJson(reference, targetProjectPath);
     // Drop the old relative spelling before deriving one in the new document directory.
-    return ProjectSourceReferenceCodec::toJson({{}, absolute, reference.fingerprint}, targetProjectPath);
+    return ProjectSourceReferenceCodec::toJson({{}, absolute, reference.fingerprint, reference.contentSha256}, targetProjectPath);
 }
 
 QStringList EventProjectCodec::referencedPaths(const QJsonObject &project, const QString &projectPath)
@@ -534,8 +539,13 @@ QJsonObject EventProjectCodec::withEditorState(
                     != editorSources.value("telemetry").toObject().value("fingerprint"))
                     source.insert("contentSha256", QString::fromLatin1(activeSourceRevision));
             }
+            // KAN-208: an event source keeps its content identity on the
+            // source itself, so the editor's copy in the reference is dropped.
+            auto editorTelemetry = editorSources.value(QStringLiteral("telemetry")).toObject();
+            if (!source.value("reference").toObject().contains(QStringLiteral("contentSha256")))
+                editorTelemetry.remove(QStringLiteral("contentSha256"));
             source.insert(QStringLiteral("reference"), active && primary
-                ? editorSources.value(QStringLiteral("telemetry")).toObject()
+                ? editorTelemetry
                 : rebaseReference(source.value(QStringLiteral("reference")).toObject(), previousProjectPath, targetProjectPath));
             telemetry.append(source);
         }
