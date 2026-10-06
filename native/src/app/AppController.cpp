@@ -97,14 +97,6 @@ AppController::AppController(QObject *parent, QString recoveryPath,
     connect(&m_widgetModel, &WidgetModel::lastErrorChanged, this, [this] {
         if (!m_widgetModel.lastError().isEmpty()) setStatus(m_widgetModel.lastError());
     });
-    m_selectedTemplateId = m_settings.value(QStringLiteral("ui/selectedTemplateId")).toString();
-    connect(&m_widgetModel, &WidgetModel::templatesChanged, this, [this] {
-        reconcileTemplateSelection();
-        if (templateIndexForId(m_activeTemplateId) < 0) {
-            clearActiveTemplate();
-        }
-    });
-    reconcileTemplateSelection();
     connect(&m_videoProbeWatcher, &QFutureWatcher<VideoProbeResult>::finished, this, [this] {
         const VideoProbeResult result = m_videoProbeWatcher.result();
         if (result.generation != m_document.sourceGeneration()) {
@@ -566,82 +558,6 @@ QString AppController::sourceMismatchCandidateName() const
         return QFileInfo(m_pendingMismatchVbo.path).fileName();
     }
     return {};
-}
-
-QString AppController::selectedTemplateId() const { return m_selectedTemplateId; }
-QString AppController::activeTemplateId() const { return m_activeTemplateId; }
-
-int AppController::templateIndexForId(const QString &templateId) const
-{
-    const QVariantList templates = m_widgetModel.templates();
-    for (qsizetype index = 0; index < templates.size(); ++index) {
-        if (templates[index].toMap().value(QStringLiteral("id")).toString() == templateId) {
-            return static_cast<int>(index);
-        }
-    }
-    return -1;
-}
-
-void AppController::selectTemplate(const QString &templateId)
-{
-    if (templateIndexForId(templateId) < 0 || m_selectedTemplateId == templateId) {
-        return;
-    }
-    m_selectedTemplateId = templateId;
-    m_settings.setValue(QStringLiteral("ui/selectedTemplateId"), m_selectedTemplateId);
-    m_settings.sync();
-    emit templateUiStateChanged();
-}
-
-void AppController::reconcileTemplateSelection()
-{
-    if (templateIndexForId(m_selectedTemplateId) >= 0) {
-        return;
-    }
-    const QVariantList templates = m_widgetModel.templates();
-    const QString fallback = templates.isEmpty()
-        ? QString() : templates.constFirst().toMap().value(QStringLiteral("id")).toString();
-    if (m_selectedTemplateId == fallback) {
-        return;
-    }
-    m_selectedTemplateId = fallback;
-    m_settings.setValue(QStringLiteral("ui/selectedTemplateId"), m_selectedTemplateId);
-    m_settings.sync();
-    emit templateUiStateChanged();
-}
-
-bool AppController::applyTemplate(const QString &templateId)
-{
-    if (templateIndexForId(templateId) < 0 || !m_widgetModel.applyTemplate(templateId)) {
-        return false;
-    }
-    selectTemplate(templateId);
-    markTemplateActive(templateId);
-    return true;
-}
-
-void AppController::markTemplateActive(const QString &templateId)
-{
-    const QString activeId = templateIndexForId(templateId) >= 0 ? templateId : QString();
-    if (m_activeTemplateId == activeId) {
-        return;
-    }
-    m_activeTemplateId = activeId;
-    emit templateUiStateChanged();
-}
-
-void AppController::clearActiveTemplate()
-{
-    markTemplateActive({});
-}
-
-bool AppController::saveActiveTemplate()
-{
-    const int index = templateIndexForId(m_activeTemplateId);
-    if (index < 0 || m_widgetModel.templates()[index].toMap().value(QStringLiteral("builtIn")).toBool()) {
-        return false;
-    }
-    return m_widgetModel.updateTemplate(m_activeTemplateId);
 }
 
 QVariantList AppController::trackPointsFor(const TrackGeometry &geometry)

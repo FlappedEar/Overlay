@@ -166,7 +166,7 @@ void SourceTests::persistsEventSelectionAndRunLocalSync()
     QVERIFY(!controller.dirty());
     QCOMPARE(controller.lastSavedRevision(), quint64(4));
     const QString documentId = controller.m_document.m_documentId;
-    controller.m_activeTemplateId = QStringLiteral("test-template");
+    controller.m_templatePicker.m_activeId = QStringLiteral("test-template");
     controller.syncController()->setOffset(9.0);
     controller.syncController()->setTimeScale(1.002);
     QVERIFY(controller.selectEventRun("run-b"));
@@ -177,7 +177,7 @@ void SourceTests::persistsEventSelectionAndRunLocalSync()
     QCOMPARE(controller.syncController()->timeScale(), 1.0);
     QCOMPARE(controller.videoLoadState(), QStringLiteral("idle"));
     QVERIFY(controller.videoSource().isEmpty());
-    QCOMPARE(controller.activeTemplateId(), QStringLiteral("test-template"));
+    QCOMPARE(controller.templatePicker()->activeId(), QStringLiteral("test-template"));
     QVERIFY(controller.dirty());
     QCOMPARE(controller.lastSavedRevision(), quint64(4));
     QCOMPARE(controller.m_document.m_documentId, documentId);

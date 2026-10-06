@@ -7,6 +7,7 @@
 #include "app/DocumentHost.h"
 #include "app/ExportController.h"
 #include "app/SyncController.h"
+#include "app/TemplatePicker.h"
 #include "telemetry/TelemetrySessionCache.h"
 
 #include "telemetry/LapTiming.h"
@@ -66,6 +67,7 @@ class AppController final : public QObject, private DocumentHost {
     // KAN-215: the export run, its progress and its diagnostics.
     Q_PROPERTY(FlappedEar::ExportController *exporter READ exporter CONSTANT)
     Q_PROPERTY(FlappedEar::SyncController *sync READ syncController CONSTANT)
+    Q_PROPERTY(FlappedEar::TemplatePicker *templatePicker READ templatePicker CONSTANT)
     Q_PROPERTY(QString fixedFontFamily READ fixedFontFamily CONSTANT)
     Q_PROPERTY(QVariant speed READ speed NOTIFY liveValuesChanged)
     Q_PROPERTY(QVariant rpm READ rpm NOTIFY liveValuesChanged)
@@ -112,8 +114,6 @@ class AppController final : public QObject, private DocumentHost {
     Q_PROPERTY(QString recoveryError READ recoveryError NOTIFY recoveryChanged)
     Q_PROPERTY(QString sourceMismatchType READ sourceMismatchType NOTIFY sourceMismatchChanged)
     Q_PROPERTY(QString sourceMismatchCandidateName READ sourceMismatchCandidateName NOTIFY sourceMismatchChanged)
-    Q_PROPERTY(QString selectedTemplateId READ selectedTemplateId NOTIFY templateUiStateChanged)
-    Q_PROPERTY(QString activeTemplateId READ activeTemplateId NOTIFY templateUiStateChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr, QString recoveryPath = {},
@@ -138,6 +138,7 @@ public:
     [[nodiscard]] QVariantMap exportSourceInfo() const;
     [[nodiscard]] ExportController *exporter() { return &m_export; }
     [[nodiscard]] SyncController *syncController() { return &m_syncController; }
+    [[nodiscard]] TemplatePicker *templatePicker() { return &m_templatePicker; }
     [[nodiscard]] QString fixedFontFamily() const;
     [[nodiscard]] QVariant speed() const;
     [[nodiscard]] QVariant rpm() const;
@@ -170,8 +171,6 @@ public:
     [[nodiscard]] QString recoveryError() const { return m_document.recoveryError(); }
     [[nodiscard]] QString sourceMismatchType() const;
     [[nodiscard]] QString sourceMismatchCandidateName() const;
-    [[nodiscard]] QString selectedTemplateId() const;
-    [[nodiscard]] QString activeTemplateId() const;
 
     Q_INVOKABLE void loadVideo(const QUrl &url);
     // KAN-105: a reviewed chapter group, played as one timeline.
@@ -242,12 +241,6 @@ public:
     Q_INVOKABLE QString previewEndTimecode() const;
     Q_INVOKABLE void reportPlaybackError(const QString &message);
     Q_INVOKABLE void saveWindowState(int x, int y, int width, int height);
-    Q_INVOKABLE int templateIndexForId(const QString &templateId) const;
-    Q_INVOKABLE void selectTemplate(const QString &templateId);
-    Q_INVOKABLE void reconcileTemplateSelection();
-    Q_INVOKABLE bool applyTemplate(const QString &templateId);
-    Q_INVOKABLE void markTemplateActive(const QString &templateId);
-    Q_INVOKABLE bool saveActiveTemplate();
 
 public slots:
     void setPlaybackTime(double seconds);
@@ -269,7 +262,6 @@ signals:
     void projectLoadChanged();
     void recoveryChanged();
     void sourceMismatchChanged();
-    void templateUiStateChanged();
     void saveAsRequested();
     void quitApproved();
 
@@ -362,7 +354,6 @@ private:
     void commitVboLoad(const VboLoadResult &result, bool markDocumentDirty);
     [[nodiscard]] static QString normalizedSourcePath(const QString &path) { return DocumentController::normalizedSourcePath(path); }
     [[nodiscard]] static QVariantList trackPointsFor(const TrackGeometry &geometry);
-    void clearActiveTemplate();
 
     QSettings m_settings;
     // DocumentHost: the active run's editor state in the project document.
@@ -403,6 +394,7 @@ private:
     std::unique_ptr<TelemetrySession> m_session;
     LapSession m_lapSession;
     WidgetModel m_widgetModel;
+    TemplatePicker m_templatePicker{m_widgetModel, m_settings};
     TrackGeometry m_trackGeometry;
     TelemetryRenderContext m_previewRenderContext;
     SyncController m_syncController{[this] { return currentSyncSources(); }};
@@ -438,8 +430,6 @@ private:
     VideoProbeResult m_pendingMismatchVideo;
     VboLoadResult m_pendingMismatchVbo;
     QString m_sourceMismatchType;
-    QString m_selectedTemplateId;
-    QString m_activeTemplateId;
     DocumentController m_document;
     BestLapFinder m_bestLapFinder{m_document};
     // Last, so a running export stops before the rest of the editor goes.

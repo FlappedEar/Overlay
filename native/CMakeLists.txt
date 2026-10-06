@@ -319,6 +319,8 @@ qt_add_library(flappedear_editor STATIC
     src/app/ExportController.h
     src/app/SyncController.cpp
     src/app/SyncController.h
+    src/app/TemplatePicker.cpp
+    src/app/TemplatePicker.h
     src/app/BundledFonts.cpp
     src/app/BundledFonts.h
 )
