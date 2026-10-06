@@ -169,6 +169,7 @@ private slots:
     void keepsTheEditorStateAnotherAppSaved();
     void importsAFolderOfRecordings();
     void attachesAlternativeRecordingsAndSwitchesThePrimary();
+    void dropsRecordingWorkFromAReplacedDocument();
     void reviewsApprovesAndReopensSourceFusion();
     void keepsAddingRunsWhileTheDayIsEdited();
     void measuresAPrivateFullDay();
@@ -368,6 +369,35 @@ void TelemetryAppTests::importsAFolderOfRecordings()
     QVERIFY(document.analysisImportMessages().join(' ').contains("Already in this outing; skipped."));
     QTRY_VERIFY_WITH_TIMEOUT(!controller.analysis()->outingLapsLoading(), 20000);
     QCOMPARE(controller.analysis()->outingAnalysisStatus().value("state").toString(), QString("ready"));
+}
+
+// KAN-196: recording work that finishes after the document was reopened
+// changes nothing in the reopened document.
+void TelemetryAppTests::dropsRecordingWorkFromAReplacedDocument()
+{
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto primary = directory.filePath("session.vbo"), alternative = directory.filePath("session-copy.vbo");
+    QVERIFY(writeFile(primary, warpedRouteVbo(true)));
+    QVERIFY(writeFile(alternative, warpedRouteVbo(true, 200)));
+    TelemetryController controller(directory.filePath("recovery.json"));
+    auto &document = *controller.document();
+    QSignalSpy committed(&document, &DocumentController::batchImportCommitted);
+    QVERIFY(document.importAnalysisRuns("Reopened", {QUrl::fromLocalFile(primary)}));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 20000);
+    const auto runId = document.activeRunId();
+    const QString projectPath = directory.filePath("day.fetproject");
+    QVERIFY(document.saveProject(QUrl::fromLocalFile(projectPath)));
+    QVERIFY(document.attachRunRecording(runId, QUrl::fromLocalFile(alternative)));
+    QTRY_COMPARE_WITH_TIMEOUT(document.runRecordingReview().value("state").toString(), QString("review"), 20000);
+    // Confirming hashes the recording in the background; the same project is
+    // reopened before the result arrives.
+    QVERIFY(document.confirmRunRecording());
+    QVERIFY(document.m_recordingWatcher.isRunning());
+    document.requestOpenProject(QUrl::fromLocalFile(projectPath));
+    QTRY_VERIFY_WITH_TIMEOUT(!document.m_recordingWatcher.isRunning() && !document.projectLoading(), 20000);
+    QTRY_VERIFY_WITH_TIMEOUT(document.runRecordingReview().isEmpty(), 20000);
+    QCOMPARE(document.runRecordings(runId).size(), 1);
+    QVERIFY(!document.dirty());
 }
 
 void TelemetryAppTests::attachesAlternativeRecordingsAndSwitchesThePrimary()
