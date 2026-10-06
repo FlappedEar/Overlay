@@ -1,4 +1,5 @@
 #include "gopro/GoProTelemetrySource.h"
+#include "export/BoundedProcessOutput.h"
 #include "export/FfmpegTools.h"
 
 #include <QFile>
@@ -93,7 +94,7 @@ QJsonObject runProbe(
             stopProcess(process);
             throw OperationCancelled();
         }
-        static_cast<void>(process.waitForFinished(100));
+        static_cast<void>(waitForOutputOrExit(process, 100));
         output.append(process.readAllStandardOutput());
         diagnostics.append(process.readAllStandardError());
         if (output.size() > GoProTelemetrySource::kMaximumProbeOutputBytes) {

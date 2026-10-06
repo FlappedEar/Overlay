@@ -261,6 +261,13 @@ void DrivingStatesTests::measuresBrakingWhileCornering()
     QVERIFY(std::abs(travelledMeters(session, overlap) - 110.0 / 3.6 * 2.0) < 4.0);
     QVERIFY(overlapOf(states.braking.active, {}).isEmpty());
     QCOMPARE(travelledMeters(sessionWith({}), overlap), 0.0); // no speed: nothing invented
+
+    // KAN-201: speed is lost from 5.45 s to 6.55 s inside the overlap; that
+    // 1.1 s is not bridged.
+    const auto gapped = sessionWith({{"speed", makeChannel("velocity", "km/h", speed,
+        [](double t) { return t < 5.47 || t > 6.53; })}});
+    const double kept = overlap[0].end - overlap[0].start - 1.1;
+    QVERIFY(std::abs(travelledMeters(gapped, overlap) - 110.0 / 3.6 * kept) < 0.5);
 }
 
 void DrivingStatesTests::classifiesPrivateBestLaps()

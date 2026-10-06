@@ -13,4 +13,5 @@ flappedear_add_fuzzer(flappedear_fuzz_rcz FuzzRcz.cpp)
 # The GPMF decoder lives in the overlay library; build just its source so the
 # harness needs Qt Core only.
 flappedear_add_fuzzer(flappedear_fuzz_gpmf FuzzGpmf.cpp
-    ../src/gopro/GoProTelemetrySource.cpp ../src/export/FfmpegTools.cpp)
+    ../src/gopro/GoProTelemetrySource.cpp ../src/export/FfmpegTools.cpp
+    ../src/export/BoundedProcessOutput.cpp)

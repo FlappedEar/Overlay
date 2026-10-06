@@ -3,6 +3,8 @@
 #include <QByteArray>
 #include <QString>
 
+class QProcess;
+
 namespace FlappedEar {
 
 // External programs are untrusted input. Complete payloads fail on overflow;
@@ -31,6 +33,13 @@ private:
 // The end of `text` within `maximumUtf8Bytes` of UTF-8, marked when shortened:
 // for an error, the last lines are the ones that explain it.
 [[nodiscard]] QString utf8Tail(const QString &text, qint64 maximumUtf8Bytes);
+
+// Waits up to `milliseconds` for the child's standard output to be read or for
+// the child to exit; true once it has exited. Unlike waitForFinished it returns
+// after each read from the pipe, so a caller that drains and checks its cap on
+// every return never lets QProcess hold more than about one pipe's worth beyond
+// that cap (KAN-201).
+[[nodiscard]] bool waitForOutputOrExit(QProcess &process, int milliseconds);
 
 namespace ProcessOutputLimits {
 inline constexpr qint64 ffprobeJsonBytes = 4 * 1024 * 1024;

@@ -107,7 +107,7 @@ The normal validation path records FFmpeg's final progress frame count and uses 
 For target-file transaction guarantees, see [export-output-safety.md](export-output-safety.md).
 # External process boundaries
 
-Every ffprobe/FFmpeg channel is treated as untrusted external input. FFprobe JSON is drained while the process runs and must fit within 4 MiB; overflow terminates the probe and reports the operation, limit, and observed bytes. FFmpeg stderr is retained as a 128 KiB newest-first diagnostic tail with truncation semantics.
+Every ffprobe/FFmpeg channel is treated as untrusted external input. FFprobe JSON is drained while the process runs and must fit within 4 MiB; the reader wakes on every read from the pipe rather than on a timer, so a flooding probe is stopped within about one pipe buffer of the limit (KAN-201); overflow terminates the probe and reports the operation, limit, and observed bytes. FFmpeg stderr is retained as a 128 KiB newest-first diagnostic tail with truncation semantics.
 
 Text fields in a worker message are cut to their last 32 KiB, marked "[… earlier output omitted]". That keeps each message well below the GUI's 128 KiB limit, and the end of an FFmpeg tail, which explains the error, still reaches the export log. The GUI applies the limit to each message line rather than to everything one read delivered (KAN-148). Machine-readable progress drops a pathological pending line above 16 KiB instead of growing indefinitely. The representative FFV1 storage sample counts and discards encoded stdout bytes, so sample output is not retained in RAM.
 
