@@ -365,7 +365,8 @@ MediaInfo MediaProbe::parseJson(const QByteArray &json, const QString &path)
                 info.displayVideoSize.transpose();
             }
             info.sourceColorClass = classifyColor(
-                info.colorTransfer, info.colorSpace, info.colorPrimaries);
+                info.colorTransfer, info.colorSpace, info.colorPrimaries,
+                !info.masteringDisplayMetadata.isEmpty() || !info.contentLightMetadata.isEmpty());
             info.videoFrameCount = jsonCount(stream, QStringLiteral("nb_read_frames"),
                                               QStringLiteral("nb_frames"));
             info.videoPacketCount = jsonCount(stream, QStringLiteral("nb_read_packets"),
@@ -433,8 +434,10 @@ std::optional<int> MediaProbe::bitDepthForPixelFormat(const QString &pixelFormat
 }
 
 SourceColorClass MediaProbe::classifyColor(
-    const QString &colorTransfer, const QString &colorSpace, const QString &colorPrimaries)
+    const QString &colorTransfer, const QString &colorSpace, const QString &colorPrimaries,
+    const bool hasHdrSideData)
 {
+    Q_UNUSED(colorSpace)
     const QString transfer = colorTransfer.trimmed().toLower();
     if (transfer == QStringLiteral("arib-std-b67")) return SourceColorClass::HdrHlg;
     if (transfer == QStringLiteral("smpte2084")) return SourceColorClass::HdrPq;
@@ -442,16 +445,29 @@ SourceColorClass MediaProbe::classifyColor(
         || transfer == QStringLiteral("iec61966-2-4") || transfer == QStringLiteral("bt1361e")) {
         return SourceColorClass::LogOrExtended;
     }
+    // Mastering-display or content-light metadata only accompanies HDR grades, so a stream
+    // carrying it is not trusted as SDR whatever its transfer tag says.
+    if (hasHdrSideData) return SourceColorClass::PossibleHdr;
     if (transfer == QStringLiteral("bt709") || transfer == QStringLiteral("smpte170m")
         || transfer == QStringLiteral("gamma22") || transfer == QStringLiteral("gamma28")
         || transfer == QStringLiteral("iec61966-2-1") || transfer == QStringLiteral("bt2020-10")
         || transfer == QStringLiteral("bt2020-12")) {
         return SourceColorClass::Sdr;
     }
-    if (transfer.isEmpty() && colorSpace.isEmpty() && colorPrimaries.isEmpty()) {
-        return SourceColorClass::Unknown;
+    // BT.2020 primaries with a missing or unrecognised transfer may be HLG or PQ with the
+    // transfer tag stripped; it cannot be verified as SDR.
+    if (colorPrimaries.trimmed().toLower() == QStringLiteral("bt2020")) {
+        return SourceColorClass::PossibleHdr;
     }
     return SourceColorClass::Unknown;
+}
+
+bool isUnsupportedColorManagedClass(const SourceColorClass classification)
+{
+    return classification == SourceColorClass::HdrHlg
+        || classification == SourceColorClass::HdrPq
+        || classification == SourceColorClass::LogOrExtended
+        || classification == SourceColorClass::PossibleHdr;
 }
 
 QString sourceColorClassName(const SourceColorClass classification)
@@ -461,6 +477,7 @@ QString sourceColorClassName(const SourceColorClass classification)
     case SourceColorClass::HdrHlg: return QStringLiteral("HLG HDR");
     case SourceColorClass::HdrPq: return QStringLiteral("PQ HDR");
     case SourceColorClass::LogOrExtended: return QStringLiteral("Log/extended");
+    case SourceColorClass::PossibleHdr: return QStringLiteral("Possible HDR (unverified)");
     case SourceColorClass::Unknown: return QStringLiteral("Unknown color");
     }
     return QStringLiteral("Unknown color");

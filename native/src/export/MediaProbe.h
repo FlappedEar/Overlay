@@ -25,9 +25,13 @@ enum class SourceColorClass {
     HdrHlg,
     HdrPq,
     LogOrExtended,
+    // HDR side data, or BT.2020 primaries without a known transfer: possibly HDR, unverifiable.
+    PossibleHdr,
 };
 
 [[nodiscard]] QString sourceColorClassName(SourceColorClass classification);
+// True for classes that export refuses rather than silently converting to SDR.
+[[nodiscard]] bool isUnsupportedColorManagedClass(SourceColorClass classification);
 
 struct MediaInfo {
     QString path;
@@ -107,7 +111,7 @@ public:
     [[nodiscard]] static std::optional<int> bitDepthForPixelFormat(const QString &pixelFormat);
     [[nodiscard]] static SourceColorClass classifyColor(
         const QString &colorTransfer, const QString &colorSpace,
-        const QString &colorPrimaries);
+        const QString &colorPrimaries, bool hasHdrSideData = false);
 };
 
 } // namespace FlappedEar

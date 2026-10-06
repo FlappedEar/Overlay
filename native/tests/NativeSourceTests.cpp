@@ -6,6 +6,7 @@
 #include "app/TelemetryController.h"
 #include "export/FfmpegTools.h"
 #include "export/MediaProbe.h"
+#include "export/ExportMediaProfile.h"
 #include "telemetry/TelemetrySyncEngine.h"
 #include "export/VideoFingerprint.h"
 #include "telemetry/TelemetryRenderContext.h"
@@ -1429,6 +1430,27 @@ void SourceTests::modelsExtendedMediaCharacteristics()
              SourceColorClass::HdrPq);
     QCOMPARE(MediaProbe::classifyColor(QStringLiteral("log316"), {}, {}),
              SourceColorClass::LogOrExtended);
+    QCOMPARE(MediaProbe::classifyColor({}, QStringLiteral("bt2020nc"), QStringLiteral("bt2020")),
+             SourceColorClass::PossibleHdr);
+    QCOMPARE(MediaProbe::classifyColor(QStringLiteral("unknown"), {}, QStringLiteral("bt2020")),
+             SourceColorClass::PossibleHdr);
+    QCOMPARE(MediaProbe::classifyColor(QStringLiteral("bt2020-10"), QStringLiteral("bt2020nc"),
+                                       QStringLiteral("bt2020")),
+             SourceColorClass::Sdr);
+    QCOMPARE(MediaProbe::classifyColor(QStringLiteral("bt709"), QStringLiteral("bt709"),
+                                       QStringLiteral("bt709"), true),
+             SourceColorClass::PossibleHdr);
+    QVERIFY(isUnsupportedColorManagedClass(SourceColorClass::PossibleHdr));
+    QVERIFY(!isUnsupportedColorManagedClass(SourceColorClass::Unknown));
+
+    const QByteArray strippedHdrJson = R"({"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"hevc","width":3840,"height":2160,"r_frame_rate":"30/1","avg_frame_rate":"30/1","pix_fmt":"yuv420p10le","side_data_list":[{"side_data_type":"Content light level metadata","max_content":1000}]}]})";
+    const MediaInfo strippedHdr = MediaProbe::parseJson(strippedHdrJson, QStringLiteral("/hdr.mp4"));
+    QCOMPARE(strippedHdr.sourceColorClass, SourceColorClass::PossibleHdr);
+    const ExportMediaProfile strippedProfile = ExportMediaProfile::derive(
+        strippedHdr, {3840, 2160}, {30, 1}, 20'000'000, QStringLiteral("libx265"));
+    QVERIFY(!strippedProfile.supported);
+    QVERIFY2(strippedProfile.error.contains(QStringLiteral("Possible HDR")),
+             qPrintable(strippedProfile.error));
     QCOMPARE(MediaProbe::bitDepthForPixelFormat(QStringLiteral("yuv420p")),
              std::optional<int>(8));
     QCOMPARE(MediaProbe::bitDepthForPixelFormat(QStringLiteral("p010le")),
