@@ -204,6 +204,7 @@ The `.fetproject` document is the only thing the two apps share ([KAN-170]). A d
 Two consequences:
 - `lap-derivation-v1` hashes the whole `trackConfiguration` and the primary fingerprint. One extra key in `trackConfiguration` changes every lap reference, and saved exclusions and comparison slots stop matching.
 - The exact bytes (key order, number and string formatting) are not specified anywhere, so a second implementation cannot be checked without test vectors.
+- Whole-document behaviour is pinned the same way since KAN-218: `native/tests/fixtures/project-vectors/` holds days as Telemetry saves them and what a no-change save, in place or Save As, must write. Telemetry should run these vectors against its Dart save.
 
 **Source references**
 - **Paths:**

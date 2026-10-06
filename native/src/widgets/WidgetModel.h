@@ -2,6 +2,7 @@
 
 #include <QAbstractListModel>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QUrl>
 #include <QVariantMap>
 
@@ -66,6 +67,10 @@ public:
     [[nodiscard]] const WidgetData *widgetAt(int index) const;
     // Widgets of retired types (KAN-192) the last fromJson() left out.
     [[nodiscard]] int retiredWidgetsDropped() const { return m_retiredWidgetsDropped; }
+    // KAN-217: widgets of a type this build does not know, from a newer
+    // version. They are not shown or rendered, but toJson() writes them back
+    // unchanged at their place in the scene until the scene is replaced.
+    [[nodiscard]] int unknownWidgetsKept() const { return static_cast<int>(m_unknownWidgets.size()); }
 
     Q_INVOKABLE int addWidget(const QString &type);
     Q_INVOKABLE void removeWidget(int index);
@@ -139,6 +144,10 @@ private:
     bool m_templateStoreWritable = false;
     int m_revision = 0;
     int m_retiredWidgetsDropped = 0;
+    // Each unknown widget's JSON and its index in the saved scene.
+    QList<QPair<qsizetype, QJsonObject>> m_unknownWidgets;
+    [[nodiscard]] qsizetype sceneWidgetCount() const { return m_widgets.size() + m_unknownWidgets.size(); }
+    [[nodiscard]] qsizetype unknownCueCount() const;
 };
 
 } // namespace FlappedEar

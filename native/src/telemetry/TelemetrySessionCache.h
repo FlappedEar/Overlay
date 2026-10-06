@@ -43,7 +43,7 @@ private:
         std::shared_ptr<const TelemetrySession> session;
     };
     std::shared_ptr<Budget> m_budget;
-    std::timed_mutex m_mutex;
+    std::mutex m_mutex;
     QList<Entry> m_entries; // Most recently used first; at most two cache entries.
 };
 }

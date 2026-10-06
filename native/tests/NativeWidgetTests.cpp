@@ -41,6 +41,7 @@ private slots:
     void rejectsNonFiniteWidgetGeometryAndDuplicateIds();
     void loadsVisualTemplates();
     void dropsRetiredWidgetTypes();
+    void keepsUnknownWidgetTypesUnchanged();
     void keepsRetiredWidgetSettings();
     void providesCustomizableArchetypes();
     void persistsAndSharesCustomTemplates();
@@ -384,6 +385,52 @@ void WidgetTests::loadsVisualTemplates()
         QVERIFY2(!model.applyTemplate(id), qPrintable(id));
 }
 
+void WidgetTests::keepsUnknownWidgetTypesUnchanged()
+{
+    // KAN-217: a scene saved by a newer version keeps that version's widgets.
+    // They are not shown, and saving writes them back unchanged in place.
+    WidgetModel model;
+    const QJsonObject future{{"id", "future"}, {"type", "sparkline"}, {"x", 0.7}, {"y", 0.1},
+        {"settings", QJsonObject{{"channel", "rpm"}, {"window", 12}, {"style", QJsonObject{{"glow", true}}}}},
+        {"cues", QJsonArray{QJsonObject{{"start", 1.0}, {"end", 2.0}}}}, {"newerKey", "kept"}};
+    const QJsonArray scene{
+        QJsonObject{{"id", "speed"}, {"type", "speed"}},
+        future,
+        QJsonObject{{"id", "old"}, {"type", "rpm"}},
+        QJsonObject{{"id", "lap"}, {"type", "lapCurrent"}},
+        QJsonObject{{"id", "future-2"}, {"type", "anotherNewType"}},
+    };
+    QVERIFY(model.fromJson(scene));
+    QCOMPARE(model.count(), 2);
+    QCOMPARE(model.unknownWidgetsKept(), 2);
+    QCOMPARE(model.retiredWidgetsDropped(), 1);
+    auto saved = model.toJson();
+    QCOMPARE(saved.size(), 4);
+    QCOMPARE(saved[0].toObject().value("id").toString(), QString("speed"));
+    QCOMPARE(saved[1].toObject(), future);
+    QCOMPARE(saved[2].toObject().value("id").toString(), QString("lap"));
+    QCOMPARE(saved[3].toObject(), scene[4].toObject());
+    // Editing the known widgets keeps the unknown ones.
+    model.moveWidget(1, 0.2, 0.2);
+    QVERIFY(model.addWidget("heartRate") >= 0);
+    saved = model.toJson();
+    QCOMPARE(saved.size(), 5);
+    QCOMPARE(saved[1].toObject(), future);
+    QVERIFY(model.fromJson(saved));
+    QCOMPARE(model.toJson(), saved);
+    // They count toward the scene limits; a duplicate id is still invalid.
+    QJsonArray full;
+    for (qsizetype i = 0; i < ProjectLimits::maximumWidgets; ++i)
+        full.append(QJsonObject{{"id", QString("f%1").arg(i)}, {"type", "sparkline"}});
+    QVERIFY(model.fromJson(full));
+    QCOMPARE(model.addWidget("speed"), -1);
+    QVERIFY(!model.fromJson(QJsonArray{future, future}));
+    // A template replaces the whole scene, unknown widgets included.
+    QVERIFY(model.fromJson(scene));
+    QVERIFY(model.applyTemplate("motorsport-broadcast-smoke"));
+    QCOMPARE(model.unknownWidgetsKept(), 0);
+}
+
 void WidgetTests::dropsRetiredWidgetTypes()
 {
     // KAN-192: a project or custom template saved with a removed type still
@@ -406,9 +453,11 @@ void WidgetTests::dropsRetiredWidgetTypes()
     QCOMPARE(model.widget(1).value("type").toString(), QString("lapCurrent"));
     QVERIFY(model.fromJson(QJsonArray{scene.at(0)}));
     QCOMPARE(model.retiredWidgetsDropped(), 0);
-    // A type that never existed still makes the scene invalid.
-    QVERIFY(!model.fromJson(QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("x")},
-                                                   {QStringLiteral("type"), QStringLiteral("unknownType")}}}));
+    // A type this build does not know is a newer version's: kept, not dropped (KAN-217).
+    QVERIFY(model.fromJson(QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("x")},
+                                                  {QStringLiteral("type"), QStringLiteral("unknownType")}}}));
+    QCOMPARE(model.count(), 0);
+    QCOMPARE(model.unknownWidgetsKept(), 1);
 
     QTemporaryDir directory;
     QVERIFY(directory.isValid());

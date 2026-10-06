@@ -1,0 +1,30 @@
+{
+  "format": "fetproject-round-trip-v1",
+  "about": "KAN-218: shared .fetproject compatibility vectors for FlappedEar Overlays and FlappedEar Telemetry. Each accepted case is opened from <root>/day/ next to its recordings and saved unchanged to savePath; the result must equal expected as JSON values once the temporary root in every absolutePath is replaced by /vectors and the generated documentState.saveId (and documentState.id, when the input had none) by <generated-uuid>; both must be UUIDs. Rejected cases must fail validation. Regenerate expected files only for a reviewed format change (docs/event-project-format.md).",
+  "cases": [
+    {
+      "name": "telemetry-day-save",
+      "input": "telemetry-day.fetproject",
+      "recordings": ["first.vbo", "second.vbo"],
+      "savePath": "day/day.fetproject",
+      "expected": "telemetry-day.saved.fetproject"
+    },
+    {
+      "name": "telemetry-day-save-as",
+      "input": "telemetry-day.fetproject",
+      "recordings": ["first.vbo", "second.vbo"],
+      "savePath": "archive/2026/day.fetproject",
+      "expected": "telemetry-day.saved-as.fetproject"
+    },
+    {
+      "name": "event-demo-save",
+      "input": "event-demo.fetproject",
+      "recordings": ["event-laps.vbo", "basic.vbo"],
+      "savePath": "day/day.fetproject",
+      "expected": "event-demo.saved.fetproject"
+    },
+    { "name": "rejects-root-sources", "input": "rejected-root-sources.fetproject", "rejected": true },
+    { "name": "rejects-v2-with-event", "input": "rejected-v2-event.fetproject", "rejected": true },
+    { "name": "rejects-malformed-version-tag", "input": "rejected-malformed-version-tag.fetproject", "rejected": true }
+  ]
+}

@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <limits>
+#include <thread>
 
 namespace FlappedEar {
 qint64 telemetrySessionMemoryBytes(const TelemetrySession &session)
@@ -38,8 +39,10 @@ std::shared_ptr<const TelemetrySession> TelemetrySessionCache::load(const QByteA
     const std::function<void(const TelemetrySession &)> &validate)
 {
     // Serialize decoding across A/B and the inspector, with cancellable waiting.
+    // Polls try_lock rather than timed_mutex::try_lock_for: GCC's ThreadSanitizer
+    // does not intercept pthread_mutex_clocklock and reports every unlock (KAN-219).
     std::unique_lock lock(m_mutex, std::defer_lock);
-    while (!lock.try_lock_for(std::chrono::milliseconds(10))) throwIfCancelled(cancelled);
+    while (!lock.try_lock()) { throwIfCancelled(cancelled); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
     throwIfCancelled(cancelled);
     for (qsizetype i = 0; i < m_entries.size(); ++i) {
         if (m_entries[i].key != key) continue;

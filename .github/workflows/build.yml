@@ -281,6 +281,162 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  # KAN-219: the same GUI-free tests under ThreadSanitizer. Decoding, A/B
+  # geometry and the inspector share sessions across worker threads.
+  linux-tsan:
+    name: Linux x64 / TSan / Qt 6.8.3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+      QT_QPA_PLATFORM: offscreen
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/.github/tsan-suppressions.txt
+      # As ASan+UBSan, and also the two suites that drive the reference app:
+      # its QtConcurrent tasks reach worker threads through Qt's uninstrumented
+      # thread pool, so every captured value reads as a race (docs/testing.md).
+      EXCLUDED_TESTS: flappedear_telemetry_app_tests|flappedear_project_vector_tests|flappedear_native_tests_[a-z]+|flappedear_startup_smoke|flappedear_command_line_usage|flappedear_telemetry_core_boundary|flappedear_telemetry_app_boundary|flappedear_boundary_rejects_relative-transitive|flappedear_boundary_rejects_gui-header
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ninja-build libgl-dev libegl-dev \
+            libxkbcommon-dev libvulkan-dev libfontconfig1-dev libfreetype-dev
+          # GCC 13's ThreadSanitizer fails with "unexpected memory mapping" at
+          # the runner image's 32 bits of mmap randomisation (runner-images#9491).
+          sudo sysctl vm.mmap_rnd_bits=28
+
+      - name: Install Qt 6.8.3 and modules
+        uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: '6.8.3'
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtmultimedia qtshadertools
+          cache: true
+          cache-key-prefix: native-ci-qt-6.8.3-linux-v1
+
+      - name: Configure ThreadSanitizer build
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          flags='-fsanitize=thread -fno-omit-frame-pointer -O1 -g'
+          cmake -S . -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR" \
+            "-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread" 2>&1 | tee ci-logs/configure.log
+
+      - name: Build the GUI-free test programs
+        run: |
+          set -o pipefail
+          ctest --test-dir build-native -N | awk '/Test +#/ {print $3}' | grep -vE "^($EXCLUDED_TESTS)\$" > ci-logs/tests.txt
+          test -s ci-logs/tests.txt
+          cmake --build build-native --target $(cat ci-logs/tests.txt) 2>&1 | tee ci-logs/build.log
+
+      - name: Run them under ThreadSanitizer
+        timeout-minutes: 35
+        run: |
+          set -o pipefail
+          ctest --test-dir build-native --output-on-failure --no-tests=error --timeout 1500 -j 2 \
+            -R "^($(paste -sd'|' ci-logs/tests.txt))\$" --output-junit "$GITHUB_WORKSPACE/ci-logs/ctest.xml" 2>&1 | tee ci-logs/ctest.log
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-ci-linux-tsan-qt-6.8.3
+          path: |
+            ci-logs/
+            build-native/Testing/Temporary/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # KAN-219: the editor suites under AddressSanitizer and UBSan on a virtual
+  # X display with Mesa's software OpenGL. Leak checks are off: Qt Quick's
+  # QML engine leaves cycles at exit that cannot be attributed to this code.
+  linux-gui-sanitizers:
+    name: Linux x64 / GUI ASan+UBSan / Qt 6.8.3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+      QT_QPA_PLATFORM: xcb
+      QSG_RHI_BACKEND: opengl
+      ASAN_OPTIONS: detect_leaks=0:detect_stack_use_after_return=1:quarantine_size_mb=32
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      # The sources and export suites need FFmpeg 8.1, which macOS supplies.
+      GUI_TESTS: flappedear_native_tests_editor flappedear_native_tests_project flappedear_native_tests_widgets
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ninja-build libgl-dev libegl-dev \
+            libxkbcommon-dev libvulkan-dev libfontconfig1-dev libfreetype-dev \
+            xvfb xauth libgl1-mesa-dri libegl-mesa0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-xkb1 fonts-dejavu-core ffmpeg
+
+      - name: Install Qt 6.8.3 and modules
+        uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: '6.8.3'
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtmultimedia qtshadertools
+          cache: true
+          cache-key-prefix: native-ci-qt-6.8.3-linux-v1
+
+      - name: Configure sanitizer build
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          flags='-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined'
+          cmake -S . -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR" \
+            "-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined" 2>&1 | tee ci-logs/configure.log
+
+      - name: Build the editor suites
+        run: |
+          set -o pipefail
+          cmake --build build-native --target $GUI_TESTS 2>&1 | tee ci-logs/build.log
+
+      - name: Run them under the sanitizers
+        timeout-minutes: 30
+        run: |
+          set -o pipefail
+          xvfb-run -a -s '-screen 0 1920x1080x24' ctest --test-dir build-native --output-on-failure \
+            --no-tests=error --timeout 1500 -R "^($(echo $GUI_TESTS | tr ' ' '|'))\$" --output-junit "$GITHUB_WORKSPACE/ci-logs/ctest.xml" \
+            2>&1 | tee ci-logs/ctest.log
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-ci-linux-gui-sanitizers-qt-6.8.3
+          path: |
+            ci-logs/
+            build-native/Testing/Temporary/
+          if-no-files-found: warn
+          retention-days: 14
+
   # KAN-154: clang-tidy (.clang-tidy) on the C++ files a pull request changes.
   # The build is needed for the compile database and the generated moc files.
   linux-clang-tidy:
@@ -303,7 +459,20 @@ jobs:
           set -o pipefail
           mkdir -p ci-logs
           git diff --name-only --diff-filter=ACMR "${{ github.event.pull_request.base.sha }}...HEAD" -- \
-            'native/*.cpp' | tee ci-logs/changed-files.txt
+            'native/*.cpp' 'native/*.h' > ci-logs/changed-sources.txt
+          # KAN-219: a changed header is checked through its own .cpp, or else
+          # through up to three source files that include it.
+          {
+            grep '\.cpp$' ci-logs/changed-sources.txt || true
+            grep '\.h$' ci-logs/changed-sources.txt | while read -r header; do
+              if [ -f "${header%.h}.cpp" ]; then
+                echo "${header%.h}.cpp"
+              else
+                { grep -rlE --include='*.cpp' "#include \"([A-Za-z0-9_]+/)*$(basename "$header")\"" native || true; } \
+                  | sort | sed -n 1,3p
+              fi
+            done || true
+          } | sort -u | tee ci-logs/changed-files.txt
           if [ -s ci-logs/changed-files.txt ]; then echo "any=true" >> "$GITHUB_OUTPUT"; fi
 
       - name: Install build dependencies
@@ -401,6 +570,8 @@ jobs:
           cmake --build build-fuzz --target flappedear_fuzz_vbo flappedear_fuzz_rcz flappedear_fuzz_gpmf \
             2>&1 | tee ci-logs/build.log
 
+      # KAN-219: inputs up to 1 MiB, so the parsers' size and count limits
+      # are reached, not only their syntax checks.
       - name: Fuzz each parser for 60 seconds
         run: |
           set -o pipefail
@@ -408,7 +579,7 @@ jobs:
             mkdir -p "fuzz-corpus/$format" "ci-logs/crashes-$format"
             cp "native/fuzz/seeds/$format/"* "fuzz-corpus/$format/"
             "build-fuzz/native/fuzz/flappedear_fuzz_$format" "fuzz-corpus/$format" \
-              -max_total_time=60 -max_len=65536 -timeout=30 -rss_limit_mb=2560 \
+              -max_total_time=60 -max_len=1048576 -timeout=30 -rss_limit_mb=2560 \
               "-artifact_prefix=ci-logs/crashes-$format/" 2>&1 | tee "ci-logs/fuzz-$format.log" | tail -n 60
           done
 
