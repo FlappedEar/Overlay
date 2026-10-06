@@ -5,6 +5,7 @@
 #include "app/BestLapFinder.h"
 #include "app/DocumentController.h"
 #include "app/DocumentHost.h"
+#include "app/ExportController.h"
 #include "telemetry/TelemetrySessionCache.h"
 
 #include "telemetry/LapTiming.h"
@@ -62,16 +63,10 @@ class AppController final : public QObject, private DocumentHost {
     Q_PROPERTY(double syncOffset READ syncOffset WRITE setSyncOffset NOTIFY syncChanged)
     Q_PROPERTY(double timeScale READ timeScale WRITE setTimeScale NOTIFY syncChanged)
     Q_PROPERTY(bool syncing READ syncing NOTIFY syncingChanged)
-    Q_PROPERTY(bool exporting READ exporting NOTIFY exportChanged)
-    Q_PROPERTY(int exportProgress READ exportProgress NOTIFY exportChanged)
-    Q_PROPERTY(QString exportState READ exportState NOTIFY exportChanged)
-    Q_PROPERTY(QString exportError READ exportError NOTIFY exportChanged)
+    // The open video as the export reads it.
     Q_PROPERTY(QVariantMap exportSourceInfo READ exportSourceInfo NOTIFY exportChanged)
-    Q_PROPERTY(QVariantMap exportMetrics READ exportMetrics NOTIFY exportChanged)
-    Q_PROPERTY(QVariantMap exportProgressInfo READ exportProgressInfo NOTIFY exportChanged)
-    Q_PROPERTY(bool exportProgressVisible READ exportProgressVisible NOTIFY exportChanged)
-    Q_PROPERTY(QString exportDiagnosticLog READ exportDiagnosticLog NOTIFY exportDiagnosticLogChanged)
-    Q_PROPERTY(qint64 exportDiagnosticDroppedCharacters READ exportDiagnosticDroppedCharacters NOTIFY exportDiagnosticLogChanged)
+    // KAN-215: the export run, its progress and its diagnostics.
+    Q_PROPERTY(FlappedEar::ExportController *exporter READ exporter CONSTANT)
     Q_PROPERTY(QString fixedFontFamily READ fixedFontFamily CONSTANT)
     Q_PROPERTY(QVariantMap syncCandidate READ syncCandidate NOTIFY syncCandidateChanged)
     Q_PROPERTY(QVariant speed READ speed NOTIFY liveValuesChanged)
@@ -141,20 +136,12 @@ public:
     [[nodiscard]] double syncOffset() const;
     [[nodiscard]] double timeScale() const;
     [[nodiscard]] bool syncing() const;
-    [[nodiscard]] bool exporting() const;
     // KAN-124: the document is busy with an operation that must not be
     // interleaved with document edits (today: an export). The document's
     // guards use this, not the overlay's export state.
     [[nodiscard]] bool documentBusy() const override;
-    [[nodiscard]] int exportProgress() const;
-    [[nodiscard]] QString exportState() const;
-    [[nodiscard]] QString exportError() const;
     [[nodiscard]] QVariantMap exportSourceInfo() const;
-    [[nodiscard]] QVariantMap exportMetrics() const;
-    [[nodiscard]] QVariantMap exportProgressInfo() const;
-    [[nodiscard]] bool exportProgressVisible() const;
-    [[nodiscard]] QString exportDiagnosticLog() const;
-    [[nodiscard]] qint64 exportDiagnosticDroppedCharacters() const { return m_exportDiagnosticLog.droppedCharacters(); }
+    [[nodiscard]] ExportController *exporter() { return &m_export; }
     [[nodiscard]] QString fixedFontFamily() const;
     [[nodiscard]] QVariantMap syncCandidate() const;
     [[nodiscard]] QVariant speed() const;
@@ -261,10 +248,6 @@ public:
     Q_INVOKABLE QString previewTimecodeForPositionMilliseconds(qint64 positionMilliseconds) const;
     Q_INVOKABLE QString previewEndTimecode() const;
     Q_INVOKABLE void reportPlaybackError(const QString &message);
-    Q_INVOKABLE void cancelExport();
-    Q_INVOKABLE void cancelExportAndQuit();
-    Q_INVOKABLE void dismissExportProgress();
-    Q_INVOKABLE void copyExportDiagnostics();
     Q_INVOKABLE void saveWindowState(int x, int y, int width, int height);
     Q_INVOKABLE int templateIndexForId(const QString &templateId) const;
     Q_INVOKABLE void selectTemplate(const QString &templateId);
@@ -289,7 +272,6 @@ signals:
     void syncChanged();
     void syncingChanged();
     void exportChanged();
-    void exportDiagnosticLogChanged();
     void syncCandidateChanged();
     void liveValuesChanged();
     void documentStateChanged();
@@ -405,11 +387,6 @@ private:
     [[nodiscard]] static QString normalizedSourcePath(const QString &path) { return DocumentController::normalizedSourcePath(path); }
     [[nodiscard]] static QVariantList trackPointsFor(const TrackGeometry &geometry);
     void clearActiveTemplate();
-    void handleExportOutput();
-    void finishExport(int exitCode, QProcess::ExitStatus exitStatus);
-    void appendExportDiagnostic(const QString &entry);
-    void appendExportLifecycle(const QString &event);
-    void finishPersistentExportLog(const QString &result, const QString &error = {});
     [[nodiscard]] static QString syncCandidateLevelName(double confidence);
 
     QSettings m_settings;
@@ -466,6 +443,7 @@ private:
     // KAN-106: the chapters an export reads as one source, or why it cannot.
     QStringList m_exportChapterPaths;
     QString m_exportChapterProblem;
+    MediaInfo m_exportSourceInfo;
     MediaTimeline m_videoTimeline;
     int m_videoChapterIndex = 0;
     QString m_videoChapterNotice;
@@ -490,32 +468,11 @@ private:
     QString m_sourceMismatchType;
     QString m_selectedTemplateId;
     QString m_activeTemplateId;
-    std::unique_ptr<QProcess> m_exportProcess;
-    std::unique_ptr<ExportProcessSupervisor> m_exportSupervisor;
-    std::unique_ptr<QTemporaryFile> m_exportConfig;
-    std::unique_ptr<ExportOutputTransaction> m_exportOutputTransaction;
-    QByteArray m_exportStdout;
-    BoundedProcessOutput m_exportStderr{BoundedProcessOutput::Mode::DiagnosticTail,
-                                        ProcessOutputLimits::ffmpegDiagnosticTailBytes};
-    QString m_exportCancelPath;
-    QString m_exportSupervisionReadyPath;
-    QString m_exportManifestPath;
-    int m_exportProgress = 0;
-    QString m_exportState = QStringLiteral("idle");
-    QString m_exportError;
-    MediaInfo m_exportSourceInfo;
-    QVariantMap m_exportMetrics;
-    QVariantMap m_exportProgressInfo;
-    BoundedDiagnosticLog m_exportDiagnosticLog{1500};
-    // Coalesces exportDiagnosticLogChanged: a busy export logs faster than the
-    // Very verbose view should re-lay out its text.
-    QTimer m_exportDiagnosticNotifier;
-    std::unique_ptr<PersistentExportLog> m_persistentExportLog;
-    bool m_exportProgressVisible = false;
-    bool m_quitAfterExport = false;
     QVariantMap m_syncCandidate;
     DocumentController m_document;
     BestLapFinder m_bestLapFinder{m_document};
+    // Last, so a running export stops before the rest of the editor goes.
+    ExportController m_export;
 };
 
 } // namespace FlappedEar

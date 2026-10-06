@@ -1234,9 +1234,9 @@ void SourceTests::keepsVideoChaptersAsOneTimeline()
         QCOMPARE(controller.m_exportChapterPaths.size(), 3);
         QVERIFY(!controller.startExport(file("GX020200.MP4"), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, true));
         QVERIFY2(controller.startExport(QUrl::fromLocalFile(directory.filePath("out.mp4")), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, false),
-                 qPrintable(controller.exportError()));
-        QTRY_VERIFY_WITH_TIMEOUT(!controller.exporting(), 120000); // the worker exited and the output was committed
-        QVERIFY2(controller.exportState() == "complete", qPrintable(controller.exportError() + controller.exportDiagnosticLog().right(3000)));
+                 qPrintable(controller.exporter()->error()));
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.exporter()->exporting(), 120000); // the worker exited and the output was committed
+        QVERIFY2(controller.exporter()->state() == "complete", qPrintable(controller.exporter()->error() + controller.exporter()->diagnosticLog().right(3000)));
         QCOMPARE(MediaProbe::probe(directory.filePath("out.mp4"), {}, true).videoFrameCount, qsizetype(210));
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
     }
@@ -1264,7 +1264,7 @@ void SourceTests::keepsVideoChaptersAsOneTimeline()
             QVERIFY(reopened.locateVideoTimeline(4000).value("gap").toBool());
             QVERIFY(reopened.statusText().contains("gap"));
             QVERIFY(!reopened.startExport(QUrl::fromLocalFile(directory.filePath("gap.mp4")), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, false));
-            QVERIFY(reopened.exportError().contains("missing or changed"));
+            QVERIFY(reopened.exporter()->error().contains("missing or changed"));
             // Saving keeps the missing chapter's reference and duration.
             QVERIFY(reopened.saveProject(QUrl::fromLocalFile(projectPath)));
             const auto again = QJsonDocument::fromJson(readBytes(projectPath)).object()

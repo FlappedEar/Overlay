@@ -274,12 +274,12 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QFile::remove(target);
     QVERIFY2(controller.startExport(QUrl::fromLocalFile(target), 1920, 1080, 60000, 1001,
         controller.recommendedExportBitrate(1920, 1080, 60000, 1001, QStringLiteral("high")),
-        true, true, timecode(firstFrame), timecode(firstFrame + 8 * 60)), qPrintable(controller.exportError()));
-    qInfo() << "export started" << controller.exportState() << timecode(firstFrame);
+        true, true, timecode(firstFrame), timecode(firstFrame + 8 * 60)), qPrintable(controller.exporter()->error()));
+    qInfo() << "export started" << controller.exporter()->state() << timecode(firstFrame);
     QQuickItem *overlayRoot = window->contentItem()->parentItem() ? window->contentItem()->parentItem() : window->contentItem();
-    const auto finished = [&] { return controller.exportState() == "complete" || controller.exportState() == "failed"; };
+    const auto finished = [&] { return controller.exporter()->state() == "complete" || controller.exporter()->state() == "failed"; };
     QVERIFY(QTest::qWaitFor([&] {
-        return controller.exportProgressInfo().value("progressPercent").toDouble() >= 25.0 || finished();
+        return controller.exporter()->progressInfo().value("progressPercent").toDouble() >= 25.0 || finished();
     }, 240000));
     QVERIFY(shoot.window(window, "export-progress", {}, 100));
     auto *details = byText(overlayRoot, QStringLiteral("Details"));
@@ -293,10 +293,10 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     verbose->setProperty("checked", false);
     details->setProperty("checked", false);
     QTRY_VERIFY_WITH_TIMEOUT(finished(), 600000);
-    qInfo() << "export state" << controller.exportState();
-    QCOMPARE(controller.exportState(), QStringLiteral("complete"));
+    qInfo() << "export state" << controller.exporter()->state();
+    QCOMPARE(controller.exporter()->state(), QStringLiteral("complete"));
     QVERIFY(shoot.window(window, "export-complete", {}, 800));
-    controller.dismissExportProgress();
+    controller.exporter()->dismissProgress();
     QFile::remove(target);
 
     // A GoPro recording split into chapters, on the run it belongs to.

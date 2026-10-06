@@ -145,12 +145,7 @@ void AppController::clearEditor()
     m_exportSourceInfo = {};
     m_exportChapterPaths.clear();
     m_exportChapterProblem.clear();
-    m_exportMetrics.clear();
-    m_exportDiagnosticLog.clear();
-    m_exportDiagnosticNotifier.stop();
-    emit exportDiagnosticLogChanged();
-    m_exportProgressInfo.clear();
-    m_exportProgressVisible = false;
+    m_export.reset();
     m_telemetryPath.clear();
     m_vboReference = {};
     m_session.reset();

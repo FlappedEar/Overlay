@@ -60,14 +60,22 @@ QtObject {
     property var lapSummaries: []
     property var outingRanking: ({})
 
-    // Export
-    property bool exporting: false
-    property string exportState: "idle"
-    property string exportError: ""
-    property real exportProgress: 0
-    property bool exportProgressVisible: false
-    property var exportProgressInfo: ({})
-    property string exportDiagnosticLog: ""
+    // Export (KAN-215: appController.exporter)
+    property QtObject exporter: QtObject {
+        property bool exporting: false
+        property string state: "idle"
+        property string error: ""
+        property real progress: 0
+        property bool progressVisible: false
+        property var progressInfo: ({})
+        property var metrics: ({})
+        property string diagnosticLog: ""
+        property real diagnosticDroppedCharacters: 0
+        function cancel() {}
+        function cancelAndQuit() {}
+        function dismissProgress() {}
+        function copyDiagnostics() {}
+    }
     property var exportSourceInfo: ({})
 
     function formatElapsedTime(seconds) {
