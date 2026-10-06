@@ -139,19 +139,26 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QStringLiteral("ready"), 60000);
     QTRY_VERIFY_WITH_TIMEOUT(controller.playbackTime() > 0.0, 30000);
     QTRY_VERIFY_WITH_TIMEOUT(!window->property("previewPrimeFramePending").toBool(), 30000);
-    // Auto Sync is refused until the video's GPS has been read; retry until it starts.
-    bool started = false;
-    for (int attempt = 0; attempt < 30 && !started; ++attempt) {
-        controller.autoSync();
-        started = QTest::qWaitFor([&] { return controller.syncing() || !controller.syncCandidate().isEmpty(); }, 2000);
+    if (options.syncOffset) {
+        controller.setSyncOffset(*options.syncOffset);
+    } else {
+        // Auto Sync is refused until the video's GPS has been read; retry until it starts.
+        bool started = false;
+        for (int attempt = 0; attempt < 30 && !started; ++attempt) {
+            controller.autoSync();
+            started = QTest::qWaitFor([&] { return controller.syncing() || !controller.syncCandidate().isEmpty(); }, 2000);
+        }
+        QVERIFY2(started, "Auto Sync did not start");
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.syncing() && !controller.syncCandidate().isEmpty(), 300000);
+        const QVariantMap sync = controller.syncCandidate();
+        qInfo().noquote() << QString("sync offset %1 s · correlation %2 · confidence %3 · applied %4")
+            .arg(controller.syncOffset(), 0, 'f', 3).arg(sync.value("correlation").toDouble(), 0, 'f', 4)
+            .arg(sync.value("confidence").toDouble(), 0, 'f', 2).arg(sync.value("automaticallyApplied").toBool());
+        QVERIFY(sync.value("automaticallyApplied").toBool());
     }
-    QVERIFY2(started, "Auto Sync did not start");
-    QTRY_VERIFY_WITH_TIMEOUT(!controller.syncing() && !controller.syncCandidate().isEmpty(), 300000);
-    const QVariantMap sync = controller.syncCandidate();
-    qInfo().noquote() << QString("sync offset %1 s · correlation %2 · confidence %3 · applied %4")
-        .arg(controller.syncOffset(), 0, 'f', 3).arg(sync.value("correlation").toDouble(), 0, 'f', 4)
-        .arg(sync.value("confidence").toDouble(), 0, 'f', 2).arg(sync.value("automaticallyApplied").toBool());
-    QVERIFY(sync.value("automaticallyApplied").toBool());
+
+    // The day opens with no layout; show the default template (KAN-189).
+    QVERIFY(controller.widgetModel()->applyTemplate("motorsport-broadcast-smoke"));
 
     // Halfway into the run's best lap.
     QVariantMap best;
@@ -173,7 +180,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
         .arg(38).arg(controller.telemetryName()).arg(best.value("number").toInt())
         .arg(context->valueText("speed", 1), context->valueText("rpm", 0), context->valueText("throttle", 0),
              context->valueText("brake", 0), context->valueText("heartRate", 0));
-    QVERIFY(shoot.window(window, "editor-sync-result", {}, 1500));
+    if (!options.syncOffset) QVERIFY(shoot.window(window, "editor-sync-result", {}, 1500));
     QVERIFY(shoot.window(window, "editor-window"));
 
     auto *inspector = byType(window->contentItem(), "InspectorPanel");
@@ -192,7 +199,7 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QVERIFY(gap && gap->parentItem() && gap->parentItem()->parentItem());
     QQuickItem *viewport = gap->parentItem(), *stage = viewport->parentItem();
     const QRectF viewportArea = viewport->mapRectToItem(stage, viewport->boundingRect());
-    for (const QString id : {"motorsport-broadcast-smoke"}) {
+    for (const QString id : {"motorsport-broadcast-smoke", "tech-hud"}) {
         QVERIFY2(controller.widgetModel()->applyTemplate(id), qPrintable(id));
         QVERIFY(shoot.item(stage, viewportArea, {1280, 720}, "template-" + id, 1200));
     }
@@ -265,9 +272,9 @@ void captureUserGuide(const UserGuideCaptureOptions &options)
     QDir().mkpath(QStringLiteral("/tmp/FlappedEar"));
     const QString target = QStringLiteral("/tmp/FlappedEar/jastrzab-session-5.mp4");
     QFile::remove(target);
-    QVERIFY(controller.startExport(QUrl::fromLocalFile(target), 1920, 1080, 60000, 1001,
+    QVERIFY2(controller.startExport(QUrl::fromLocalFile(target), 1920, 1080, 60000, 1001,
         controller.recommendedExportBitrate(1920, 1080, 60000, 1001, QStringLiteral("high")),
-        true, true, timecode(firstFrame), timecode(firstFrame + 8 * 60)));
+        true, true, timecode(firstFrame), timecode(firstFrame + 8 * 60)), qPrintable(controller.exportError()));
     qInfo() << "export started" << controller.exportState() << timecode(firstFrame);
     QQuickItem *overlayRoot = window->contentItem()->parentItem() ? window->contentItem()->parentItem() : window->contentItem();
     const auto finished = [&] { return controller.exportState() == "complete" || controller.exportState() == "failed"; };

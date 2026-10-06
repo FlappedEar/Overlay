@@ -61,6 +61,11 @@ that check over this file.
 - **Inspector shows only working controls (KAN-139, 6 October 2026):**
   `InspectorPanel.qml`'s `unusedControls` lists, per style and type, the
   shared settings a renderer ignores; update it when a renderer changes.
+- **User-guide pictures (KAN-189, 6 October 2026):** retaken over a neutral
+  backdrop clip with `FLAPPEDEAR_GUIDE_SYNC_OFFSET` (no GoPro GPS), on Linux
+  with the menu bar cropped. `editor-sync-result.png` and `video-chapters.png`
+  still show the old look; retake everything over GX010089.MP4 when the footage
+  is back (see `docs/user-guide/capture/README.md`).
 - `currentstate.md` and `ROADMAP.md` were archived to `docs/history/` (KAN-159).
   `docs/product-delivery.md` and Jira are the only status records.
 
