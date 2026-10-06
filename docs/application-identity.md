@@ -20,7 +20,8 @@ a space (owner direction, KAN-171); candidate builds of 2 October 2026 were stil
 
 `ApplicationIdentity::initialize()` sets the visible display name and the storage name
 used by QSettings and QStandardPaths. The internal CMake target, C++ namespace, QML URI
-and icon resource are unchanged.
+and icon resource names are unchanged. The icon itself was redrawn in the Telemetry
+design language on 6 October 2026 (KAN-202); see [the editor look](ui-theme.md#app-icon).
 
 ## Moving existing data
 
