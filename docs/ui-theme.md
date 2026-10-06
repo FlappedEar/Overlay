@@ -56,7 +56,15 @@ no outline. A focused control shows a 2 px amber ring. Sliders use a light
 track and thumb on a dark track, as in Telemetry.
 
 Type: `sans` (Sora) with `numbers` (`tnum`, tabular digits) for interface text,
-`mono` (JetBrains Mono) for timecodes and lap times. The editor keeps its
+`mono` (JetBrains Mono) for timecodes and lap times. Every font size in editor
+QML is a theme name (KAN-199): `overline` 9, `labelSmall` 10, `labelMedium` 11
+(most labels and control text), `body` 12, `titleSmall` 13, `subtitle` 14
+(panel headings), `titleMedium` 15, `dialogTitle` 17, `titleLarge` 18, and the
+welcome screen's `glyphLarge` 20, `wordmark` 21 and `headline` 25. Round marks
+use `radius: width / 2`; other corners use `radius` or `dialogRadius`.
+`EditorTests::appliesTelemetryDesignLanguage` fails on a literal font size,
+corner radius or colour in editor QML; widget colour defaults written as
+`|| "#..."` are overlay content and are allowed. The editor keeps its
 desktop density (12 px body text, 32 and 38 px control heights); Telemetry's
 44 to 48 px touch targets are a mobile rule.
 

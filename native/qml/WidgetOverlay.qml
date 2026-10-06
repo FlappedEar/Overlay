@@ -69,7 +69,7 @@ Item {
                 anchors.margins: -6
                 visible: root.selectedIndex === interactionItem.index
                 color: Theme.primary
-                radius: 7
+                radius: width / 2
                 border.color: Theme.onPrimary
                 z: 3
                 MouseArea {

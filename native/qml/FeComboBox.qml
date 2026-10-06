@@ -25,7 +25,7 @@ ComboBox {
         anchors.verticalCenter: parent.verticalCenter
         text: "⌄"
         color: control.enabled ? Theme.onSurfaceVariant : Theme.outline
-        font.pixelSize: 15
+        font.pixelSize: Theme.titleMedium
     }
     background: Rectangle {
         radius: Theme.radius

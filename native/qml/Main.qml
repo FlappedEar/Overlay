@@ -30,7 +30,7 @@ ApplicationWindow {
     palette.midlight: Theme.surfaceContainerHighest
     palette.mid: Theme.surfaceContainerHighest
     palette.dark: Theme.outlineVariant
-    palette.shadow: "#000000"
+    palette.shadow: Theme.shadow
     palette.highlight: Theme.primary
     palette.highlightedText: Theme.onPrimary
     palette.placeholderText: Theme.outline
@@ -184,7 +184,7 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         text: "●"
                         color: Theme.primary
-                        font.pixelSize: 18
+                        font.pixelSize: Theme.titleLarge
                     }
                 }
 
@@ -200,14 +200,14 @@ ApplicationWindow {
                         text: dirtyProjectDialog.actionTitle()
                         color: Theme.onSurface
                         font.family: Theme.sans
-                        font.pixelSize: 17
+                        font.pixelSize: Theme.dialogTitle
                         font.weight: Font.DemiBold
                     }
                     Text {
                         text: qsTr("Your project has unsaved changes.")
                         color: Theme.onSurfaceVariant
                         font.family: Theme.sans
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.body
                     }
                 }
             }
@@ -227,7 +227,7 @@ ApplicationWindow {
                 text: qsTr("Save your changes before continuing? You can also discard them and continue without saving.")
                 color: Theme.onSurface
                 font.family: Theme.sans
-                font.pixelSize: 13
+                font.pixelSize: Theme.titleSmall
                 lineHeight: 1.35
                 wrapMode: Text.WordWrap
             }
@@ -554,7 +554,7 @@ ApplicationWindow {
             text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nCtrl/Cmd+Shift+N  New widget (widget editor)\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
             color: Theme.onSurface
             wrapMode: Text.WordWrap
-            font.pixelSize: 12
+            font.pixelSize: Theme.body
         }
     }
 
@@ -1090,7 +1090,7 @@ ApplicationWindow {
                 text: qsTr("SOURCE")
                 color: Theme.onSurfaceVariant
                 wrapMode: Text.WordWrap
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
             }
             FeLabel {
                 Layout.fillWidth: true
@@ -1136,7 +1136,7 @@ ApplicationWindow {
                 }
                 color: Theme.onSurfaceVariant
                 wrapMode: Text.WordWrap
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
             }
             FeLabel {
                 Layout.fillWidth: true
@@ -1144,7 +1144,7 @@ ApplicationWindow {
                 text: qsTr("HDR/Log preservation is not yet supported. Export will be rejected rather than silently converted to SDR.")
                 color: Theme.warning
                 wrapMode: Text.WordWrap
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
             }
             FeLabel {
                 Layout.fillWidth: true
@@ -1153,7 +1153,7 @@ ApplicationWindow {
                     .arg(appController.exportSourceInfo.frameRateText)
                 color: Theme.warning
                 wrapMode: Text.WordWrap
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
             }
             FeLabel {
                 Layout.fillWidth: true
@@ -1168,7 +1168,7 @@ ApplicationWindow {
                 text: qsTr("Choose output…")
                 onClicked: exportOutputDialog.open()
             }
-            FeLabel { text: qsTr("Resolution"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+            FeLabel { text: qsTr("Resolution"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
             FeComboBox {
                 id: exportResolution; Layout.fillWidth: true
                 model: exportDialog.formatOptions.sizes || []
@@ -1176,7 +1176,7 @@ ApplicationWindow {
                 delegate: ItemDelegate { width: exportResolution.width; text: modelData.label }
                 onCurrentIndexChanged: exportDialog.updateBitrate()
             }
-            FeLabel { text: qsTr("Frame rate"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+            FeLabel { text: qsTr("Frame rate"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
             FeComboBox {
                 id: exportFrameRate; Layout.fillWidth: true; model: exportDialog.formatOptions.rates || []
                 textRole: "label"; onCurrentIndexChanged: exportDialog.updateBitrate()
@@ -1185,7 +1185,7 @@ ApplicationWindow {
             FeLabel {
                 text: qsTr("Quality")
                 color: Theme.onSurfaceVariant
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
             }
             FeComboBox {
                 id: exportQuality
@@ -1194,7 +1194,7 @@ ApplicationWindow {
                 currentIndex: 1
                 onCurrentIndexChanged: exportDialog.updateBitrate()
             }
-            FeLabel { text: qsTr("Video bitrate (Mbps)"); color: Theme.onSurfaceVariant; font.pixelSize: 11 }
+            FeLabel { text: qsTr("Video bitrate (Mbps)"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
             FeTextField {
                 id: exportCustomBitrate; Layout.fillWidth: true
                 inputMethodHints: Qt.ImhFormattedNumbersOnly
@@ -1208,7 +1208,7 @@ ApplicationWindow {
                 visible: exportCustomBitrate.readOnly
                 text: qsTr("Automatically selected for %1 @ %2").arg(exportDialog.selectedSize().label || "").arg(exportDialog.selectedRate().label || "")
                 color: Theme.onSurfaceVariant
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
                 elide: Text.ElideRight
             }
             FeCheckBox {
@@ -1218,13 +1218,13 @@ ApplicationWindow {
                 checked: enabled
             }
             FeLabel {
-                Layout.fillWidth: true; color: Theme.onSurfaceVariant; font.pixelSize: 11
+                Layout.fillWidth: true; color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium
                 text: qsTr("Estimated size: %1").arg(appController.formatEstimatedExportSize(appController.estimateExportSize(exportDialog.selectedBitrate, exportAudio.checked, exportDialog.selectedDuration)))
             }
             FeLabel {
                 text: qsTr("Range")
                 color: Theme.onSurfaceVariant
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
             }
             FeComboBox {
                 id: exportRangeMode
@@ -1241,7 +1241,7 @@ ApplicationWindow {
                 FeLabel {
                     text: qsTr("IN")
                     color: Theme.onSurfaceVariant
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.labelMedium
                 }
                 FeTextField {
                     id: exportRangeStart
@@ -1251,7 +1251,7 @@ ApplicationWindow {
                 FeLabel {
                     text: qsTr("OUT")
                     color: Theme.onSurfaceVariant
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.labelMedium
                 }
                 FeTextField {
                     id: exportRangeEnd
@@ -1268,7 +1268,7 @@ ApplicationWindow {
                 FeLabel {
                     text: qsTr("Lap")
                     color: Theme.onSurfaceVariant
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.labelMedium
                 }
                 FeComboBox {
                     id: lapPicker
@@ -1291,7 +1291,7 @@ ApplicationWindow {
                 FeLabel {
                     text: qsTr("Handle")
                     color: Theme.onSurfaceVariant
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.labelMedium
                 }
                 FeComboBox {
                     id: lapHandle
@@ -1314,7 +1314,7 @@ ApplicationWindow {
                         .arg(appController.formatElapsedTime(Number(exportDialog.singleLapRange.durationSeconds)))
                     color: Theme.primary
                     font.family: Theme.mono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.labelSmall
                 }
                 FeLabel {
                     Layout.columnSpan: 2
@@ -1323,7 +1323,7 @@ ApplicationWindow {
                     text: qsTr("Choose a completed lap whose synchronized range overlaps the video.")
                     color: Theme.warning
                     wrapMode: Text.WordWrap
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.labelSmall
                 }
                 Label {
                     objectName: "exportFindingDayBestLap"
@@ -1333,7 +1333,7 @@ ApplicationWindow {
                     text: qsTr("Finding the day's best lap…")
                     color: Theme.onSurfaceVariant
                     wrapMode: Text.WordWrap
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.labelSmall
                 }
                 // Where the day's best lap is: this recording, or another run.
                 FeLabel {
@@ -1350,7 +1350,7 @@ ApplicationWindow {
                                 .arg(appController.formatElapsedTime(Number(exportDialog.dayBestLap.durationSeconds)))
                     color: Theme.onSurfaceVariant
                     wrapMode: Text.WordWrap
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.labelSmall
                 }
                 FeButton {
                     objectName: "exportSelectDayBestLap"
@@ -1382,7 +1382,7 @@ ApplicationWindow {
                 text: appController.exportError
                 color: Theme.error
                 wrapMode: Text.WordWrap
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -1431,7 +1431,7 @@ ApplicationWindow {
                     return qsTr("Exporting video");
                 }
                 color: Theme.onSurface
-                font.pixelSize: 17
+                font.pixelSize: Theme.dialogTitle
                 font.weight: Font.DemiBold
             }
             FeLabel {
@@ -1439,7 +1439,7 @@ ApplicationWindow {
                 text: appController.exportProgressInfo.outputName || ""
                 color: Theme.onSurfaceVariant
                 elide: Text.ElideMiddle
-                font.pixelSize: 12
+                font.pixelSize: Theme.body
             }
             FeLabel {
                 text: {
@@ -1453,7 +1453,7 @@ ApplicationWindow {
                     return names[appController.exportProgressInfo.stage] || qsTr("Preparing");
                 }
                 color: Theme.primary
-                font.pixelSize: 14
+                font.pixelSize: Theme.subtitle
             }
             ProgressBar {
                 Layout.fillWidth: true
@@ -1464,7 +1464,7 @@ ApplicationWindow {
             FeLabel {
                 text: qsTr("%1%").arg(Number(appController.exportProgressInfo.progressPercent || appController.exportProgress).toFixed(1))
                 color: Theme.onSurfaceVariant
-                font.pixelSize: 12
+                font.pixelSize: Theme.body
             }
             FeLabel {
                 Layout.fillWidth: true
@@ -1472,7 +1472,7 @@ ApplicationWindow {
                     + " / " + window.formatTime(Number(appController.exportProgressInfo.exportDuration || 0) * 1000)
                     + "    ·    " + qsTr("Encoded frame %1").arg(appController.exportProgressInfo.encodedFrames || 0)
                 color: Theme.onSurface
-                font.pixelSize: 12
+                font.pixelSize: Theme.body
             }
             GridLayout {
                 Layout.fillWidth: true
@@ -1486,7 +1486,7 @@ ApplicationWindow {
                 text: (appController.exportProgressInfo.stage === "renderingOverlay" ? qsTr("Temporary overlay · FFV1") : "HEVC · " + (appController.exportProgressInfo.encoderName || qsTr("Detecting encoder…")))
                     + " · " + (appController.exportProgressInfo.width || "") + "×" + (appController.exportProgressInfo.height || "")
                     + " · " + Number(appController.exportProgressInfo.frameRate || 0).toFixed(3) + " fps\n" + (appController.exportProgressInfo.audioLabel || "")
-                color: Theme.onSurfaceVariant; font.pixelSize: 11
+                color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -1531,7 +1531,7 @@ ApplicationWindow {
                     persistentSelection: true
                     wrapMode: TextEdit.WrapAnywhere
                     color: Theme.onSurfaceVariant
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.labelMedium
                     Keys.onPressed: function(event) {
                         if (event.matches(StandardKey.SelectAll)) {
                             selectAll();
@@ -1630,7 +1630,7 @@ ApplicationWindow {
                     persistentSelection: true
                     wrapMode: TextEdit.WrapAnywhere
                     color: Theme.onSurfaceVariant
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.labelMedium
                     font.family: Theme.mono
                     function jumpToLatest() {
                         followTail = true;
@@ -1717,9 +1717,9 @@ ApplicationWindow {
                     }
                 }
             }
-            FeLabel { visible: appController.exportState === "cancelling"; text: qsTr("Finishing current operation and cleaning up."); color: Theme.warning; font.pixelSize: 11 }
-            FeLabel { visible: appController.exportState === "failed"; text: appController.exportError; color: Theme.error; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-            FeLabel { visible: appController.exportState === "validationWarning"; text: appController.exportError; color: Theme.warning; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            FeLabel { visible: appController.exportState === "cancelling"; text: qsTr("Finishing current operation and cleaning up."); color: Theme.warning; font.pixelSize: Theme.labelMedium }
+            FeLabel { visible: appController.exportState === "failed"; text: appController.exportError; color: Theme.error; font.pixelSize: Theme.labelMedium; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            FeLabel { visible: appController.exportState === "validationWarning"; text: appController.exportError; color: Theme.warning; font.pixelSize: Theme.labelMedium; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             Item { Layout.fillHeight: true }
             FeButton {
                 Layout.alignment: Qt.AlignRight
@@ -1754,20 +1754,20 @@ ApplicationWindow {
             FeLabel {
                 text: qsTr("Save as new custom template")
                 color: Theme.onSurface
-                font.pixelSize: 17
+                font.pixelSize: Theme.dialogTitle
                 font.weight: Font.DemiBold
             }
             FeLabel {
                 Layout.fillWidth: true
                 text: qsTr("Create a named custom template from the complete current scene, including widget positions, bindings and styles.")
                 color: Theme.onSurfaceVariant
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
                 wrapMode: Text.WordWrap
             }
             FeLabel {
                 text: qsTr("Name")
                 color: Theme.onSurfaceVariant
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
             }
             FeTextField {
                 id: templateName
@@ -1777,14 +1777,14 @@ ApplicationWindow {
             FeLabel {
                 text: qsTr("Description")
                 color: Theme.onSurfaceVariant
-                font.pixelSize: 11
+                font.pixelSize: Theme.labelMedium
             }
                     FeLabel {
                         Layout.fillWidth: true
                         visible: appController.widgetModel.lastError.length > 0
                         text: appController.widgetModel.lastError
                         color: Theme.error
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.labelMedium
                         wrapMode: Text.Wrap
                     }
             FeTextField {
@@ -1912,14 +1912,14 @@ ApplicationWindow {
                         text: "FlappedEar"
                         color: Theme.onSurface
                         font.family: Theme.sans
-                        font.pixelSize: 15
+                        font.pixelSize: Theme.titleMedium
                         font.weight: Font.DemiBold
                     }
                     FeLabel {
                         text: "OVERLAYS"
                         color: Theme.outline
                         font.family: Theme.sans
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.overline
                         font.letterSpacing: 1.5
                     }
                 }
@@ -1936,14 +1936,14 @@ ApplicationWindow {
                     FeLabel {
                         text: appController.videoName || qsTr("No video selected")
                         color: appController.videoName ? Theme.onSurface : Theme.outline
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.labelMedium
                         elide: Text.ElideMiddle
                         Layout.fillWidth: true
                     }
                     FeLabel {
                         text: appController.telemetryName || qsTr("No telemetry selected")
                         color: appController.telemetryName ? Theme.onSurfaceVariant : Theme.outline
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.labelSmall
                         elide: Text.ElideMiddle
                         Layout.fillWidth: true
                     }
@@ -1980,7 +1980,7 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         text: qsTr("SYNC  %1 s").arg(appController.syncOffset.toFixed(3))
                         color: Theme.onPrimaryContainer
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.overline
                         font.weight: Font.DemiBold
                         font.letterSpacing: 0.7
                     }
@@ -2059,7 +2059,7 @@ ApplicationWindow {
                         visible: appController.widgetModel.lastError.length > 0
                         text: appController.widgetModel.lastError
                         color: Theme.error
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.labelMedium
                         wrapMode: Text.Wrap
                     }
                     // Shown while the custom template file cannot be read, so a restored
@@ -2086,7 +2086,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         text: window.selectedTemplate() ? window.selectedTemplate().description : ""
                         color: Theme.outline
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.labelSmall
                         wrapMode: Text.WordWrap
                     }
                     FeButton {
@@ -2188,7 +2188,7 @@ ApplicationWindow {
                                         Layout.fillWidth: true
                                         text: modelData.label
                                         color: Theme.onSurface
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.labelSmall
                                         wrapMode: Text.WordWrap
                                     }
                                 }
@@ -2218,7 +2218,7 @@ ApplicationWindow {
                         visible: appController.widgetModel.libraryWidgets.length === 0
                         text: qsTr("Widgets you save with Save to My widgets appear here, ready for any project.")
                         color: Theme.onSurfaceVariant
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.labelSmall
                         wrapMode: Text.WordWrap
                     }
                     FeLabel {
@@ -2226,7 +2226,7 @@ ApplicationWindow {
                         visible: appController.widgetModel.libraryError.length > 0
                         text: appController.widgetModel.libraryError
                         color: Theme.error
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.labelSmall
                         wrapMode: Text.Wrap
                     }
                     Repeater {
@@ -2254,7 +2254,7 @@ ApplicationWindow {
                                     Layout.fillWidth: true
                                     text: modelData.name
                                     color: Theme.onSurface
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.labelMedium
                                     elide: Text.ElideRight
                                 }
                                 FeButton {
@@ -2313,7 +2313,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         text: qsTr("%1 layers selected").arg(window.selectedWidgetIndices.length)
                         color: Theme.primary
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.overline
                     }
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -2338,13 +2338,13 @@ ApplicationWindow {
                                         FeLabel {
                                             text: window.isWidgetSelected(index) ? "●" : (widgetGroupId ? "◆" : "○")
                                             color: window.isWidgetSelected(index) ? Theme.primary : Theme.outline
-                                            font.pixelSize: 9
+                                            font.pixelSize: Theme.overline
                                         }
                                         FeLabel {
                                             Layout.fillWidth: true
                                             text: widgetSettings.name || widgetType
                                             color: widgetVisible ? Theme.onSurface : Theme.outline
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.labelMedium
                                             elide: Text.ElideRight
                                         }
                                         FeButton {
@@ -2486,21 +2486,21 @@ ApplicationWindow {
                                         anchors.centerIn: parent
                                         text: "▶"
                                         color: Theme.primary
-                                        font.pixelSize: 20
+                                        font.pixelSize: Theme.glyphLarge
                                     }
                                 }
                                 FeLabel {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: qsTr("See your lap from the driver’s seat")
                                     color: Theme.onSurface
-                                    font.pixelSize: 14
+                                    font.pixelSize: Theme.subtitle
                                     font.weight: Font.DemiBold
                                 }
                                 FeLabel {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: qsTr("Open an MP4 or MOV to start building the overlay")
                                     color: Theme.outline
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.labelMedium
                                 }
                                 FeButton {
                                     Layout.alignment: Qt.AlignHCenter
@@ -2543,14 +2543,14 @@ ApplicationWindow {
                                         width: parent.width
                                         text: qsTr("Video playback failed")
                                         color: Theme.onErrorContainer
-                                        font.pixelSize: 14
+                                        font.pixelSize: Theme.subtitle
                                         font.weight: Font.DemiBold
                                     }
                                     FeLabel {
                                         width: parent.width
                                         text: mediaPlayer.errorString || qsTr("The selected video could not be decoded.")
                                         color: Theme.onErrorContainer
-                                        font.pixelSize: 11
+                                        font.pixelSize: Theme.labelMedium
                                         wrapMode: Text.Wrap
                                     }
                                 }
@@ -2584,7 +2584,7 @@ ApplicationWindow {
                                         text: appController.previewTimecodeForPositionMilliseconds(window.timelinePosition)
                                         color: Theme.onSurface
                                         font.family: Theme.mono
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.labelSmall
                                     }
                                     FeSlider {
                                         id: fullScreenTimeline
@@ -2610,7 +2610,7 @@ ApplicationWindow {
                                         text: appController.previewEndTimecode
                                         color: Theme.onSurfaceVariant
                                         font.family: Theme.mono
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.labelSmall
                                     }
                                 }
                             }
@@ -2640,7 +2640,7 @@ ApplicationWindow {
                                 text: appController.previewTimecodeForPositionMilliseconds(window.timelinePosition)
                                 color: Theme.onSurface
                                 font.family: Theme.mono
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             Item {
                                 Layout.fillWidth: true
@@ -2662,7 +2662,7 @@ ApplicationWindow {
                                         y: 1
                                         width: Math.max(3, Math.min(parent.width - x, Number(modelData.duration || 0) * 1000 / Math.max(1, appController.previewEndPositionMilliseconds) * parent.width))
                                         height: 4
-                                        radius: 2
+                                        radius: height / 2
                                         color: Theme.primary
                                         opacity: 0.8
                                     }
@@ -2672,7 +2672,7 @@ ApplicationWindow {
                                 text: appController.previewEndTimecode
                                 color: Theme.outline
                                 font.family: Theme.mono
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.labelSmall
                             }
                             FeButton {
                                 width: 38
@@ -2714,7 +2714,7 @@ ApplicationWindow {
                           ? qsTr("Automatic recovery could not be saved. Save the project manually to protect your changes.")
                           : appController.statusText
                     color: appController.recoveryDegraded ? Theme.warning : Theme.onSurfaceVariant
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.labelSmall
                     elide: Text.ElideRight
                 }
                 FeButton {
@@ -2727,12 +2727,12 @@ ApplicationWindow {
                 FeLabel {
                     text: qsTr("%1 widgets").arg(appController.widgetModel.count)
                     color: Theme.outline
-                    font.pixelSize: 9
+                    font.pixelSize: Theme.overline
                 }
                 Rectangle {
                     width: 4
                     height: 4
-                    radius: 2
+                    radius: width / 2
                     color: appController.videoLoadState === "ready"
                            && appController.vboLoadState === "ready" ? Theme.tertiary : Theme.outline
                 }
@@ -2791,13 +2791,13 @@ ApplicationWindow {
                         text: "FlappedEar"
                         color: Theme.onSurface
                         font.family: Theme.sans
-                        font.pixelSize: 21
+                        font.pixelSize: Theme.wordmark
                         font.weight: Font.DemiBold
                     }
                     FeLabel {
                         text: "OVERLAYS"
                         color: Theme.onSurfaceVariant
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.overline
                         font.letterSpacing: 2
                     }
                 }
@@ -2811,14 +2811,14 @@ ApplicationWindow {
                     text: qsTr("Your track day, on video")
                     color: Theme.onSurface
                     font.family: Theme.sans
-                    font.pixelSize: 25
+                    font.pixelSize: Theme.headline
                     font.weight: Font.DemiBold
                 }
                 FeLabel {
                     Layout.alignment: Qt.AlignHCenter
                     text: qsTr("Pair a video clip with telemetry and create an overlay.")
                     color: Theme.onSurfaceVariant
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.body
                 }
             }
 
@@ -2845,13 +2845,13 @@ ApplicationWindow {
                                 anchors.centerIn: parent
                                 text: "▶"
                                 color: appController.videoName ? Theme.primary : Theme.onSurfaceVariant
-                                font.pixelSize: 14
+                                font.pixelSize: Theme.subtitle
                             }
                         }
                         FeLabel {
                             text: qsTr("1 · Video clip")
                             color: Theme.onSurface
-                            font.pixelSize: 14
+                            font.pixelSize: Theme.subtitle
                             font.weight: Font.DemiBold
                         }
                         FeLabel {
@@ -2859,7 +2859,7 @@ ApplicationWindow {
                             text: appController.videoName || qsTr("MP4 or MOV from the camera")
                             color: appController.videoName ? Theme.onSurface : Theme.onSurfaceVariant
                             elide: Text.ElideMiddle
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.labelSmall
                         }
                         Item {
                             Layout.fillHeight: true
@@ -2892,13 +2892,13 @@ ApplicationWindow {
                                 anchors.centerIn: parent
                                 text: "⌁"
                                 color: appController.telemetryName ? Theme.primary : Theme.onSurfaceVariant
-                                font.pixelSize: 17
+                                font.pixelSize: Theme.dialogTitle
                             }
                         }
                         FeLabel {
                             text: qsTr("2 · Telemetry")
                             color: Theme.onSurface
-                            font.pixelSize: 14
+                            font.pixelSize: Theme.subtitle
                             font.weight: Font.DemiBold
                         }
                         FeLabel {
@@ -2906,7 +2906,7 @@ ApplicationWindow {
                             text: appController.telemetryName || qsTr("Optional telemetry session")
                             color: appController.telemetryName ? Theme.onSurface : Theme.onSurfaceVariant
                             elide: Text.ElideMiddle
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.labelSmall
                         }
                         Item {
                             Layout.fillHeight: true
@@ -2938,13 +2938,13 @@ ApplicationWindow {
                                 anchors.centerIn: parent
                                 text: "◇"
                                 color: Theme.secondary
-                                font.pixelSize: 18
+                                font.pixelSize: Theme.titleLarge
                             }
                         }
                         FeLabel {
                             text: qsTr("Saved project")
                             color: Theme.onSurface
-                            font.pixelSize: 14
+                            font.pixelSize: Theme.subtitle
                             font.weight: Font.DemiBold
                         }
                         FeLabel {
@@ -2952,7 +2952,7 @@ ApplicationWindow {
                             text: qsTr("Resume a saved outing or overlay")
                             color: Theme.onSurfaceVariant
                             wrapMode: Text.WordWrap
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.labelSmall
                         }
                         Item {
                             Layout.fillHeight: true
@@ -2972,7 +2972,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     text: appController.videoName ? qsTr("Ready to build the overlay") : qsTr("Choose a video to continue")
                     color: appController.videoName ? Theme.tertiary : Theme.outline
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.labelMedium
                 }
                 FeButton {
                     text: qsTr("Enter Studio  →")

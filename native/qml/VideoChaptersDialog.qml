@@ -105,7 +105,7 @@ Dialog {
                             text: root.issueText(groupBlock.modelData)
                                 + (groupBlock.modelData.manualOrder ? (groupBlock.modelData.issues.length ? "\n" : "") + qsTr("Order changed by you.") : "")
                             wrapMode: Text.WordWrap
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                             color: groupBlock.modelData.needsReview ? Theme.warning : Theme.onSurfaceVariant
                         }
                         Repeater {
@@ -119,7 +119,7 @@ Dialog {
                                     Layout.fillWidth: true
                                     text: (chapterRow.index + 1) + ". " + root.chapterText(chapterRow.modelData)
                                     elide: Text.ElideRight
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.body
                                     color: chapterRow.modelData.probed ? Theme.onSurface : Theme.error
                                 }
                                 FeButton {
@@ -147,7 +147,7 @@ Dialog {
                             visible: groupBlock.modelData.duplicates.length > 0
                             text: qsTr("Left out: %1").arg(groupBlock.modelData.duplicates.map(entry => entry.path).join(", "))
                             wrapMode: Text.WrapAnywhere
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.labelMedium
                             color: Theme.onSurfaceVariant
                         }
                         FeButton {
@@ -164,7 +164,7 @@ Dialog {
                     visible: root.groups.some(group => group.chapters.length > 1)
                     text: qsTr("A recording's chapters play as one continuous video, in the order shown. Exporting it is not available yet.")
                     wrapMode: Text.WordWrap
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.labelMedium
                     color: Theme.outline
                 }
             }

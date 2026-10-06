@@ -13,6 +13,8 @@
 #include "telemetry/VboParser.h"
 #include "UserGuideCapture.h"
 
+#include <QRegularExpression>
+
 using namespace NativeTestSupport;
 
 class EditorTests final : public QObject {
@@ -597,6 +599,34 @@ void EditorTests::appliesTelemetryDesignLanguage()
     for (const auto &arguments : warnings)
         for (const auto &error : arguments.first().value<QList<QQmlError>>())
             QFAIL(qPrintable(error.toString()));
+
+    // KAN-199: editor QML takes font sizes, corners and colours from the
+    // theme. Widget colour defaults (`|| "#..."`) are overlay content.
+    const QRegularExpression literalSize(QStringLiteral(R"(pixelSize:\s*\d)"));
+    const QRegularExpression literalRadius(QStringLiteral(R"(\bradius:\s*[1-9])"));
+    const QRegularExpression literalColour(QStringLiteral(R"(["']#[0-9a-fA-F]{3,8}["'])"));
+    const QRegularExpression widgetDefault(QStringLiteral(R"(\|\|\s*["']#[0-9a-fA-F]{3,8}["'])"));
+    const QStringList editorFiles {
+        QStringLiteral("Main.qml"), QStringLiteral("InspectorPanel.qml"), QStringLiteral("WidgetEditor.qml"),
+        QStringLiteral("WidgetOverlay.qml"), QStringLiteral("VideoChaptersDialog.qml"),
+        QStringLiteral("StartupError.qml"), QStringLiteral("SectionTitle.qml"), QStringLiteral("FeLabel.qml"),
+        QStringLiteral("FeButton.qml"), QStringLiteral("FeCheckBox.qml"), QStringLiteral("FeComboBox.qml"),
+        QStringLiteral("FeSlider.qml"), QStringLiteral("FeSpinBox.qml"), QStringLiteral("FeTextField.qml")};
+    for (const QString &name : editorFiles) {
+        QFile file(qmlSourcePath(name));
+        QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(name));
+        int lineNumber = 0;
+        while (!file.atEnd()) {
+            const QString line = QString::fromUtf8(file.readLine());
+            ++lineNumber;
+            const QString where = QStringLiteral("%1:%2: %3").arg(name).arg(lineNumber).arg(line.trimmed());
+            QVERIFY2(!literalSize.match(line).hasMatch(), qPrintable(where));
+            QVERIFY2(!literalRadius.match(line).hasMatch(), qPrintable(where));
+            QString colours = line;
+            colours.remove(widgetDefault);
+            QVERIFY2(!literalColour.match(colours).hasMatch(), qPrintable(where));
+        }
+    }
 }
 
 void EditorTests::derivesNavigableLapFragmentsAndHotlapExportRange()

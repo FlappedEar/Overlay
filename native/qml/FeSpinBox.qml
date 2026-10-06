@@ -31,7 +31,7 @@ SpinBox {
             anchors.centerIn: parent
             text: "+"
             color: Theme.onSurfaceVariant
-            font.pixelSize: 14
+            font.pixelSize: Theme.subtitle
         }
     }
     down.indicator: Rectangle {
@@ -44,7 +44,7 @@ SpinBox {
             anchors.centerIn: parent
             text: "−"
             color: Theme.onSurfaceVariant
-            font.pixelSize: 14
+            font.pixelSize: Theme.subtitle
         }
     }
     background: Rectangle {

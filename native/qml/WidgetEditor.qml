@@ -490,7 +490,7 @@ Dialog {
                                 visible: handle.selected
                                 width: 12
                                 height: 12
-                                radius: 2
+                                radius: Theme.radius
                                 x: parent.width - width / 2
                                 y: parent.height - height / 2
                                 color: Theme.primary
