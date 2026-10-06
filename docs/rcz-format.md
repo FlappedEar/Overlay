@@ -45,6 +45,10 @@ Source samples and timing gates retain their original coordinate convention.
 | OBD | 1002, 10025, 10071 | double → brake, throttle, accelerator % |
 | OBD | 1005, 10026, 10029, 10066 | double → gearbox, coolant, intake, oil °C |
 | OBD | 4 | double m/s → km/h |
+| CAN-bus (kind 12, channel2/storage 3) | (position << 15) \| 1013 | double → `tyre_temp_<rr/rl/fr/fl>-canbus` °C, positions 3–6 = RR, RL, FR, FL (KAN-203) |
+| CAN-bus | (position << 15) \| 1014 | double → `tyre_pressure_<…>-canbus` kPa |
+
+The CAN-bus tyre layout was verified on the owner's Silesia Ring session of 27 September 2026: all eight channels match RaceChrono's own VBO export of that session sample for sample (median difference 0). Other CAN-bus channels are left out with a warning.
 
 Each group retains its own timestamp array relative to the single session origin.
 There is no resampling to video FPS or independent per-channel zeroing. Integer

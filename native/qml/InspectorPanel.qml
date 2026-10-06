@@ -67,6 +67,8 @@ Rectangle {
     }
     // A stored source that the open recording lacks (an alias such as "rpm", or a
     // channel of another file) stays listed, so the combo never shows Automatic for it.
+    readonly property var tyreSourceKeys: ["temperatureSourceFL", "temperatureSourceFR", "temperatureSourceRL", "temperatureSourceRR",
+        "pressureSourceFL", "pressureSourceFR", "pressureSourceRL", "pressureSourceRR"]
     function channelModel(current) {
         const names = [qsTr("Automatic")].concat(appController.channelNames);
         if (current && names.indexOf(current) < 0)
@@ -655,8 +657,37 @@ Rectangle {
                             FeLabel {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
-                                text: qsTr("Per corner from the recording's tyre channels. Temperature in °C; pressure converted to the unit below. A dash means no data at that moment.")
+                                text: qsTr("Per corner from the recording's tyre channels, found by name or chosen below. Temperature in °C; pressure converted to the unit below. A dash means no data at that moment.")
                                 color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium
+                            }
+                            FeLabel {
+                                objectName: "tyresNoChannelsNotice"
+                                readonly property bool anyChosen: root.tyreSourceKeys.some(key => !!root.settings[key])
+                                visible: appController.renderContext.tyreChannelsMissing && !anyChosen
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: qsTr("No channel in this recording is named as a tyre temperature or pressure, so every corner shows a dash. Choose each corner's channel below if the recording has them under other names.")
+                                color: Theme.warning; font.pixelSize: Theme.labelMedium
+                            }
+                            Repeater {
+                                model: root.tyreSourceKeys
+                                delegate: RowLayout {
+                                    required property string modelData
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    FeLabel {
+                                        Layout.preferredWidth: 96
+                                        text: (modelData.startsWith("temperature") ? qsTr("Temp") : qsTr("Pressure")) + " " + modelData.slice(-2)
+                                        color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium
+                                    }
+                                    FeComboBox {
+                                        objectName: "tyreSource" + modelData.slice(-2) + (modelData.startsWith("temperature") ? "Temperature" : "Pressure")
+                                        Layout.fillWidth: true
+                                        model: root.channelModel(root.settings[modelData])
+                                        currentIndex: Math.max(0, model.indexOf(root.settings[modelData] || qsTr("Automatic")))
+                                        onActivated: root.setSetting(modelData, currentIndex === 0 ? "" : currentText)
+                                    }
+                                }
                             }
                             RowLayout {
                                 FeCheckBox { text: qsTr("Label"); checked: root.settings.showLabel ?? true; onToggled: root.setSetting("showLabel", checked) }

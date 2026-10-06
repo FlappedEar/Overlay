@@ -3,6 +3,7 @@
 #include "telemetry/TelemetrySource.h"
 #include "telemetry/VboParser.h"
 #include "telemetry/LapTiming.h"
+#include "telemetry/TyreData.h"
 #include <QTemporaryFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -132,6 +133,31 @@ private slots:
         files.remove("channel_5_200_10071_1_1"); files.remove("channel2_5_200_10071_10071_3");
         QCOMPARE(parse(RczFixture::zip(files)).aliases.value("throttle"), QString("throttle_pos-obd"));
     }
+    void canBusTyreChannels()
+    {
+        // KAN-203: RaceChrono CAN-bus tyre channels, id (position << 15) | type.
+        auto files = RczFixture::members();
+        files["channel_12_500_1_1_1"] = RczFixture::ticks({250, 1250});
+        files["channel_12_500_197621_1_1"] = RczFixture::ticks({250, 1250});   // 6 << 15 | 1013
+        files["channel2_12_500_197621_197621_3"] = RczFixture::doubles({31, 33});
+        files["channel_12_500_99318_1_1"] = RczFixture::ticks({250, 1250});    // 3 << 15 | 1014
+        files["channel2_12_500_99318_99318_3"] = RczFixture::doubles({192, 208});
+        files["channel_12_500_40000_1_1"] = RczFixture::ticks({250, 1250});    // not a tyre channel
+        files["channel2_12_500_40000_40000_3"] = RczFixture::doubles({1, 2});
+        const auto session = parse(RczFixture::zip(files));
+        QCOMPARE(session.valueAt("tyre_temp_fl-canbus", .25).value(), 31.0);
+        QCOMPARE(session.channels.value("tyre_temp_fl-canbus").unit, QString("°C"));
+        QCOMPARE(session.valueAt("tyre_pressure_rr-canbus", 1.25).value(), 208.0);
+        QCOMPARE(session.channels.value("tyre_pressure_rr-canbus").unit, QString("kPa"));
+        QVERIFY(session.warnings.join('\n').contains("channel2_12_500_40000_40000_3"));
+        const TyreChannelMap map = mapTyreChannels(session);
+        QCOMPARE(map.temperature[static_cast<int>(TyreCorner::FrontLeft)], QString("tyre_temp_fl-canbus"));
+        QCOMPARE(map.pressureUnit[static_cast<int>(TyreCorner::RearRight)], PressureUnit::Kilopascal);
+        // A CAN-bus value stored as integers is not a known encoding.
+        files.remove("channel2_12_500_99318_99318_3");
+        files["channel_12_500_99318_99318_0"] = RczFixture::ints({192, 208});
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, parse(RczFixture::zip(files)));
+    }
     void missingValuesAndPrimaryGps()
     {
         auto files = RczFixture::members();
@@ -233,6 +259,21 @@ private slots:
             const double median = errors[errors.size() / 2];
             qInfo() << alias << "median/max absolute difference" << median << errors.last();
             QVERIFY(median < (alias == "rpm" ? 5.0 : .2));
+        }
+        // KAN-203: CAN-bus tyre channels carry the VBO's names and values.
+        for (const auto &name : reference.channelNames()) {
+            if (!name.startsWith("tyre_")) continue;
+            const auto &channel = reference.channels[name];
+            QVERIFY2(native.channels.contains(name), qPrintable(name));
+            QVector<double> errors;
+            for (qsizetype i = 0; i < channel.timestamps.size(); ++i) {
+                const auto value = native.valueAt(name, channel.timestamps[i] + shift);
+                if (value && std::isfinite(channel.values[i])) errors.append(std::abs(*value - channel.values[i]));
+            }
+            QVERIFY2(errors.size() > channel.timestamps.size() / 2, qPrintable(name));
+            std::sort(errors.begin(), errors.end());
+            qInfo() << name << "median/max absolute difference" << errors[errors.size() / 2] << errors.last();
+            QVERIFY2(errors[errors.size() / 2] < .5, qPrintable(name));
         }
         const auto nativeLaps = deriveSourceLapSession(native);
         const auto referenceLaps = deriveSourceLapSession(reference);

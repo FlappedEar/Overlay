@@ -59,6 +59,7 @@ private slots:
     void matchesLongCircuitsByCrossTrackDistance();
     void flagsALapThatLeavesTheOtherLapsLine();
     void mapsTyreChannelsPerCorner();
+    void appliesChosenTyreChannels();
     void formatsLapTimesRoundedBeforeMinutes();
     void readsTyreValuesWithoutPlaceholdersOrGaps();
     void readsPrivateTyreData();
@@ -1527,6 +1528,35 @@ void TelemetryCoreTests::mapsTyreChannelsPerCorner()
     // Only placeholders: no unit, so no pressure is ever shown.
     QCOMPARE(classifyPressureUnit(tyreChannel(QStringLiteral("p"), {0, 0, 0})), PressureUnit::Unknown);
     QCOMPARE(classifyPressureUnit(tyreChannel(QStringLiteral("p"), {0, 0, 30})), PressureUnit::Psi);
+}
+
+void TelemetryCoreTests::appliesChosenTyreChannels()
+{
+    // KAN-203: a chosen channel replaces the automatic one for its corner; an
+    // empty choice keeps it, and a channel the recording lacks is no data.
+    TelemetrySession session;
+    const auto add = [&session](const TelemetryChannel &channel) { session.channels.insert(channel.name, channel); };
+    add(tyreChannel(QStringLiteral("tyre_temp_fl"), {40, 41}));
+    add(tyreChannel(QStringLiteral("TPMS 1 temp"), {104, 104}, QStringLiteral("°F")));
+    add(tyreChannel(QStringLiteral("TPMS 1 kpa"), {210, 212}));
+    add(tyreChannel(QStringLiteral("TPMS 2"), {31, 32}));
+    std::array<QString, tyreCornerCount> temperature{QString(), QStringLiteral("TPMS 1 temp"), QString(), QStringLiteral("absent")};
+    std::array<QString, tyreCornerCount> pressure{QStringLiteral("TPMS 1 kpa"), QString(), QStringLiteral("TPMS 2"), QString()};
+    QHash<QString, PressureUnit> units;
+    const TyreChannelMap map = withTyreChannelChoices(session, mapTyreChannels(session), temperature, pressure, &units);
+    QCOMPARE(map.temperature[0], QStringLiteral("tyre_temp_fl"));
+    QCOMPARE(map.temperature[1], QStringLiteral("TPMS 1 temp"));
+    QVERIFY(map.temperatureFahrenheit[1]);
+    QCOMPARE(map.pressureUnit[0], PressureUnit::Kilopascal);
+    QCOMPARE(map.pressureUnit[2], PressureUnit::Psi);
+    QCOMPARE(units.value(QStringLiteral("TPMS 2")), PressureUnit::Psi);
+    QCOMPARE(*tyreReadingAt(session, map, TyreCorner::FrontRight, 0.0).temperatureCelsius, 40.0);
+    QCOMPARE(*tyreReadingAt(session, map, TyreCorner::FrontLeft, 0.0).pressureBar, 2.1);
+    QVERIFY(!tyreReadingAt(session, map, TyreCorner::RearRight, 0.0).temperatureCelsius);
+
+    // A cached unit is reused rather than classified again.
+    units.insert(QStringLiteral("TPMS 2"), PressureUnit::Bar);
+    QCOMPARE(withTyreChannelChoices(session, {}, {}, pressure, &units).pressureUnit[2], PressureUnit::Bar);
 }
 
 void TelemetryCoreTests::readsTyreValuesWithoutPlaceholdersOrGaps()

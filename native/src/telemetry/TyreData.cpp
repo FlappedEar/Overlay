@@ -126,6 +126,30 @@ TyreChannelMap mapTyreChannels(const TelemetrySession &session)
     return map;
 }
 
+TyreChannelMap withTyreChannelChoices(const TelemetrySession &session, TyreChannelMap map,
+    const std::array<QString, tyreCornerCount> &temperature, const std::array<QString, tyreCornerCount> &pressure,
+    QHash<QString, PressureUnit> *pressureUnits)
+{
+    for (int corner = 0; corner < tyreCornerCount; ++corner) {
+        if (!temperature[corner].isEmpty()) {
+            map.temperature[corner] = temperature[corner];
+            const auto channel = session.channels.constFind(temperature[corner]);
+            map.temperatureFahrenheit[corner] = channel != session.channels.cend() && declaresFahrenheit(channel->unit);
+        }
+        if (!pressure[corner].isEmpty()) {
+            map.pressure[corner] = pressure[corner];
+            if (pressureUnits && pressureUnits->contains(pressure[corner])) {
+                map.pressureUnit[corner] = pressureUnits->value(pressure[corner]);
+                continue;
+            }
+            const auto channel = session.channels.constFind(pressure[corner]);
+            map.pressureUnit[corner] = channel != session.channels.cend() ? classifyPressureUnit(*channel) : PressureUnit::Unknown;
+            if (pressureUnits) pressureUnits->insert(pressure[corner], map.pressureUnit[corner]);
+        }
+    }
+    return map;
+}
+
 ChannelSummaryPolicy tyreTemperaturePolicy()
 {
     ChannelSummaryPolicy policy = temperatureSummaryPolicy();
