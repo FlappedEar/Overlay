@@ -135,6 +135,7 @@ Rectangle {
 
             ScrollView {
                 id: widgetScroll
+                objectName: "inspectorWidgetScroll"
                 clip: true
                 contentWidth: availableWidth
                 contentHeight: widgetContent.implicitHeight
@@ -1321,6 +1322,7 @@ Rectangle {
 
             ScrollView {
                 id: dataScroll
+                objectName: "inspectorDataScroll"
                 clip: true
                 contentWidth: availableWidth
                 contentHeight: dataContent.implicitHeight
@@ -1478,6 +1480,7 @@ Rectangle {
 
             ScrollView {
                 id: cuesScroll
+                objectName: "inspectorCuesScroll"
                 clip: true
                 contentWidth: availableWidth
                 contentHeight: cuesContent.implicitHeight

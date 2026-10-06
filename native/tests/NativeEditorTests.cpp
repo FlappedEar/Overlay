@@ -42,6 +42,8 @@ private slots:
     void preservesPartialOverlapInAnalysisSeries();
     void derivesStablePreviewViewportAndLastFrameAdapter();
     void exposesReactivePreviewMetadataToQml();
+    void keepsSidebarReachableAtMinimumSize();
+    void disablesTransportShortcutsWhileEditing();
 };
 
 void EditorTests::initTestCase()
@@ -864,6 +866,170 @@ void EditorTests::exposesReactivePreviewMetadataToQml()
         QVERIFY2(property.isValid(), propertyName);
         QVERIFY2(property.hasNotifySignal(), propertyName);
         QCOMPARE(property.notifySignal().name(), QByteArrayLiteral("previewMetadataChanged"));
+    }
+}
+
+namespace {
+// The editor window at its supported minimum, with the widget that has the
+// most inspector controls selected.
+struct MinimumEditor {
+    AppController controller;
+    QQmlEngine engine;
+    std::unique_ptr<QObject> object;
+    QQuickWindow *window = nullptr;
+    QObject *inspector = nullptr;
+};
+
+bool openMinimumEditor(MinimumEditor &editor)
+{
+    const int index = editor.controller.widgetModel()->addWidget("retroCustomValue");
+    if (index < 0) return false;
+    editor.engine.rootContext()->setContextProperty("appController", &editor.controller);
+    QQmlComponent component(&editor.engine, QUrl::fromLocalFile(qmlSourcePath("Main.qml")));
+    if (!component.isReady()) {
+        qWarning() << component.errorString();
+        return false;
+    }
+    editor.object.reset(component.create());
+    editor.window = qobject_cast<QQuickWindow *>(editor.object.get());
+    if (!editor.window) return false;
+    editor.window->resize(1180, 720);
+    editor.window->show();
+    if (!QTest::qWaitForWindowExposed(editor.window)) return false;
+    QMetaObject::invokeMethod(editor.window, "selectWidget", Q_ARG(QVariant, index), Q_ARG(QVariant, false));
+    editor.inspector = editor.window->findChild<QObject *>("inspector");
+    return editor.inspector && editor.inspector->property("selectedIndex").toInt() == index;
+}
+
+bool isControl(const QQuickItem *item)
+{
+    return item->inherits("QQuickControl") || item->inherits("QQuickTextInput") || item->inherits("QQuickTextEdit");
+}
+
+void collectControls(QQuickItem *item, QVector<QQuickItem *> &controls)
+{
+    if (!item->isVisible() || !item->isEnabled()) return;
+    if (isControl(item) && item->width() > 0 && item->height() > 0) {
+        controls.append(item);
+        return; // a control's own parts are not separate controls
+    }
+    for (auto *child : item->childItems()) collectControls(child, controls);
+}
+
+void collectFlickables(QQuickItem *item, QVector<QQuickItem *> &flickables)
+{
+    if (!item->isVisible()) return;
+    if (item->inherits("QQuickFlickable")) flickables.append(item);
+    for (auto *child : item->childItems()) collectFlickables(child, flickables);
+}
+}
+
+void EditorTests::keepsSidebarReachableAtMinimumSize()
+{
+    // KAN-153 (AGENTS.md): at the 1180x720 minimum every sidebar control is
+    // reachable through one vertical scroll surface per tab, never stranded
+    // below a fixed nested scroller. The window is never larger than 1180x720
+    // here; a smaller screen only makes the check stricter.
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    QVERIFY(editor.window->width() <= 1180 && editor.window->height() <= 720);
+    const char *tabs[] = {"inspectorWidgetScroll", "inspectorDataScroll", "inspectorCuesScroll"};
+    for (int tab = 0; tab < 3; ++tab) {
+        editor.inspector->setProperty("currentTab", tab);
+        auto *scroll = editor.window->findChild<QQuickItem *>(QString::fromLatin1(tabs[tab]));
+        QVERIFY(scroll);
+        QTRY_VERIFY(scroll->isVisible());
+        auto *flickable = scroll->property("contentItem").value<QQuickItem *>();
+        QVERIFY(flickable && flickable->inherits("QQuickFlickable"));
+        auto *content = flickable->property("contentItem").value<QQuickItem *>();
+        QVERIFY(content);
+        // Let the tab's layout settle.
+        double settled = -1.0;
+        QTRY_VERIFY([&] {
+            const double height = flickable->property("contentHeight").toDouble();
+            const bool same = height == settled;
+            settled = height;
+            QTest::qWait(50);
+            return same && height > 0.0;
+        }());
+        const double viewport = flickable->height();
+        // The scroller itself is inside the window.
+        const QRectF frame = flickable->mapRectToScene(QRectF(0, 0, flickable->width(), viewport));
+        QVERIFY2(viewport >= 120 && frame.bottom() <= editor.window->height() + 0.5,
+                 qPrintable(QStringLiteral("tab %1: viewport %2, bottom %3").arg(tab).arg(viewport).arg(frame.bottom())));
+        // No nested scroller holds content it cannot show.
+        QVector<QQuickItem *> nested;
+        for (auto *child : content->childItems()) collectFlickables(child, nested);
+        for (auto *inner : nested)
+            QVERIFY2(inner->property("contentHeight").toDouble() <= inner->height() + 1.0
+                         || !inner->property("interactive").toBool(),
+                     qPrintable(QStringLiteral("tab %1: nested scroller %2").arg(tab).arg(inner->objectName())));
+        QVector<QQuickItem *> controls;
+        for (auto *child : content->childItems()) collectControls(child, controls);
+        QVERIFY2(tab != 0 || controls.size() >= 30, qPrintable(QString::number(controls.size())));
+        const double contentHeight = flickable->property("contentHeight").toDouble();
+        const double maximumY = std::max(0.0, contentHeight - viewport);
+        for (auto *control : controls) {
+            const QRectF area = control->mapRectToItem(content, QRectF(0, 0, control->width(), control->height()));
+            const QString where = QStringLiteral("tab %1: %2 %3 at %4+%5 of %6")
+                .arg(tab).arg(QString::fromLatin1(control->metaObject()->className()), control->objectName())
+                .arg(area.top()).arg(area.height()).arg(contentHeight);
+            QVERIFY2(area.top() >= -0.5 && area.bottom() <= contentHeight + 0.5 && area.height() <= viewport,
+                     qPrintable(where));
+            // Scrolling the one surface brings it fully into view.
+            flickable->setProperty("contentY", std::clamp(area.top() - 4.0, 0.0, maximumY));
+            const QRectF shown = control->mapRectToItem(flickable, QRectF(0, 0, control->width(), control->height()));
+            QVERIFY2(shown.top() >= -0.5 && shown.bottom() <= viewport + 0.5, qPrintable(where));
+        }
+        flickable->setProperty("contentY", 0.0);
+    }
+}
+
+void EditorTests::disablesTransportShortcutsWhileEditing()
+{
+    // KAN-153 (AGENTS.md): playback transport shortcuts are disabled while a
+    // text or numeric editor has focus, and come back when it loses focus.
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    const QStringList transport{"Space", "Left", "Right", "Shift+Left", "Shift+Right", "Home", "End"};
+    QVector<QObject *> shortcuts;
+    for (auto *child : editor.window->findChildren<QObject *>())
+        if (child->inherits("QQuickShortcut") && child->parent()->inherits("QQuickContentItem") // the window's, not the widget editor's
+            && transport.contains(child->property("sequence").toString()))
+            shortcuts.append(child);
+    QCOMPARE(shortcuts.size(), transport.size());
+    const auto enabledCount = [&] {
+        return std::count_if(shortcuts.cbegin(), shortcuts.cend(),
+                             [](QObject *shortcut) { return shortcut->property("enabled").toBool(); });
+    };
+    // The inspector panel itself is neither a text nor a numeric editor.
+    auto *neutral = qobject_cast<QQuickItem *>(editor.inspector);
+    QVERIFY(neutral);
+    neutral->forceActiveFocus();
+    QTRY_COMPARE(enabledCount(), shortcuts.size());
+
+    auto *scroll = editor.window->findChild<QQuickItem *>("inspectorWidgetScroll");
+    QVERIFY(scroll);
+    QQuickItem *textField = nullptr;
+    QQuickItem *numberField = nullptr;
+    const std::function<void(QQuickItem *)> find = [&](QQuickItem *item) {
+        if (!item->isVisible()) return;
+        if (!textField && item->inherits("QQuickTextField")) textField = item;
+        if (!numberField && item->inherits("QQuickSpinBox") && item->property("editable").toBool()) numberField = item;
+        for (auto *child : item->childItems()) find(child);
+    };
+    find(scroll);
+    QVERIFY(textField);
+    QVERIFY(numberField);
+    for (auto *field : {textField, numberField}) {
+        auto *input = field->inherits("QQuickSpinBox") ? field->property("contentItem").value<QQuickItem *>() : field;
+        QVERIFY(input);
+        input->forceActiveFocus();
+        QTRY_VERIFY(input->hasActiveFocus());
+        QTRY_COMPARE(enabledCount(), 0);
+        neutral->forceActiveFocus(); // leaving the field
+        QTRY_VERIFY(!input->hasActiveFocus());
+        QTRY_COMPARE(enabledCount(), shortcuts.size());
     }
 }
 
