@@ -41,6 +41,7 @@ private:
     void applyEditorProject(const ProjectLoadResult &) override {}
     void announceEditorProject() override {}
     void startEditorSources(const ProjectLoadResult &) override {}
+    void resumeInterruptedSources() override {}
     void clearEditor() override {}
     // The active run's source references, rebased for where the project is
     // saved (as the editor does); everything else passes through.

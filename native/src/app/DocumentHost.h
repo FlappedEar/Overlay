@@ -57,6 +57,9 @@ public:
     virtual void applyEditorProject(const ProjectLoadResult &result) = 0;
     virtual void announceEditorProject() = 0;
     virtual void startEditorSources(const ProjectLoadResult &result) = 0;
+    // A project open failed after beginSourceGeneration: restart the current
+    // document's source loads that it interrupted (KAN-195).
+    virtual void resumeInterruptedSources() = 0;
     // A new, empty document.
     virtual void clearEditor() = 0;
     // The editor state written into `projection` (the active run's editor view).

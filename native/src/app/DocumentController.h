@@ -212,6 +212,7 @@ private:
     void restoreStartupState();
     void scheduleRecoveryWrite();
     void writeRecoverySnapshot();
+    void clearRecoveryDegradedIfClean();
     bool clearRecovery(const QString &reason);
     bool discardRecovery(const ProjectRecoverySnapshot &snapshot, const QString &reason);
     void clearDiscardTombstoneAfterRecoveryCleanup();

@@ -407,6 +407,7 @@ private:
     void applyEditorProject(const ProjectLoadResult &result) override;
     void announceEditorProject() override;
     void startEditorSources(const ProjectLoadResult &result) override;
+    void resumeInterruptedSources() override;
     void clearEditor() override;
     [[nodiscard]] QJsonObject withEditorState(QJsonObject projection, const QString &documentPath,
         const QString &targetPath) const override;
@@ -461,6 +462,9 @@ private:
     QString m_vboLoadState = QStringLiteral("idle");
     SourceLoadRequest m_videoLoadRequest;
     SourceLoadRequest m_vboLoadRequest;
+    // Loads the last beginSourceGeneration stopped; resumeInterruptedSources restarts them.
+    bool m_videoLoadInterrupted = false;
+    bool m_vboLoadInterrupted = false;
     QString m_pendingVideoPath;
     QString m_pendingVboPath;
     VideoProbeResult m_pendingMismatchVideo;
