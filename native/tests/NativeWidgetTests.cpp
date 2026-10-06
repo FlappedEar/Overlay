@@ -12,6 +12,9 @@
 #include "project/ProjectLimits.h"
 
 #include <QRegularExpression>
+#include <QSignalSpy>
+
+#include <functional>
 
 using namespace NativeTestSupport;
 
@@ -25,6 +28,7 @@ private slots:
     void showsTyreTemperatureAndPressurePerCorner();
     void rendersLapTimeTileInProductionScene();
     void rendersTechStyleWidgets();
+    void repaintsOnlyMovingGaugeLayers();
     void rendersTyresInExportScene();
     void normalizesDesignedWidgetElements();
     void persistsWidgetLibrary();
@@ -1624,9 +1628,19 @@ void WidgetTests::editsDesignedWidgetInWidgetEditor()
     QVERIFY(editor);
     const auto elements = [&] { return model->widget(designed).value("settings").toMap().value("elements").toList(); };
 
+    model->setSetting(designed, QStringLiteral("stackPosition"), QStringLiteral("top"));
     QVERIFY(QMetaObject::invokeMethod(editor, "openFor", Q_ARG(QVariant, designed)));
     QTRY_VERIFY(editor->property("visible").toBool());
     QCOMPARE(editor->property("selectedElement").toInt(), 0);
+    // KAN-199: the editor draws the export's panel, stacking and scaled corners included.
+    auto *panel = object->findChild<QQuickItem *>(QStringLiteral("widgetEditorPanel"));
+    QVERIFY(panel);
+    QTRY_VERIFY(panel->width() > 0);
+    QVERIFY(panel->property("squareBottom").toBool());
+    QVERIFY(!panel->property("squareTop").toBool());
+    const double zoom = panel->width() / (model->widget(designed).value("width").toDouble() * 1920.0);
+    QVERIFY(std::abs(panel->property("cornerRadius").toDouble()
+                     - model->widget(designed).value("settings").toMap().value("cornerRadius", 12).toDouble() * zoom) < 1e-6);
     QVERIFY(QMetaObject::invokeMethod(editor, "addElement", Q_ARG(QVariant, QStringLiteral("lap"))));
     QCOMPARE(elements().size(), original.size() + 1);
     QCOMPARE(elements().constLast().toMap().value("kind").toString(), QStringLiteral("lap"));
@@ -1772,6 +1786,73 @@ void WidgetTests::rendersTechStyleWidgets()
     QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
     // The lap tile's plate is drawn at the centre of its box.
     QVERIFY(image.pixelColor(static_cast<int>(0.24 * image.width()), static_cast<int>(0.9 * image.height())).alpha() > 80);
+}
+
+void WidgetTests::repaintsOnlyMovingGaugeLayers()
+{
+    // KAN-199: gauge faces are drawn once; telemetry ticks repaint only the moving layer.
+    QVERIFY(FlappedEar::registerBundledFonts());
+    TelemetrySession session = speedSession(0.0, 6.0, 0.0);
+    const auto add = [&session](const QString &name, double amplitude) {
+        TelemetryChannel channel;
+        channel.name = name;
+        for (double time = 0.0; time <= 6.0; time += 0.05) {
+            channel.timestamps.append(time);
+            channel.values.append(static_cast<float>(amplitude * (1.0 + std::sin(time * 1.3))));
+        }
+        session.channels.insert(name, channel);
+        session.aliases.insert(name, name);
+    };
+    add(QStringLiteral("rpm"), 3500.0);
+    add(QStringLiteral("lateralAcceleration"), 0.6);
+    add(QStringLiteral("longitudinalAcceleration"), 0.4);
+    const auto findLayer = [](QQuickItem *root, const QString &name) {
+        const std::function<QQuickItem *(QQuickItem *)> search = [&](QQuickItem *item) -> QQuickItem * {
+            if (item->objectName() == name) return item;
+            for (QQuickItem *child : item->childItems())
+                if (QQuickItem *found = search(child)) return found;
+            return nullptr;
+        };
+        return search(root);
+    };
+    const QList<std::pair<QString, QStringList>> cases{
+        {QStringLiteral("tech"), {QStringLiteral("techTachometerFace"), QStringLiteral("techTachometerValue"),
+                                  QStringLiteral("techRadarFace"), QStringLiteral("techRadarDot")}},
+        {QStringLiteral("classic"), {QStringLiteral("retroTachometerFace"), QStringLiteral("retroTachometerNeedle"),
+                                     QStringLiteral("retroTachometerHub")}},
+    };
+    for (const auto &[style, layers] : cases) {
+        WidgetModel widgets;
+        QVERIFY(widgets.applyTemplate(QStringLiteral("tech-hud")));
+        for (int index = 0; index < widgets.rowCount(); ++index)
+            widgets.setSetting(index, QStringLiteral("style"), style);
+        TelemetryFrameRenderer renderer;
+        QVERIFY2(renderer.initialize(&widgets, &session, nullptr, SyncTransform{}, QSize(1280, 720)),
+                 qPrintable(renderer.errorString()));
+        QVERIFY(!renderer.renderFrame(0.5).isNull());
+        std::vector<std::unique_ptr<QSignalSpy>> spies;
+        for (const QString &layer : layers) {
+            QQuickItem *item = findLayer(renderer.m_rootItem, layer);
+            QVERIFY2(item, qPrintable(layer));
+            spies.push_back(std::make_unique<QSignalSpy>(item, SIGNAL(painted())));
+        }
+        for (int frame = 1; frame <= 6; ++frame)
+            QVERIFY(!renderer.renderFrame(0.5 + frame * 0.4).isNull());
+        for (qsizetype index = 0; index < layers.size(); ++index) {
+            const bool moving = layers[index].endsWith(QStringLiteral("Value"))
+                || layers[index].endsWith(QStringLiteral("Dot")) || layers[index].endsWith(QStringLiteral("Needle"));
+            if (moving) QVERIFY2(spies[size_t(index)]->count() >= 5, qPrintable(layers[index]));
+            else QVERIFY2(spies[size_t(index)]->count() == 0, qPrintable(layers[index]));
+        }
+        // A settings change repaints the faces.
+        for (int index = 0; index < widgets.rowCount(); ++index) {
+            widgets.setSetting(index, QStringLiteral("warningValue"), 5000);
+            widgets.setSetting(index, QStringLiteral("maxG"), 2.0);
+        }
+        QVERIFY(!renderer.renderFrame(3.5).isNull());
+        for (qsizetype index = 0; index < layers.size(); ++index)
+            QVERIFY2(spies[size_t(index)]->count() > 0, qPrintable(layers[index]));
+    }
 }
 
 void WidgetTests::rendersLapTimeTileInProductionScene()

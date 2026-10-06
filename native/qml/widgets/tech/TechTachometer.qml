@@ -23,15 +23,21 @@ Item {
     readonly property real warning: Number(settings.warningValue ?? 7500)
     readonly property real side: Math.min(width, height)
 
+    // Geometry shared by the static face and the value arc.
+    readonly property real arcStart: Math.PI * 0.75
+    readonly property real arcSweep: Math.PI * 1.5
+    function ratio(v) {
+        return Math.max(0, Math.min(1, (v - minimum) / (maximum - minimum)));
+    }
+
+    // The face (track, red zone, scale) changes only with size or settings; the value arc
+    // repaints on every RPM change in a canvas above it (KAN-199).
     Canvas {
-        id: gauge
+        id: face
+        objectName: "techTachometerFace"
         anchors.centerIn: parent
         width: root.side
         height: root.side
-        property real value: root.rpm
-        property bool hasValue: root.hasRpm
-        onValueChanged: requestPaint()
-        onHasValueChanged: requestPaint()
         onWidthChanged: requestPaint()
         onPaint: {
             const ctx = getContext("2d");
@@ -39,11 +45,10 @@ Item {
             const c = width / 2;
             const r = width * 0.43;
             const line = Math.max(2, width * 0.02);
-            const start = Math.PI * 0.75;
-            const sweep = Math.PI * 1.5;
+            const start = root.arcStart;
+            const sweep = root.arcSweep;
             const span = root.maximum - root.minimum;
-            const ratio = v => Math.max(0, Math.min(1, (v - root.minimum) / span));
-            const redFrom = ratio(root.warning);
+            const redFrom = root.ratio(root.warning);
             const red = root.settings.warningColor || "#ff4d3d";
 
             ctx.lineCap = "round";
@@ -78,16 +83,31 @@ Item {
                 ctx.fillText(String(Math.round((root.minimum + span * t) / 1000)),
                              c + Math.cos(a) * r * 0.72, c + Math.sin(a) * r * 0.72);
             }
+        }
+    }
 
-            if (hasValue) {
-                const p = ratio(value);
-                ctx.lineCap = "round";
-                ctx.lineWidth = line;
-                ctx.strokeStyle = value >= root.warning ? red : "#f4f4f4";
-                ctx.beginPath();
-                ctx.arc(c, c, r, start, start + sweep * Math.max(0.001, p));
-                ctx.stroke();
-            }
+    Canvas {
+        id: gauge
+        objectName: "techTachometerValue"
+        anchors.fill: face
+        property real value: root.rpm
+        property bool hasValue: root.hasRpm
+        onValueChanged: requestPaint()
+        onHasValueChanged: requestPaint()
+        onWidthChanged: requestPaint()
+        onPaint: {
+            const ctx = getContext("2d");
+            ctx.reset();
+            if (!hasValue)
+                return;
+            const c = width / 2;
+            const r = width * 0.43;
+            ctx.lineCap = "round";
+            ctx.lineWidth = Math.max(2, width * 0.02);
+            ctx.strokeStyle = value >= root.warning ? (root.settings.warningColor || "#ff4d3d") : "#f4f4f4";
+            ctx.beginPath();
+            ctx.arc(c, c, r, root.arcStart, root.arcStart + root.arcSweep * Math.max(0.001, root.ratio(value)));
+            ctx.stroke();
         }
     }
 
@@ -122,6 +142,7 @@ Item {
         target: frame.widgetModel
         ignoreUnknownSignals: true
         function onRevisionChanged() {
+            face.requestPaint();
             gauge.requestPaint();
         }
     }

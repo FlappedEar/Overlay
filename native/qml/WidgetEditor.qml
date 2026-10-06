@@ -379,21 +379,22 @@ Dialog {
                     width: canvasArea.sceneWidth * canvasArea.zoom
                     height: canvasArea.sceneHeight * canvasArea.zoom
 
-                    Rectangle {
+                    // The same panel the preview and export draw (TelemetryPanel), at the
+                    // editor's zoom in place of the scene scale (KAN-199).
+                    TelemetryPanel {
+                        objectName: "widgetEditorPanel"
                         anchors.fill: parent
-                        visible: editor.widgetSettings.showBackground ?? true
-                        color: editor.widgetSettings.backgroundColor || "#16232d"
-                        opacity: Number(editor.widgetSettings.backgroundOpacity ?? 0.78)
-                        radius: Number(editor.widgetSettings.cornerRadius ?? 12) * canvasArea.zoom
-                    }
-                    Rectangle {
-                        anchors.fill: parent
-                        visible: editor.widgetSettings.showBorder ?? true
-                        color: "transparent"
-                        border.width: Number(editor.widgetSettings.borderWidth ?? 1) * canvasArea.zoom
-                        border.color: editor.widgetSettings.borderColor || "#96a8b8"
-                        opacity: Number(editor.widgetSettings.borderOpacity ?? 0.45)
-                        radius: Number(editor.widgetSettings.cornerRadius ?? 12) * canvasArea.zoom
+                        frame: QtObject {
+                            readonly property var widgetSettings: editor.widgetSettings
+                            readonly property real sceneScale: canvasArea.zoom
+                            readonly property color panel: editor.widgetSettings.backgroundColor || "#16232d"
+                            readonly property color panelBorder: editor.widgetSettings.borderColor || "#96a8b8"
+                            readonly property color accent: editor.widgetSettings.accentColor || "#55d76a"
+                            readonly property real panelRadius: Number(editor.widgetSettings.cornerRadius ?? 12) * canvasArea.zoom
+                            readonly property real pad: Number(editor.widgetSettings.padding ?? 10) * canvasArea.zoom
+                            readonly property real labelScale: Number(editor.widgetSettings.labelFontScale ?? 1)
+                            readonly property real valueScale: Number(editor.widgetSettings.valueFontScale ?? 1)
+                        }
                     }
                     // Grid.
                     Repeater {
