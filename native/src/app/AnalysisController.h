@@ -420,6 +420,8 @@ private:
     // whole-file gate/lap derivation that produced referenceTrace/referenceGate
     // was expensive enough to need the background worker.
     void ensureComparisonProgressAxis() const;
+    // Both slots' timed starts and ends for computeDeltaSeries (KAN-152).
+    [[nodiscard]] FlappedEar::DeltaTiming comparisonDeltaTiming() const;
     mutable FlappedEar::ProgressAxis m_comparisonProgressAxis;
     mutable quint64 m_comparisonProgressAxisRequestA = 0;
     mutable quint64 m_comparisonProgressAxisRequestB = 0;

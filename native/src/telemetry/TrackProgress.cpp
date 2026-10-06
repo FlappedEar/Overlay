@@ -9,6 +9,44 @@ namespace {
 
 double pointDistance(const QPointF &a, const QPointF &b) { return std::hypot(a.x() - b.x(), a.y() - b.y()); }
 
+// A projection may step back this far before it is distrusted.
+constexpr double backwardToleranceMeters = 3.0;
+// A lock older than this is not continued: the next fix is a cold start.
+constexpr double maximumGapSeconds = 5.0;
+
+double cross(const QPointF &a, const QPointF &b) { return a.x() * b.y() - a.y() * b.x(); }
+
+struct GateCrossing {
+    qsizetype edge = -1; // the path's edge from points[edge] to points[edge + 1]
+    QPointF point;
+};
+
+// Where a closed path (last point == first) crosses the gate segment [a, b]:
+// the crossing nearest the gate midpoint when there are several, or none.
+GateCrossing gateCrossing(const QVector<QPointF> &closed, const QPointF &a, const QPointF &b)
+{
+    GateCrossing result;
+    const QPointF gate = b - a;
+    const QPointF midpoint = (a + b) / 2.0;
+    double bestDistance = std::numeric_limits<double>::infinity();
+    for (qsizetype i = 0; i + 1 < closed.size(); ++i) {
+        const QPointF edge = closed[i + 1] - closed[i];
+        const double denominator = cross(edge, gate);
+        if (!(std::abs(denominator) > 1e-12)) continue; // parallel: no single crossing
+        const QPointF offset = a - closed[i];
+        const double alongEdge = cross(offset, gate) / denominator;
+        const double alongGate = cross(offset, edge) / denominator;
+        if (alongEdge < 0.0 || alongEdge >= 1.0 || alongGate < 0.0 || alongGate > 1.0) continue;
+        const QPointF point = closed[i] + edge * alongEdge;
+        const double distance = pointDistance(point, midpoint);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            result = {i, point};
+        }
+    }
+    return result;
+}
+
 // Resamples an ordered point sequence into `count` points evenly spaced by
 // arc length (points[0] included, points[count] implicitly wrapping back to
 // points[0] -- callers close the loop first if that is what they want).
@@ -173,23 +211,46 @@ ProgressAxis buildProgressAxis(
     if (!(length >= 50 && length <= 30'000)) return axis;
 
     const int pointCount = std::clamp(static_cast<int>(std::lround(length / 2.0)), 32, 15'000);
-    const QVector<QPointF> resampled = resampleByArcLength(points, pointCount);
-    if (resampled.size() != pointCount) return axis;
 
-    // Rotate so index 0 sits at the timing-gate crossing.
-    const GeoCoordinate gateMidpoint{
-        (gate.endpointA.latitudeDegrees + gate.endpointB.latitudeDegrees) / 2,
-        (gate.endpointA.longitudeDegrees + gate.endpointB.longitudeDegrees) / 2};
-    const MetricPoint gateLocal = projectCoordinate(gateMidpoint, origin);
-    int gateIndex = 0;
-    double bestDistance = std::numeric_limits<double>::infinity();
-    for (int i = 0; i < resampled.size(); ++i) {
-        const double d = pointDistance(resampled[i], QPointF(gateLocal.eastMeters, gateLocal.northMeters));
-        if (d < bestDistance) { bestDistance = d; gateIndex = i; }
-    }
+    // Progress 0 is where the path crosses the timing gate (KAN-152): the
+    // closed path is restarted at that crossing before it is resampled. The
+    // point nearest the gate midpoint is not enough: an oblique gate whose
+    // midpoint lies off the racing line puts it metres after the crossing,
+    // and each lap's first fix would project just before progress 0.
+    const MetricPoint gateA = projectCoordinate(gate.endpointA, origin);
+    const MetricPoint gateB = projectCoordinate(gate.endpointB, origin);
+    const auto crossing = gateCrossing(
+        points, QPointF(gateA.eastMeters, gateA.northMeters), QPointF(gateB.eastMeters, gateB.northMeters));
     QVector<QPointF> rotated;
-    rotated.reserve(resampled.size());
-    for (int i = 0; i < resampled.size(); ++i) rotated.append(resampled[(gateIndex + i) % resampled.size()]);
+    if (crossing.edge >= 0) {
+        const qsizetype open = points.size() - 1; // points.last() repeats points.first()
+        QVector<QPointF> restarted{crossing.point};
+        restarted.reserve(open + 2);
+        for (qsizetype step = 1; step <= open; ++step) {
+            const QPointF &point = points[(crossing.edge + step) % open];
+            if (pointDistance(point, restarted.last()) > 1e-9) restarted.append(point);
+        }
+        if (pointDistance(crossing.point, restarted.last()) > 1e-9) restarted.append(crossing.point);
+        rotated = resampleByArcLength(restarted, pointCount);
+        if (rotated.size() != pointCount) return axis;
+    } else {
+        // The path never crosses the gate's segment: rotate so index 0 is
+        // the resampled point nearest the gate midpoint.
+        const QVector<QPointF> resampled = resampleByArcLength(points, pointCount);
+        if (resampled.size() != pointCount) return axis;
+        const GeoCoordinate gateMidpoint{
+            (gate.endpointA.latitudeDegrees + gate.endpointB.latitudeDegrees) / 2,
+            (gate.endpointA.longitudeDegrees + gate.endpointB.longitudeDegrees) / 2};
+        const MetricPoint gateLocal = projectCoordinate(gateMidpoint, origin);
+        int gateIndex = 0;
+        double bestDistance = std::numeric_limits<double>::infinity();
+        for (int i = 0; i < resampled.size(); ++i) {
+            const double d = pointDistance(resampled[i], QPointF(gateLocal.eastMeters, gateLocal.northMeters));
+            if (d < bestDistance) { bestDistance = d; gateIndex = i; }
+        }
+        rotated.reserve(resampled.size());
+        for (int i = 0; i < resampled.size(); ++i) rotated.append(resampled[(gateIndex + i) % resampled.size()]);
+    }
 
     axis.points = std::move(rotated);
     QVector<double> cumulative{0};
@@ -251,8 +312,6 @@ ProjectedSample projectSample(const ProgressAxis &axis, const QPointF &localPoin
     constexpr double coldStartProximityMeters = 20.0;
     constexpr double lockProximityMeters = 20.0;
     constexpr double ambiguityRatio = 0.7; // reject when the runner-up is within 70% of the best distance
-    constexpr double backwardToleranceMeters = 3.0;
-    constexpr double maximumGapSeconds = 5.0;
     constexpr double coldStartSeparationMeters = 30.0;
     constexpr double windowedSeparationMeters = 10.0;
     // Direction must not disagree outright (>90 degrees off): this is what
@@ -324,6 +383,7 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
     ProjectionContext context;
     std::optional<QPointF> previousLocal;
     std::optional<double> previousTime;
+    std::optional<double> lastProgress; // unwrapped; kept across segments of this lap
     const auto flush = [&] {
         if (!current.samples.isEmpty()) { result.append(std::move(current)); current = {}; }
         context = ProjectionContext{};
@@ -351,8 +411,28 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
             previousLocal = local;
             previousTime = time;
 
-            const auto projectedSample = projectSample(axis, local, time, speed, movement, context);
+            auto projectedSample = projectSample(axis, local, time, speed, movement, context);
             if (!projectedSample.valid) { flush(); continue; }
+
+            // Unwrap at the gate (KAN-152). The lap's first fix, taken just
+            // after its timed start, may project onto the end of the axis:
+            // it is just before progress 0. Later fixes continue forward from
+            // the last one by whole laps of the axis, so the fixes past the
+            // finish run beyond the axis length.
+            double &progress = projectedSample.progressMeters;
+            if (!lastProgress) {
+                if (progress > axis.lengthMeters / 2 && time - startTime <= maximumGapSeconds) progress -= axis.lengthMeters;
+            } else {
+                progress += std::ceil((*lastProgress - backwardToleranceMeters - progress) / axis.lengthMeters)
+                    * axis.lengthMeters;
+            }
+            // A fix projecting up to the backward tolerance behind the last one
+            // in this segment (GPS jitter, often while stopped) is held at the
+            // last progress, so progress never falls within a segment and the
+            // segment still covers the fix's time. A segment after a gap may
+            // start a little behind the last one, as before.
+            if (!current.samples.isEmpty()) progress = std::max(progress, current.samples.last().progressMeters);
+            lastProgress = progress;
             current.samples.append(projectedSample);
         }
     }
@@ -397,6 +477,55 @@ std::optional<double> timeAtProgress(const QVector<ProgressSegment> &lap, const 
         if (const auto time = timeAtProgressInSegment(segment, progressMeters)) return time;
     }
     return std::nullopt;
+}
+
+namespace {
+
+// The lap at its timed start at progress 0 and its timed end at the axis
+// length, when its projection stops within the gate tolerance of them.
+QVector<ProgressSegment> anchoredAtGate(
+    QVector<ProgressSegment> lap, const double start, const double end, const double length)
+{
+    if (lap.isEmpty() || lap.first().samples.isEmpty() || lap.last().samples.isEmpty()) return lap;
+    auto &first = lap.first().samples;
+    if (first.first().progressMeters > 0.0 && first.first().progressMeters <= gateCoverageToleranceMeters
+        && start < first.first().telemetryTime)
+        first.prepend({start, 0.0, true});
+    auto &last = lap.last().samples;
+    if (last.last().progressMeters < length && last.last().progressMeters >= length - gateCoverageToleranceMeters
+        && end > last.last().telemetryTime)
+        last.append({end, length, true});
+    return lap;
+}
+
+} // namespace
+
+QVector<QVector<DeltaPoint>> computeDeltaSeries(const QVector<ProgressSegment> &lapA,
+    const QVector<ProgressSegment> &lapB, const double progressStepMeters, const DeltaTiming &timing,
+    const CancellationCheck &cancelled)
+{
+    QVector<QVector<DeltaPoint>> result;
+    const double length = timing.lengthMeters;
+    if (lapA.isEmpty() || lapB.isEmpty() || !(progressStepMeters > 0) || !std::isfinite(length) || !(length > 0))
+        return result;
+    const auto anchoredA = anchoredAtGate(lapA, timing.lapStartA, timing.lapEndA, length);
+    const auto anchoredB = anchoredAtGate(lapB, timing.lapStartB, timing.lapEndB, length);
+
+    const int steps = static_cast<int>(std::ceil(length / progressStepMeters));
+    QVector<DeltaPoint> current;
+    for (int i = 0; i <= steps; ++i) {
+        throwIfCancelled(cancelled);
+        const double progress = std::min(length, i * progressStepMeters);
+        const auto timeA = timeAtProgress(anchoredA, progress);
+        const auto timeB = timeAtProgress(anchoredB, progress);
+        if (!timeA || !timeB) {
+            if (!current.isEmpty()) { result.append(std::move(current)); current = {}; }
+            continue;
+        }
+        current.append({progress, (*timeA - timing.lapStartA) - (*timeB - timing.lapStartB)});
+    }
+    if (!current.isEmpty()) result.append(std::move(current));
+    return result;
 }
 
 QVector<QVector<DeltaPoint>> computeDeltaSeries(const QVector<ProgressSegment> &lapA,

@@ -166,6 +166,20 @@ detection (KAN-44), review/editing UI (KAN-45+) and Corner Analyzer metrics
 (KAN-46, KAN-51-55) are separate, later tickets -- this task is the data
 model and its validation only.
 
+## Track progress at the gate (KAN-152)
+
+`TrackProgressTests` covers the start-gate findings of the 2 October audit
+with the route fixture's gate turned 45 degrees, its midpoint about 10 m off
+the line. `anchorsProgressZeroWhereTheGateCrossesTheAxis` checks progress 0 is
+where the reference lap crosses the gate (it was 6 m away, at the point nearest
+the midpoint). `obliqueOffLineGateKeepsEveryLapsSectors` checks every lap's
+progress never falls and all four quarter sectors are timed, summing to the
+lap time. `unwrapsAFirstFixJustBeforeTheGate` checks a lap's first fix just
+before progress 0 is stored as a small negative value, so the gate crossing is
+interpolated. `deltaAtTheFinishEqualsTheLapTimeDifference` checks the timed
+delta is 0 at the start and the lap-time difference at the finish for a lap
+10% slower with a shifted clock. Each fails without the change.
+
 ## Smoothed heading and curvature on track progress (KAN-44)
 
 `computeTrackFeatures` (`native/src/telemetry/TrackProgress.h/.cpp`) is a

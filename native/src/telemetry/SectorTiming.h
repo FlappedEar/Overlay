@@ -19,9 +19,6 @@ inline constexpr auto sectorTimingAlgorithm = "sector-timing-v1";
 
 // A complete partition's sector times must sum to the lap time within this.
 inline constexpr double sectorSumToleranceSeconds = 0.001;
-// Projection of a gate-to-gate lap starts and ends a few samples inside the
-// gate; coverage within this distance of either gate counts as reaching it.
-inline constexpr double gateCoverageToleranceMeters = 15.0;
 
 // Why a sector has no numeric time.
 // No longer produced for sector times: since KAN-120 a gate-crossing sector is
