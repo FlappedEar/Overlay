@@ -628,6 +628,11 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
             break;
         }
     }
+    // Never invent timing (KAN-207): without a recognised time column the
+    // sample rate is unknown, and row numbers would silently pass as seconds.
+    if (timeIndex < 0)
+        throw VboParseError("VBO has no recognised time column (time, timestamp or utc time); "
+                            "its sample timing is unknown.");
 
     // Every load path decodes through here: budget rows x columns before any
     // value vector grows (KAN-147).
@@ -671,14 +676,10 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
                               .arg(rowIndex + 1)
                               .arg(row.count - names.size()));
         }
-        const auto parsedTime = timeIndex >= 0
-            ? (timeIndex < cells.size() ? parseTimestamp(cells[timeIndex])
-                                        : std::optional<ParsedTimestamp>{})
-            : std::optional<ParsedTimestamp>(
-                  ParsedTimestamp{static_cast<double>(rowIndex), TimestampFormat::RelativeSeconds});
+        const auto parsedTime = timeIndex < cells.size() ? parseTimestamp(cells[timeIndex])
+                                                         : std::optional<ParsedTimestamp>{};
         if (!parsedTime) {
-            const QString timestampText = timeIndex >= 0 && timeIndex < cells.size()
-                ? cells[timeIndex] : QString();
+            const QString timestampText = timeIndex < cells.size() ? cells[timeIndex] : QString();
             appendWarning(QStringLiteral("Row %1: invalid timestamp \"%2\"; row skipped.")
                               .arg(rowIndex + 1)
                               .arg(timestampText));

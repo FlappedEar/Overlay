@@ -73,6 +73,7 @@ private slots:
     void syncIgnoresALossOfGpsFix();
     void preservesRepeatedDataSections();
     void rejectsMissingSections();
+    void rejectsVboWithoutTimeColumn();
     void interpolatesByTime();
     void parsesTextFirstVboTimeFormats();
     void keepsVboTimestampsStrictlyMonotonic();
@@ -490,6 +491,32 @@ void TelemetryCoreTests::rejectsMissingSections()
     QVERIFY_THROWS_EXCEPTION(VboParseError, (void) VboParser::parse(u"[header]\nfoo=bar"));
 }
 
+void TelemetryCoreTests::rejectsVboWithoutTimeColumn()
+{
+    // KAN-207: 6000 rows recorded at 10 Hz (10 minutes) under an exporter's own
+    // time-column name must not load as 6000 seconds of 1 Hz data.
+    QString rows;
+    for (int row = 0; row < 6000; ++row)
+        rows += QStringLiteral("%1 %2\n").arg(row / 10.0, 0, 'f', 1).arg(row % 200);
+    QString message;
+    try {
+        (void) VboParser::parse(QStringLiteral("[column names]\nelapsed_sec speed\n[data]\n") + rows);
+    } catch (const VboParseError &error) {
+        message = QString::fromUtf8(error.what());
+    }
+    QVERIFY2(message.contains(QStringLiteral("no recognised time column")), qPrintable(message));
+    QVERIFY_THROWS_EXCEPTION(VboParseError,
+        (void) VboParser::parse(u"[column names]\nspeed rpm\n[data]\n10 100\n20 200"));
+
+    // The recognised names still decode at their real cadence.
+    for (const QString &name : {QStringLiteral("time"), QStringLiteral("Timestamp"), QStringLiteral("UTC time")}) {
+        const auto session = VboParser::parse(QStringLiteral("[column names]\n%1 speed\n[data]\n")
+                                                  .arg(QString(name).replace(' ', '_')) + rows);
+        QCOMPARE(session.sampleCount, 6000);
+        QVERIFY(qAbs(session.duration - 599.9) < 0.000001);
+    }
+}
+
 void TelemetryCoreTests::interpolatesByTime()
 {
     const auto session = VboParser::parse(u"[column names]\ntime speed\n[data]\n0 0\n1 10\n2 30");
@@ -737,7 +764,8 @@ void TelemetryCoreTests::boundsVboHeaderAndDecodedValues()
     // 2. 512 columns and 400,000 one-value rows: rows x columns was not
     // budgeted (802 KB grew to 978 MB).
     QByteArray wide = "[column names]\n";
-    for (int column = 0; column < 512; ++column) wide += "c" + QByteArray::number(column) + ' ';
+    wide += "time ";
+    for (int column = 1; column < 512; ++column) wide += "c" + QByteArray::number(column) + ' ';
     wide += "\n[data]\n";
     wide.reserve(wide.size() + 400'000 * 2);
     for (int row = 0; row < 400'000; ++row) wide += "1\n";
