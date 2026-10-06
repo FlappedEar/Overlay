@@ -129,7 +129,7 @@ ApplicationWindow {
             wrapMode: Text.WordWrap
             color: Theme.onSurface
         }
-        onAccepted: appController.cancelExportAndQuit()
+        onAccepted: appController.exporter.cancelAndQuit()
     }
 
     Dialog {
@@ -565,7 +565,7 @@ ApplicationWindow {
             enterFullScreen();
     }
     function beginQuit() {
-        if (appController.exporting)
+        if (appController.exporter.exporting)
             exportQuitDialog.open()
         else
             appController.requestQuit()
@@ -1039,7 +1039,7 @@ ApplicationWindow {
                 String(range.outTimecode || ""),
                 overwriteAllowed)) {
                 close();
-            } else if (appController.exportState === "overwriteConfirmationRequired") {
+            } else if (appController.exporter.state === "overwriteConfirmationRequired") {
                 exportOverwriteDialog.open();
             }
         }
@@ -1377,9 +1377,9 @@ ApplicationWindow {
                 }
             }
             FeLabel {
-                visible: appController.exportState === "failed" && appController.exportError.length > 0
+                visible: appController.exporter.state === "failed" && appController.exporter.error.length > 0
                 Layout.fillWidth: true
-                text: appController.exportError
+                text: appController.exporter.error
                 color: Theme.error
                 wrapMode: Text.WordWrap
                 font.pixelSize: Theme.labelMedium
@@ -1404,14 +1404,14 @@ ApplicationWindow {
     Popup {
         font.family: Theme.sans
         id: exportProgressPopup
-        visible: appController.exportProgressVisible
+        visible: appController.exporter.progressVisible
         modal: true
         focus: true
         closePolicy: Popup.NoAutoClose
         anchors.centerIn: parent
         width: Math.min(window.width - 40, 680)
-        height: Math.min(window.height - 40, exportDetails.checked || appController.exportState === "failed"
-            || appController.exportState === "validationWarning" ? 700 : 460)
+        height: Math.min(window.height - 40, exportDetails.checked || appController.exporter.state === "failed"
+            || appController.exporter.state === "validationWarning" ? 700 : 460)
         background: Rectangle {
             radius: Theme.dialogRadius
             color: Theme.surfaceContainer
@@ -1423,7 +1423,7 @@ ApplicationWindow {
             spacing: 9
             FeLabel {
                 text: {
-                    const stage = appController.exportProgressInfo.stage || appController.exportState;
+                    const stage = appController.exporter.progressInfo.stage || appController.exporter.state;
                     if (stage === "complete") return qsTr("Export complete");
                     if (stage === "validationWarning") return qsTr("Export completed with warning");
                     if (stage === "failed") return qsTr("Export failed");
@@ -1436,7 +1436,7 @@ ApplicationWindow {
             }
             FeLabel {
                 Layout.fillWidth: true
-                text: appController.exportProgressInfo.outputName || ""
+                text: appController.exporter.progressInfo.outputName || ""
                 color: Theme.onSurfaceVariant
                 elide: Text.ElideMiddle
                 font.pixelSize: Theme.body
@@ -1450,7 +1450,7 @@ ApplicationWindow {
                         "validatingOutput": qsTr("Validating output"), "cleaningUp": qsTr("Cleaning up"),
                         "cancelling": qsTr("Cancelling"), "complete": qsTr("Complete"),
                         "validationWarning": qsTr("Completed with warning"), "failed": qsTr("Failed") };
-                    return names[appController.exportProgressInfo.stage] || qsTr("Preparing");
+                    return names[appController.exporter.progressInfo.stage] || qsTr("Preparing");
                 }
                 color: Theme.primary
                 font.pixelSize: Theme.subtitle
@@ -1459,33 +1459,33 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 from: 0
                 to: 100
-                value: Number(appController.exportProgressInfo.progressPercent || appController.exportProgress)
+                value: Number(appController.exporter.progressInfo.progressPercent || appController.exporter.progress)
             }
             FeLabel {
-                text: qsTr("%1%").arg(Number(appController.exportProgressInfo.progressPercent || appController.exportProgress).toFixed(1))
+                text: qsTr("%1%").arg(Number(appController.exporter.progressInfo.progressPercent || appController.exporter.progress).toFixed(1))
                 color: Theme.onSurfaceVariant
                 font.pixelSize: Theme.body
             }
             FeLabel {
                 Layout.fillWidth: true
-                text: window.formatTime(Number(appController.exportProgressInfo.encodedSeconds || appController.exportProgressInfo.exportRelativeTime || 0) * 1000)
-                    + " / " + window.formatTime(Number(appController.exportProgressInfo.exportDuration || 0) * 1000)
-                    + "    ·    " + qsTr("Encoded frame %1").arg(appController.exportProgressInfo.encodedFrames || 0)
+                text: window.formatTime(Number(appController.exporter.progressInfo.encodedSeconds || appController.exporter.progressInfo.exportRelativeTime || 0) * 1000)
+                    + " / " + window.formatTime(Number(appController.exporter.progressInfo.exportDuration || 0) * 1000)
+                    + "    ·    " + qsTr("Encoded frame %1").arg(appController.exporter.progressInfo.encodedFrames || 0)
                 color: Theme.onSurface
                 font.pixelSize: Theme.body
             }
             GridLayout {
                 Layout.fillWidth: true
                 columns: 3
-                FeLabel { text: qsTr("Elapsed\n%1").arg(window.formatTime(Number(appController.exportProgressInfo.elapsedMilliseconds || 0))); color: Theme.onSurfaceVariant }
-                FeLabel { text: qsTr("Overlay feed\n%1 fps").arg(Number(appController.exportProgressInfo.rendererFps || 0).toFixed(1)); color: Theme.onSurfaceVariant }
-                FeLabel { text: (appController.exportProgressInfo.stage === "renderingOverlay" ? qsTr("Overlay encode") : qsTr("Final encoder")) + "\n%1 fps · %2x".arg(Number(appController.exportProgressInfo.encoderFps || 0).toFixed(1)).arg(Number(appController.exportProgressInfo.encoderRealtimeFactor || 0).toFixed(2)); color: Theme.onSurfaceVariant }
+                FeLabel { text: qsTr("Elapsed\n%1").arg(window.formatTime(Number(appController.exporter.progressInfo.elapsedMilliseconds || 0))); color: Theme.onSurfaceVariant }
+                FeLabel { text: qsTr("Overlay feed\n%1 fps").arg(Number(appController.exporter.progressInfo.rendererFps || 0).toFixed(1)); color: Theme.onSurfaceVariant }
+                FeLabel { text: (appController.exporter.progressInfo.stage === "renderingOverlay" ? qsTr("Overlay encode") : qsTr("Final encoder")) + "\n%1 fps · %2x".arg(Number(appController.exporter.progressInfo.encoderFps || 0).toFixed(1)).arg(Number(appController.exporter.progressInfo.encoderRealtimeFactor || 0).toFixed(2)); color: Theme.onSurfaceVariant }
             }
             FeLabel {
                 Layout.fillWidth: true
-                text: (appController.exportProgressInfo.stage === "renderingOverlay" ? qsTr("Temporary overlay · FFV1") : "HEVC · " + (appController.exportProgressInfo.encoderName || qsTr("Detecting encoder…")))
-                    + " · " + (appController.exportProgressInfo.width || "") + "×" + (appController.exportProgressInfo.height || "")
-                    + " · " + Number(appController.exportProgressInfo.frameRate || 0).toFixed(3) + " fps\n" + (appController.exportProgressInfo.audioLabel || "")
+                text: (appController.exporter.progressInfo.stage === "renderingOverlay" ? qsTr("Temporary overlay · FFV1") : "HEVC · " + (appController.exporter.progressInfo.encoderName || qsTr("Detecting encoder…")))
+                    + " · " + (appController.exporter.progressInfo.width || "") + "×" + (appController.exporter.progressInfo.height || "")
+                    + " · " + Number(appController.exporter.progressInfo.frameRate || 0).toFixed(3) + " fps\n" + (appController.exporter.progressInfo.audioLabel || "")
                 color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium
             }
             RowLayout {
@@ -1499,8 +1499,8 @@ ApplicationWindow {
                 FeCheckBox {
                     id: exportVeryVerbose
                     objectName: "exportVeryVerbose"
-                    visible: exportDetails.checked || appController.exportState === "failed"
-                        || appController.exportState === "validationWarning"
+                    visible: exportDetails.checked || appController.exporter.state === "failed"
+                        || appController.exporter.state === "validationWarning"
                     text: qsTr("Very verbose")
                     checked: false
                 }
@@ -1508,7 +1508,7 @@ ApplicationWindow {
                 FeButton {
                     visible: exportVeryVerbose.visible && exportVeryVerbose.checked
                     text: qsTr("Copy all")
-                    onClicked: appController.copyExportDiagnostics()
+                    onClicked: appController.exporter.copyDiagnostics()
                 }
                 FeButton {
                     visible: exportVeryVerbose.visible && exportVeryVerbose.checked && !verboseText.followTail
@@ -1518,8 +1518,8 @@ ApplicationWindow {
             }
             ScrollView {
                 id: normalDetailsScroll
-                visible: (exportDetails.checked || appController.exportState === "failed"
-                    || appController.exportState === "validationWarning") && !exportVeryVerbose.checked
+                visible: (exportDetails.checked || appController.exporter.state === "failed"
+                    || appController.exporter.state === "validationWarning") && !exportVeryVerbose.checked
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 140
@@ -1542,7 +1542,7 @@ ApplicationWindow {
                         }
                     }
                     text: {
-                        const p = appController.exportProgressInfo;
+                        const p = appController.exporter.progressInfo;
                         const names = { "preparing": qsTr("Preparing"), "renderingOverlay": qsTr("Rendering overlay"),
                             "validatingOverlay": qsTr("Validating temporary overlay"),
                             "encodingVideo": qsTr("Encoding video"), "validatingOutput": qsTr("Validating output"),
@@ -1688,12 +1688,12 @@ ApplicationWindow {
                     }
                     function refreshLog() {
                         if (verboseScroll.visible)
-                            updateLog(appController.exportDiagnosticLog, appController.exportDiagnosticDroppedCharacters);
+                            updateLog(appController.exporter.diagnosticLog, appController.exporter.diagnosticDroppedCharacters);
                     }
                     Component.onCompleted: refreshLog()
                     Connections {
-                        target: appController
-                        function onExportDiagnosticLogChanged() {
+                        target: appController.exporter
+                        function onDiagnosticLogChanged() {
                             verboseText.refreshLog();
                         }
                     }
@@ -1716,15 +1716,15 @@ ApplicationWindow {
                     }
                 }
             }
-            FeLabel { visible: appController.exportState === "cancelling"; text: qsTr("Finishing current operation and cleaning up."); color: Theme.warning; font.pixelSize: Theme.labelMedium }
-            FeLabel { visible: appController.exportState === "failed"; text: appController.exportError; color: Theme.error; font.pixelSize: Theme.labelMedium; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-            FeLabel { visible: appController.exportState === "validationWarning"; text: appController.exportError; color: Theme.warning; font.pixelSize: Theme.labelMedium; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            FeLabel { visible: appController.exporter.state === "cancelling"; text: qsTr("Finishing current operation and cleaning up."); color: Theme.warning; font.pixelSize: Theme.labelMedium }
+            FeLabel { visible: appController.exporter.state === "failed"; text: appController.exporter.error; color: Theme.error; font.pixelSize: Theme.labelMedium; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            FeLabel { visible: appController.exporter.state === "validationWarning"; text: appController.exporter.error; color: Theme.warning; font.pixelSize: Theme.labelMedium; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             Item { Layout.fillHeight: true }
             FeButton {
                 Layout.alignment: Qt.AlignRight
-                text: appController.exporting ? (appController.exportState === "cancelling" ? qsTr("Cancelling…") : qsTr("Cancel")) : qsTr("Done")
-                enabled: appController.exportState !== "cancelling"
-                onClicked: { if (appController.exporting) appController.cancelExport(); else appController.dismissExportProgress(); }
+                text: appController.exporter.exporting ? (appController.exporter.state === "cancelling" ? qsTr("Cancelling…") : qsTr("Cancel")) : qsTr("Done")
+                enabled: appController.exporter.state !== "cancelling"
+                onClicked: { if (appController.exporter.exporting) appController.exporter.cancel(); else appController.exporter.dismissProgress(); }
             }
         }
     }
@@ -1956,7 +1956,7 @@ ApplicationWindow {
                     implicitHeight: 28
                     model: appController.eventRuns.map(run => run.name)
                     currentIndex: appController.eventRuns.findIndex(run => run.id === appController.activeRunId)
-                    enabled: !appController.projectLoading && !appController.exporting
+                    enabled: !appController.projectLoading && !appController.exporter.exporting
                         && !appController.recoveryPending && appController.pendingDestructiveAction === ""
                     onActivated: index => {
                         appController.selectEventRun(appController.eventRuns[index].id);
@@ -1968,7 +1968,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                 }
                 Rectangle {
-                    visible: appController.syncOffset !== 0
+                    visible: appController.sync.offset !== 0
                     implicitWidth: syncLabel.implicitWidth + 18
                     height: 28
                     radius: Theme.radius
@@ -1977,7 +1977,7 @@ ApplicationWindow {
                     FeLabel {
                         id: syncLabel
                         anchors.centerIn: parent
-                        text: qsTr("SYNC  %1 s").arg(appController.syncOffset.toFixed(3))
+                        text: qsTr("SYNC  %1 s").arg(appController.sync.offset.toFixed(3))
                         color: Theme.onPrimaryContainer
                         font.pixelSize: Theme.overline
                         font.weight: Font.DemiBold

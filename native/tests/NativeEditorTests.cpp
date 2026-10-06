@@ -805,7 +805,7 @@ void EditorTests::preservesPartialOverlapInAnalysisSeries()
 
     // A negative offset maps the beginning of the video before telemetry starts.
     // The overlapping half must remain a plotted segment, not disappear wholesale.
-    controller.setSyncOffset(-2.0);
+    controller.syncController()->setOffset(-2.0);
     const QVariantMap ramp = controller.telemetrySeries(QStringLiteral("ramp"), 0.0, 6.0, 100);
     const QVariantList rampSegments = ramp.value(QStringLiteral("segments")).toList();
     QVERIFY(!rampSegments.isEmpty());

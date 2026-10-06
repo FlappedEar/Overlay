@@ -157,8 +157,8 @@ void ProjectTests::reopensPreferencesProjectAndRecoveryAfterDisplayRename()
     {
         AppController controller(nullptr, recoveryPath);
         QTRY_VERIFY(!controller.projectLoading());
-        QCOMPARE(controller.syncOffset(), 1.25);
-        controller.setSyncOffset(7.0);
+        QCOMPARE(controller.syncController()->offset(), 1.25);
+        controller.syncController()->setOffset(7.0);
         controller.m_document.writeRecoverySnapshot();
         QVERIFY(QFileInfo(recoveryPath).isFile());
     }
@@ -168,7 +168,7 @@ void ProjectTests::reopensPreferencesProjectAndRecoveryAfterDisplayRename()
         QVERIFY(controller.recoveryPending());
         controller.resolveStartupRecovery("recover");
         QTRY_VERIFY(!controller.projectLoading());
-        QCOMPARE(controller.syncOffset(), 7.0);
+        QCOMPARE(controller.syncController()->offset(), 7.0);
         QCOMPARE(controller.m_settings.value("analysis/windowWidth").toInt(), 777);
         QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(projectPath).canonicalFilePath());
         QVERIFY(controller.dirty());
@@ -177,7 +177,7 @@ void ProjectTests::reopensPreferencesProjectAndRecoveryAfterDisplayRename()
     }
     AppController reopened(nullptr, recoveryPath);
     QTRY_VERIFY(!reopened.projectLoading());
-    QCOMPARE(reopened.syncOffset(), 7.0);
+    QCOMPARE(reopened.syncController()->offset(), 7.0);
     QVERIFY(!reopened.dirty());
 }
 
@@ -416,7 +416,7 @@ void ProjectTests::keepsRecoveryWhenQuittingAtTheRecoveryPrompt()
         AppController controller(nullptr, recovery);
         controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
         QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-        controller.setSyncOffset(1.25);
+        controller.syncController()->setOffset(1.25);
         QVERIFY(controller.dirty());
         controller.m_document.writeRecoverySnapshot();
         QVERIFY(QFileInfo::exists(recovery));
@@ -442,7 +442,7 @@ void ProjectTests::keepsRecoveryWhenQuittingAtTheRecoveryPrompt()
         QVERIFY(controller.recoveryPending()); // offered again at the next start
         controller.resolveStartupRecovery("recover");
         QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-        QCOMPARE(controller.syncOffset(), 1.25);
+        QCOMPARE(controller.syncController()->offset(), 1.25);
     }
 }
 
@@ -498,7 +498,7 @@ void ProjectTests::routesNewDocumentSaveAsThroughPendingQuit()
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
     AppController controller(nullptr, directory.filePath(QStringLiteral("recovery.json")));
-    controller.setSyncOffset(1.0); // A dirty new document has no project path.
+    controller.syncController()->setOffset(1.0); // A dirty new document has no project path.
 
     QSignalSpy saveAsSpy(&controller, &AppController::saveAsRequested);
     QSignalSpy quitSpy(&controller, &AppController::quitApproved);
@@ -548,7 +548,7 @@ void ProjectTests::opensProjectsTransactionally()
     QCOMPARE(controller.telemetryName(), QStringLiteral("missing.vbo"));
     QVERIFY(controller.channelNames().isEmpty());
     QCOMPARE(controller.widgetModel()->toJson(), scene.value(QStringLiteral("widgets")).toArray());
-    QCOMPARE(controller.syncOffset(), 4.0);
+    QCOMPARE(controller.syncController()->offset(), 4.0);
     QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(failedPath).canonicalFilePath());
     QVERIFY(!controller.dirty());
 
@@ -564,7 +564,7 @@ void ProjectTests::opensProjectsTransactionally()
     QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
     QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(successPath).canonicalFilePath());
     QCOMPARE(controller.telemetryName(), QStringLiteral("basic.vbo"));
-    QCOMPARE(controller.syncOffset(), 2.5);
+    QCOMPARE(controller.syncController()->offset(), 2.5);
     QVERIFY(!controller.dirty());
     QVERIFY(controller.saveCurrentProject());
     const QJsonObject migrated = QJsonDocument::fromJson(readBytes(successPath)).object();
@@ -618,12 +618,12 @@ void ProjectTests::refusesSaveWhileProjectOpens()
     QVERIFY(directory.isValid());
     AppController controller(nullptr, directory.filePath(QStringLiteral("recovery.json")));
     const QString first = directory.filePath(QStringLiteral("first.fetproject"));
-    controller.setSyncOffset(1.0);
+    controller.syncController()->setOffset(1.0);
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(first)));
     const QByteArray saved = readBytes(first);
     const QString second = directory.filePath(QStringLiteral("second.fetproject"));
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(second)));
-    controller.setSyncOffset(2.0);
+    controller.syncController()->setOffset(2.0);
     QVERIFY(controller.dirty());
     // Back to the first project's path with unsaved edits, then open the second
     // and discard them.
@@ -654,18 +654,18 @@ void ProjectTests::surfacesAndRetriesRecoveryPersistenceFailure()
     settings.clear();
     settings.sync();
     AppController controller(nullptr, recoveryPath);
-    controller.setSyncOffset(1.0);
+    controller.syncController()->setOffset(1.0);
     QTRY_VERIFY(controller.recoveryDegraded());
     QVERIFY(!controller.recoveryError().isEmpty());
     QVERIFY(controller.dirty()); // Editing remains available while recovery is unavailable.
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(directory.filePath(QStringLiteral("manual.fetproject")))));
     QVERIFY(!controller.dirty()); // Authoritative manual save is independent of recovery failure.
     QVERIFY(!controller.recoveryDegraded()); // A clean document has nothing to protect (KAN-195).
-    controller.setSyncOffset(1.5);
+    controller.syncController()->setOffset(1.5);
     QTRY_VERIFY(controller.recoveryDegraded());
 
     QVERIFY(QDir().rmdir(recoveryPath));
-    controller.setSyncOffset(2.0);
+    controller.syncController()->setOffset(2.0);
     QTRY_VERIFY(!controller.recoveryDegraded());
     QVERIFY(QFileInfo(recoveryPath).isFile());
 }
@@ -778,9 +778,9 @@ void ProjectTests::opensProjectsWithMissingSources()
     QTRY_VERIFY(!controller.projectLoading());
     QCOMPARE(controller.videoLoadState(), QStringLiteral("missing"));
     QCOMPARE(controller.vboLoadState(), QStringLiteral("missing"));
-    QCOMPARE(controller.syncOffset(), 3.25);
+    QCOMPARE(controller.syncController()->offset(), 3.25);
     QVERIFY(!controller.dirty());
-    controller.setSyncOffset(4.0);
+    controller.syncController()->setOffset(4.0);
     QTRY_VERIFY(QFileInfo(directory.filePath(QStringLiteral("recovery.json"))).isFile());
     ProjectRecoveryStore recovery(directory.filePath(QStringLiteral("recovery.json")));
     ProjectRecoverySnapshot snapshot;
@@ -1005,9 +1005,9 @@ void ProjectTests::restoresSavedProjectsAndPreservesUnknownFields()
     {
         AppController controller(nullptr, recoveryPath);
         QTRY_VERIFY(!controller.projectLoading());
-        QCOMPARE(controller.syncOffset(), 1.25);
+        QCOMPARE(controller.syncController()->offset(), 1.25);
         QVERIFY(!controller.dirty());
-        controller.setSyncOffset(2.5);
+        controller.syncController()->setOffset(2.5);
         QVERIFY(controller.saveCurrentProject());
         QVERIFY(!controller.dirty());
     }
@@ -1042,7 +1042,7 @@ void ProjectTests::recoversAndDiscardsSavedChanges()
     {
         AppController controller(nullptr, recoveryPath);
         QTRY_VERIFY(!controller.projectLoading());
-        controller.setSyncOffset(7.0);
+        controller.syncController()->setOffset(7.0);
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
     }
     {
@@ -1050,7 +1050,7 @@ void ProjectTests::recoversAndDiscardsSavedChanges()
         QVERIFY(controller.recoveryPending());
         controller.resolveStartupRecovery(QStringLiteral("recover"));
         QTRY_VERIFY(!controller.projectLoading());
-        QCOMPARE(controller.syncOffset(), 7.0);
+        QCOMPARE(controller.syncController()->offset(), 7.0);
         QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(projectPath).canonicalFilePath());
         QVERIFY(controller.dirty());
     }
@@ -1059,7 +1059,7 @@ void ProjectTests::recoversAndDiscardsSavedChanges()
         QVERIFY(controller.recoveryPending());
         controller.resolveStartupRecovery(QStringLiteral("discard"));
         QTRY_VERIFY(!controller.projectLoading());
-        QCOMPARE(controller.syncOffset(), 1.0);
+        QCOMPARE(controller.syncController()->offset(), 1.0);
         QVERIFY(!controller.dirty());
         QVERIFY(!QFileInfo(recoveryPath).exists());
     }
@@ -1077,7 +1077,7 @@ void ProjectTests::recoversAndDiscardsUnsavedDocuments()
     {
         AppController controller(nullptr, recoveryPath);
         controller.widgetModel()->addWidget(QStringLiteral("retroCustomValue"));
-        controller.setSyncOffset(4.0);
+        controller.syncController()->setOffset(4.0);
         recoveredWidgetCount = controller.widgetModel()->count();
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
     }
@@ -1087,7 +1087,7 @@ void ProjectTests::recoversAndDiscardsUnsavedDocuments()
         controller.resolveStartupRecovery(QStringLiteral("recover"));
         QTRY_VERIFY(!controller.projectLoading());
         QCOMPARE(controller.widgetModel()->count(), recoveredWidgetCount);
-        QCOMPARE(controller.syncOffset(), 4.0);
+        QCOMPARE(controller.syncController()->offset(), 4.0);
         QVERIFY(controller.projectPath().isEmpty());
         QVERIFY(controller.dirty());
     }
@@ -1096,7 +1096,7 @@ void ProjectTests::recoversAndDiscardsUnsavedDocuments()
         QVERIFY(controller.recoveryPending());
         controller.resolveStartupRecovery(QStringLiteral("discard"));
         QVERIFY(!controller.projectLoading());
-        QCOMPARE(controller.syncOffset(), 0.0);
+        QCOMPARE(controller.syncController()->offset(), 0.0);
         QVERIFY(controller.projectPath().isEmpty());
         QVERIFY(!controller.dirty());
         QVERIFY(!QFileInfo(recoveryPath).exists());
@@ -1121,7 +1121,7 @@ void ProjectTests::discardsUnsavedStateForQuitNewAndOpen()
         AppController controller(nullptr, recoveryPath);
         QTRY_VERIFY(!controller.projectLoading());
         controller.widgetModel()->addWidget(QStringLiteral("retroCustomValue"));
-        controller.setSyncOffset(8.0);
+        controller.syncController()->setOffset(8.0);
         controller.loadVbo(QUrl::fromLocalFile(QStringLiteral(TEST_FIXTURE_PATH)));
         QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
@@ -1134,25 +1134,25 @@ void ProjectTests::discardsUnsavedStateForQuitNewAndOpen()
     {
         AppController controller(nullptr, recoveryPath);
         QTRY_VERIFY(!controller.projectLoading());
-        QCOMPARE(controller.syncOffset(), 1.0);
+        QCOMPARE(controller.syncController()->offset(), 1.0);
         QVERIFY(controller.telemetryName().isEmpty());
         QVERIFY(!controller.dirty());
 
-        controller.setSyncOffset(8.0);
+        controller.syncController()->setOffset(8.0);
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
         controller.requestNewProject();
         controller.resolveDestructiveAction(QStringLiteral("discard"));
-        QCOMPARE(controller.syncOffset(), 0.0);
+        QCOMPARE(controller.syncController()->offset(), 0.0);
         QVERIFY(controller.projectPath().isEmpty());
         QVERIFY(!controller.dirty());
         QVERIFY(!QFileInfo(recoveryPath).exists());
 
-        controller.setSyncOffset(9.0);
+        controller.syncController()->setOffset(9.0);
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
         controller.requestOpenProject(QUrl::fromLocalFile(projectB));
         controller.resolveDestructiveAction(QStringLiteral("discard"));
         QTRY_VERIFY(!controller.projectLoading());
-        QCOMPARE(controller.syncOffset(), 3.0);
+        QCOMPARE(controller.syncController()->offset(), 3.0);
         QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(projectB).canonicalFilePath());
         QVERIFY(!controller.dirty());
         QVERIFY(!QFileInfo(recoveryPath).exists());
@@ -1175,7 +1175,7 @@ void ProjectTests::continuesDiscardedQuitWhenRecoveryDeletionFails()
 
     {
         AppController controller(nullptr, recoveryPath, operations);
-        controller.setSyncOffset(8.0);
+        controller.syncController()->setOffset(8.0);
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
         QSignalSpy quitSpy(&controller, &AppController::quitApproved);
         controller.requestQuit();
@@ -1217,11 +1217,11 @@ void ProjectTests::continuesDiscardedNewAndOpenWhenRecoveryDeletionFails()
 
     {
         AppController controller(nullptr, recoveryPath, operations);
-        controller.setSyncOffset(8.0);
+        controller.syncController()->setOffset(8.0);
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
         controller.requestNewProject();
         controller.resolveDestructiveAction(QStringLiteral("discard"));
-        QCOMPARE(controller.syncOffset(), 0.0);
+        QCOMPARE(controller.syncController()->offset(), 0.0);
         QVERIFY(controller.projectPath().isEmpty());
         QVERIFY(QFileInfo(recoveryPath).isFile());
     }
@@ -1232,12 +1232,12 @@ void ProjectTests::continuesDiscardedNewAndOpenWhenRecoveryDeletionFails()
 
     {
         AppController controller(nullptr, recoveryPath, operations);
-        controller.setSyncOffset(9.0);
+        controller.syncController()->setOffset(9.0);
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
         controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
         controller.resolveDestructiveAction(QStringLiteral("discard"));
         QTRY_VERIFY(!controller.projectLoading());
-        QCOMPARE(controller.syncOffset(), 3.0);
+        QCOMPARE(controller.syncController()->offset(), 3.0);
         QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(projectPath).canonicalFilePath());
         QVERIFY(QFileInfo(recoveryPath).isFile());
     }
@@ -1258,7 +1258,7 @@ void ProjectTests::leavesRecoveryUntouchedWhenDiscardIsCancelled()
     settings.sync();
     const QString recoveryPath = directory.filePath(QStringLiteral("recovery.json"));
     AppController controller(nullptr, recoveryPath);
-    controller.setSyncOffset(8.0);
+    controller.syncController()->setOffset(8.0);
     QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
     QSignalSpy quitSpy(&controller, &AppController::quitApproved);
     controller.requestQuit();
@@ -1322,7 +1322,7 @@ void ProjectTests::cancelsDiscardWhenTombstoneAndDeletionFail()
         return false;
     };
     AppController controller(nullptr, recoveryPath, operations);
-    controller.setSyncOffset(8.0);
+    controller.syncController()->setOffset(8.0);
     QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
     QSignalSpy quitSpy(&controller, &AppController::quitApproved);
     controller.requestQuit();
@@ -1374,7 +1374,7 @@ void ProjectTests::preservesRecoveryAcrossFailedSave()
     AppController controller(nullptr, recoveryPath);
     controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
     QTRY_VERIFY(!controller.projectLoading());
-    controller.setSyncOffset(8.0);
+    controller.syncController()->setOffset(8.0);
     QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
     QVERIFY(!controller.saveProject(
         QUrl::fromLocalFile(directory.filePath(QStringLiteral("missing/project.fetproject")))));
@@ -1408,11 +1408,11 @@ void ProjectTests::offersRecoveryWhenAnotherAppSavedTheSameRevision()
         AppController controller(nullptr, recoveryPath);
         controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
         QTRY_VERIFY(!controller.projectLoading());
-        controller.setSyncOffset(3.0);
+        controller.syncController()->setOffset(3.0);
         QVERIFY(controller.saveCurrentProject());
         const auto saved = QJsonDocument::fromJson(readBytes(projectPath)).object();
         QVERIFY(!saved.value("documentState").toObject().value("saveId").toString().isEmpty());
-        controller.setSyncOffset(8.0); // unsaved edit, kept only in recovery
+        controller.syncController()->setOffset(8.0); // unsaved edit, kept only in recovery
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
         snapshotRevision = QJsonDocument::fromJson(readBytes(recoveryPath)).object().value("revision").toVariant().toULongLong();
         QVERIFY(snapshotRevision > 0);
@@ -1475,7 +1475,7 @@ void ProjectTests::doesNotOfferStaleRecoveryAfterSuccessfulSaveCleanupFailure()
         AppController controller(nullptr, recoveryPath, operations);
         controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
         QTRY_VERIFY(!controller.projectLoading());
-        controller.setSyncOffset(8.0);
+        controller.syncController()->setOffset(8.0);
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
 
         QVERIFY(controller.saveCurrentProject());
@@ -1487,7 +1487,7 @@ void ProjectTests::doesNotOfferStaleRecoveryAfterSuccessfulSaveCleanupFailure()
     AppController restarted(nullptr, recoveryPath);
     QVERIFY(!restarted.recoveryPending());
     QTRY_VERIFY(!restarted.projectLoading());
-    QCOMPARE(restarted.syncOffset(), 8.0);
+    QCOMPARE(restarted.syncController()->offset(), 8.0);
     QVERIFY(!restarted.dirty());
     QVERIFY(!QFileInfo(recoveryPath).exists()); // Startup retry completed stale cleanup.
 }
@@ -1504,7 +1504,7 @@ void ProjectTests::classifiesVersionedRecoveryAgainstSavedAuthority()
 
     {
         AppController controller(nullptr, recoveryPath);
-        controller.setSyncOffset(1.0);
+        controller.syncController()->setOffset(1.0);
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
     }
     const QJsonObject saved = QJsonDocument::fromJson(readBytes(projectPath)).object();
@@ -1522,7 +1522,7 @@ void ProjectTests::classifiesVersionedRecoveryAgainstSavedAuthority()
         AppController restarted(nullptr, recoveryPath);
         QVERIFY(!restarted.recoveryPending());
         QTRY_VERIFY(!restarted.projectLoading());
-        QCOMPARE(restarted.syncOffset(), 1.0);
+        QCOMPARE(restarted.syncController()->offset(), 1.0);
     }
 
     QJsonObject newer = saved;
@@ -1565,7 +1565,7 @@ void ProjectTests::keepsSaveAsRecoveryIdentityWithNewAndExistingProjects()
 
     {
         AppController controller(nullptr, recoveryPath, operations);
-        controller.setSyncOffset(2.0); // New document -> Save As.
+        controller.syncController()->setOffset(2.0); // New document -> Save As.
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectB)));
         QVERIFY(QFileInfo(recoveryPath).isFile());
@@ -1581,7 +1581,7 @@ void ProjectTests::keepsSaveAsRecoveryIdentityWithNewAndExistingProjects()
         AppController controller(nullptr, recoveryPath, operations);
         controller.requestOpenProject(QUrl::fromLocalFile(projectA));
         QTRY_VERIFY(!controller.projectLoading());
-        controller.setSyncOffset(3.0); // Existing A -> Save As B.
+        controller.syncController()->setOffset(3.0); // Existing A -> Save As B.
         QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
         QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectB)));
         QVERIFY(QFileInfo(recoveryPath).isFile());
@@ -1617,7 +1617,7 @@ void ProjectTests::rejectsInvalidVersionedRecoveryMetadata()
     AppController restarted(nullptr, recoveryPath);
     QVERIFY(!restarted.recoveryPending());
     QTRY_VERIFY(!restarted.projectLoading());
-    QCOMPARE(restarted.syncOffset(), 1.0);
+    QCOMPARE(restarted.syncController()->offset(), 1.0);
 }
 
 void ProjectTests::rejectsMismatchedVersionedRecoveryPayloadIdentity()
@@ -1654,7 +1654,7 @@ void ProjectTests::rejectsMismatchedVersionedRecoveryPayloadIdentity()
     AppController restarted(nullptr, recoveryPath);
     QVERIFY(!restarted.recoveryPending());
     QTRY_VERIFY(!restarted.projectLoading());
-    QCOMPARE(restarted.syncOffset(), 1.0);
+    QCOMPARE(restarted.syncController()->offset(), 1.0);
 }
 
 void ProjectTests::doesNotTrustMalformedProjectAsRecoveryAuthority()
@@ -1739,10 +1739,10 @@ void ProjectTests::preservesEditsAfterDocumentFirstProjectOpen()
     AppController controller(nullptr, recoveryPath);
     controller.requestOpenProject(QUrl::fromLocalFile(projectPath));
     QTRY_VERIFY(!controller.projectLoading());
-    QCOMPARE(controller.syncOffset(), 2.0);
+    QCOMPARE(controller.syncController()->offset(), 2.0);
     QCOMPARE(controller.projectPath().toLocalFile(), QFileInfo(projectPath).canonicalFilePath());
-    controller.setSyncOffset(9.0);
-    QCOMPARE(controller.syncOffset(), 9.0);
+    controller.syncController()->setOffset(9.0);
+    QCOMPARE(controller.syncController()->offset(), 9.0);
     QVERIFY(controller.dirty());
     QVERIFY(controller.projectLoadError().isEmpty());
 }

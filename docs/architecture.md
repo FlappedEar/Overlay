@@ -157,6 +157,24 @@ navigation when analysis re-applies them. A separate OverlayController was
 not extracted: KAN-124 closed with `AppController` holding only the overlay
 editor plus `DocumentHost`/`VideoLink` and forwarding.
 
+KAN-215 splits the rest of `AppController` into controllers it owns. Step 2
+moved the export run into `ExportController` (`native/src/app/ExportController.h`),
+which QML reaches as `appController.exporter`. `AppController::startExport` still
+gathers the job (sources, chapters, protected paths, lap binding, scene and
+synchronization) and hands it with the dialog's request to
+`ExportController::start`, which validates it, prepares the output transaction
+and its manifest, runs and supervises the worker, follows its progress and
+diagnostics, and commits or cleans up. Status lines and the quit after a
+cancelled export come back to `AppController` as signals.
+
+Step 3 moved synchronization into `SyncController` (`appController.sync`): the
+transform (offset and time scale), the auto-sync worker and its candidate, and
+the rule that a timing edit cancels a running auto-sync and rejects its result.
+`AppController::autoSync` checks that a video and telemetry are open and passes
+the sources the result must still match. A user edit reaches `AppController` as
+`edited()`, which updates the preview's transform and marks the document dirty;
+a project's saved transform is restored without marking it.
+
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
 ## Project
@@ -339,7 +357,7 @@ The render context still converts track geometry once per source (`trackPoints`,
 
 ## Export
 
-`MediaProbe` reads explicit source and output raster, rate, codec/profile, bit-depth, orientation, and raw color metadata. `ExportMediaProfile` centrally derives the preservation format and encoder profile. `EncoderDetector` tests usable HEVC encoders and caches an exact raster/rate/pixel-format/profile probe; `TelemetryFrameRenderer` mounts `TelemetryScene.qml` offscreen through `QQuickRenderControl` and QRhi and checks the backend's reported texture limit. QRhi readback is canonical premultiplied RGBA and conditionally normalized from Y-up once before Stage A. Stage B keeps the 8-bit RGB composition contract, while the 10-bit YUV path explicitly unpremultiplies staged BGRA and uses straight-alpha blending before P010 conversion. `ExportEngine` also probes the production composition graph before telemetry sampling. Stage B retains original PTS for seek/trim and preserves audio's delay relative to the selected video range. The two-stage FFmpeg pipeline runs only after capability checks. Raw-frame transport uses bounded byte-oriented backpressure; representative FFV1 sampling counts encoded bytes without retaining payload bytes. All subprocess channels are incrementally drained: ffprobe JSON has a 4 MiB complete-payload limit, stderr keeps a 128 KiB tail, progress lines cap at 16 KiB, and worker messages cap at 128 KiB. `ExportOutputTransaction` creates and owns a same-directory staging output, rejects linked targets, snapshots an approved existing regular file's native identity and modification state, and commits only when that state still matches immediately before replacement. `AppController` consumes worker events and is the sole writer of the corresponding durable export diagnostic file, preserving the same formatted entries shown by Very Verbose without concurrent worker/UI file access. Color policy is documented in [media-color-policy.md](media-color-policy.md).
+`MediaProbe` reads explicit source and output raster, rate, codec/profile, bit-depth, orientation, and raw color metadata. `ExportMediaProfile` centrally derives the preservation format and encoder profile. `EncoderDetector` tests usable HEVC encoders and caches an exact raster/rate/pixel-format/profile probe; `TelemetryFrameRenderer` mounts `TelemetryScene.qml` offscreen through `QQuickRenderControl` and QRhi and checks the backend's reported texture limit. QRhi readback is canonical premultiplied RGBA and conditionally normalized from Y-up once before Stage A. Stage B keeps the 8-bit RGB composition contract, while the 10-bit YUV path explicitly unpremultiplies staged BGRA and uses straight-alpha blending before P010 conversion. `ExportEngine` also probes the production composition graph before telemetry sampling. Stage B retains original PTS for seek/trim and preserves audio's delay relative to the selected video range. The two-stage FFmpeg pipeline runs only after capability checks. Raw-frame transport uses bounded byte-oriented backpressure; representative FFV1 sampling counts encoded bytes without retaining payload bytes. All subprocess channels are incrementally drained: ffprobe JSON has a 4 MiB complete-payload limit, stderr keeps a 128 KiB tail, progress lines cap at 16 KiB, and worker messages cap at 128 KiB. `ExportOutputTransaction` creates and owns a same-directory staging output, rejects linked targets, snapshots an approved existing regular file's native identity and modification state, and commits only when that state still matches immediately before replacement. `ExportController` consumes worker events and is the sole writer of the corresponding durable export diagnostic file, preserving the same formatted entries shown by Very Verbose without concurrent worker/UI file access. Color policy is documented in [media-color-policy.md](media-color-policy.md).
 
 The detailed pipeline and timing contract are in [export-pipeline.md](export-pipeline.md). Target-file transaction guarantees are in [export-output-safety.md](export-output-safety.md).
 

@@ -108,10 +108,9 @@ void AppController::applyEditorProject(const ProjectLoadResult &result)
     m_previewRenderContext.setSession(nullptr);
     m_previewRenderContext.setTrackGeometry(nullptr);
     m_previewRenderContext.setLapSession({});
-    m_sync = result.sync;
-    m_previewRenderContext.setSyncTransform(m_sync);
+    m_syncController.restore(result.sync);
+    m_previewRenderContext.setSyncTransform(m_syncController.transform());
     m_playbackTime = 0.0;
-    m_syncCandidate.clear();
     // A .fetproject stores a scene, not template provenance. Retain the picker preference,
     // but never let a newly opened scene overwrite a visible custom template in place.
     if (!result.runSelection) clearActiveTemplate();
@@ -125,8 +124,8 @@ void AppController::announceEditorProject()
     emit lapNavigationChanged();
     emit exportChanged();
     emit playbackTimeChanged();
-    emit syncChanged();
-    emit syncCandidateChanged();
+    emit m_syncController.changed();
+    emit m_syncController.candidateChanged();
     emit liveValuesChanged();
     emit sourceLoadStateChanged();
 }
@@ -145,12 +144,7 @@ void AppController::clearEditor()
     m_exportSourceInfo = {};
     m_exportChapterPaths.clear();
     m_exportChapterProblem.clear();
-    m_exportMetrics.clear();
-    m_exportDiagnosticLog.clear();
-    m_exportDiagnosticNotifier.stop();
-    emit exportDiagnosticLogChanged();
-    m_exportProgressInfo.clear();
-    m_exportProgressVisible = false;
+    m_export.reset();
     m_telemetryPath.clear();
     m_vboReference = {};
     m_session.reset();
@@ -162,8 +156,8 @@ void AppController::clearEditor()
     m_previewRenderContext.setLapSession({});
     m_trackPoints.clear();
     m_playbackTime = 0.0;
-    m_sync = {};
-    m_syncCandidate.clear();
+    m_syncController.restore({});
+    m_previewRenderContext.setSyncTransform(m_syncController.transform());
     clearActiveTemplate();
     m_widgetModel.resetDefaults();
     emit videoSourceChanged();
@@ -171,8 +165,8 @@ void AppController::clearEditor()
     emit telemetryChanged();
     emit lapNavigationChanged();
     emit playbackTimeChanged();
-    emit syncChanged();
-    emit syncCandidateChanged();
+    emit m_syncController.changed();
+    emit m_syncController.candidateChanged();
     emit sourceLoadStateChanged();
     emit liveValuesChanged();
 }
@@ -217,8 +211,8 @@ QJsonObject AppController::withEditorState(QJsonObject project, const QString &d
     }
     project.insert(QStringLiteral("sources"), sources);
     QJsonObject sync = project.value("sync").toObject();
-    sync.insert("offset", m_sync.offset);
-    sync.insert("timeScale", m_sync.timeScale);
+    sync.insert("offset", m_syncController.offset());
+    sync.insert("timeScale", m_syncController.timeScale());
     project.insert("sync", sync);
     QJsonObject scene = project.value("scene").toObject();
     scene.insert("widgets", m_widgetModel.toJson());
