@@ -70,7 +70,8 @@ class AppController final : public QObject, private DocumentHost {
     Q_PROPERTY(QVariantMap exportMetrics READ exportMetrics NOTIFY exportChanged)
     Q_PROPERTY(QVariantMap exportProgressInfo READ exportProgressInfo NOTIFY exportChanged)
     Q_PROPERTY(bool exportProgressVisible READ exportProgressVisible NOTIFY exportChanged)
-    Q_PROPERTY(QString exportDiagnosticLog READ exportDiagnosticLog NOTIFY exportChanged)
+    Q_PROPERTY(QString exportDiagnosticLog READ exportDiagnosticLog NOTIFY exportDiagnosticLogChanged)
+    Q_PROPERTY(qint64 exportDiagnosticDroppedCharacters READ exportDiagnosticDroppedCharacters NOTIFY exportDiagnosticLogChanged)
     Q_PROPERTY(QString fixedFontFamily READ fixedFontFamily CONSTANT)
     Q_PROPERTY(QVariantMap syncCandidate READ syncCandidate NOTIFY syncCandidateChanged)
     Q_PROPERTY(QVariant speed READ speed NOTIFY liveValuesChanged)
@@ -153,6 +154,7 @@ public:
     [[nodiscard]] QVariantMap exportProgressInfo() const;
     [[nodiscard]] bool exportProgressVisible() const;
     [[nodiscard]] QString exportDiagnosticLog() const;
+    [[nodiscard]] qint64 exportDiagnosticDroppedCharacters() const { return m_exportDiagnosticLog.droppedCharacters(); }
     [[nodiscard]] QString fixedFontFamily() const;
     [[nodiscard]] QVariantMap syncCandidate() const;
     [[nodiscard]] QVariant speed() const;
@@ -290,6 +292,7 @@ signals:
     void syncChanged();
     void syncingChanged();
     void exportChanged();
+    void exportDiagnosticLogChanged();
     void syncCandidateChanged();
     void liveValuesChanged();
     void documentStateChanged();
@@ -482,6 +485,9 @@ private:
     QVariantMap m_exportMetrics;
     QVariantMap m_exportProgressInfo;
     BoundedDiagnosticLog m_exportDiagnosticLog{1500};
+    // Coalesces exportDiagnosticLogChanged: a busy export logs faster than the
+    // Very verbose view should re-lay out its text.
+    QTimer m_exportDiagnosticNotifier;
     std::unique_ptr<PersistentExportLog> m_persistentExportLog;
     bool m_exportProgressVisible = false;
     bool m_quitAfterExport = false;

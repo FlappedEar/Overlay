@@ -41,9 +41,13 @@ public:
     [[nodiscard]] QString text() const;
     [[nodiscard]] qsizetype size() const;
     [[nodiscard]] qsizetype maximumEntries() const;
+    // Characters of text() (entries and their line breaks) removed from the head since
+    // the last clear(); a view uses it to keep the same history in place while the log trims.
+    [[nodiscard]] qint64 droppedCharacters() const { return m_droppedCharacters; }
 
 private:
     qsizetype m_maximumEntries = 1500;
+    qint64 m_droppedCharacters = 0;
     bool m_omissionMarkerNeeded = false;
     QStringList m_entries;
 };

@@ -1490,11 +1490,13 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 FeCheckBox {
                     id: exportDetails
+                    objectName: "exportDetails"
                     text: qsTr("Details")
                     checked: false
                 }
                 FeCheckBox {
                     id: exportVeryVerbose
+                    objectName: "exportVeryVerbose"
                     visible: exportDetails.checked || appController.exportState === "failed"
                         || appController.exportState === "validationWarning"
                     text: qsTr("Very verbose")
@@ -1591,6 +1593,7 @@ ApplicationWindow {
             }
             ScrollView {
                 id: verboseScroll
+                objectName: "verboseExportScroll"
                 visible: exportVeryVerbose.visible && exportVeryVerbose.checked
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -1616,6 +1619,7 @@ ApplicationWindow {
                 }
                 TextArea {
                     id: verboseText
+                    objectName: "verboseExportLog"
                     width: verboseScroll.availableWidth
                     property bool followTail: true
                     property bool programmaticScroll: false
@@ -1635,10 +1639,26 @@ ApplicationWindow {
                             programmaticScroll = false;
                         });
                     }
-                    function updateLog(nextText) {
+                    // Characters the bounded log had trimmed from its head when this view
+                    // last took its text; the difference is the history that scrolled away.
+                    property real shownDroppedCharacters: 0
+                    function updateLog(nextText, droppedCharacters) {
                         const wasFollowing = followTail;
                         const previousY = verboseScroll.contentItem.contentY;
-                        const previousCursor = cursorPosition;
+                        const previousSelection = [selectionStart, selectionEnd];
+                        // Height of the text the log trimmed since the last update, measured in
+                        // the old text, where the first entry follows the omission marker line.
+                        let trimmedHeight = 0;
+                        const newlyDropped = droppedCharacters - shownDroppedCharacters;
+                        if (!wasFollowing && newlyDropped > 0 && length > 0) {
+                            const start = shownDroppedCharacters > 0 ? text.indexOf("\n") + 1 : 0;
+                            trimmedHeight = positionToRectangle(Math.min(start + newlyDropped, length)).y
+                                - positionToRectangle(start).y;
+                            // The marker line appears at the top once trimming starts.
+                            if (shownDroppedCharacters === 0)
+                                trimmedHeight -= positionToRectangle(0).height;
+                        }
+                        shownDroppedCharacters = droppedCharacters;
                         programmaticScroll = true;
                         text = nextText;
                         Qt.callLater(function() {
@@ -1647,20 +1667,39 @@ ApplicationWindow {
                                 verboseBar.position = Math.max(0, 1 - verboseBar.size);
                             } else {
                                 // Keep the same absolute historical content in view as the
-                                // diagnostic document grows; do not preserve a percentage.
-                                verboseScroll.contentItem.contentY = Math.max(0, Math.min(
-                                    previousY,
+                                // diagnostic document grows or trims; do not preserve a percentage.
+                                const targetY = Math.max(0, Math.min(
+                                    previousY - trimmedHeight,
                                     Math.max(0, verboseScroll.contentItem.contentHeight - verboseScroll.contentItem.height)));
-                                cursorPosition = Math.min(previousCursor, length);
+                                // The text area scrolls its cursor into view, so the cursor goes
+                                // inside the restored view: on a kept selection (moved with its
+                                // text), or else on the first visible line.
+                                const shift = Math.max(0, newlyDropped);
+                                if (previousSelection[1] > previousSelection[0]
+                                        && previousSelection[0] - shift >= 0)
+                                    select(previousSelection[0] - shift, previousSelection[1] - shift);
+                                else
+                                    cursorPosition = positionAt(1, targetY + 1);
+                                verboseScroll.contentItem.contentY = targetY;
                             }
                             programmaticScroll = false;
                         });
                     }
-                    Component.onCompleted: updateLog(appController.exportDiagnosticLog)
+                    function refreshLog() {
+                        if (verboseScroll.visible)
+                            updateLog(appController.exportDiagnosticLog, appController.exportDiagnosticDroppedCharacters);
+                    }
+                    Component.onCompleted: refreshLog()
                     Connections {
                         target: appController
                         function onExportDiagnosticLogChanged() {
-                            verboseText.updateLog(appController.exportDiagnosticLog);
+                            verboseText.refreshLog();
+                        }
+                    }
+                    Connections {
+                        target: verboseScroll
+                        function onVisibleChanged() {
+                            verboseText.refreshLog();
                         }
                     }
                     Keys.onPressed: function(event) {

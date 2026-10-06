@@ -62,7 +62,7 @@
 <ul>
   <li><strong>Cancel</strong> stops the export and removes its temporary files. The chosen output file is not written.</li>
   <li><strong>Details</strong> shows a technical report (stages, timings, frame counts, free space, encoder). It opens automatically when an export fails or ends with a warning.</li>
-  <li><strong>Very verbose</strong> shows the live FFmpeg log. Scrolling up stops it from following new lines; <strong>Jump to latest</strong> resumes following. <strong>Copy all</strong> copies the whole log.</li>
+  <li><strong>Very verbose</strong> shows the live FFmpeg log. It refreshes about five times a second. Scrolling up stops it from following new lines, and the lines you are reading stay in place even when the oldest entries are dropped (the view keeps the latest 1,500 entries); <strong>Jump to latest</strong> resumes following. <strong>Copy all</strong> copies the log as shown; the export log file keeps everything.</li>
 </ul>
 <figure>
   <img src="assets/screens/export-progress.png" alt="Export progress window while the overlay is rendered" width="1440" height="860" loading="lazy">
