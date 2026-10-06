@@ -400,6 +400,8 @@ QVariantMap TelemetryRenderContext::tyreValues() const
     return result;
 }
 
+bool TelemetryRenderContext::tyreChannelsMissing() const { return m_session && !m_tyreChannels.hasAny(); }
+
 QVariant TelemetryRenderContext::telemetryTime() const
 {
     const auto time = videoToTelemetryTime(m_time, m_sync);

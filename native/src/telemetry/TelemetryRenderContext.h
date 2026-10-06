@@ -21,6 +21,7 @@ class TelemetryRenderContext final : public QObject {
     Q_PROPERTY(quint64 trackRevision READ trackRevision NOTIFY trackGeometryChanged)
     Q_PROPERTY(QVariantMap currentTrackPoint READ currentTrackPoint NOTIFY timeChanged)
     Q_PROPERTY(QVariantMap lapTiming READ lapTiming NOTIFY timeChanged)
+    Q_PROPERTY(bool tyreChannelsMissing READ tyreChannelsMissing NOTIFY sourceChanged)
 
 public:
     explicit TelemetryRenderContext(QObject *parent = nullptr);
@@ -57,6 +58,9 @@ public:
     // when recorded and valid at that time; `available` is false when the
     // recording has no tyre channels at all.
     Q_INVOKABLE QVariantMap tyreValues() const;
+    // A recording is loaded and none of its channels is a tyre temperature
+    // or pressure, so the tyres widget can only show dashes.
+    [[nodiscard]] bool tyreChannelsMissing() const;
     // KAN-149: lap times for the tiles, rounded before minutes are split.
     Q_INVOKABLE QString formatLapTime(double seconds, int decimals) const { return FlappedEar::formatLapTime(seconds, decimals); }
 

@@ -657,6 +657,14 @@ Rectangle {
                                 text: qsTr("Per corner from the recording's tyre channels. Temperature in °C; pressure converted to the unit below. A dash means no data at that moment.")
                                 color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium
                             }
+                            FeLabel {
+                                objectName: "tyresNoChannelsNotice"
+                                visible: appController.renderContext.tyreChannelsMissing
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: qsTr("This recording has no tyre channels, so every corner shows a dash. Tyres needs per-corner tyre temperature or pressure channels, such as tyre_temp_fl or tyre_pressure_rr from a TPMS or CAN logger.")
+                                color: Theme.warning; font.pixelSize: Theme.labelMedium
+                            }
                             RowLayout {
                                 FeCheckBox { text: qsTr("Label"); checked: root.settings.showLabel ?? true; onToggled: root.setSetting("showLabel", checked) }
                                 FeCheckBox { text: qsTr("Temperature"); checked: root.settings.showTemperature ?? true; onToggled: root.setSetting("showTemperature", checked) }

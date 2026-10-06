@@ -202,6 +202,26 @@ void WidgetTests::showsTyreTemperatureAndPressurePerCorner()
     QVERIFY(QMetaObject::invokeMethod(unit, "activated", Q_ARG(int, 1)));
     QTRY_COMPARE(model->widget(tyres).value("settings").toMap().value("pressureUnit").toString(), QString("psi"));
     QTRY_COMPARE(cornerText("RR", "tyrePressure"), QString("33.4 psi"));
+
+    // KAN-203: a recording without tyre channels says so in the inspector, so the
+    // dashes are not mistaken for a broken binding.
+    const auto notice = [&] {
+        return findVisual(findVisual, window->contentItem(),
+            [](QQuickItem *item) { return item->objectName() == "tyresNoChannelsNotice"; });
+    };
+    QVERIFY(notice());
+    QVERIFY(!controller.renderContext()->tyreChannelsMissing());
+    QVERIFY(!notice()->isVisible());
+    QByteArray plain = "[header]\ncoordinate units = degrees\n[column names]\ntime latitude longitude "
+                       "coolant_temp-obd\n[data]\n";
+    for (int second = 0; second <= 10; ++second)
+        plain += QByteArray::number(second) + " 52.0001 21.0002 +083.000\n";
+    const QString plainPath = directory.filePath(QStringLiteral("no-tyres.vbo"));
+    QVERIFY(writeBytes(plainPath, plain));
+    controller.loadVbo(QUrl::fromLocalFile(plainPath));
+    QTRY_VERIFY(controller.renderContext()->tyreChannelsMissing());
+    QTRY_VERIFY(notice()->isVisible());
+    QTRY_COMPARE(cornerText("RR", "tyreTemperature"), QString("—"));
     for (const auto &arguments : warnings)
         for (const auto &error : arguments.first().value<QList<QQmlError>>())
             QVERIFY2(error.toString().contains("Cannot open: qrc:"), qPrintable(error.toString()));
