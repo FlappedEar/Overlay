@@ -8,6 +8,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <mutex>
 #include <optional>
 
 namespace FlappedEar {
@@ -19,18 +20,43 @@ enum class InterpolationMode { Nearest, Previous, Linear };
 // making a real problem indistinguishable from an ordinary telemetry gap.
 enum class SampledSegmentsStatus { Ok, InvalidRange, ChannelMissing, ChannelMalformed };
 
+// The cadence statistic behind the gap rule (KAN-157), cached with its channel.
+// It is safe to read from several threads at once, and it is recomputed when the
+// channel's timestamp buffer, length or end points change (KAN-209), so a session
+// edited after a lookup, or shared before it was warmed, never reads a stale or
+// half-written value.
+class ChannelCadenceCache {
+public:
+    ChannelCadenceCache() = default;
+    ChannelCadenceCache(const ChannelCadenceCache &other);
+    ChannelCadenceCache &operator=(const ChannelCadenceCache &other);
+
+    // The median positive sample interval, 0 when there is none.
+    [[nodiscard]] double baseInterval(const QVector<double> &timestamps) const;
+    [[nodiscard]] bool isCurrent(const QVector<double> &timestamps) const;
+    [[nodiscard]] qsizetype computations() const;
+
+private:
+    struct Entry {
+        bool valid = false;
+        const double *data = nullptr;
+        qsizetype size = 0;
+        quint64 firstBits = 0;
+        quint64 lastBits = 0;
+        double interval = 0.0;
+        qsizetype computations = 0;
+    };
+    [[nodiscard]] static bool matches(const Entry &entry, const QVector<double> &timestamps);
+    mutable std::mutex m_mutex;
+    mutable Entry m_entry;
+};
+
 struct TelemetryChannel {
     QString name;
     QString unit;
     QVector<double> timestamps;
     QVector<float> values;
-
-    // Telemetry sessions are immutable after source loading. Cache the cadence
-    // statistic with its channel rather than recomputing a full timestamp
-    // median for every presentation lookup.
-    mutable bool cadenceStatisticsValid = false;
-    mutable double cachedBaseIntervalSeconds = 0.0;
-    mutable qsizetype cadenceStatisticComputationCount = 0;
+    ChannelCadenceCache cadence {};
 };
 
 struct SyncTransform {
@@ -89,11 +115,11 @@ void preferAcceleratorPedalForThrottle(TelemetrySession &session);
 [[nodiscard]] std::optional<double> telemetryValueAt(
     const TelemetryChannel &channel, double time, InterpolationMode mode = InterpolationMode::Linear);
 
-// Every channel's lazily-computed cadence statistics are non-atomic mutable
-// state. Call this once, single-threaded, before a TelemetrySession is
-// published as a shared const object; otherwise concurrent const readers
-// (GUI render vs. a background worker) race on the first access to any
-// not-yet-warmed channel.
+// The median positive sample interval of a channel (cached, thread-safe).
+[[nodiscard]] double telemetryBaseInterval(const TelemetryChannel &channel);
+
+// Computes every channel's cadence statistic up front, so the first lookups on
+// a newly loaded session do not pay for it. Not required for thread safety.
 void freezeCachedStatistics(const TelemetrySession &session, const CancellationCheck &cancelled = {});
 
 } // namespace FlappedEar

@@ -27,7 +27,10 @@
 #include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QtTest>
+
 #include <atomic>
+#include <thread>
+#include <vector>
 #include <cfloat>
 #include <cmath>
 #include <limits>
@@ -84,6 +87,7 @@ private slots:
     void rejectsOverflowingTelemetryChartRanges();
     void cancelsVboParsingDeterministically();
     void cachesTelemetryChannelCadence();
+    void readsAnUnwarmedSessionFromManyThreads();
     void enforcesVboResourceLimits();
     void boundsVboHeaderAndDecodedValues();
     void normalizesVboHeaderEdgeCases();
@@ -664,12 +668,12 @@ void TelemetryCoreTests::cachesTelemetryChannelCadence()
     regular.timestamps = {0.0, 0.1, 0.2, 0.3, 0.4};
     QCOMPARE(telemetryGapThreshold(regular, 0.0), 0.3);
     QCOMPARE(telemetryGapThreshold(regular, 0.75), 0.75);
-    QCOMPARE(regular.cadenceStatisticComputationCount, qsizetype(1));
+    QCOMPARE(regular.cadence.computations(), qsizetype(1));
 
     TelemetryChannel sparse;
     sparse.timestamps = {0.0, 0.5, 2.0, 3.5};
     QCOMPARE(telemetryGapThreshold(sparse, 0.0), 4.5);
-    QCOMPARE(sparse.cadenceStatisticComputationCount, qsizetype(1));
+    QCOMPARE(sparse.cadence.computations(), qsizetype(1));
 
     TelemetryChannel guarded;
     guarded.timestamps = {0.0, 0.2, 0.2, std::numeric_limits<double>::quiet_NaN(), 0.8};
@@ -677,7 +681,49 @@ void TelemetryCoreTests::cachesTelemetryChannelCadence()
     for (int lookup = 0; lookup < 10'000; ++lookup) {
         QCOMPARE(telemetryGapThreshold(guarded, 0.4), 0.6);
     }
-    QCOMPARE(guarded.cadenceStatisticComputationCount, qsizetype(1));
+    QCOMPARE(guarded.cadence.computations(), qsizetype(1));
+
+    // KAN-209: editing a channel after a lookup recomputes the statistic
+    // instead of keeping the old cadence.
+    regular.timestamps = {0.0, 1.0, 2.0, 3.0};
+    QCOMPARE(telemetryGapThreshold(regular, 0.0), 3.0);
+    regular.timestamps.append(3.5);
+    QCOMPARE(telemetryGapThreshold(regular, 0.0), 3.0);
+    regular.timestamps.last() = 13.0;
+    QCOMPARE(telemetryGapThreshold(regular, 0.0), 3.0);
+    regular.timestamps = {0.0, 0.1, 0.2};
+    QCOMPARE(telemetryGapThreshold(regular, 0.0), 0.3);
+    QCOMPARE(regular.cadence.computations(), qsizetype(5));
+    TelemetryChannel copy = regular;
+    QVERIFY(copy.cadence.isCurrent(copy.timestamps));
+    copy.timestamps[2] = 0.4;
+    QVERIFY(!copy.cadence.isCurrent(copy.timestamps));
+    QVERIFY(regular.cadence.isCurrent(regular.timestamps));
+}
+
+void TelemetryCoreTests::readsAnUnwarmedSessionFromManyThreads()
+{
+    // KAN-209: a session straight from the parser, never warmed, read at once
+    // from several threads. Every reader sees the same gap rule.
+    QString text = QStringLiteral("[column names]\ntime speed\n[data]\n");
+    for (int row = 0; row < 2000; ++row)
+        text += QStringLiteral("%1 %2\n").arg(row / 10.0 + (row >= 1000 ? 5.0 : 0.0), 0, 'f', 1).arg(row);
+    const TelemetrySession session = VboParser::parse(text);
+    QCOMPARE(session.channels.value("speed").cadence.computations(), qsizetype(0));
+    const TelemetryChannel &speed = *session.channels.constFind(QStringLiteral("speed"));
+    std::atomic_int wrong{0};
+    std::vector<std::thread> readers;
+    for (int reader = 0; reader < 8; ++reader) {
+        readers.emplace_back([&session, &wrong] {
+            for (int lookup = 0; lookup < 2000; ++lookup) {
+                if (session.valueAt("speed", 50.0).value_or(-1) != 500.0) ++wrong;
+                if (session.valueAt("speed", 102.0).has_value()) ++wrong; // in the 5 s gap
+            }
+        });
+    }
+    for (auto &reader : readers) reader.join();
+    QCOMPARE(wrong.load(), 0);
+    QCOMPARE(speed.cadence.computations(), qsizetype(1));
 }
 
 void TelemetryCoreTests::enforcesVboResourceLimits()

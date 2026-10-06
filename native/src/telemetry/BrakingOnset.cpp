@@ -126,7 +126,7 @@ BrakingOnsetDetection detectBrakingOnsets(const TelemetrySession &session, const
                 started.tolerance = time - previousTime;
             } else {
                 started.onset = time;
-                started.tolerance = channel.cachedBaseIntervalSeconds;
+                started.tolerance = telemetryBaseInterval(channel);
                 started.reasons.append(followsGap ? brakingFollowsGap : brakingAlreadyActive);
             }
             started.peak = magnitude;
