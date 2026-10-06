@@ -39,6 +39,8 @@ struct LapDetectionDiagnostics {
     qsizetype rejectedSlowClusters = 0;
     qsizetype rejectedParallelClusters = 0;
     qsizetype rejectedLongClusters = 0;
+    // Passes that came near the line without crossing it (KAN-205).
+    qsizetype rejectedNotCrossingClusters = 0;
     qsizetype rejectedOppositeDirectionClusters = 0;
     qsizetype invalidLapDurations = 0;
 };
@@ -106,6 +108,10 @@ void recomputeLapRanking(LapSession &session);
 [[nodiscard]] QString timingGateRevision(
     const TelemetrySession &session, const CancellationCheck &cancelled = {});
 
+// A pass is accepted only when it really crosses the gate line: it starts
+// strictly on one side, ends on the line or the other side, and reaches the line
+// within the gate span widened by innerCorridorMeters at each end. Coming close
+// and leaving on the same side is not a pass (KAN-205, Telemetry FET-198).
 [[nodiscard]] LapSession detectLaps(
     const TelemetrySession &session,
     const TimingGate &startGate,
