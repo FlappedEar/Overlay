@@ -102,6 +102,10 @@ double correlation(
         : -1.0;
 }
 
+// A nearby offset counts as a competing peak only when the correlation dips
+// at least this much between it and the best offset.
+constexpr double kCompetingPeakDip = 0.1;
+
 SyncCandidate calculate(
     const TelemetryChannel &video,
     const TelemetryChannel &telemetry,
@@ -161,18 +165,37 @@ SyncCandidate calculate(
     if (anyLongOverlap)
         results.erase(std::remove_if(results.begin(), results.end(),
             [minimumSamples](const Result &item) { return item.samples < minimumSamples; }), results.end());
+    QVector<Result> byOffset = results;
+    std::sort(byOffset.begin(), byOffset.end(), [](const Result &left, const Result &right) {
+        return left.offset < right.offset;
+    });
     // The global search ranks by significance; the local refinement, where
     // the overlap is nearly constant, by correlation alone.
     std::stable_sort(results.begin(), results.end(), [rankBySignificance](const Result &left, const Result &right) {
         return rankBySignificance ? left.significance > right.significance : left.score > right.score;
     });
     const Result best = results.constFirst();
-    // The strongest competing offset, at least 5 s away, over the whole range.
+    // The strongest competing offset over the whole range: any offset at
+    // least 5 s away, or a nearer one that is a separate peak, with the
+    // score dipping between it and the best by kCompetingPeakDip (KAN-214).
+    // The best peak's own shoulders are not competitors.
     double second = -1.0;
     for (const Result &item : results) {
         if (std::abs(item.offset - best.offset) >= 5.0) {
             second = item.score;
             break;
+        }
+    }
+    const auto bestPosition = std::find_if(byOffset.cbegin(), byOffset.cend(), [&best](const Result &item) {
+        return item.offset == best.offset;
+    }) - byOffset.cbegin();
+    for (const int direction : {-1, 1}) {
+        double lowest = best.score;
+        for (qsizetype index = bestPosition + direction; index >= 0 && index < byOffset.size(); index += direction) {
+            const Result &item = byOffset[index];
+            if (std::abs(item.offset - best.offset) >= 5.0) break;
+            lowest = std::min(lowest, item.score);
+            if (item.score - lowest >= kCompetingPeakDip) second = std::max(second, item.score);
         }
     }
     const double uniqueness = std::clamp((best.score - second) / 0.25, 0.0, 1.0);

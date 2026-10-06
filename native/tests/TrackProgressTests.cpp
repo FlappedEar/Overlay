@@ -160,6 +160,8 @@ private slots:
     void outlierAndGapBreakSegmentsWithoutBridging();
     void deltaSeriesOnlyCoversSharedValidRange();
     void anchorsProgressZeroWhereTheGateCrossesTheAxis();
+    void rejectsAStartGateThatMissesTheTrack();
+    void anchorsAtTheTimedCrossingWhenTheGateCrossesTwice();
     void unwrapsAFirstFixJustBeforeTheGate();
     void obliqueOffLineGateKeepsEveryLapsSectors();
     void deltaAtTheFinishEqualsTheLapTimeDifference();
@@ -360,6 +362,67 @@ void TrackProgressTests::anchorsProgressZeroWhereTheGateCrossesTheAxis()
         fixture.axis.points.first().x() - crossing.x(), fixture.axis.points.first().y() - crossing.y());
     QVERIFY2(distance < 1.0, qPrintable(QString("progress 0 is %1 m from the crossing").arg(distance)));
     QVERIFY(std::abs(fixture.axis.spacingMeters - fixture.axis.lengthMeters / fixture.axis.points.size()) < 1e-6);
+}
+
+namespace {
+// A 200 x 50 m rectangle driven anticlockwise, starting at (102, 0) on the
+// bottom straight, points every 2 m.
+LapTrace rectangleLap()
+{
+    QVector<QPointF> corners{{0, 0}, {200, 0}, {200, 50}, {0, 50}, {0, 0}};
+    QVector<QPointF> loop;
+    for (qsizetype c = 1; c < corners.size(); ++c) {
+        const QPointF from = corners[c - 1], to = corners[c];
+        const int steps = static_cast<int>(std::hypot(to.x() - from.x(), to.y() - from.y()) / 2.0);
+        for (int i = 0; i < steps; ++i) loop.append(from + (to - from) * (double(i) / steps));
+    }
+    const qsizetype start = std::find(loop.cbegin(), loop.cend(), QPointF(102, 0)) - loop.cbegin();
+    LapTrace trace;
+    for (qsizetype i = 0; i < loop.size(); ++i) {
+        const QPointF &point = loop[(start + i) % loop.size()];
+        trace.points.append({double(i), point.x(), point.y()});
+    }
+    return trace;
+}
+
+TimingGate gateBetween(const QPointF &a, const QPointF &b)
+{
+    return {TimingGateType::Start, "start",
+            {degreesForMeters(a.y()), degreesForMeters(a.x())},
+            {degreesForMeters(b.y()), degreesForMeters(b.x())}, {}};
+}
+} // namespace
+
+void TrackProgressTests::rejectsAStartGateThatMissesTheTrack()
+{
+    // KAN-212: a 10 m line across x = 100 below the bottom straight, its near
+    // end 5, 25 or 100 m from the path.
+    const GeoCoordinate origin{0.0, 0.0};
+    const auto axisFor = [&](const double gap) {
+        return buildProgressAxis(rectangleLap(), origin, gateBetween({100, -gap - 10}, {100, -gap}));
+    };
+    const auto near = axisFor(5);
+    QVERIFY(near.valid);
+    QVERIFY(near.problem.isEmpty());
+    QVERIFY(std::hypot(near.points.first().x() - 100.0, near.points.first().y()) < 3.0);
+    for (const double gap : {25.0, 100.0}) {
+        const auto far = axisFor(gap);
+        QVERIFY2(!far.valid, qPrintable(QString::number(gap)));
+        QVERIFY2(far.problem.contains(QStringLiteral("%1 m away").arg(gap)), qPrintable(far.problem));
+    }
+    // A line across a pit lane 30 m below the racing surface, not the track.
+    QVERIFY(!buildProgressAxis(rectangleLap(), origin, gateBetween({100, -35}, {100, -25})).valid);
+}
+
+void TrackProgressTests::anchorsAtTheTimedCrossingWhenTheGateCrossesTwice()
+{
+    // KAN-212: a long line over both straights. Its midpoint (100, 30) is
+    // nearer the top straight, but the lap was timed on the bottom one, where
+    // it starts.
+    const auto axis = buildProgressAxis(rectangleLap(), GeoCoordinate{0.0, 0.0}, gateBetween({100, -10}, {100, 70}));
+    QVERIFY(axis.valid);
+    QVERIFY2(std::hypot(axis.points.first().x() - 100.0, axis.points.first().y()) < 0.5,
+             qPrintable(QString("%1, %2").arg(axis.points.first().x()).arg(axis.points.first().y())));
 }
 
 void TrackProgressTests::unwrapsAFirstFixJustBeforeTheGate()
