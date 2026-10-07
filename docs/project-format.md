@@ -79,6 +79,37 @@ A video made of GoPro chapter files keeps its first chapter as the ordinary `vid
 
 **Unchanged documents.** A document without `chapters` is an ordinary single video, unchanged.
 
+### Additional videos (KAN-131)
+
+A run can hold up to three videos besides its main one, such as a helmet camera without GPS. They are stored apart from `video`, so a reader that knows only one video still opens the main recording:
+
+```json
+"sources": {
+  "video": { "relativePath": "media/gopro.mp4" },
+  "additionalVideos": [
+    {
+      "id": "helmet",
+      "label": "Helmet camera",
+      "relativePath": "media/helmet.mp4",
+      "fingerprint": { "kind": "video-v1" },
+      "sync": { "offset": -12.5, "timeScale": 1.0 }
+    }
+  ]
+},
+"videoLayout": { "mode": "sideBySide" }
+```
+
+- Each entry is a source reference with the same path, `fingerprint` and `contentSha256` rules as `video`, plus:
+    * a unique, nonblank `id` of at most 64 characters;
+    * an optional `label` of at most 128 characters;
+    * its own `sync`, with the meaning of the run's: telemetry time = video time × `timeScale` + `offset`, both finite and `timeScale` above 0.
+- Chapters are not supported on an additional video.
+- `videoLayout.mode` says how export places the additional videos beside the main one: `pictureInPicture` (the default when absent) or `sideBySide`.
+- In a version 3 event both belong to the run (`run.sources.additionalVideos`, `run.videoLayout`). The editor's version 2 projection carries them as `sources.additionalVideos` and a root `videoLayout`.
+- A malformed list, more than three entries, a repeated `id`, a missing path or sync, or an unknown layout mode makes the document invalid in both versions.
+- Unknown keys in an entry, in its `sync` and in `videoLayout` survive. Save As rebases every entry, in inactive runs too, and export never overwrites one.
+- Overlays reads and keeps them; adding, syncing, previewing and exporting them follow in later KAN-131 steps.
+
 ## Source fingerprints
 
 Fingerprints are deterministic identity metadata, not cryptographic proof of complete-file identity. Both source types store file size and a SHA-256 digest over at most three fixed 64 KiB regions: head, middle, and tail. Video additionally stores probed duration in microseconds, dimensions, exact rational frame rate, and codec. Newly modeled profile, pixel-format, bit-depth, orientation, bitrate, and color fields deliberately do not participate in the existing `video-v1` fingerprint, preserving compatibility with saved projects. Telemetry additionally stores parsed duration, sample count, and sorted channel name/unit/sample-count metadata.

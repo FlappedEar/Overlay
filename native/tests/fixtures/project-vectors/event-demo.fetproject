@@ -42,11 +42,26 @@
                 "relativePath": "basic.vbo"
               }
             }
+          ],
+          "additionalVideos": [
+            {
+              "id": "helmet",
+              "label": "Helmet camera",
+              "relativePath": "helmet.mp4",
+              "sync": {
+                "offset": -2.5,
+                "timeScale": 1.0002
+              },
+              "futureKey": "kept by both apps"
+            }
           ]
         },
         "sync": {
           "offset": 0,
           "timeScale": 1
+        },
+        "videoLayout": {
+          "mode": "sideBySide"
         }
       }
     ]

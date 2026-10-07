@@ -33,6 +33,7 @@ private slots:
     void initTestCase();
     void cleanupTestCase();
     void persistsEventSelectionAndRunLocalSync();
+    void keepsAdditionalVideosThroughRunSwitchAndSaveAs();
     void recoversEventAndRelinksOnlyActiveSource();
     void rejectsInvalidEventWithoutReplacingDocument();
     void rejectsLateSourceResultsAfterRunSelection();
@@ -203,6 +204,58 @@ void SourceTests::persistsEventSelectionAndRunLocalSync()
     QCOMPARE(controller.lapSummaries().size(), 3);
     QCOMPARE(controller.videoLoadState(), QStringLiteral("missing"));
     QCOMPARE(controller.lastSavedRevision(), revision);
+}
+
+void SourceTests::keepsAdditionalVideosThroughRunSwitchAndSaveAs()
+{
+    // KAN-131: a run's additional videos and layout survive switching runs
+    // and Save As, with their references rebased and their sync unchanged.
+    namespace Fixture = EventProjectFixture;
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    QVERIFY(writeBytes(directory.filePath("run-a.vbo"), Fixture::lapsVbo()));
+    QVERIFY(QFile::copy(QStringLiteral(TEST_FIXTURE_PATH), directory.filePath("run-b.vbo")));
+    auto project = Fixture::project();
+    auto runs = Fixture::runs(project);
+    auto runA = runs[0].toObject();
+    auto sources = runA.value("sources").toObject();
+    sources.insert("additionalVideos", QJsonArray{QJsonObject{{"id", "helmet"}, {"label", "Helmet"},
+        {"relativePath", "helmet.mp4"}, {"sync", QJsonObject{{"offset", -4.5}, {"timeScale", 1.0005}}}}});
+    runA.insert("sources", sources);
+    runA.insert("videoLayout", QJsonObject{{"mode", "sideBySide"}});
+    runs[0] = runA;
+    Fixture::setRuns(project, runs);
+    const QString path = directory.filePath("event.fetproject");
+    QVERIFY(writeBytes(path, QJsonDocument(project).toJson()));
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.requestOpenProject(QUrl::fromLocalFile(path));
+    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+    QCOMPARE(controller.m_additionalVideos.size(), 1);
+    QCOMPARE(controller.m_additionalVideos[0].sync.offset, -4.5);
+    QCOMPARE(controller.m_videoLayout, VideoLayoutMode::SideBySide);
+    QVERIFY(controller.selectEventRun("run-b"));
+    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+    QVERIFY(controller.m_additionalVideos.isEmpty());
+    QCOMPARE(controller.m_videoLayout, VideoLayoutMode::PictureInPicture);
+    QVERIFY(controller.selectEventRun("run-a"));
+    QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
+    QCOMPARE(controller.m_additionalVideos.size(), 1);
+    QVERIFY(QDir().mkpath(directory.filePath("saved")));
+    const QString savedPath = directory.filePath("saved/event.fetproject");
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
+    const QJsonObject saved = QJsonDocument::fromJson(readBytes(savedPath)).object();
+    QVERIFY(!saved.contains("videoLayout"));
+    const auto savedRuns = Fixture::runs(saved);
+    const auto helmet = savedRuns[0].toObject().value("sources").toObject().value("additionalVideos").toArray()[0].toObject();
+    QCOMPARE(helmet.value("relativePath").toString(), QStringLiteral("../helmet.mp4"));
+    QCOMPARE(helmet.value("label").toString(), QStringLiteral("Helmet"));
+    QCOMPARE(helmet.value("sync").toObject().value("offset").toDouble(), -4.5);
+    QCOMPARE(helmet.value("sync").toObject().value("timeScale").toDouble(), 1.0005);
+    QCOMPARE(savedRuns[0].toObject().value("videoLayout").toObject().value("mode").toString(), QStringLiteral("sideBySide"));
+    QVERIFY(!savedRuns[1].toObject().value("sources").toObject().contains("additionalVideos"));
+    QVERIFY(!savedRuns[1].toObject().contains("videoLayout"));
+    QCOMPARE(controller.m_additionalVideos[0].reference.relativePath, QStringLiteral("../helmet.mp4"));
 }
 
 void SourceTests::recoversEventAndRelinksOnlyActiveSource()

@@ -1,6 +1,7 @@
 #include "EventProjectFixture.h"
 #include "project/EventProjectCodec.h"
 #include "project/ProjectLimits.h"
+#include "project/AdditionalVideos.h"
 #include "project/VideoChapters.h"
 #include "project/ProjectRecoveryStore.h"
 #include "export/ExportOutputTransaction.h"
@@ -34,6 +35,7 @@ private slots:
     void keepsNewerVersionsOfKnownFields();
     void boundsReferenceContentIdentity();
     void boundsAndRebasesVideoChapters();
+    void keepsAdditionalVideosPerRun();
     void persistsTrackConfigurationAndUnknownLegacyState();
     void rejectsInvalidTrackConfigurations_data();
     void rejectsInvalidTrackConfigurations();
@@ -468,6 +470,123 @@ void EventProjectTests::boundsAndRebasesVideoChapters()
     QCOMPARE(chapters[2].toObject().value("durationSeconds").toDouble(), 100.0);
     const auto protectedPaths = EventProjectCodec::referencedPaths(project, oldPath);
     QVERIFY(protectedPaths.contains(QDir(directory.filePath("old")).absoluteFilePath("GX030123.MP4")));
+}
+
+void EventProjectTests::keepsAdditionalVideosPerRun()
+{
+    // KAN-131: a run's additional videos (each with its own sync) and its
+    // video layout are validated in both project versions, projected into
+    // the editor and written back for the active run, rebased on Save As for
+    // an inactive one, kept with unknown keys, and protected from export.
+    const auto helmet = [](const QString &id, const QString &path) {
+        return QJsonObject{{"id", id}, {"label", "Helmet"}, {"relativePath", path},
+            {"fingerprint", QJsonObject{{"kind", "video-v1"}}},
+            {"sync", QJsonObject{{"offset", -12.5}, {"timeScale", 1.0001}}}, {"futureKey", 7}};
+    };
+    const QJsonArray valid{helmet("helmet", "helmet.mp4")};
+    QVERIFY(AdditionalVideosCodec::valid(valid));
+    QVERIFY(AdditionalVideosCodec::valid(QJsonValue(QJsonValue::Undefined)));
+    const auto read = AdditionalVideosCodec::read(valid);
+    QCOMPARE(read.size(), 1);
+    QCOMPARE(read[0].id, QString("helmet"));
+    QCOMPARE(read[0].label, QString("Helmet"));
+    QCOMPARE(read[0].reference.relativePath, QString("helmet.mp4"));
+    QCOMPARE(read[0].sync.offset, -12.5);
+    QCOMPARE(read[0].sync.timeScale, 1.0001);
+    QVERIFY(AdditionalVideosCodec::validLayout(QJsonObject{{"mode", "sideBySide"}}));
+    QCOMPARE(AdditionalVideosCodec::readLayout(QJsonObject{{"mode", "sideBySide"}}), VideoLayoutMode::SideBySide);
+    QCOMPARE(AdditionalVideosCodec::readLayout(QJsonValue(QJsonValue::Undefined)), VideoLayoutMode::PictureInPicture);
+
+    QVector<QJsonValue> bad;
+    QJsonArray four;
+    for (int index = 0; index < 4; ++index) four.append(helmet(QString("v%1").arg(index), "v.mp4"));
+    bad.append(four);
+    bad.append(QJsonArray{helmet("same", "a.mp4"), helmet("same", "b.mp4")});
+    auto noId = helmet("x", "a.mp4"); noId.remove("id"); bad.append(QJsonArray{noId});
+    auto noPath = helmet("x", "a.mp4"); noPath.remove("relativePath"); bad.append(QJsonArray{noPath});
+    bad.append(QJsonArray{helmet("x", "/absolute.mp4")});
+    auto noSync = helmet("x", "a.mp4"); noSync.remove("sync"); bad.append(QJsonArray{noSync});
+    auto zeroScale = helmet("x", "a.mp4"); zeroScale.insert("sync", QJsonObject{{"offset", 0.0}, {"timeScale", 0.0}});
+    bad.append(QJsonArray{zeroScale});
+    auto badLabel = helmet("x", "a.mp4"); badLabel.insert("label", 3); bad.append(QJsonArray{badLabel});
+    bad.append(QJsonArray{7});
+    bad.append(QJsonObject{});
+    for (const auto &value : bad) {
+        QVERIFY(!AdditionalVideosCodec::valid(value));
+        QVERIFY(AdditionalVideosCodec::read(value).isEmpty());
+        auto project = Fixture::project(); auto runs = Fixture::runs(project); auto run = runs[0].toObject();
+        auto sources = run.value("sources").toObject(); sources.insert("additionalVideos", value); run.insert("sources", sources);
+        runs[0] = run; Fixture::setRuns(project, runs);
+        QVERIFY(!ProjectLimits::validateProject(project));
+        auto editor = EventProjectCodec::editorProjection(Fixture::project());
+        auto editorSources = editor.value("sources").toObject(); editorSources.insert("additionalVideos", value); editor.insert("sources", editorSources);
+        QVERIFY(!ProjectLimits::validateProject(editor));
+    }
+    for (const QJsonValue &layout : {QJsonValue(QJsonObject{{"mode", "grid"}}), QJsonValue(QJsonObject{}), QJsonValue("sideBySide")}) {
+        QVERIFY(!AdditionalVideosCodec::validLayout(layout));
+        auto project = Fixture::project(); auto runs = Fixture::runs(project); auto run = runs[0].toObject();
+        run.insert("videoLayout", layout); runs[0] = run; Fixture::setRuns(project, runs);
+        QVERIFY(!ProjectLimits::validateProject(project));
+        auto editor = EventProjectCodec::editorProjection(Fixture::project());
+        editor.insert("videoLayout", layout);
+        QVERIFY(!ProjectLimits::validateProject(editor));
+    }
+
+    // Both runs carry one; the active run's is edited in the editor projection.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QString oldPath = directory.filePath("old/event.fetproject");
+    const QString newPath = directory.filePath("new/event.fetproject");
+    auto project = Fixture::project(); auto runs = Fixture::runs(project);
+    for (int index = 0; index < 2; ++index) {
+        auto run = runs[index].toObject(); auto sources = run.value("sources").toObject();
+        sources.insert("additionalVideos", QJsonArray{helmet("helmet", QString("helmet%1.mp4").arg(index))});
+        run.insert("sources", sources);
+        run.insert("videoLayout", QJsonObject{{"mode", "sideBySide"}, {"futureKey", true}});
+        runs[index] = run;
+    }
+    Fixture::setRuns(project, runs);
+    QString error;
+    QVERIFY2(ProjectLimits::validateProject(project, &error), qPrintable(error));
+    auto editor = EventProjectCodec::editorProjection(project);
+    QCOMPARE(editor.value("sources").toObject().value("additionalVideos").toArray().size(), 1);
+    QCOMPARE(editor.value("videoLayout").toObject().value("mode").toString(), QString("sideBySide"));
+    QVERIFY2(ProjectLimits::validateProject(editor, &error), qPrintable(error));
+    auto editedVideos = AdditionalVideosCodec::read(editor.value("sources").toObject().value("additionalVideos"));
+    editedVideos[0].sync.offset = 3.25;
+    auto editorSources = editor.value("sources").toObject();
+    editorSources.insert("additionalVideos", AdditionalVideosCodec::write(editedVideos, editorSources.value("additionalVideos"),
+        [&](const ProjectSourceReference &reference) { return EventProjectCodec::referenceForSave(reference, oldPath, newPath); }));
+    editor.insert("sources", editorSources);
+    editor.insert("videoLayout", AdditionalVideosCodec::writeLayout(VideoLayoutMode::PictureInPicture, editor.value("videoLayout")));
+    const auto saved = EventProjectCodec::withEditorState(project, editor, oldPath, newPath);
+    QVERIFY2(ProjectLimits::validateProject(saved, &error), qPrintable(error));
+    QVERIFY(!saved.contains("videoLayout"));
+    const auto active = Fixture::runs(saved)[0].toObject();
+    const auto activeVideo = active.value("sources").toObject().value("additionalVideos").toArray()[0].toObject();
+    QCOMPARE(activeVideo.value("sync").toObject().value("offset").toDouble(), 3.25);
+    QCOMPARE(activeVideo.value("relativePath").toString(), QString("../old/helmet0.mp4"));
+    QCOMPARE(activeVideo.value("futureKey").toInt(), 7);
+    QCOMPARE(active.value("videoLayout").toObject().value("mode").toString(), QString("pictureInPicture"));
+    QVERIFY(active.value("videoLayout").toObject().value("futureKey").toBool());
+    const auto inactive = Fixture::runs(saved)[1].toObject();
+    const auto inactiveVideo = inactive.value("sources").toObject().value("additionalVideos").toArray()[0].toObject();
+    QCOMPARE(inactiveVideo.value("relativePath").toString(), QString("../old/helmet1.mp4"));
+    QCOMPARE(inactiveVideo.value("sync").toObject().value("offset").toDouble(), -12.5);
+    QCOMPARE(inactiveVideo.value("futureKey").toInt(), 7);
+    QCOMPARE(inactive.value("videoLayout").toObject().value("mode").toString(), QString("sideBySide"));
+
+    // Removing the active run's additional videos in the editor removes them from the run.
+    auto cleared = EventProjectCodec::editorProjection(project);
+    auto clearedSources = cleared.value("sources").toObject(); clearedSources.remove("additionalVideos");
+    cleared.insert("sources", clearedSources); cleared.remove("videoLayout");
+    const auto clearedSaved = EventProjectCodec::withEditorState(project, cleared, oldPath, oldPath);
+    QVERIFY(!Fixture::runs(clearedSaved)[0].toObject().value("sources").toObject().contains("additionalVideos"));
+    QVERIFY(!Fixture::runs(clearedSaved)[0].toObject().contains("videoLayout"));
+    QVERIFY(Fixture::runs(clearedSaved)[1].toObject().value("sources").toObject().contains("additionalVideos"));
+
+    const auto protectedPaths = EventProjectCodec::referencedPaths(project, oldPath);
+    QVERIFY(protectedPaths.contains(QDir(directory.filePath("old")).absoluteFilePath("helmet0.mp4")));
+    QVERIFY(protectedPaths.contains(QDir(directory.filePath("old")).absoluteFilePath("helmet1.mp4")));
 }
 
 void EventProjectTests::persistsTrackConfigurationAndUnknownLegacyState()
