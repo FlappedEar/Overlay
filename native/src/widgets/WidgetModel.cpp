@@ -547,6 +547,8 @@ QVariant WidgetModel::data(const QModelIndex &index, const int role) const
         return widget.cues;
     case WidgetGroupIdRole:
         return widget.groupId;
+    case WidgetRendererRole:
+        return widgetRendererSource(widget.type, widget.settings.value(QStringLiteral("style")).toString());
     default:
         return {};
     }
@@ -564,6 +566,7 @@ QHash<int, QByteArray> WidgetModel::roleNames() const
         {WidgetSettingsRole, "widgetSettings"},
         {WidgetCuesRole, "widgetCues"},
         {WidgetGroupIdRole, "widgetGroupId"},
+        {WidgetRendererRole, "widgetRenderer"},
     };
 }
 

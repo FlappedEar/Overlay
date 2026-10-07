@@ -29,6 +29,8 @@ Item {
             required property var widgetSettings
             required property var widgetCues
             required property string widgetGroupId
+            // KAN-217: the renderer for the type and style, from its descriptor.
+            required property string widgetRenderer
             property var renderContext: root.renderContext
             property var widgetModel: root.widgetModel
             property real sceneScale: root.sceneScale
@@ -177,38 +179,7 @@ Item {
                 anchors.fill: parent
                 anchors.margins: widgetItem.rendererOwnsPanel ? 0 : widgetItem.pad
                 property var frame: widgetItem
-                readonly property string techSource: {
-                    // KAN-193: the Tech style has its own renderer per type.
-                    switch (widgetItem.widgetType) {
-                    case "speed": return "widgets/tech/TechSpeed.qml";
-                    case "heartRate": return "widgets/tech/TechHeartRate.qml";
-                    case "pedals": return "widgets/tech/TechPedals.qml";
-                    case "f1GForceRadar": return "widgets/tech/TechRadar.qml";
-                    case "gForceMagnitudeBar": return "widgets/tech/TechGForce.qml";
-                    case "lapCurrent": return "widgets/tech/TechLapTime.qml";
-                    case "retroTachometer": return "widgets/tech/TechTachometer.qml";
-                    case "retroCustomValue": return "widgets/tech/TechCustomValue.qml";
-                    case "tyres": return "widgets/tech/TechTyres.qml";
-                    default: return "";
-                    }
-                }
-                readonly property string rendererSource: {
-                    if (widgetItem.widgetSettings.style === "tech" && techSource)
-                        return techSource;
-                    switch (widgetItem.widgetType) {
-                    case "speed": return "widgets/SpeedWidget.qml";
-                    case "heartRate": return "widgets/HeartRateWidget.qml";
-                    case "pedals": return "widgets/PedalsWidget.qml";
-                    case "f1GForceRadar": return "widgets/F1GForceRadarWidget.qml";
-                    case "gForceMagnitudeBar": return "widgets/GForceMagnitudeBarWidget.qml";
-                    case "lapCurrent": return "widgets/LapTimeWidget.qml";
-                    case "retroTachometer": return "widgets/RetroTachometerWidget.qml";
-                    case "retroCustomValue": return "widgets/RetroCustomValueWidget.qml";
-                    case "tyres": return "widgets/TyresWidget.qml";
-                    case "designed": return "widgets/DesignedWidget.qml";
-                    default: return "";
-                    }
-                }
+                readonly property string rendererSource: widgetItem.widgetRenderer
                 source: rendererSource
                 Component.onCompleted: {
                     if (!rendererSource)

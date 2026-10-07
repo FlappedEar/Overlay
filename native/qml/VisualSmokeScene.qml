@@ -99,6 +99,17 @@ Item {
                 "cornerRadius": 12, "padding": 10,
                 "textColor": "#f2f5f7", "secondaryTextColor": "#c0cad2"
             };
+            // The Classic renderer of each type, as WidgetModel's widgetRenderer
+            // role gives it from the type's descriptor (WidgetTypes.cpp).
+            const renderers = {
+                "retroTachometer": "widgets/RetroTachometerWidget.qml",
+                "speed": "widgets/SpeedWidget.qml",
+                "pedals": "widgets/PedalsWidget.qml",
+                "retroCustomValue": "widgets/RetroCustomValueWidget.qml",
+                "heartRate": "widgets/HeartRateWidget.qml",
+                "f1GForceRadar": "widgets/F1GForceRadarWidget.qml",
+                "gForceMagnitudeBar": "widgets/GForceMagnitudeBarWidget.qml"
+            };
             const add = function(type, x, y, width, height, settings) {
                 smokeWidgets.append({
                     "widgetId": type + "-smoke-" + smokeWidgets.count,
@@ -106,7 +117,8 @@ Item {
                     "widgetWidth": width, "widgetHeight": height,
                     "widgetScale": 1, "widgetRotation": 0, "widgetOpacity": 1,
                     "widgetVisible": true, "widgetSettings": settings,
-                    "widgetCues": [], "widgetGroupId": ""
+                    "widgetCues": [], "widgetGroupId": "",
+                    "widgetRenderer": renderers[type]
                 });
             };
             // Keep the primary modules as one lower-third band rather than

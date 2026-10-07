@@ -12,6 +12,7 @@
 #include "project/ProjectLimits.h"
 #include "widgets/WidgetTypes.h"
 
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QSignalSpy>
 
@@ -554,6 +555,19 @@ void WidgetTests::describesEachWidgetTypeOnce()
         QCOMPARE(widget.value("width").toDouble(), descriptor.width);
         QCOMPARE(widget.value("height").toDouble(), descriptor.height);
         const QVariantMap settings = widget.value("settings").toMap();
+        // The scene loads the renderer the descriptor names, per style.
+        QVERIFY2(QFileInfo::exists(QStringLiteral(QML_SOURCE_DIR "/") + descriptor.classicRenderer),
+                 qPrintable(descriptor.classicRenderer));
+        if (!descriptor.techRenderer.isEmpty()) {
+            QVERIFY2(QFileInfo::exists(QStringLiteral(QML_SOURCE_DIR "/") + descriptor.techRenderer),
+                     qPrintable(descriptor.techRenderer));
+        }
+        const QModelIndex row = model.index(index);
+        model.setSetting(index, QStringLiteral("style"), QStringLiteral("classic"));
+        QCOMPARE(model.data(row, WidgetModel::WidgetRendererRole).toString(), descriptor.classicRenderer);
+        model.setSetting(index, QStringLiteral("style"), QStringLiteral("tech"));
+        QCOMPARE(model.data(row, WidgetModel::WidgetRendererRole).toString(),
+                 descriptor.techRenderer.isEmpty() ? descriptor.classicRenderer : descriptor.techRenderer);
         for (const QString &style : {QStringLiteral("classic"), QStringLiteral("tech")}) {
             for (const QString &control : model.unusedControls(descriptor.type, style)) {
                 QVERIFY2(settings.contains(control),
