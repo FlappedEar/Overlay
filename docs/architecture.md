@@ -205,6 +205,13 @@ time for a timeline position, clamped to the timeline. They are pure functions o
 video's `MediaTimeline`; `AppController` keeps the selected chapter and the saved
 chapter references, and still plays a single file without a timeline.
 
+Step 9 moved what the editor reads from telemetry at a video time into `PlaybackReadout`
+(`native/src/app/PlaybackReadout.h`): a channel's value under the playhead, its text for a
+readout (0 to 6 decimals, an em dash for no value) and a channel's chart series over a video
+range. They are pure functions of the session, the run's sync transform and the video time;
+`AppController` passes its session, sync and playhead, and its semantic values (speed, rpm,
+heart rate) use the same lookup.
+
 `AdditionalVideoController` (`appController.additionalVideos`, KAN-131) holds the
 run's videos besides the main one, each with its own sync, and the export layout.
 It probes each video in the background (`MediaProbe` and its fingerprint) and binds

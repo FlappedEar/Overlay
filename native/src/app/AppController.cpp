@@ -4,6 +4,7 @@
 #include "app/ExportSourceOptions.h"
 #include "app/LapNavigation.h"
 #include "app/ChapterPlayback.h"
+#include "app/PlaybackReadout.h"
 #include "export/ExportFormat.h"
 #include "export/ExportEngine.h"
 #include "export/ChapterSource.h"
@@ -18,7 +19,6 @@
 #include "project/BoundedJsonLoader.h"
 #include "project/ProjectLimits.h"
 #include "project/EventProjectCodec.h"
-#include "telemetry/ChannelSeries.h"
 #include "telemetry/TelemetrySyncEngine.h"
 #include "telemetry/VboParser.h"
 #include "telemetry/TelemetrySource.h"
@@ -830,23 +830,14 @@ void AppController::resolveSourceMismatch(const bool acceptReplacement)
 
 QString AppController::valueText(const QString &channelName, const int decimals) const
 {
-    if (!m_session) {
-        return QStringLiteral("—");
-    }
-    const auto time = videoToTelemetryTime(m_playbackTime, m_syncController.transform());
-    if (!time) return QStringLiteral("—");
-    const auto value = m_session->valueAt(channelName, *time);
-    return value ? QString::number(*value, 'f', qBound(0, decimals, 6)) : QStringLiteral("—");
+    return PlaybackReadout::valueText(m_session.get(), m_syncController.transform(), m_playbackTime, channelName,
+        decimals);
 }
 
 QVariant AppController::telemetryValue(const QString &channelName) const
 {
-    if (!m_session || channelName.isEmpty()) {
-        return {};
-    }
-    const auto time = videoToTelemetryTime(m_playbackTime, m_syncController.transform());
-    if (!time) return {};
-    const auto value = m_session->valueAt(channelName, *time);
+    const auto value = PlaybackReadout::valueAt(m_session.get(), m_syncController.transform(), m_playbackTime,
+        channelName);
     return value ? QVariant(*value) : QVariant();
 }
 
@@ -856,14 +847,8 @@ QVariantMap AppController::telemetrySeries(
     const double videoEnd,
     const int maximumPoints) const
 {
-    if (!m_session || channelName.isEmpty() || !std::isfinite(videoStart)
-        || !std::isfinite(videoEnd) || maximumPoints < 2) {
-        return {};
-    }
-    const auto telemetryStart = videoToTelemetryTime(videoStart, m_syncController.transform());
-    const auto telemetryEnd = videoToTelemetryTime(videoEnd, m_syncController.transform());
-    if (!telemetryStart || !telemetryEnd) return {};
-    return channelSeries(*m_session, channelName, *telemetryStart, *telemetryEnd, maximumPoints);
+    return PlaybackReadout::series(m_session.get(), m_syncController.transform(), channelName, videoStart, videoEnd,
+        maximumPoints);
 }
 
 int AppController::lapNumberAtPlayback() const
@@ -1039,13 +1024,7 @@ void AppController::setPlaybackTime(const double seconds)
 
 QVariant AppController::semanticValue(const QString &alias) const
 {
-    if (!m_session) {
-        return {};
-    }
-    const auto time = videoToTelemetryTime(m_playbackTime, m_syncController.transform());
-    if (!time) return {};
-    const auto value = m_session->valueAt(alias, *time);
-    return value ? QVariant(*value) : QVariant();
+    return telemetryValue(alias);
 }
 
 void AppController::setStatus(QString status)

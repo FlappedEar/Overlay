@@ -2708,3 +2708,9 @@ at lap boundaries.
 missing 5 s chapter and a 20 s chapter: chapter files and starts (none for a gap or an index out of
 range), the chapter list with names and the gap's reason, and locating positions inside the gap,
 at a chapter start and past both ends of the timeline.
+
+`EditorTests::readsTelemetryAtTheVideoTime` checks `PlaybackReadout` with a speed channel that has a
+gap and a video starting 10 s before the telemetry: values by alias and channel name, no value in
+the gap, outside the channel, for an unknown channel, without a session or with an unusable sync,
+the readout text with 1, 12 and negative decimals, and the chart series against `channelSeries`
+for the mapped range, empty for fewer than two points or a non-finite range.
