@@ -13,6 +13,7 @@
 #include "telemetry/VboParser.h"
 #include "UserGuideCapture.h"
 
+#include <QDeadlineTimer>
 #include <QRegularExpression>
 
 #include <stdexcept>
@@ -930,15 +931,22 @@ void EditorTests::keepsSidebarReachableAtMinimumSize()
         QVERIFY(flickable && flickable->inherits("QQuickFlickable"));
         auto *content = flickable->property("contentItem").value<QQuickItem *>();
         QVERIFY(content);
-        // Let the tab's layout settle.
+        // Let the tab's layout settle: its content height must hold still for
+        // three samples 50 ms apart. This is an explicit loop because a
+        // QTRY macro evaluates its expression again after the loop ends, so a
+        // check that remembers the last height failed whenever the height
+        // moved once more (PR #202 on macOS CI, reported as a timeout).
+        QDeadlineTimer settleDeadline(20'000);
         double settled = -1.0;
-        QTRY_VERIFY([&] {
-            const double height = flickable->property("contentHeight").toDouble();
-            const bool same = height == settled;
-            settled = height;
+        int stableSamples = 0;
+        while (stableSamples < 3 && !settleDeadline.hasExpired()) {
             QTest::qWait(50);
-            return same && height > 0.0;
-        }());
+            const double height = flickable->property("contentHeight").toDouble();
+            stableSamples = height == settled && height > 0.0 ? stableSamples + 1 : 0;
+            settled = height;
+        }
+        QVERIFY2(stableSamples >= 3,
+                 qPrintable(QStringLiteral("tab %1: content height still changing at %2").arg(tab).arg(settled)));
         const double viewport = flickable->height();
         // The scroller itself is inside the window.
         const QRectF frame = flickable->mapRectToScene(QRectF(0, 0, flickable->width(), viewport));

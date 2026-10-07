@@ -2577,7 +2577,8 @@ Three `AGENTS.md` UI invariants now have automated tests:
   For the WIDGET, DATA and CUES tabs, the test checks that the tab's scroll view lies inside the
   window and that no nested scroller holds content it cannot show. It then scrolls that one
   surface to each visible control and checks the control comes fully into view. The window is
-  never larger than 1180×720; a smaller CI display only makes the check stricter.
+  never larger than 1180×720; a smaller CI display only makes the check stricter. Each tab waits until
+  its content height holds still for three samples 50 ms apart (up to 20 s on a loaded runner).
 - **Transport shortcuts while editing**
   (`EditorTests::disablesTransportShortcutsWhileEditing`). Space, Left, Right, Shift+Left,
   Shift+Right, Home and End are off while an inspector text field or spin box has focus, and
