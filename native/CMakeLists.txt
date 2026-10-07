@@ -384,6 +384,7 @@ qt_add_qml_module(flappedear_native
     VERSION 1.0
     QML_FILES
         qml/Theme.js
+        qml/Format.js
         qml/ColorField.qml
         qml/VideoChaptersDialog.qml
         qml/FeButton.qml
@@ -394,6 +395,7 @@ qt_add_qml_module(flappedear_native
         qml/FeSpinBox.qml
         qml/FeTextField.qml
         qml/ExportDialog.qml
+        qml/ExportProgressPopup.qml
         qml/InspectorPanel.qml
         qml/StartupError.qml
         qml/Main.qml
