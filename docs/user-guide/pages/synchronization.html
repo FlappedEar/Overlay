@@ -71,3 +71,20 @@
   <li>Check a second event later in the video. If the second event is off by a growing amount, adjust <strong>Time scale</strong>.</li>
 </ol>
 <p>Editing manual timing cancels a running automatic search. The header shows the current offset as <code>SYNC x.xxx s</code> when it is not zero.</p>
+
+<h2 id="additional-videos">Additional videos</h2>
+<p>A run can have up to three videos besides the main one, such as a helmet camera without GPS. They are listed under <strong>Additional videos</strong> in the DATA tab, below <strong>Manual timing</strong>. Each has its own offset and time scale. Automatic synchronization uses only the main video's GoPro GPS, so additional videos are aligned by hand.</p>
+<ol class="steps">
+  <li>Click <strong>Add video…</strong> and choose an MP4 or MOV file. It cannot be the main video or a video the run already has. A new video starts with the main video's timing and is named after its file. You can rename it in the field at the top of its card.</li>
+  <li>Click <strong>Align…</strong> on its card. A small player shows this video at the moment the main video is showing, while <strong>Follow the main video</strong> is ticked.</li>
+  <li>Pause the main video on a moment both cameras show, such as a flash, crossing a timing line, or the car leaving the pit box.</li>
+  <li>Move the small player to the same moment with its slider or with <strong>−1 s</strong>, <strong>−1 frame</strong>, <strong>+1 frame</strong> and <strong>+1 s</strong>, then click <strong>Align here</strong>. The offset is set so that both moments are the same telemetry time. The time scale is not changed.</li>
+  <li>Check a second moment later in the run. If it drifts, adjust <strong>Time scale</strong> on the card and align again.</li>
+</ol>
+<p>When a project is opened, each additional video is checked against the file it was saved with:</p>
+<ul>
+  <li>A file that is not found is kept in the project. Click <strong>Locate…</strong> to choose its new location.</li>
+  <li>A file that has changed is kept but marked as changed. Locate the original, or remove it and add the new file.</li>
+  <li><strong>Locate…</strong> does not accept a different video.</li>
+</ul>
+<p><strong>Layout in export</strong> chooses <em>Picture in picture</em> or <em>Side by side</em>. The choice is saved with the run. Export does not include additional videos yet; that support is coming in a later update.</p>

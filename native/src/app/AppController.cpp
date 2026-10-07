@@ -66,6 +66,8 @@ AppController::AppController(QObject *parent, QString recoveryPath,
         emit liveValuesChanged();
         markPersistentChange();
     });
+    connect(&m_additionalVideos, &AdditionalVideoController::statusMessage, this, &AppController::setStatus);
+    connect(&m_additionalVideos, &AdditionalVideoController::edited, this, [this] { markPersistentChange(); });
     // KAN-104: a reviewed chapter group.
     connect(&m_videoChapters, &VideoChapterReview::groupChosen, this, [this](const QList<QUrl> &files, bool) {
         // KAN-105: several chapters play as one timeline.

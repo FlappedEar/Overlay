@@ -108,7 +108,7 @@ A run can hold up to three videos besides its main one, such as a helmet camera 
 - In a version 3 event both belong to the run (`run.sources.additionalVideos`, `run.videoLayout`). The editor's version 2 projection carries them as `sources.additionalVideos` and a root `videoLayout`.
 - A malformed list, more than three entries, a repeated `id`, a missing path or sync, or an unknown layout mode makes the document invalid in both versions.
 - Unknown keys in an entry, in its `sync` and in `videoLayout` survive. Save As rebases every entry, in inactive runs too, and export never overwrites one.
-- Overlays reads and keeps them; adding, syncing, previewing and exporting them follow in later KAN-131 steps.
+- The editor adds, removes, relinks and syncs them in the DATA tab (Additional videos). A video read from a project is used only when its fingerprint matches; a missing or changed file stays in the project, marked. Preview and export composition follow in a later KAN-131 step.
 
 ## Source fingerprints
 

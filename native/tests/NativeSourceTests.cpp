@@ -34,6 +34,7 @@ private slots:
     void cleanupTestCase();
     void persistsEventSelectionAndRunLocalSync();
     void keepsAdditionalVideosThroughRunSwitchAndSaveAs();
+    void addsAlignsAndChecksAdditionalVideos();
     void recoversEventAndRelinksOnlyActiveSource();
     void rejectsInvalidEventWithoutReplacingDocument();
     void rejectsLateSourceResultsAfterRunSelection();
@@ -231,16 +232,16 @@ void SourceTests::keepsAdditionalVideosThroughRunSwitchAndSaveAs()
     AppController controller(nullptr, directory.filePath("recovery.json"));
     controller.requestOpenProject(QUrl::fromLocalFile(path));
     QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-    QCOMPARE(controller.m_additionalVideos.size(), 1);
-    QCOMPARE(controller.m_additionalVideos[0].sync.offset, -4.5);
-    QCOMPARE(controller.m_videoLayout, VideoLayoutMode::SideBySide);
+    QCOMPARE(controller.m_additionalVideos.videos().size(), 1);
+    QCOMPARE(controller.m_additionalVideos.videos()[0].sync.offset, -4.5);
+    QCOMPARE(controller.m_additionalVideos.layoutMode(), VideoLayoutMode::SideBySide);
     QVERIFY(controller.selectEventRun("run-b"));
     QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-    QVERIFY(controller.m_additionalVideos.isEmpty());
-    QCOMPARE(controller.m_videoLayout, VideoLayoutMode::PictureInPicture);
+    QVERIFY(controller.m_additionalVideos.videos().isEmpty());
+    QCOMPARE(controller.m_additionalVideos.layoutMode(), VideoLayoutMode::PictureInPicture);
     QVERIFY(controller.selectEventRun("run-a"));
     QTRY_COMPARE(controller.vboLoadState(), QStringLiteral("ready"));
-    QCOMPARE(controller.m_additionalVideos.size(), 1);
+    QCOMPARE(controller.m_additionalVideos.videos().size(), 1);
     QVERIFY(QDir().mkpath(directory.filePath("saved")));
     const QString savedPath = directory.filePath("saved/event.fetproject");
     QVERIFY(controller.saveProject(QUrl::fromLocalFile(savedPath)));
@@ -255,7 +256,146 @@ void SourceTests::keepsAdditionalVideosThroughRunSwitchAndSaveAs()
     QCOMPARE(savedRuns[0].toObject().value("videoLayout").toObject().value("mode").toString(), QStringLiteral("sideBySide"));
     QVERIFY(!savedRuns[1].toObject().value("sources").toObject().contains("additionalVideos"));
     QVERIFY(!savedRuns[1].toObject().contains("videoLayout"));
-    QCOMPARE(controller.m_additionalVideos[0].reference.relativePath, QStringLiteral("../helmet.mp4"));
+    QCOMPARE(controller.m_additionalVideos.videos()[0].reference.relativePath, QStringLiteral("../helmet.mp4"));
+}
+
+void SourceTests::addsAlignsAndChecksAdditionalVideos()
+{
+    // KAN-131: additional videos are added after a probe (not the main video,
+    // not twice, at most three), take the main video's sync, are aligned by
+    // a moment seen in both, keep their sync and layout through Save and
+    // reopening, and are checked by fingerprint: a changed file is kept but
+    // marked, a missing one can be relinked, a different file cannot.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the additional video test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    const auto encode = [&](const QString &name, const QString &source) {
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", source,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", directory.filePath(name)});
+        return encoder.waitForFinished(30'000) && encoder.exitCode() == 0;
+    };
+    QVERIFY(encode("main.mp4", "testsrc2=s=320x180:r=30:d=2"));
+    QVERIFY(encode("helmet.mp4", "testsrc2=s=160x120:r=25:d=3"));
+    QVERIFY(encode("chest.mp4", "color=c=red:s=64x64:r=30:d=1"));
+    QVERIFY(encode("rear.mp4", "color=c=blue:s=64x64:r=30:d=1"));
+    QVERIFY(encode("fourth.mp4", "color=c=green:s=64x64:r=30:d=1"));
+    QVERIFY(writeBytes(directory.filePath("notes.txt"), "not a video"));
+    const auto url = [&](const QString &name) { return QUrl::fromLocalFile(directory.filePath(name)); };
+
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    auto *videos = controller.additionalVideoController();
+    controller.loadVideo(url("main.mp4"));
+    QTRY_COMPARE(controller.videoLoadState(), QStringLiteral("ready"));
+    controller.syncController()->setOffset(10.0);
+    videos->addVideo(url("notes.txt"));
+    videos->addVideo(url("main.mp4"));
+    QVERIFY(controller.statusText().contains("already a video"));
+    QCOMPARE(videos->count(), 0);
+    QVERIFY(!videos->loading());
+    videos->addVideo(url("helmet.mp4"));
+    QVERIFY(videos->loading());
+    QTRY_COMPARE(videos->count(), 1);
+    QVERIFY(!videos->loading());
+    QVERIFY(controller.dirty());
+    auto entry = videos->videoList().first().toMap();
+    QCOMPARE(entry.value("state").toString(), QStringLiteral("ready"));
+    QCOMPARE(entry.value("label").toString(), QStringLiteral("helmet"));
+    QCOMPARE(entry.value("width").toInt(), 160);
+    QVERIFY(qAbs(entry.value("durationSeconds").toDouble() - 3.0) < 0.1);
+    QCOMPARE(videos->videos()[0].sync.offset, 10.0);
+    QCOMPARE(videos->videos()[0].sync.timeScale, 1.0);
+    videos->addVideo(url("helmet.mp4"));
+    QVERIFY(controller.statusText().contains("already a video"));
+
+    // Sync edits: invalid values are ignored; alignment keeps the time scale.
+    videos->setOffset(0, std::numeric_limits<double>::quiet_NaN());
+    videos->setTimeScale(0, 0.0);
+    videos->setTimeScale(0, -1.0);
+    QCOMPARE(videos->videos()[0].sync.offset, 10.0);
+    QCOMPARE(videos->videos()[0].sync.timeScale, 1.0);
+    videos->setTimeScale(0, 1.001);
+    // The main video at 2.0 s is telemetry 12.0 s; the helmet shows it at 0.5 s.
+    videos->alignAt(0, 2.0, 0.5);
+    QVERIFY(qAbs(videos->videos()[0].sync.offset - (12.0 - 0.5 * 1.001)) < 1e-9);
+    QVERIFY(qAbs(videos->videoSecondsFor(0, 2.0) - 0.5) < 1e-9);
+    QVERIFY(qAbs(videos->videoSecondsFor(0, 3.0) - (1.0 / 1.001 + 0.5)) < 1e-9);
+    videos->setLabel(0, QStringLiteral("  Helmet camera  "));
+    QCOMPARE(videos->videos()[0].label, QStringLiteral("Helmet camera"));
+    videos->setLayout(QStringLiteral("grid"));
+    QCOMPARE(videos->layout(), QStringLiteral("pictureInPicture"));
+    videos->setLayout(QStringLiteral("sideBySide"));
+    QCOMPARE(videos->layoutMode(), VideoLayoutMode::SideBySide);
+
+    // At most three.
+    videos->addVideo(url("chest.mp4"));
+    videos->addVideo(url("rear.mp4"));
+    QTRY_COMPARE(videos->count(), 3);
+    videos->addVideo(url("fourth.mp4"));
+    QVERIFY(controller.statusText().contains("at most 3"));
+    QCOMPARE(videos->count(), 3);
+    videos->removeVideo(2);
+    QCOMPARE(videos->count(), 2);
+
+    const QString projectPath = directory.filePath("project.fetproject");
+    QVERIFY(controller.saveProject(QUrl::fromLocalFile(projectPath)));
+    QVERIFY(!controller.dirty());
+    const auto saved = QJsonDocument::fromJson(readBytes(projectPath)).object();
+    const auto savedVideos = saved.value("sources").toObject().value("additionalVideos").toArray();
+    QCOMPARE(savedVideos.size(), 2);
+    QCOMPARE(savedVideos[0].toObject().value("relativePath").toString(), QStringLiteral("helmet.mp4"));
+    QCOMPARE(savedVideos[0].toObject().value("label").toString(), QStringLiteral("Helmet camera"));
+    QVERIFY(savedVideos[0].toObject().value("fingerprint").isObject());
+    QCOMPARE(saved.value("videoLayout").toObject().value("mode").toString(), QStringLiteral("sideBySide"));
+
+    // Reopened: both found and ready, sync and layout as saved, not dirty.
+    {
+        AppController reopened(nullptr, directory.filePath("recovery-2.json"));
+        reopened.requestOpenProject(QUrl::fromLocalFile(projectPath));
+        auto *loaded = reopened.additionalVideoController();
+        QTRY_COMPARE(loaded->count(), 2);
+        QTRY_VERIFY(!loaded->loading());
+        QCOMPARE(loaded->videoList()[0].toMap().value("state").toString(), QStringLiteral("ready"));
+        QCOMPARE(loaded->videoList()[1].toMap().value("state").toString(), QStringLiteral("ready"));
+        QVERIFY(qAbs(loaded->videos()[0].sync.offset - (12.0 - 0.5 * 1.001)) < 1e-9);
+        QCOMPARE(loaded->videos()[0].sync.timeScale, 1.001);
+        QCOMPARE(loaded->layoutMode(), VideoLayoutMode::SideBySide);
+        QVERIFY(!reopened.dirty());
+    }
+
+    // A changed file is kept but marked; a different file is not taken as a relink.
+    QVERIFY(QFile::rename(directory.filePath("chest.mp4"), directory.filePath("moved-chest.mp4")));
+    QVERIFY(encode("helmet.mp4", "color=c=white:s=160x120:r=25:d=3"));
+    AppController changed(nullptr, directory.filePath("recovery-3.json"));
+    changed.requestOpenProject(QUrl::fromLocalFile(projectPath));
+    auto *checked = changed.additionalVideoController();
+    QTRY_COMPARE(checked->count(), 2);
+    QTRY_VERIFY(!checked->loading());
+    QCOMPARE(checked->videoList()[0].toMap().value("state").toString(), QStringLiteral("mismatch"));
+    QVERIFY(checked->videoList()[0].toMap().value("url").toUrl().isEmpty());
+    QCOMPARE(checked->videoList()[1].toMap().value("state").toString(), QStringLiteral("missing"));
+    checked->relinkVideo(1, url("rear.mp4"));
+    QTRY_VERIFY(!checked->loading());
+    QVERIFY(changed.statusText().contains("not the video this project saved"));
+    QCOMPARE(checked->videoList()[1].toMap().value("state").toString(), QStringLiteral("missing"));
+    QVERIFY(!changed.dirty());
+    checked->relinkVideo(1, url("moved-chest.mp4"));
+    QTRY_COMPARE(checked->videoList()[1].toMap().value("state").toString(), QStringLiteral("ready"));
+    QVERIFY(changed.dirty());
+    QVERIFY(changed.saveProject(QUrl::fromLocalFile(projectPath)));
+    const auto relinked = QJsonDocument::fromJson(readBytes(projectPath)).object()
+        .value("sources").toObject().value("additionalVideos").toArray();
+    QCOMPARE(relinked[1].toObject().value("relativePath").toString(), QStringLiteral("moved-chest.mp4"));
+    // The changed helmet video keeps its saved reference and sync.
+    QCOMPARE(relinked[0].toObject().value("relativePath").toString(), QStringLiteral("helmet.mp4"));
+    QCOMPARE(relinked[0].toObject().value("fingerprint"), savedVideos[0].toObject().value("fingerprint"));
+
+    // A document replaced while probes run ignores their results.
+    changed.additionalVideoController()->addVideo(url("rear.mp4"));
+    changed.additionalVideoController()->clear();
+    QTest::qWait(500);
+    QCOMPARE(changed.additionalVideoController()->count(), 0);
 }
 
 void SourceTests::recoversEventAndRelinksOnlyActiveSource()
