@@ -539,6 +539,13 @@ took a detour or used the pit lane. It is reported as `different-recorded-route`
 and stays out of automatic ranking and progression. The check needs at least
 three matching laps in the run and is cooperatively cancellable.
 
+A third check (KAN-225, as Telemetry FET-199) compares lap lengths across the
+day. An eligible lap on the group's route whose GPS path is shorter than 80 % of
+the median path of its compatibility group's laps, taken from at least two
+recordings, is reported as `implausible-lap` and also stays out of ranking. The
+same code marks a lap the recording itself finds implausible (its time, length
+or average speed; see [telemetry semantics](telemetry-semantics.md)).
+
 On the real days, normal laps deviate by at most 11.2 m. The laps flagged are
 Jastrząb Session 2 LAP 4 (43 m) and Session 5 LAP 5 (19 m), and at Silesia
 Ring five laps between 12.3 m and 16.0 m. One of those is Session 2 LAP 2,

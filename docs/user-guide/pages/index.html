@@ -42,7 +42,7 @@
   <tr><td>Template</td><td>A saved arrangement of widgets.</td></tr>
   <tr><td>Event, run, lap</td><td>A track day, one session on track, and one timed lap of a session.</td></tr>
   <tr><td>Timing gate</td><td>The start/finish line stored in the telemetry file, used to cut laps.</td></tr>
-  <tr><td>Eligible lap</td><td>A complete lap with good GPS on the day's layout, used to find the day's best lap.</td></tr>
+  <tr><td>Eligible lap</td><td>A complete, plausible lap with good GPS on the day's layout, used to find the day's best lap. A lap under 3 s or over an hour, shorter than 200 m, faster than 100 m/s on average, or much shorter than the other laps of the recording or of the day's circuit is not plausible: it stays listed but never counts as a best lap.</td></tr>
 </table>
 
 <h2 id="about">About this guide</h2>
