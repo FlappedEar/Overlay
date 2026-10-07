@@ -88,7 +88,7 @@ screen) from the SVG.
 
 Restyled (KAN-187): the shared controls and `FeLabel`; `Main.qml` (bars,
 preview surround, timeline and cue marks, status bar, welcome screen, recovery
-and other dialogs, menus); `ExportDialog`; `ExportProgressPopup`; `TemplateSavePopup`; the `WidgetOverlay` selection
+and other dialogs, menus); `ExportDialog`; `ExportProgressPopup`; `TemplateSavePopup`; `DirtyProjectDialog`; the `WidgetOverlay` selection
 outline and resize handle; `InspectorPanel.qml`; `VideoChaptersDialog`;
 `StartupError`. `Main.qml` sets the full Basic-style palette from the theme, so
 standard dialogs, menus and dialog buttons follow it. Editor text uses

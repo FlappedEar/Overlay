@@ -2595,6 +2595,9 @@ Three `AGENTS.md` UI invariants now have automated tests:
 - **Save as template** (`EditorTests::savesTheSceneAsATemplateFromThePopup`). Opening the
   popup clears the name, Save stays disabled until a name is typed, and saving closes the popup,
   selects the new template and marks it as the one the scene came from.
+- **Unsaved changes** (`EditorTests::asksBeforeDiscardingUnsavedChanges`). With unsaved
+  changes, New opens the dialog; closing it cancels the request and keeps the scene, and Discard
+  changes carries it out and leaves a clean document.
 - **Transport shortcuts while editing**
   (`EditorTests::disablesTransportShortcutsWhileEditing`). Space, Left, Right, Shift+Left,
   Shift+Right, Home and End are off while an inspector text field or spin box has focus, and
