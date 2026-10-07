@@ -1772,6 +1772,26 @@ void TelemetryCoreTests::takesLongitudeTheShortWayRoundAcrossTheAntimeridian()
     QCOMPARE(detected.timedLaps.size(), qsizetype(3));
     QVERIFY(qAbs(detected.timedLaps[0].durationSeconds - 4.0) < 0.001);
     QVERIFY(qAbs(detected.timedLaps[1].durationSeconds - 5.0) < 0.001);
+
+    // KAN-241 (FET-213 review): longitude is interpolated the short way round,
+    // so a lap trace's ends, interpolated at the start line on 180°, stay on
+    // the line instead of jumping to the other side of the world.
+    QVERIFY(!detected.lapTraces.isEmpty());
+    for (const auto &trace : detected.lapTraces) {
+        for (const auto &point : trace.points)
+            QVERIFY2(std::abs(point.eastMeters) < 100.0, qPrintable(QString::number(point.eastMeters)));
+    }
+    const TelemetrySession aroundTheLine = sessionFor({0.0, 1.0}, {mid, mid}, {west, east});
+    const auto halfway = aroundTheLine.valueAt(QStringLiteral("longitude"), 0.5, InterpolationMode::Longitude);
+    QVERIFY(halfway && std::abs(std::abs(*halfway) - 180.0) < 1e-4);
+    const auto quarter = aroundTheLine.valueAt(QStringLiteral("longitude"), 0.25, InterpolationMode::Longitude);
+    QVERIFY(quarter && std::abs(*quarter - (double(west) + 0.25 * (double(east) + 360.0 - double(west)))) < 1e-6);
+    // Linear still averages the numbers; Longitude is Linear, bit for bit,
+    // for neighbours under 180° apart.
+    QVERIFY(std::abs(*aroundTheLine.valueAt(QStringLiteral("longitude"), 0.5, InterpolationMode::Linear)) < 1e-3);
+    const TelemetrySession near = sessionFor({0.0, 1.0}, {mid, mid}, {20.9998F, 21.0002F});
+    QCOMPARE(*near.valueAt(QStringLiteral("longitude"), 0.3, InterpolationMode::Longitude),
+             *near.valueAt(QStringLiteral("longitude"), 0.3, InterpolationMode::Linear));
 }
 
 void TelemetryCoreTests::appliesOneGpsGapRuleToPassesAndLaps()

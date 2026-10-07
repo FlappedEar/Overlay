@@ -332,7 +332,7 @@ void buildLapTraces(
     qsizetype totalPoints = 0;
     const auto appendCoordinate = [&](LapTrace &trace, const double time) {
         const auto latitudeValue = session.valueAt("latitude", time, InterpolationMode::Linear);
-        const auto longitudeValue = session.valueAt("longitude", time, InterpolationMode::Linear);
+        const auto longitudeValue = session.valueAt("longitude", time, InterpolationMode::Longitude);
         if (!latitudeValue || !longitudeValue) return;
         const GeoCoordinate coordinate{*latitudeValue, *longitudeValue};
         if (!isValidCoordinate(coordinate)) return;

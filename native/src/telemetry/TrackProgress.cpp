@@ -449,7 +449,7 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
             const QPointF &sample = segment[index];
             const double time = sample.x();
             const double latitude = sample.y();
-            const auto longitude = session.valueAt("longitude", time);
+            const auto longitude = session.valueAt("longitude", time, InterpolationMode::Longitude);
             if (!longitude || !isValidCoordinate({latitude, *longitude})) { flush(); continue; }
 
             const MetricPoint projected = projectCoordinate({latitude, *longitude}, axis.origin);

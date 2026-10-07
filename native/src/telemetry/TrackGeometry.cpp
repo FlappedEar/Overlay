@@ -93,7 +93,7 @@ std::optional<QPointF> currentTrackPoint(
         return std::nullopt;
     }
     const auto latitude = session.valueAt("latitude", time);
-    const auto longitude = session.valueAt("longitude", time);
+    const auto longitude = session.valueAt("longitude", time, InterpolationMode::Longitude);
     if (!latitude || !longitude || !isValidCoordinate({*latitude, *longitude})) {
         return std::nullopt;
     }
@@ -119,7 +119,7 @@ void appendLatLon(const TelemetrySession &session, const double startTime, const
     for (const auto &segment : latitudeSegments) {
         for (const auto &sample : segment) {
             throwIfCancelled(cancelled);
-            const auto lon = session.valueAt("longitude", sample.x());
+            const auto lon = session.valueAt("longitude", sample.x(), InterpolationMode::Longitude);
             if (!lon) continue;
             // Geometry reads only the points; the index keeps time ordered
             // across both sessions.
@@ -160,7 +160,7 @@ QVariantList buildTrackSegments(const TelemetrySession &session, const double st
         QVariantList points;
         for (const auto &sample : segment) {
             throwIfCancelled(cancelled);
-            const auto longitude = session.valueAt("longitude", sample.x());
+            const auto longitude = session.valueAt("longitude", sample.x(), InterpolationMode::Longitude);
             if (!longitude) {
                 if (!points.isEmpty()) { track.append(QVariant::fromValue(points)); points.clear(); }
                 continue;

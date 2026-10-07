@@ -262,7 +262,7 @@ QVariantMap TelemetryRenderContext::lapTiming() const
             ? m_session->valueAt("latitude", currentTime, InterpolationMode::Linear)
             : std::nullopt;
         const auto longitude = m_session
-            ? m_session->valueAt("longitude", currentTime, InterpolationMode::Linear)
+            ? m_session->valueAt("longitude", currentTime, InterpolationMode::Longitude)
             : std::nullopt;
         if (referenceTrace != m_lapSession.lapTraces.cend() && latitude && longitude) {
             const GeoCoordinate currentCoordinate{*latitude, *longitude};

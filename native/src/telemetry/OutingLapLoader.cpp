@@ -117,7 +117,7 @@ OutingLapDetail loadOutingLapDetail(const QJsonObject &source,
         for (const auto &segment : latitude) {
             for (const auto &point : segment) {
                 throwIfCancelled(cancelled);
-                const auto longitude = session->valueAt("longitude", point.x());
+                const auto longitude = session->valueAt("longitude", point.x(), InterpolationMode::Longitude);
                 if (!longitude) continue;
                 // Geometry reads only the points; the index keeps time ordered.
                 const auto order = static_cast<double>(lat.sampleCount());

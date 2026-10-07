@@ -1,5 +1,7 @@
 #include "telemetry/TelemetrySession.h"
 
+#include "telemetry/TelemetryGeometry.h"
+
 #include <QRegularExpression>
 
 #include <algorithm>
@@ -253,7 +255,10 @@ std::optional<double> telemetryValueAt(const TelemetryChannel &channel, const do
         return std::nullopt;
     }
     const double ratio = (time - timestamps[previous]) / span;
-    const double interpolated = *previousValue + (*nextValue - *previousValue) * ratio;
+    const double difference = *nextValue - *previousValue;
+    const double interpolated = mode == InterpolationMode::Longitude && std::abs(difference) > 180.0
+        ? wrapLongitudeDegrees(*previousValue + wrapLongitudeDegrees(difference) * ratio)
+        : *previousValue + difference * ratio;
     return std::isfinite(interpolated) ? std::optional<double>(interpolated) : std::nullopt;
 }
 
