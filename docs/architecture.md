@@ -292,6 +292,8 @@ Synchronization, telemetry time, lap seeking and the analysis video link all use
 
 **Loading.** `AppController` probes the first chapter as the video, as before, and every further chapter with it. Each further chapter is checked against its saved fingerprint. The editor then exposes the current chapter's file, where it starts on the timeline, a function that locates a timeline time, and a function that switches chapter.
 
+**Main.qml split (KAN-216).** `Main.qml` holds the window, preview, timeline and the dialogs that coordinate them; self-contained dialogs move into their own files one at a time. Step 1: the export dialog is `ExportDialog.qml`. It asks `Main.qml` for the save dialog and the overwrite confirmation through signals, and `acceptsEnter()` tells the window's Return and Enter shortcuts when they may start the export.
+
 **Editor preview (`Main.qml`).**
 - Every seek goes through `seekTimeline()`. A seek into another chapter switches the player's file and applies the local position once a frame at it is shown. That is necessary because the player can report `LoadedMedia` more than once for one file, and a position set as the file loads can be ignored.
 - Silent priming does not count as playing.
