@@ -198,6 +198,16 @@ lap bar under the preview (out lap, laps and in lap in video time) and the lap u
 the playhead. They are pure functions of the lap session; `AppController` passes the
 run, its `PreviewTimeline` and its telemetry-to-video mapping.
 
+`AdditionalVideoController` (`appController.additionalVideos`, KAN-131) holds the
+run's videos besides the main one, each with its own sync, and the export layout.
+It probes each video in the background (`MediaProbe` and its fingerprint) and binds
+results to the document generation and the request, so a result for a closed
+document or an older request is ignored. A saved video is used only when its
+fingerprint matches; a missing or changed file stays in the project, marked. A user
+edit reaches `AppController` as `edited()` and marks the document dirty; restoring
+a project does not. Export composes the videos by `VideoComposition` (`native/src/export/`), whose
+layout rules `AdditionalVideosPreview.qml` shares through `previewRects`, so the preview matches the file ([export-pipeline.md](export-pipeline.md#additional-videos-kan-131)).
+
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
 ## Project

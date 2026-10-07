@@ -2,7 +2,9 @@
 
 #include "export/MediaProbe.h"
 #include "export/ExportMediaProfile.h"
+#include "export/VideoComposition.h"
 
+#include <QRect>
 #include <QSize>
 #include <QVariantMap>
 #include <QString>
@@ -50,6 +52,14 @@ struct ExportPipelineProgress {
     QString stage = QStringLiteral("rendering");
 };
 
+// KAN-131: a video placed with the main one, such as a helmet camera.
+struct ExportAdditionalVideo {
+    QString path;
+    QString label;
+    SyncTransform sync;
+    MediaInfo info;
+};
+
 struct ExportSettings {
     QString inputPath;
     // KAN-106: every chapter of a chaptered recording, inputPath first; the
@@ -57,6 +67,10 @@ struct ExportSettings {
     QStringList chapterPaths;
     // Each chapter's video duration_ts as the editor probed it.
     QVector<qint64> chapterDurationTicks;
+    // The main video's sync and the additional videos (KAN-131).
+    SyncTransform sync;
+    QVector<ExportAdditionalVideo> additionalVideos;
+    VideoLayoutMode videoLayout = VideoLayoutMode::PictureInPicture;
     QString outputPath;
     QSize outputSize;
     MediaRational frameRate;
@@ -117,6 +131,20 @@ struct StageBSourceAccess {
     QString trimEndTimestamp;
 };
 
+// KAN-131: the additional videos in Stage B, FFmpeg inputs 2, 3, ... in
+// order. Each is shown in its rectangle from its first frame inside the
+// export to its last; outside that the main video shows through.
+struct StageBComposition {
+    // Empty: the main video fills the output, as without additional videos.
+    QRect mainRect;
+    struct Input {
+        QRect rect;
+        double timeFactor = 1.0;
+        double timeShift = 0.0;
+    };
+    QVector<Input> additional;
+};
+
 class ExportEngine final {
 public:
     [[nodiscard]] static MediaRational effectiveFrameRate(
@@ -154,16 +182,23 @@ public:
     [[nodiscard]] static double audioStartForRange(const MediaInfo &source, double start, double end);
     [[nodiscard]] static QString stageBAudioFilterGraph(const StageBSourceAccess &access, bool chaptered = false);
     [[nodiscard]] static QStringList stageBInputArguments(const StageBSourceAccess &access, const QString &path);
-    // Empty on success; runs the actual composition graph before rendering telemetry.
+    // An additional video's input, read from its timing's seek point with
+    // its own timestamps kept.
+    [[nodiscard]] static QStringList stageBAdditionalInputArguments(
+        const VideoComposition::Timing &timing, const QString &path);
+    // Empty on success; runs the actual composition graph before rendering
+    // telemetry, with `additionalInputs` stand-ins for the additional videos.
     [[nodiscard]] static QString verifyCompositionFilters(
-        const QString &program, const QString &graph, const std::function<bool()> &cancelled = {});
+        const QString &program, const QString &graph, const std::function<bool()> &cancelled = {},
+        int additionalInputs = 0);
     [[nodiscard]] static QString stageBVideoFilterGraph(
         const StageBSourceAccess &sourceAccess,
         const QSize &sourceSize,
         const QSize &outputSize,
         const MediaRational &frameRate,
         qsizetype expectedFrames,
-        const ExportMediaProfile &mediaProfile);
+        const ExportMediaProfile &mediaProfile,
+        const StageBComposition &composition = {});
 };
 
 } // namespace FlappedEar

@@ -67,6 +67,8 @@ AppController::AppController(QObject *parent, QString recoveryPath,
         emit liveValuesChanged();
         markPersistentChange();
     });
+    connect(&m_additionalVideos, &AdditionalVideoController::statusMessage, this, &AppController::setStatus);
+    connect(&m_additionalVideos, &AdditionalVideoController::edited, this, [this] { markPersistentChange(); });
     // KAN-104: a reviewed chapter group.
     connect(&m_videoChapters, &VideoChapterReview::groupChosen, this, [this](const QList<QUrl> &files, bool) {
         // KAN-105: several chapters play as one timeline.
@@ -957,6 +959,12 @@ bool AppController::startExport(
             ? QStringLiteral("The chapters of this recording cannot be exported together.") : m_exportChapterProblem);
         return false;
     }
+    QString additionalProblem;
+    const auto additionalVideos = m_additionalVideos.exportVideos(&additionalProblem);
+    if (!additionalProblem.isEmpty()) {
+        m_export.fail(additionalProblem);
+        return false;
+    }
     ExportController::Job job;
     job.inputPath = inputPath;
     job.chapterPaths = m_exportChapterPaths;
@@ -973,6 +981,11 @@ bool AppController::startExport(
     job.widgets = m_widgetModel.toJson();
     job.sync = m_syncController.transform();
     job.source = m_exportSourceInfo;
+    for (const auto &video : additionalVideos) {
+        job.additionalVideos.append({video.path, video.label, video.sync});
+        job.protectedPaths.append(video.path); // KAN-131: never overwritten by the output
+    }
+    job.videoLayout = m_additionalVideos.layoutMode();
     return m_export.start(job, {outputPath, QSize(outputWidth, outputHeight),
                                 MediaRational{frameRateNumerator, frameRateDenominator}, videoBitrate,
                                 audioEnabled, customRange, rangeIn, rangeOut, overwriteAllowed});

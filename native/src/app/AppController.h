@@ -24,7 +24,7 @@
 #include "export/BoundedProcessOutput.h"
 #include "telemetry/TelemetrySyncEngine.h"
 #include "widgets/WidgetModel.h"
-#include "project/AdditionalVideos.h"
+#include "app/AdditionalVideoController.h"
 #include "project/ProjectWriter.h"
 #include "project/ProjectDocumentState.h"
 #include "project/ProjectRecoveryStore.h"
@@ -69,6 +69,7 @@ class AppController final : public QObject, private DocumentHost {
     // KAN-215: the export run, its progress and its diagnostics.
     Q_PROPERTY(FlappedEar::ExportController *exporter READ exporter CONSTANT)
     Q_PROPERTY(FlappedEar::SyncController *sync READ syncController CONSTANT)
+    Q_PROPERTY(FlappedEar::AdditionalVideoController *additionalVideos READ additionalVideoController CONSTANT)
     Q_PROPERTY(FlappedEar::TemplatePicker *templatePicker READ templatePicker CONSTANT)
     Q_PROPERTY(QString fixedFontFamily READ fixedFontFamily CONSTANT)
     Q_PROPERTY(QVariant speed READ speed NOTIFY liveValuesChanged)
@@ -140,6 +141,7 @@ public:
     [[nodiscard]] QVariantMap exportSourceInfo() const;
     [[nodiscard]] ExportController *exporter() { return &m_export; }
     [[nodiscard]] SyncController *syncController() { return &m_syncController; }
+    [[nodiscard]] AdditionalVideoController *additionalVideoController() { return &m_additionalVideos; }
     [[nodiscard]] TemplatePicker *templatePicker() { return &m_templatePicker; }
     [[nodiscard]] QString fixedFontFamily() const;
     [[nodiscard]] QVariant speed() const;
@@ -380,10 +382,6 @@ private:
     QString m_telemetryPath;
     ProjectSourceReference m_videoReference;
     ProjectSourceReference m_vboReference;
-    // KAN-131: videos besides the main one, each with its own sync, and how
-    // export places them; kept through every save.
-    QVector<AdditionalVideo> m_additionalVideos;
-    VideoLayoutMode m_videoLayout = VideoLayoutMode::PictureInPicture;
     QString m_statusText = QStringLiteral("Open a video and VBO to begin.");
     QString m_startupNotice;
     QString m_sceneNotice;
@@ -394,6 +392,13 @@ private:
     TrackGeometry m_trackGeometry;
     TelemetryRenderContext m_previewRenderContext;
     SyncController m_syncController{[this] { return currentSyncSources(); }};
+    // KAN-131: videos besides the main one, each with its own sync, and how
+    // export places them; kept through every save.
+    AdditionalVideoController m_additionalVideos{[this] {
+        return AdditionalVideoController::MainVideo{
+            m_videoSource.isEmpty() ? QString() : normalizedSourcePath(m_videoSource.toLocalFile()),
+            m_syncController.transform()};
+    }};
     QVariantList m_trackPoints;
     double m_playbackTime = 0.0;
     QFutureWatcher<VideoProbeResult> m_videoProbeWatcher;

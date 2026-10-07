@@ -22,6 +22,7 @@
 #include "export/MediaProbe.h"
 #include "export/TelemetryFrameRenderer.h"
 #include "export/TemporaryOverlayValidation.h"
+#include "export/VideoComposition.h"
 #include "telemetry/TelemetryRenderContext.h"
 #include "telemetry/VboParser.h"
 #include "RczFixture.h"
@@ -83,6 +84,9 @@ private slots:
     void checksCompositionFiltersBeforeRendering();
     void preservesFramesWithPositiveSourcePts_data();
     void preservesFramesWithPositiveSourcePts();
+    void placesAdditionalVideosByLayout();
+    void timesAdditionalVideosAgainstTheMainVideo();
+    void composesAnAdditionalVideoOnItsOwnTimeline();
     void preservesCfrCadenceForCommonRates();
     void validatesQuantizedTemporaryOverlayCadence();
     void preservesAbsoluteExportTimestamps();
@@ -1986,6 +1990,155 @@ void ExportTests::preservesFramesWithPositiveSourcePts()
             if (static_cast<unsigned char>(decoded[(frame * width * height + width * 8 + bit * 6 + 3) * 4]) > 127) identity |= 1 << bit;
         QCOMPARE(identity, first + frame);
     }
+}
+
+void ExportTests::placesAdditionalVideosByLayout()
+{
+    using VideoComposition::layout;
+    const QSize hd(1920, 1080);
+    // Picture in picture: the main video fills the frame; each additional
+    // video fits a box of 28 % down the right edge, 3 % margins.
+    const auto pip = layout(VideoLayoutMode::PictureInPicture, hd, {hd, hd, QSize(1080, 1920)});
+    QCOMPARE(pip.size(), 3);
+    QCOMPARE(pip[0], QRect(0, 0, 1920, 1080));
+    QCOMPARE(pip[1], QRect(1352, 32, 536, 300));
+    QCOMPARE(pip[2], QRect(1720, 366, 168, 302));
+    // Side by side: the main video in the left half, the others stacked in
+    // the right half, each keeping its aspect ratio and centred.
+    const auto sideBySide = layout(VideoLayoutMode::SideBySide, hd, {hd, QSize(1080, 1920)});
+    QCOMPARE(sideBySide.size(), 2);
+    QCOMPARE(sideBySide[0], QRect(0, 270, 960, 540));
+    QCOMPARE(sideBySide[1], QRect(1136, 0, 606, 1080));
+    const auto stacked = layout(VideoLayoutMode::SideBySide, hd, {hd, hd, hd});
+    QCOMPARE(stacked[1], QRect(960, 0, 960, 540));
+    QCOMPARE(stacked[2], QRect(960, 540, 960, 540));
+    for (const auto &rects : {pip, sideBySide, stacked})
+        for (const QRect &rect : rects)
+            QVERIFY(rect.x() % 2 == 0 && rect.y() % 2 == 0 && rect.width() % 2 == 0 && rect.height() % 2 == 0);
+    // Without additional videos side by side is the plain frame.
+    QCOMPARE(layout(VideoLayoutMode::SideBySide, hd, {hd}), QVector<QRect>{QRect(0, 0, 1920, 1080)});
+    QVERIFY(layout(VideoLayoutMode::PictureInPicture, hd, {hd, QSize()}).isEmpty());
+    QVERIFY(layout(VideoLayoutMode::PictureInPicture, QSize(), {hd}).isEmpty());
+}
+
+void ExportTests::timesAdditionalVideosAgainstTheMainVideo()
+{
+    using VideoComposition::timing;
+    // The helmet camera's video time is the main video's minus 2 s.
+    const SyncTransform main{10.0, 1.0};
+    auto result = timing(main, {12.0, 1.0}, 5.0, 10.0, 0.0, 20.0);
+    QVERIFY(result.has_value());
+    QCOMPARE(result->inputSeekSeconds, 2.0);
+    QCOMPARE(result->timeFactor, 1.0);
+    QCOMPARE(result->timeShift, -3.0); // its 3 s is the export's first frame
+    // Its own start time is part of its timestamps.
+    result = timing(main, {12.0, 1.0}, 5.0, 10.0, 1.5, 20.0);
+    QVERIFY(result.has_value());
+    QCOMPARE(result->inputSeekSeconds, 3.5);
+    QCOMPARE(result->timeShift, -4.5);
+    // A time scale: its clock runs at half the telemetry's rate.
+    result = timing(main, {12.0, 0.5}, 5.0, 10.0, 0.0, 20.0);
+    QVERIFY(result.has_value());
+    QCOMPARE(result->timeFactor, 0.5);
+    QCOMPARE(result->timeShift, -3.0); // its 6 s is the export's first frame
+    QCOMPARE(result->inputSeekSeconds, 5.0);
+    // Starting after the export starts: read from its beginning.
+    result = timing(main, {20.0, 1.0}, 5.0, 10.0, 0.0, 20.0);
+    QVERIFY(result.has_value());
+    QCOMPARE(result->inputSeekSeconds, 0.0);
+    QCOMPARE(result->timeShift, 5.0); // its first frame is the export's 5 s
+    // No frame inside the export.
+    QVERIFY(!timing(main, {12.0, 1.0}, 5.0, 10.0, 0.0, 3.0));
+    QVERIFY(!timing(main, {-20.0, 1.0}, 5.0, 10.0, 0.0, 20.0));
+    QVERIFY(!timing(main, {12.0, 0.0}, 5.0, 10.0, 0.0, 20.0));
+    QVERIFY(!timing(main, {12.0, 1.0}, 5.0, 0.0, 0.0, 20.0));
+}
+
+void ExportTests::composesAnAdditionalVideoOnItsOwnTimeline()
+{
+    // A 128x32 main video and a 64x32 additional video at 25 fps whose
+    // frames carry their number in white bars, side by side. Both files
+    // start after 0 (2 s and 0.5 s), as camera files may.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto run = [](const QStringList &args) {
+        QProcess process; process.start(FfmpegTools::ffmpegPath(), args);
+        if (!process.waitForFinished(30'000) || process.exitCode() != 0)
+            qWarning().noquote() << process.readAllStandardError();
+        return process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
+    };
+    const auto numbered = [](int frames, int width, int height) {
+        QByteArray pixels(frames * width * height * 3, '\0');
+        for (int frame = 0; frame < frames; ++frame) for (int y = 0; y < height; ++y) {
+            for (int bit = 0; bit < 9; ++bit) for (int x = bit * 6; x < bit * 6 + 6; ++x)
+                for (int c = 0; c < 3; ++c) pixels[((frame * height + y) * width + x) * 3 + c] = (frame & (1 << bit)) ? '\xFF' : '\0';
+            for (int x = 56; x < 62; ++x) for (int c = 0; c < 3; ++c) pixels[((frame * height + y) * width + x) * 3 + c] = '\xFF';
+        }
+        return pixels;
+    };
+    const auto mainRaw = directory.filePath("main.rgb"), main = directory.filePath("main.mp4");
+    const auto extraRaw = directory.filePath("helmet.rgb"), extra = directory.filePath("helmet.mp4");
+    const auto overlayRaw = directory.filePath("overlay.rgba"), overlay = directory.filePath("overlay.mkv");
+    const auto output = directory.filePath("output.rgba");
+    QVERIFY(writeBytes(mainRaw, numbered(180, 128, 32)));
+    QVERIFY(writeBytes(extraRaw, numbered(75, 64, 32)));
+    QVERIFY(run({"-v", "error", "-y", "-f", "rawvideo", "-pixel_format", "rgb24", "-video_size", "128x32", "-framerate", "30", "-i", mainRaw,
+        "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p", "-output_ts_offset", "2", main}));
+    QVERIFY(run({"-v", "error", "-y", "-f", "rawvideo", "-pixel_format", "rgb24", "-video_size", "64x32", "-framerate", "25", "-i", extraRaw,
+        "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p", "-output_ts_offset", "0.5", extra}));
+    constexpr int first = 60, count = 90;
+    QVERIFY(writeBytes(overlayRaw, QByteArray(count * 128 * 32 * 4, '\0')));
+    QVERIFY(run({"-v", "error", "-y", "-f", "rawvideo", "-pixel_format", "rgba", "-video_size", "128x32", "-framerate", "30", "-i", overlayRaw,
+        "-c:v", "ffv1", "-pix_fmt", "bgra", overlay}));
+    const auto mainInfo = MediaProbe::probe(main);
+    const auto extraInfo = MediaProbe::probe(extra);
+    QVERIFY(std::abs(extraInfo.videoStartTime - 0.5) < .001);
+    // The helmet camera's video time is the main video's minus 1 s.
+    const SyncTransform mainSync{0.0, 1.0};
+    const auto timing = VideoComposition::timing(mainSync, {1.0, 1.0}, 2.0, 3.0, extraInfo.videoStartTime, extraInfo.videoDuration);
+    QVERIFY(timing.has_value());
+    const auto rects = VideoComposition::layout(VideoLayoutMode::SideBySide, {128, 32}, {mainInfo.videoSize, extraInfo.videoSize});
+    QCOMPARE(rects[1], QRect(64, 0, 64, 32));
+    StageBComposition composition{rects[0], {{rects[1], timing->timeFactor, timing->timeShift}}};
+    const auto access = ExportEngine::stageBSourceAccess(mainInfo, {first, first + count - 1}, {30, 1});
+    QVERIFY(access.has_value());
+    const auto profile = ExportMediaProfile::derive(mainInfo, {128, 32}, {30, 1}, 1'000'000, "libx265");
+    const QString graph = ExportEngine::stageBVideoFilterGraph(*access, mainInfo.videoSize, {128, 32}, {30, 1}, count, profile, composition);
+    QStringList args{"-v", "error", "-y"};
+    args += ExportEngine::stageBInputArguments(*access, main);
+    args += QStringList{"-i", overlay};
+    args += ExportEngine::stageBAdditionalInputArguments(*timing, extra);
+    args += QStringList{"-filter_complex", graph, "-map", "[video]", "-fps_mode", "cfr", "-f", "rawvideo", "-pix_fmt", "rgba", output};
+    QVERIFY(run(args));
+    // The preflight runs the same graph shape with stand-in inputs.
+    const QString preflight = ExportEngine::verifyCompositionFilters(FfmpegTools::ffmpegPath(),
+        ExportEngine::stageBVideoFilterGraph({"0", "0", "0.1"}, {64, 64}, {64, 64}, {30, 1}, 3, profile,
+            {VideoComposition::layout(VideoLayoutMode::SideBySide, {64, 64}, {mainInfo.videoSize, extraInfo.videoSize})[0],
+             {{QRect(32, 16, 32, 16), 1.0, 0.0}}}), {}, 1);
+    QVERIFY2(preflight.isEmpty(), qPrintable(preflight));
+    const auto decoded = readBytes(output);
+    QCOMPARE(decoded.size(), qsizetype(count * 128 * 32 * 4));
+    const auto pixel = [&](int frame, int x, int y) {
+        return static_cast<unsigned char>(decoded[((frame * 32 + y) * 128 + x) * 4]);
+    };
+    for (int frame = 0; frame < count; ++frame) {
+        // Output frame k is main video time 2 + k/30 and helmet time
+        // 1 + k/30, until the helmet video ends at its 3 s. Its frame j is at
+        // output time (j - 25)/25; the overlay takes the last frame whose time,
+        // rounded to the nearest output frame, is not after k.
+        const bool shown = frame < 60;
+        QCOMPARE(pixel(frame, 64 + 59, 16) > 127, shown);
+        if (!shown) continue;
+        int expected = 25;
+        while (std::lround((expected + 1 - 25) * 30.0 / 25.0) <= frame) ++expected;
+        int identity = 0;
+        for (int bit = 0; bit < 9; ++bit) if (pixel(frame, 64 + bit * 6 + 3, 16) > 127) identity |= 1 << bit;
+        QCOMPARE(identity, expected);
+    }
+    // The main video keeps its aspect ratio in the left half: 64x16 at y 8,
+    // so its marker bar (x 56 to 61 of 128) is at x 28 to 30.
+    QVERIFY(pixel(0, 29, 4) < 64);
+    QVERIFY(pixel(0, 29, 16) > 127);
 }
 
 void ExportTests::plansBoundedStageBSourceAccess()

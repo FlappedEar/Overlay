@@ -355,6 +355,26 @@ int exportWorker(const QString &configPath)
                                             {"width", input.videoSize.width()},
                                             {"height", input.videoSize.height()},
                                             {"duration", input.duration}}}});
+        // KAN-131: the videos composed with the main one.
+        QVector<FlappedEar::ExportAdditionalVideo> additionalVideos;
+        for (const auto &value : config.value("additionalVideos").toArray()) {
+            const QJsonObject video = value.toObject();
+            const QJsonObject videoSync = video.value("sync").toObject();
+            FlappedEar::ExportAdditionalVideo additional{video.value("path").toString(), video.value("label").toString(),
+                {videoSync.value("offset").toDouble(), videoSync.value("timeScale").toDouble(1.0)}, {}};
+            if (additional.path.isEmpty() || !std::isfinite(additional.sync.offset) || !(additional.sync.timeScale > 0.0))
+                throw std::runtime_error("An additional video in the export configuration is invalid.");
+            additional.info = FlappedEar::MediaProbe::probeSummary(additional.path, {}, 30'000, emitProbeEvent, cancelled);
+            if (additional.info.videoSize.isEmpty())
+                throw std::runtime_error(QStringLiteral("The additional video %1 has no readable video stream.")
+                    .arg(QFileInfo(additional.path).fileName()).toStdString());
+            // As for the main video: HDR or Log colour is not converted.
+            if (FlappedEar::isUnsupportedColorManagedClass(additional.info.sourceColorClass))
+                throw std::runtime_error(QStringLiteral("The additional video %1 is %2. Export does not yet convert HDR or Log colour.")
+                    .arg(QFileInfo(additional.path).fileName(), FlappedEar::sourceColorClassName(additional.info.sourceColorClass))
+                    .toStdString());
+            additionalVideos.append(additional);
+        }
         currentOperation = QStringLiteral("initializeRenderer");
         currentMessage = QStringLiteral("Preparing telemetry scene");
         emitEvent({{"type", "status"}, {"operation", currentOperation}, {"message", currentMessage}});
@@ -373,6 +393,10 @@ int exportWorker(const QString &configPath)
         settings.inputPath = config.value("inputPath").toString();
         settings.chapterPaths = chapterPaths;
         settings.chapterDurationTicks = chapterDurationTicks;
+        settings.sync = sync;
+        settings.additionalVideos = additionalVideos;
+        settings.videoLayout = config.value("videoLayout").toString() == QStringLiteral("sideBySide")
+            ? FlappedEar::VideoLayoutMode::SideBySide : FlappedEar::VideoLayoutMode::PictureInPicture;
         settings.outputPath = config.value("outputPath").toString();
         settings.encoder = config.value("encoder").toString();
         settings.outputSize = outputSize;
