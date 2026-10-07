@@ -45,6 +45,7 @@ private slots:
     void preservesPartialOverlapInAnalysisSeries();
     void derivesStablePreviewViewportAndLastFrameAdapter();
     void exposesReactivePreviewMetadataToQml();
+    void buildsAddWidgetListAndInspectorFromDescriptors();
     void keepsSidebarReachableAtMinimumSize();
     void disablesTransportShortcutsWhileEditing();
     void savesTheSceneAsATemplateFromThePopup();
@@ -914,6 +915,27 @@ void collectFlickables(QQuickItem *item, QVector<QQuickItem *> &flickables)
     if (item->inherits("QQuickFlickable")) flickables.append(item);
     for (auto *child : item->childItems()) collectFlickables(child, flickables);
 }
+}
+
+// KAN-217: the Add widget list and the inspector's hidden controls come from
+// the widget type descriptors through WidgetModel.
+void EditorTests::buildsAddWidgetListAndInspectorFromDescriptors()
+{
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    auto *repeater = editor.window->findChild<QObject *>("addWidgetRepeater");
+    QVERIFY(repeater);
+    QCOMPARE(repeater->property("count").toInt(), editor.controller.widgetModel()->widgetCatalog().size());
+    QCOMPARE(repeater->property("count").toInt(), 9);
+
+    const QString style = editor.inspector->property("isTech").toBool() ? QStringLiteral("tech") : QStringLiteral("classic");
+    const QStringList hidden = editor.controller.widgetModel()->unusedControls(QStringLiteral("retroCustomValue"), style);
+    QVERIFY(!hidden.isEmpty());
+    for (const QString &key : {QStringLiteral("accentColor"), QStringLiteral("label"), QStringLiteral("panelColor")}) {
+        QVariant uses;
+        QVERIFY(QMetaObject::invokeMethod(editor.inspector, "uses", Q_RETURN_ARG(QVariant, uses), Q_ARG(QVariant, key)));
+        QCOMPARE(uses.toBool(), !hidden.contains(key));
+    }
 }
 
 void EditorTests::keepsSidebarReachableAtMinimumSize()

@@ -29,6 +29,8 @@ class WidgetModel final : public QAbstractListModel {
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
     Q_PROPERTY(QVariantList templates READ templates NOTIFY templatesChanged)
+    // KAN-217: the Add widget list, from the widget type descriptors.
+    Q_PROPERTY(QVariantList widgetCatalog READ widgetCatalog CONSTANT)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool templateStoreWritable READ templateStoreWritable NOTIFY templatesChanged)
     // KAN-191: the user's "My widgets" library.
@@ -88,6 +90,9 @@ public:
     Q_INVOKABLE void ungroupWidget(int index);
     Q_INVOKABLE QVariantList groupMembers(int index) const;
     Q_INVOKABLE QVariantMap widget(int index) const;
+    [[nodiscard]] QVariantList widgetCatalog() const;
+    // KAN-139: shared inspector controls the renderer of `type` in `style` does not read.
+    Q_INVOKABLE QStringList unusedControls(const QString &type, const QString &style) const;
     Q_INVOKABLE void resetDefaults();
     Q_INVOKABLE bool applyTemplate(const QString &templateId);
     Q_INVOKABLE QString saveCurrentAsTemplate(const QString &name, const QString &description);

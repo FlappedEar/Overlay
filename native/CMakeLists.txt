@@ -279,6 +279,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/gopro/GoProTelemetrySource.h
     src/widgets/WidgetModel.cpp
     src/widgets/WidgetModel.h
+    src/widgets/WidgetTypes.cpp
+    src/widgets/WidgetTypes.h
 )
 target_compile_features(flappedear_overlay_core PUBLIC cxx_std_20)
 target_include_directories(flappedear_overlay_core PUBLIC src)

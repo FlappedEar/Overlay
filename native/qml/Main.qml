@@ -53,53 +53,8 @@ ApplicationWindow {
         && !appController.videoName && appController.eventRuns.length === 0
     property int selectedWidgetIndex: -1
     property var selectedWidgetIndices: []
-    property var widgetCatalog: [
-        {
-            "label": "Speed",
-            "type": "speed",
-            "icon": "KM"
-        },
-        {
-            "label": "Heart rate",
-            "type": "heartRate",
-            "icon": "♥"
-        },
-        {
-            "label": "Pedals",
-            "type": "pedals",
-            "icon": "▥"
-        },
-        {
-            "label": "F1 G-Force Radar",
-            "type": "f1GForceRadar",
-            "icon": "G+"
-        },
-        {
-            "label": "G-Force Bar",
-            "type": "gForceMagnitudeBar",
-            "icon": "G="
-        },
-        {
-            "label": "Tyres",
-            "type": "tyres",
-            "icon": "◫"
-        },
-        {
-            "label": "Retro Custom",
-            "type": "retroCustomValue",
-            "icon": "R+"
-        },
-        {
-            "label": "Current lap time",
-            "type": "lapCurrent",
-            "icon": "NOW"
-        },
-        {
-            "label": "Retro RPM",
-            "type": "retroTachometer",
-            "icon": "R"
-        }
-    ]
+    // KAN-217: the Add widget list comes from the widget type descriptors.
+    readonly property var widgetCatalog: appController.widgetModel.widgetCatalog
 
     onClosing: close => {
         if (window.closeApproved) {
@@ -1071,6 +1026,7 @@ ApplicationWindow {
                         columnSpacing: 7
                         rowSpacing: 7
                         Repeater {
+                            objectName: "addWidgetRepeater"
                             model: window.widgetCatalog
                             Rectangle {
                                 required property var modelData
