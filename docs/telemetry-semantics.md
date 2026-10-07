@@ -199,8 +199,10 @@ deceleration channel is reported (`noBrakeOrDecelerationChannel`) before
 coverage is checked.
 
 The `throttle` alias means the driver's input (KAN-118). When a recording
-has an accelerator-pedal channel with numeric data (RaceChrono OBD
-`accelerator_pos`), the alias refers to it. The throttle plate
+has an accelerator-pedal channel (RaceChrono OBD `accelerator_pos`) with at
+least half the throttle channel's finite samples, the alias refers to it
+(KAN-230, Telemetry FET-207); a pedal with only a few valid samples does not
+replace a full throttle. The throttle plate
 (`throttle_pos`) stays available under its own name, because it shows what
 the ECU did: on the owner's car it reads 13.3 % at idle and 80.4 % fully
 open, is fully open from about 70 % pedal, and opens for downshift rev-match

@@ -187,6 +187,7 @@ private slots:
     void interpolatesByTime();
     void parsesTextFirstVboTimeFormats();
     void keepsVboTimestampsStrictlyMonotonic();
+    void choosesVboAliasesByFiniteData();
     void readsVboMidnightRolloverByItsGap();
     void rejectsUnsafeVboDerivedTimes_data();
     void rejectsUnsafeVboDerivedTimes();
@@ -692,6 +693,29 @@ void TelemetryCoreTests::parsesTextFirstVboTimeFormats()
     verifyTimes(timestampsFor(u"091428.380 1\n091428.480 2\n091428.580 3"),
                 {0.0, 0.1, 0.2});
     verifyTimes(timestampsFor(u"0 1\n0.1 2\n0.2 3\n10.5 4"), {0.0, 0.1, 0.2, 10.5});
+}
+
+void TelemetryCoreTests::choosesVboAliasesByFiniteData()
+{
+    // KAN-230 (Telemetry FET-207). Matches are taken in name order, so
+    // "speed" comes before "velocity".
+    const auto aliasesFor = [](const QStringList &rows) {
+        QString text = QStringLiteral("[column names]\ntime velocity speed throttle accelerator_pos\n[data]\n");
+        for (qsizetype index = 0; index < rows.size(); ++index)
+            text += QStringLiteral("%1 %2\n").arg(index * 0.1, 0, 'f', 1).arg(rows[index]);
+        return VboParser::parse(text).aliases;
+    };
+    // speed has 1 finite sample, velocity 6: the later, fuller column wins.
+    auto aliases = aliasesFor({"10 10 50 x", "11 x 51 x", "12 x 52 x", "13 x 53 x", "14 x 54 x", "15 x 55 20"});
+    QCOMPARE(aliases.value("speed"), QString("velocity"));
+    // A pedal with 1 of the throttle's 6 samples does not replace it.
+    QCOMPARE(aliases.value("throttle"), QString("throttle"));
+
+    // speed has 3, velocity 6: not more than twice, so the first match stays.
+    // A pedal with 3 of the throttle's 6 samples (half) replaces it.
+    aliases = aliasesFor({"10 10 50 1", "11 11 51 2", "12 12 52 3", "13 x 53 x", "14 x 54 x", "15 x 55 x"});
+    QCOMPARE(aliases.value("speed"), QString("speed"));
+    QCOMPARE(aliases.value("throttle"), QString("accelerator_pos"));
 }
 
 void TelemetryCoreTests::keepsVboTimestampsStrictlyMonotonic()

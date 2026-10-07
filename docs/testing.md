@@ -2240,6 +2240,11 @@ chart coverage includes the maximum int point budget and a zero-width range.
 Existing timestamp text formats, UTC chronology and valid VBO fixtures stay in
 the complete native gate.
 
+`TelemetryCoreTests::choosesVboAliasesByFiniteData` (KAN-230) checks that a
+later matching column with more than twice the finite samples takes the alias
+(and one with exactly twice does not), and that an accelerator pedal replaces
+the throttle with half its samples but not with one sixth.
+
 `TelemetryCoreTests::readsVboMidnightRolloverByItsGap` (KAN-233) checks the
 rollover rule shared with FlappedEar Telemetry: a dropout from 22:50 to 01:10 and
 an exact 3-hour gap read as passing midnight, while a 3-hour-and-1-second gap and
