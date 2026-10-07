@@ -187,6 +187,7 @@ private slots:
     void interpolatesByTime();
     void parsesTextFirstVboTimeFormats();
     void keepsVboTimestampsStrictlyMonotonic();
+    void readsVboMidnightRolloverByItsGap();
     void rejectsUnsafeVboDerivedTimes_data();
     void rejectsUnsafeVboDerivedTimes();
     void preservesMixedVboClocksAcrossMidnight();
@@ -720,6 +721,23 @@ void TelemetryCoreTests::keepsVboTimestampsStrictlyMonotonic()
         QVERIFY(speed.timestamps()[index] > speed.timestamps()[index - 1]);
     }
     QVERIFY(guarded.warnings.size() >= 6);
+}
+
+void TelemetryCoreTests::readsVboMidnightRolloverByItsGap()
+{
+    const auto speedTimes = [](const char16_t *rows) {
+        return VboParser::parse(QStringLiteral("[column names]\ntime speed\n[data]\n") + QString::fromUtf16(rows))
+            .channels.value(QStringLiteral("speed")).timestamps();
+    };
+    // A dropout from 22:50 to 01:10 is 2 h 20 min forward across midnight.
+    QCOMPARE(speedTimes(u"225000.000 1\n011000.000 2\n011000.500 3"),
+             QVector<double>({0.0, 8400.0, 8400.5}));
+    // Exactly three hours forward still reads as a rollover.
+    QCOMPARE(speedTimes(u"22:00:00 1\n01:00:00 2"), QVector<double>({0.0, 10800.0}));
+    // More than three hours forward is a clock reset: the row moved backward.
+    QCOMPARE(speedTimes(u"22:00:00 1\n01:00:01 2\n22:00:01 3"), QVector<double>({0.0, 1.0}));
+    // A step back within the day, such as a daylight-saving hour, stays backward.
+    QCOMPARE(speedTimes(u"02:30:00 1\n01:30:00 2\n02:30:01 3"), QVector<double>({0.0, 1.0}));
 }
 
 void TelemetryCoreTests::rejectsUnsafeVboDerivedTimes_data()
