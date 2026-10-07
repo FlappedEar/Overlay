@@ -149,8 +149,8 @@ TrackInference inferTrack(const LapSession &laps, const bool longitudeIsWestPosi
     result.reason = "Not enough repeated, complete GPS laps to identify a route automatically.";
     if (!laps.selectedStartGate || laps.lapTraces.size() < 2) return result;
     const auto &gate = *laps.selectedStartGate;
-    const GeoCoordinate origin{(gate.endpointA.latitudeDegrees + gate.endpointB.latitudeDegrees) / 2,
-        (longitudeIsWestPositive ? -1 : 1) * (gate.endpointA.longitudeDegrees + gate.endpointB.longitudeDegrees) / 2};
+    const GeoCoordinate midpoint = geoMidpoint(gate.endpointA, gate.endpointB);
+    const GeoCoordinate origin{midpoint.latitudeDegrees, (longitudeIsWestPositive ? -1 : 1) * midpoint.longitudeDegrees};
     QVector<RouteShape> candidates;
     const auto stride = std::max<qsizetype>(1, (laps.lapTraces.size() + maximumRepresentatives - 1) / maximumRepresentatives);
     for (qsizetype i = 0; i < laps.lapTraces.size(); i += stride) {

@@ -383,7 +383,7 @@ The modules below are in dependency order. Code: `native/src/telemetry/`; tests:
 - **Units:** a declared unit must match the threshold's unit; an undeclared unit is used but flagged. Nothing is rescaled except for G-G.
 - **Lap identity:** exact bounds plus content hash. One eligibility function feeds the ranking, consistency, the theoretical best and the decisions key.
 - **Segments:** only segments approved for the exact compatibility reference are used. Proposals never feed a metric.
-- **Coordinates:** time is the recording's seconds; distance is metres from the gate on one shared axis. Local metres use an equirectangular projection with R = 6,371,000 m.
+- **Coordinates:** time is the recording's seconds; distance is metres from the gate on one shared axis. Local metres use an equirectangular projection with R = 6,371,000 m. Longitude differences and gate midpoints go the short way round across ±180°, and converted gate ends are wrapped into -180..180 (KAN-235, Telemetry FET-213).
 
 **Check before re-implementing.** These are findings in the current code, not decisions.
 - **Thresholds differ between modules.** Inferred braking is 0.30 / 0.15 g in `BrakingOnset` and 0.15 / 0.08 g in `DrivingStates`. Throttle is 20 / 10 % for pickup and 15 / 8 % for driving states. Whether this is intentional is unclear.

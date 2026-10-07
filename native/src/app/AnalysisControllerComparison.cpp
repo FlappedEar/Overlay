@@ -410,9 +410,7 @@ void AnalysisController::ensureComparisonProgressAxis() const
     m_comparisonProgressAxis = {};
     m_comparisonProgressTraceCache = {};
     if (a.hasReferenceGate) {
-        const GeoCoordinate origin{
-            (a.referenceGate.endpointA.latitudeDegrees + a.referenceGate.endpointB.latitudeDegrees) / 2.0,
-            (a.referenceGate.endpointA.longitudeDegrees + a.referenceGate.endpointB.longitudeDegrees) / 2.0};
+        const GeoCoordinate origin = geoMidpoint(a.referenceGate.endpointA, a.referenceGate.endpointB);
         m_comparisonProgressAxis = buildProgressAxis(a.referenceTrace, origin, a.referenceGate);
     }
     if (m_comparisonProgressAxis.valid) {

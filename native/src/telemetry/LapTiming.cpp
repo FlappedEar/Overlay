@@ -422,10 +422,7 @@ LapSession detectLaps(
     LapSession result;
     result.selectedStartGate = startGate;
 
-    const GeoCoordinate origin{
-        (startGate.endpointA.latitudeDegrees + startGate.endpointB.latitudeDegrees) / 2.0,
-        (startGate.endpointA.longitudeDegrees + startGate.endpointB.longitudeDegrees) / 2.0,
-    };
+    const GeoCoordinate origin = geoMidpoint(startGate.endpointA, startGate.endpointB);
     if (!isValidCoordinate(startGate.endpointA) || !isValidCoordinate(startGate.endpointB)
         || !isValidCoordinate(origin)) {
         result.status = LapSessionStatus::InvalidGate;
