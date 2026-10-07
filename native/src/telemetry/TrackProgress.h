@@ -116,6 +116,15 @@ struct ProgressSegment {
 // negative value, and fixes past the finish continue beyond lengthMeters. A
 // fix projecting slightly behind the previous one in its segment is held at
 // the previous progress, so progress never falls within a segment.
+//
+// A segment after a gap must start where the lap could have driven since its
+// last projected fix (KAN-238, as Telemetry FET-256); a fix that does not
+// matched another branch of the track and is refused. When a fix instead fits
+// the lap's earlier lock (the gate at startTime before the first segment) and
+// lies behind where a short run of the latest segments started, or out of the
+// run's reach where the earlier lock could have driven at the lap's own speed,
+// those segments matched another branch and are dropped, rather than the rest
+// of the lap being moved on by a lap or refused.
 [[nodiscard]] QVector<ProgressSegment> projectLapTrace(
     const ProgressAxis &axis, const TelemetrySession &session, double startTime, double endTime,
     const CancellationCheck &cancelled = {});

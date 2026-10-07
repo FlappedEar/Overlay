@@ -19,6 +19,29 @@ constexpr double maximumGapSeconds = 5.0;
 // Fixes one lap trace projects at most, besides each run's first and last
 // (KAN-220); the former latitude buckets kept up to twice 4000.
 constexpr qsizetype maximumLapTraceFixes = 8000;
+// Faster than any car on a track day (360 km/h). A segment that starts after
+// a gap in a lap may lie at most this speed times the time since the lap's
+// last projected fix, plus segmentRestartBackwardMeters, ahead of that fix
+// (KAN-238, as Telemetry FET-256): a cold start that matched another branch
+// of the track (the other diagonal of a crossing, the other leg of a
+// hairpin, a parallel straight) lands a long way off along the axis, and the
+// lap could not have driven there in the time.
+constexpr double maximumPlausibleSpeedMetersPerSecond = 100.0;
+// When a segment's first fix lies further ahead of the lap's last projected
+// fix than the lap's own speed (its fastest progress over a second) times
+// this margin, at least ownSpeedFloorMetersPerSecond, could have taken it, it
+// is read as lying behind the latest segments instead, which are dropped if
+// the fix fits the lock before them (KAN-238).
+constexpr double ownSpeedMargin = 1.5;
+constexpr double ownSpeedFloorMetersPerSecond = 40.0;
+// A cold start takes no direction of travel from a movement shorter than
+// this while the lap stands: its projected progress advanced less than
+// standingMetersPerSecond over the standingSeconds before its last projected
+// fix, and that fix is at most standingSeconds old. It is GPS jitter
+// (KAN-238); a car crawling through a hairpin keeps its heading.
+constexpr double minimumHeadingMovementMeters = 0.5;
+constexpr double standingSeconds = 0.5;
+constexpr double standingMetersPerSecond = 1.0;
 
 double cross(const QPointF &a, const QPointF &b) { return a.x() * b.y() - a.y() * b.x(); }
 
@@ -207,6 +230,75 @@ bool headingAgrees(const ProgressAxis &axis, const int index, const QPointF &mov
     return cosine >= minimumCosine;
 }
 
+// Distance from `point` to the nearest axis segment within `separation`
+// points of `index` (either way) whose direction is more than 90 degrees from
+// the direction at `index`: the other leg of a tight hairpin (KAN-238). When
+// the car's `movementDirection` fits the direction at `index` better than a
+// leg's, that leg is no alternative. Infinity when there is none.
+double nearestOtherLeg(const ProgressAxis &axis, const QPointF &point, const int index, const int separation,
+    const QPointF &movementDirection)
+{
+    const int n = axis.points.size();
+    const QPointF tangent = axisTangent(axis, index);
+    double nearest = std::numeric_limits<double>::infinity();
+    if (tangent.x() == 0 && tangent.y() == 0) return nearest;
+    const auto dot = [](const QPointF &a, const QPointF &b) { return a.x() * b.x() + a.y() * b.y(); };
+    const double fit = dot(movementDirection, tangent); // 0 without a movement: every leg counts
+    for (int offset = -separation + 1; offset < separation; ++offset) {
+        const int other = ((index + offset) % n + n) % n;
+        const QPointF otherTangent = axisTangent(axis, other);
+        if (dot(otherTangent, tangent) >= 0.0) continue;
+        if (dot(movementDirection, otherTangent) < fit) continue;
+        const auto projection = projectOntoSegment(point, axis.points[other], axis.points[(other + 1) % n]);
+        nearest = std::min(nearest, projection.distance);
+    }
+    return nearest;
+}
+
+// Whether the lap stands at `time`: its last projected fix, from `recent`
+// ((time, progress), in time order), is at most standingSeconds old, and its
+// progress advanced less than standingMetersPerSecond over at least
+// standingSeconds before it (KAN-238).
+bool standing(const QVector<QPointF> &recent, const double time)
+{
+    if (recent.isEmpty()) return false;
+    const QPointF last = recent.last();
+    if (time - last.x() > standingSeconds) return false;
+    for (auto it = recent.crbegin(); it != recent.crend(); ++it) {
+        const double span = last.x() - it->x();
+        if (span >= standingSeconds) return last.y() - it->y() < span * standingMetersPerSecond;
+    }
+    return false;
+}
+
+struct LocalFix {
+    QPointF local;
+    double time = 0.0;
+};
+
+// The last fix of `session` before `time`, in metres around `origin`; none
+// when it is more than maximumGapSeconds before `time` or has no valid
+// coordinate, as the lap would forget the movement then (KAN-238).
+std::optional<LocalFix> fixBefore(const TelemetrySession &session, const double time, const GeoCoordinate &origin)
+{
+    const auto channel = session.channels.constFind(session.aliases.value("latitude", "latitude"));
+    if (channel == session.channels.cend()) return std::nullopt;
+    const auto &timestamps = channel->timestamps();
+    const auto &values = channel->values();
+    if (timestamps.size() != values.size()) return std::nullopt;
+    const auto low = std::lower_bound(timestamps.cbegin(), timestamps.cend(), time);
+    if (low == timestamps.cbegin()) return std::nullopt;
+    const qsizetype index = std::distance(timestamps.cbegin(), low) - 1;
+    const double before = timestamps[index];
+    if (!(time - before <= maximumGapSeconds)) return std::nullopt;
+    const auto longitude = session.valueAt("longitude", before, InterpolationMode::Longitude);
+    if (!longitude) return std::nullopt;
+    const GeoCoordinate coordinate{values[index], *longitude};
+    if (!isValidCoordinate(coordinate)) return std::nullopt;
+    const MetricPoint projected = projectCoordinate(coordinate, origin);
+    return LocalFix{{projected.eastMeters, projected.northMeters}, before};
+}
+
 // Signed shortest angular distance from `from` to `to`, in (-pi, pi] -- never
 // a naive subtraction, which breaks across the +-pi wrap.
 double angularDifference(const double to, const double from)
@@ -371,6 +463,14 @@ ProjectedSample projectSample(const ProgressAxis &axis, const QPointF &localPoin
         const int minimumSeparation = std::max(4, static_cast<int>(std::lround(coldStartSeparationMeters / axis.spacingMeters)));
         const auto second = secondBestCandidate(axis, localPoint, 0, axis.points.size(), best.index, minimumSeparation);
         if (second.index >= 0 && best.distance > second.distance * ambiguityRatio) return result;
+        // The separation keeps the same branch out of the comparison, but in a
+        // hairpin tighter than about 10 m radius the other leg is nearer than
+        // that along the axis, so it was never compared and a fix midway
+        // between the legs locked on to either (KAN-238). A part of the axis
+        // running the other way from the match is another branch, however
+        // near, unless the direction of travel rules it out.
+        const double otherLeg = nearestOtherLeg(axis, localPoint, best.index, minimumSeparation, movementDirection);
+        if (best.distance > otherLeg * ambiguityRatio) return result;
         if (!headingAgrees(axis, best.index, movementDirection, minimumHeadingCosine)) return result;
         result.progressMeters = best.progressMeters;
         result.valid = true;
@@ -424,21 +524,96 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
     qsizetype fixCount = 0;
     for (const auto &segment : latitudeSegments) fixCount += segment.size();
     qsizetype ordinal = -1;
+    const double length = axis.lengthMeters;
+    // How far behind the last progress a segment's first fix may lie and still
+    // be on the same lap (KAN-237).
+    const double allowance = std::min(segmentRestartBackwardMeters, length / 4);
 
     ProgressSegment current;
     ProjectionContext context;
+    // The last fix, projected or not, for the direction of travel; seeded with
+    // the last fix before the lap, so the lap's first fix has one too
+    // (KAN-238).
     std::optional<QPointF> previousLocal;
     std::optional<double> previousTime;
+    if (const auto before = fixBefore(session, startTime, axis.origin)) {
+        previousLocal = before->local;
+        previousTime = before->time;
+    }
+    // The lap's projected fixes of the last second, (time, progress), to tell
+    // whether it stands.
+    QVector<QPointF> recentProgress;
     std::optional<double> lastProgress; // unwrapped; kept across segments of this lap
-    const auto flush = [&] {
+    double lastProgressTime = 0.0;      // when the fix at lastProgress was taken
+    // The lap's own speed: its fastest progress over a second within a
+    // segment, and where in `current` that second starts.
+    double fastest = 0.0;
+    qsizetype secondAgo = 0;
+
+    // Ends the current segment; the next fix is a cold start. Unless the lap
+    // has to forget it, the next fix's movement is still measured from the
+    // last fix, so the cold start has a direction of travel to check
+    // (KAN-238): after a fix the projection refused, and across a raw GPS gap
+    // of up to maximumGapSeconds. Without it a cold start could lock on to a
+    // hairpin's other leg or a parallel straight driven the other way.
+    const auto flush = [&](const bool keepMovement = false) {
         if (!current.samples.isEmpty()) { result.append(std::move(current)); current = {}; }
         context = ProjectionContext{};
-        previousLocal.reset();
-        previousTime.reset();
+        secondAgo = 0;
+        if (!keepMovement) {
+            previousLocal.reset();
+            previousTime.reset();
+        }
+    };
+
+    // How far ahead of a fix `seconds` earlier the lap could be: at
+    // maximumPlausibleSpeedMetersPerSecond, or at its own speed with a margin.
+    const auto reach = [](const double seconds) {
+        return seconds * maximumPlausibleSpeedMetersPerSecond + segmentRestartBackwardMeters;
+    };
+    const auto ownReach = [&](const double seconds) {
+        return seconds * std::clamp(fastest * ownSpeedMargin, ownSpeedFloorMetersPerSecond,
+                                    maximumPlausibleSpeedMetersPerSecond)
+            + segmentRestartBackwardMeters;
+    };
+
+    struct ConflictingRun {
+        qsizetype first = 0; // index in result of the run's first segment
+        double progress = 0.0; // the fix's progress from the lock before the run
+    };
+    // The latest segments a segment's first fix at `progress` (any lap of it)
+    // and `time` shows to be on another branch, or none. The run must cover
+    // less than a quarter of the axis (a long run is more likely right than
+    // one fix), and the fix must either lie behind where the run started and
+    // within reach of the lock before it (`behind`), or, out of the run's
+    // reach, be where the lock before it could have driven at the lap's own
+    // speed (otherwise).
+    const auto conflictingRun = [&](const double progress, const double time,
+                                    const bool behind) -> std::optional<ConflictingRun> {
+        const double last = *lastProgress;
+        for (qsizetype k = result.size() - 1; k >= 0; --k) {
+            const double first = result[k].samples.first().progressMeters;
+            if (last - first >= length / 4) return std::nullopt;
+            // The lap's last progress and its time when segment k began: the
+            // gate at startTime for the first. A lap timed from another line
+            // than the axis gate makes this lock off by that line's distance
+            // from the gate, which matters only for dropping the lap's first
+            // segment.
+            const double anchor = k == 0 ? 0.0 : result[k - 1].samples.last().progressMeters;
+            const double anchorTime = k == 0 ? startTime : result[k - 1].samples.last().telemetryTime;
+            const double from = progress + std::ceil((anchor - allowance - progress) / length) * length;
+            if (behind ? from < first - allowance && from - anchor <= reach(time - anchorTime)
+                       : from - anchor <= ownReach(time - anchorTime))
+                return ConflictingRun{k, from};
+        }
+        return std::nullopt;
     };
 
     for (const auto &segment : latitudeSegments) {
-        flush(); // a raw GPS gap between sampledSegments runs is never bridged
+        // A raw GPS gap between runs is never bridged, but up to
+        // maximumGapSeconds the movement across it still gives the direction
+        // of travel.
+        flush(previousTime && !segment.isEmpty() && segment.first().x() - *previousTime <= maximumGapSeconds);
         for (qsizetype index = 0; index < segment.size(); ++index) {
             ++ordinal;
             if ((ordinal & 0xff) == 0) throwIfCancelled(cancelled);
@@ -458,13 +633,18 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
             QPointF movement(0, 0);
             if (previousLocal && previousTime && time > *previousTime) {
                 movement = local - *previousLocal;
-                speed = std::hypot(movement.x(), movement.y()) / (time - *previousTime);
+                const double moved = std::hypot(movement.x(), movement.y());
+                speed = moved / (time - *previousTime);
+                // A cold start takes no direction from the GPS jitter of a
+                // standing car.
+                if (!context.hasLock && moved < minimumHeadingMovementMeters && standing(recentProgress, time))
+                    movement = QPointF(0, 0);
             }
             previousLocal = local;
             previousTime = time;
 
             auto projectedSample = projectSample(axis, local, time, speed, movement, context);
-            if (!projectedSample.valid) { flush(); continue; }
+            if (!projectedSample.valid) { flush(true); continue; }
 
             // Unwrap at the gate (KAN-152). The lap's first fix, taken just
             // after its timed start, may project onto the end of the axis:
@@ -473,24 +653,60 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
             // finish run beyond the axis length.
             double &progress = projectedSample.progressMeters;
             if (!lastProgress) {
-                if (progress > axis.lengthMeters / 2 && time - startTime <= maximumGapSeconds) progress -= axis.lengthMeters;
-            } else {
+                if (progress > length / 2 && time - startTime <= maximumGapSeconds) progress -= length;
+                // No bound here: the lap may be timed from another line than
+                // the axis gate, so where it starts on the axis is not known.
+                // A first segment on another branch is dropped by the later
+                // fixes instead.
+            } else if (current.samples.isEmpty()) {
                 // The first fix after a gap may be found well behind the last
                 // one (KAN-237): with the 3 m jitter tolerance a fix 4 m back
                 // moved the rest of the lap one whole lap on.
-                const double tolerance = current.samples.isEmpty() ? segmentRestartBackwardMeters
-                                                                   : backwardToleranceMeters;
-                progress += std::ceil((*lastProgress - tolerance - progress) / axis.lengthMeters)
-                    * axis.lengthMeters;
+                progress += std::ceil((*lastProgress - allowance - progress) / length) * length;
+                // A segment's first fix is a cold start, found on the whole
+                // axis (KAN-238). Further ahead than the lap could have driven
+                // since, at its own speed, it may instead lie behind the latest
+                // segments: if it fits the lock before them, they matched
+                // another branch, and they are dropped rather than this fix and
+                // every later one moved on by a lap. Otherwise, further ahead
+                // than any car could have driven, it matched another branch
+                // itself and is refused, leaving a gap.
+                const double ahead = progress - *lastProgress;
+                const double since = time - lastProgressTime;
+                auto run = ahead > ownReach(since) ? conflictingRun(progress, time, true) : std::nullopt;
+                // The mirror case: a cold start after a long gap matched
+                // another branch behind the car but within reach, and the
+                // right fixes after it are out of its reach. When the lock
+                // before that run could have reached this fix at the lap's own
+                // speed, the run is dropped.
+                if (!run && ahead > reach(since)) run = conflictingRun(progress, time, false);
+                if (run) {
+                    result.resize(run->first);
+                    progress = run->progress;
+                } else if (ahead > reach(since)) {
+                    flush(true);
+                    continue;
+                }
+            } else {
+                progress += std::ceil((*lastProgress - backwardToleranceMeters - progress) / length) * length;
+                // A fix projecting up to the backward tolerance behind the
+                // last one in this segment (GPS jitter, often while stopped) is
+                // held at the last progress, so progress never falls within a
+                // segment and the segment still covers the fix's time.
+                progress = std::max(progress, *lastProgress);
             }
-            // A fix projecting up to the backward tolerance behind the last one
-            // in this segment (GPS jitter, often while stopped) is held at the
-            // last progress, so progress never falls within a segment and the
-            // segment still covers the fix's time. A segment after a gap may
-            // start a little behind the last one, as before.
-            if (!current.samples.isEmpty()) progress = std::max(progress, current.samples.last().progressMeters);
             lastProgress = progress;
+            lastProgressTime = time;
             current.samples.append(projectedSample);
+            recentProgress.erase(std::remove_if(recentProgress.begin(), recentProgress.end(),
+                                     [time](const QPointF &fix) { return time - fix.x() > 1.0; }),
+                recentProgress.end());
+            recentProgress.append({time, progress});
+            // The lap's own speed, over at least a second of this segment.
+            const auto &samples = current.samples;
+            while (secondAgo + 1 < samples.size() && time - samples[secondAgo + 1].telemetryTime >= 1.0) ++secondAgo;
+            const double span = time - samples[secondAgo].telemetryTime;
+            if (span >= 1.0) fastest = std::max(fastest, (progress - samples[secondAgo].progressMeters) / span);
         }
     }
     if (!current.samples.isEmpty()) result.append(std::move(current));
