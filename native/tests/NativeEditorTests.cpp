@@ -47,6 +47,7 @@ private slots:
     void exposesReactivePreviewMetadataToQml();
     void keepsSidebarReachableAtMinimumSize();
     void disablesTransportShortcutsWhileEditing();
+    void savesTheSceneAsATemplateFromThePopup();
 };
 
 void EditorTests::initTestCase()
@@ -1028,7 +1029,40 @@ void EditorTests::disablesTransportShortcutsWhileEditing()
     }
 }
 
+// KAN-216: the "Save as template" popup lives in TemplateSavePopup.qml. Opening
+// it clears the name, and saving selects the new template and marks it as the
+// one the scene came from.
+void EditorTests::savesTheSceneAsATemplateFromThePopup()
+{
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    auto *popup = editor.window->findChild<QObject *>("templateSavePopup");
+    auto *name = editor.window->findChild<QObject *>("templateNameField");
+    auto *save = editor.window->findChild<QObject *>("templateSaveButton");
+    QVERIFY(popup && name && save);
+    name->setProperty("text", QStringLiteral("stale"));
+    QVERIFY(QMetaObject::invokeMethod(popup, "open"));
+    QTRY_VERIFY(popup->property("opened").toBool());
+    QCOMPARE(name->property("text").toString(), QString());
+    QVERIFY(!save->property("enabled").toBool());
+    name->setProperty("text", QStringLiteral("Saved from the popup"));
+    QTRY_VERIFY(save->property("enabled").toBool());
+    QVERIFY(QMetaObject::invokeMethod(save, "clicked"));
+    QTRY_VERIFY(!popup->property("visible").toBool());
+    const QString selected = editor.controller.templatePicker()->selectedId();
+    QVERIFY(!selected.isEmpty());
+    QCOMPARE(editor.controller.templatePicker()->activeId(), selected);
+    bool found = false;
+    for (const QVariant &entry : editor.controller.widgetModel()->templates()) {
+        const QVariantMap map = entry.toMap();
+        if (map.value("id").toString() == selected)
+            found = map.value("name").toString() == QStringLiteral("Saved from the popup");
+    }
+    QVERIFY(found);
+}
+
 #define main nativeTestMain
+
 QTEST_MAIN(EditorTests)
 #undef main
 
