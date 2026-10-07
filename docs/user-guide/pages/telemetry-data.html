@@ -77,6 +77,7 @@
   <li><strong>UNKNOWN</strong>: the whole recording, when no crossing could be found.</li>
 </ul>
 <p>A crossing counts only when the GPS path really goes over the line: it starts on one side and ends on the other, within 5 m of the line's ends. Coming close to the line and turning back on the same side, for example in the pit lane, is not a crossing.</p>
+<p>A lap that cannot be a lap of the circuit is kept in the lap list but never counts as the best lap: under 3 s or over an hour, a GPS path under 200 m, faster than 100 m/s on average, or under 80 % of the typical lap of the recording (or, across a day with several recordings, of the circuit). This catches, for example, a short loop back over the line in the paddock.</p>
 <p>Lap timing needs exactly one valid start gate and usable GPS. Laps run in the direction most start-line crossings share, so a single crossing the other way (leaving the paddock, for example) is ignored rather than deciding the direction. Manual start/finish placement is not available. If laps are missing, see <a href="troubleshooting.html#laps">No laps found</a>.</p>
 
 <h2 id="display">Display smoothing</h2>

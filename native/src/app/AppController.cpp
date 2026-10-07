@@ -427,7 +427,8 @@ QVariantList AppController::lapSummaries() const
             {QStringLiteral("exclusionReason"), lap.userExclusionReason},
             {QStringLiteral("referenceIssue"), lap.referenceIssue == LapReferenceIssue::GpsGap
                 ? QStringLiteral("GPS gap") : lap.referenceIssue == LapReferenceIssue::InvalidGps
-                    ? QStringLiteral("Invalid GPS") : QString()},
+                    ? QStringLiteral("Invalid GPS") : lap.referenceIssue == LapReferenceIssue::ImplausibleLap
+                        ? QStringLiteral("Implausible lap") : QString()},
             {QStringLiteral("deltaToBestSeconds"), lap.referenceEligible() && m_lapSession.fastestLapIndex
                 ? QVariant(lap.deltaToBestSeconds) : QVariant()},
             {QStringLiteral("isBest"), m_lapSession.fastestLapIndex

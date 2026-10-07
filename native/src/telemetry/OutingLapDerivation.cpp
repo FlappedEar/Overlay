@@ -31,6 +31,47 @@ QByteArray outingSourceDependencyKey(QJsonObject source)
     return QJsonDocument(source).toJson(QJsonDocument::Compact);
 }
 
+// Share of its compatibility group's median lap path below which a lap is not a
+// plausible lap of that circuit (KAN-225, as Telemetry FET-199). The same share
+// as LapDetectionOptions::minimumLapDistanceRatio within one recording; this
+// checks across the day's recordings, so one session's single short "lap"
+// cannot become the best of the day.
+constexpr double dayMinimumLapDistanceRatio = 0.8;
+
+void markShortLapsOfGroups(QVector<OutingLapRow> &rows, const QHash<QString, QJsonObject> &configurations)
+{
+    QHash<QString, QVector<double>> distances;
+    QHash<QString, QSet<QString>> runs;
+    const auto candidate = [](const OutingLapRow &row) {
+        return row.type == LapSectionType::Lap && row.referenceEligible && row.layoutIssue.isEmpty()
+            && row.distanceMeters;
+    };
+    QVector<QString> groups(rows.size());
+    for (qsizetype index = 0; index < rows.size(); ++index) {
+        const auto &row = rows[index];
+        if (!candidate(row)) continue;
+        groups[index] = lapCompatibilityGroupId(configurations.value(row.runId));
+        if (groups[index].isEmpty()) continue;
+        distances[groups[index]].append(*row.distanceMeters);
+        runs[groups[index]].insert(row.runId);
+    }
+    QHash<QString, double> medians;
+    for (auto it = distances.begin(); it != distances.end(); ++it) {
+        if (runs.value(it.key()).size() < 2) continue;
+        auto &values = it.value();
+        std::sort(values.begin(), values.end());
+        const qsizetype middle = values.size() / 2;
+        medians.insert(it.key(), values.size() % 2 == 1
+            ? values[middle] : (values[middle - 1] + values[middle]) / 2.0);
+    }
+    for (qsizetype index = 0; index < rows.size(); ++index) {
+        auto &row = rows[index];
+        if (groups[index].isEmpty() || !medians.contains(groups[index])) continue;
+        if (*row.distanceMeters < dayMinimumLapDistanceRatio * medians.value(groups[index]))
+            row.layoutIssue = "implausible-lap";
+    }
+}
+
 OutingLapDerivation deriveOutingLaps(const QJsonArray &sources, const QString &projectPath,
     const QHash<QString, OutingRunDerivation> &cache, const std::shared_ptr<std::atomic_bool> &cancellation)
 {
@@ -139,6 +180,7 @@ OutingLapDerivation deriveOutingLaps(const QJsonArray &sources, const QString &p
                 && config.value("layoutId").toString().startsWith("gps-route-v1:")
                 && !inference.matchingLaps.contains(row.lapNumber)) row.layoutIssue = "different-recorded-route";
         }
+        markShortLapsOfGroups(result.rows, result.groups.configurations);
         sortOutingLaps(result.rows);
     } catch (const OperationCancelled &) { result.cancelled = true; result.rows.clear(); result.runs.clear(); }
     catch (const std::exception &error) {

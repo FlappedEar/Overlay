@@ -24,6 +24,8 @@ struct OutingLapRow {
     bool bestOfRun = false;
     QJsonObject reference = {};
     QString layoutIssue = {};
+    // Length of the lap's GPS path; empty when its GPS is not complete.
+    std::optional<double> distanceMeters = {};
 };
 
 // Portable references use exact telemetry bounds, not row indices or lap numbers.
