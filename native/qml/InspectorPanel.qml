@@ -17,41 +17,11 @@ Rectangle {
     // Widgets that read one channel through the shared value settings.
     readonly property bool hasValueSource: ["speed", "heartRate", "retroCustomValue", "retroTachometer"].includes(selectedWidget.type)
     // KAN-139: shared controls a widget's renderer does not read, per style, so
-    // the inspector never offers a control that changes nothing. "*" applies to
-    // every type of that style. Keep in step with the renderers in widgets/.
-    readonly property var unusedControls: ({
-        "classic": {
-            "speed": ["accentColor"],
-            "pedals": ["accentColor", "fontWeight", "valueFontScale"],
-            "f1GForceRadar": ["accentColor", "showBackground", "backgroundColor", "showBorder", "borderColor",
-                              "borderWidth", "borderOpacity", "cornerRadius", "padding", "fontFamily", "fontWeight",
-                              "valueFontScale", "labelFontScale", "textColor", "secondaryTextColor"],
-            "gForceMagnitudeBar": ["accentColor", "fontWeight", "secondaryTextColor", "invertLateral", "invertLongitudinal"],
-            "lapCurrent": ["fontWeight", "padding", "secondaryTextColor"],
-            "retroTachometer": ["accentColor", "showBackground", "backgroundColor", "backgroundOpacity", "showBorder",
-                                "borderColor", "borderWidth", "borderOpacity", "cornerRadius", "padding", "fontWeight",
-                                "valueFontScale", "labelFontScale", "textColor", "unit", "decimals", "prefix", "suffix",
-                                "showUnit"],
-            "retroCustomValue": ["accentColor", "backgroundColor", "fontWeight", "textColor", "secondaryTextColor"]
-        },
-        "tech": {
-            "*": ["accentColor", "backgroundColor", "showBorder", "borderColor", "borderWidth", "borderOpacity",
-                  "cornerRadius", "padding", "fontFamily", "fontWeight", "valueFontScale", "labelFontScale",
-                  "textColor", "secondaryTextColor"],
-            "heartRate": ["label", "showUnit"],
-            "pedals": ["barRadius"],
-            "f1GForceRadar": ["showBackground", "gridColor", "showCenterBox"],
-            "gForceMagnitudeBar": ["fontSize", "maxG", "barRadius", "showLabel", "showValue", "barColor",
-                                   "barBackgroundColor", "invertLateral", "invertLongitudinal"],
-            "retroTachometer": ["fontSize", "showBackground", "backgroundOpacity", "unit", "decimals", "prefix",
-                                "suffix", "showUnit", "dialColor", "needleColor", "panelColor", "panelOpacity"],
-            "retroCustomValue": ["panelColor", "valueColor", "labelColor"],
-            "tyres": ["fontSize"]
-        }
-    })
+    // the inspector never offers a control that changes nothing. KAN-217: the
+    // lists live in the widget type descriptors (src/widgets/WidgetTypes.cpp).
+    readonly property var unusedControls: appController.widgetModel.unusedControls(selectedWidget.type || "", isTech ? "tech" : "classic")
     function uses(key) {
-        const byStyle = unusedControls[isTech ? "tech" : "classic"];
-        return (byStyle["*"] || []).indexOf(key) < 0 && (byStyle[selectedWidget.type] || []).indexOf(key) < 0;
+        return unusedControls.indexOf(key) < 0;
     }
     property int currentTab: 0
     signal selectionCleared

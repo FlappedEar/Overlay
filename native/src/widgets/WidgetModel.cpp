@@ -1,4 +1,5 @@
 #include "widgets/WidgetModel.h"
+#include "widgets/WidgetTypes.h"
 #include "project/BoundedJsonLoader.h"
 #include "project/ProjectLimits.h"
 
@@ -60,9 +61,11 @@ QVariantMap defaultSettings(const QString &type)
     return result;
 }
 
-const QStringList widgetTypes = {
-    "speed", "heartRate", "pedals", "f1GForceRadar", "gForceMagnitudeBar", "retroCustomValue",
-    "lapCurrent", "retroTachometer", "tyres", "designed"};
+const QStringList widgetTypes = [] {
+    QStringList types;
+    for (const WidgetTypeDescriptor &descriptor : widgetTypeDescriptors()) types.append(descriptor.type);
+    return types;
+}();
 
 // KAN-192: types the owner retired on 5 October 2026. A saved project or
 // template that still holds one opens without it; the editor reports how many
@@ -75,34 +78,8 @@ const QStringList retiredWidgetTypes = {
 
 QPair<double, double> defaultSize(const QString &type)
 {
-    if (type == "heartRate") {
-        return {0.12, 0.13};
-    }
-    if (type == "pedals") {
-        return {0.25, 0.13};
-    }
-    if (type == "f1GForceRadar") {
-        return {0.15, 0.20};
-    }
-    if (type == "gForceMagnitudeBar") {
-        return {0.24, 0.10};
-    }
-    if (type == "retroCustomValue") {
-        return {0.20, 0.13};
-    }
-    if (type == "lapCurrent") {
-        return {0.17, 0.14};
-    }
-    if (type == "retroTachometer") {
-        return {0.25, 0.36};
-    }
-    if (type == "tyres") {
-        return {0.17, 0.20};
-    }
-    if (type == "designed") {
-        return {0.20, 0.13};
-    }
-    return {0.15, 0.16};
+    const WidgetTypeDescriptor *descriptor = widgetTypeDescriptor(type);
+    return descriptor ? QPair<double, double>{descriptor->width, descriptor->height} : QPair<double, double>{0.15, 0.16};
 }
 
 double bounded(const double value, const double minimum, const double maximum)
@@ -1278,6 +1255,30 @@ WidgetData WidgetModel::createWidget(const QString &type, const int index)
 }
 
 bool WidgetModel::validType(const QString &type) { return widgetTypes.contains(type); }
+
+QVariantList WidgetModel::widgetCatalog() const
+{
+    QVariantList catalog;
+    for (const WidgetTypeDescriptor &descriptor : widgetTypeDescriptors()) {
+        if (descriptor.label.isEmpty()) continue;
+        catalog.append(QVariantMap{
+            {QStringLiteral("type"), descriptor.type},
+            {QStringLiteral("label"), descriptor.label},
+            {QStringLiteral("icon"), descriptor.icon}});
+    }
+    return catalog;
+}
+
+QStringList WidgetModel::unusedControls(const QString &type, const QString &style) const
+{
+    const WidgetTypeDescriptor *descriptor = widgetTypeDescriptor(type);
+    if (style == QStringLiteral("tech")) {
+        QStringList controls = techSharedUnusedControls();
+        if (descriptor) controls.append(descriptor->techUnusedControls);
+        return controls;
+    }
+    return descriptor ? descriptor->classicUnusedControls : QStringList();
+}
 
 void WidgetModel::update(const int index)
 {

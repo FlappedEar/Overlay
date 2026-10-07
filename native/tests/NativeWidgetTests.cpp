@@ -10,6 +10,7 @@
 #include "telemetry/TrackGeometry.h"
 #include "telemetry/VboParser.h"
 #include "project/ProjectLimits.h"
+#include "widgets/WidgetTypes.h"
 
 #include <QRegularExpression>
 #include <QSignalSpy>
@@ -44,6 +45,7 @@ private slots:
     void keepsUnknownWidgetTypesUnchanged();
     void keepsRetiredWidgetSettings();
     void providesCustomizableArchetypes();
+    void describesEachWidgetTypeOnce();
     void persistsAndSharesCustomTemplates();
     void updatesCustomTemplatesInPlace();
     void rejectsTemplateStoreCountGrowth();
@@ -527,6 +529,42 @@ void WidgetTests::keepsRetiredWidgetSettings()
         for (const QString retired : {"accentColor2", "textAlign", "showGauge", "valuePlateColor"})
             QVERIFY2(!settings.contains(retired), qPrintable(type + ": " + retired));
     }
+}
+
+// KAN-217: the widget type descriptors are the one list of types. The Add
+// widget list, the default box and the inspector's hidden controls come from
+// them, and every control a descriptor hides is a setting the type has.
+void WidgetTests::describesEachWidgetTypeOnce()
+{
+    WidgetModel model;
+    QStringList offered;
+    for (const QVariant &entry : model.widgetCatalog()) offered.append(entry.toMap().value("type").toString());
+    QCOMPARE(offered, (QStringList{"speed", "heartRate", "pedals", "f1GForceRadar", "gForceMagnitudeBar", "tyres",
+                                   "retroCustomValue", "lapCurrent", "retroTachometer"}));
+
+    QSet<QString> seen;
+    for (const WidgetTypeDescriptor &descriptor : widgetTypeDescriptors()) {
+        QVERIFY2(!seen.contains(descriptor.type), qPrintable(descriptor.type));
+        seen.insert(descriptor.type);
+        if (!descriptor.label.isEmpty()) QVERIFY2(!descriptor.icon.isEmpty(), qPrintable(descriptor.type));
+
+        const int index = model.addWidget(descriptor.type);
+        QVERIFY2(index >= 0, qPrintable(descriptor.type));
+        const QVariantMap widget = model.widget(index);
+        QCOMPARE(widget.value("width").toDouble(), descriptor.width);
+        QCOMPARE(widget.value("height").toDouble(), descriptor.height);
+        const QVariantMap settings = widget.value("settings").toMap();
+        for (const QString &style : {QStringLiteral("classic"), QStringLiteral("tech")}) {
+            for (const QString &control : model.unusedControls(descriptor.type, style)) {
+                QVERIFY2(settings.contains(control),
+                         qPrintable(descriptor.type + " " + style + " hides " + control + ", which it does not have"));
+            }
+        }
+    }
+    QVERIFY(seen.contains(QStringLiteral("designed")));
+    QVERIFY(model.addWidget(QStringLiteral("rpm")) < 0); // retired (KAN-192)
+    QCOMPARE(model.unusedControls(QStringLiteral("speed"), QStringLiteral("classic")), QStringList{"accentColor"});
+    QVERIFY(model.unusedControls(QStringLiteral("speed"), QStringLiteral("tech")).contains(QStringLiteral("fontWeight")));
 }
 
 void WidgetTests::providesCustomizableArchetypes()
