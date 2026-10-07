@@ -2574,7 +2574,8 @@ Three `AGENTS.md` UI invariants now have automated tests:
 
 - **Sidebar at the minimum** (`EditorTests::keepsSidebarReachableAtMinimumSize`). The editor
   window is opened at 1180×720 with a Retro Custom widget selected (the most inspector controls).
-  For the WIDGET, DATA and CUES tabs, the test checks that the tab's scroll view lies inside the
+  For the WIDGET, DATA and CUES tabs, the test first waits until the tab's content height has held
+  one value for 250 ms, then checks that the tab's scroll view lies inside the
   window and that no nested scroller holds content it cannot show. It then scrolls that one
   surface to each visible control and checks the control comes fully into view. The window is
   never larger than 1180×720; a smaller CI display only makes the check stricter.

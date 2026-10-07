@@ -909,6 +909,23 @@ void collectFlickables(QQuickItem *item, QVector<QQuickItem *> &flickables)
     if (item->inherits("QQuickFlickable")) flickables.append(item);
     for (auto *child : item->childItems()) collectFlickables(child, flickables);
 }
+
+// True once the flickable's content height has held one non-zero value for five
+// checks 50 ms apart; false if it is still changing after five seconds.
+bool waitForSettledHeight(QQuickItem *flickable)
+{
+    QElapsedTimer elapsed;
+    elapsed.start();
+    double settled = -1.0;
+    int stableChecks = 0;
+    while (stableChecks < 5 && elapsed.elapsed() < 5000) {
+        QTest::qWait(50);
+        const double height = flickable->property("contentHeight").toDouble();
+        stableChecks = height == settled && height > 0.0 ? stableChecks + 1 : 0;
+        settled = height;
+    }
+    return stableChecks >= 5;
+}
 }
 
 void EditorTests::keepsSidebarReachableAtMinimumSize()
@@ -930,15 +947,10 @@ void EditorTests::keepsSidebarReachableAtMinimumSize()
         QVERIFY(flickable && flickable->inherits("QQuickFlickable"));
         auto *content = flickable->property("contentItem").value<QQuickItem *>();
         QVERIFY(content);
-        // Let the tab's layout settle.
-        double settled = -1.0;
-        QTRY_VERIFY([&] {
-            const double height = flickable->property("contentHeight").toDouble();
-            const bool same = height == settled;
-            settled = height;
-            QTest::qWait(50);
-            return same && height > 0.0;
-        }());
+        // Let the tab's layout settle: the same non-zero height for 250 ms. This is
+        // not a QTRY condition, because QTRY evaluates its expression again after
+        // the loop and a stateful check can then fail on a later layout pass.
+        QVERIFY(waitForSettledHeight(flickable));
         const double viewport = flickable->height();
         // The scroller itself is inside the window.
         const QRectF frame = flickable->mapRectToScene(QRectF(0, 0, flickable->width(), viewport));
