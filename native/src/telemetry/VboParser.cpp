@@ -660,8 +660,10 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
     std::optional<double> previousAbsoluteTime;
     std::optional<double> previousClockTime;
     double clockDayOffset = 0.0;
-    constexpr double lateDayThreshold = 23.0 * 3600.0;
-    constexpr double earlyDayThreshold = 1.0 * 3600.0;
+    // A backward clock is a midnight rollover when, read that way, the time
+    // moved forward by at most three hours (FlappedEar Telemetry FET-211).
+    constexpr double secondsPerDay = 24.0 * 3600.0;
+    constexpr double maximumRolloverGap = 3.0 * 3600.0;
     for (qsizetype rowIndex = 0; rowIndex < dataSection.size(); ++rowIndex) {
         if ((rowIndex & 0xff) == 0) throwIfCancelled(cancelled);
         const auto row = scanRow({dataSection[rowIndex]}, names.size(), false, cancelled);
@@ -689,9 +691,8 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         if (parsedTime->format == TimestampFormat::Clock) {
             if (previousClockTime && previousAbsoluteTime
                 && parsedTime->seconds < *previousClockTime
-                && *previousClockTime >= lateDayThreshold
-                && parsedTime->seconds <= earlyDayThreshold) {
-                clockDayOffset = checkedTime(clockDayOffset + 24.0 * 3600.0);
+                && parsedTime->seconds + secondsPerDay - *previousClockTime <= maximumRolloverGap) {
+                clockDayOffset = checkedTime(clockDayOffset + secondsPerDay);
                 appendWarning(QStringLiteral("Row %1: midnight rollover detected.").arg(rowIndex + 1));
             }
             absoluteTime = checkedTime(absoluteTime + clockDayOffset);
