@@ -48,6 +48,7 @@ private slots:
     void keepsSidebarReachableAtMinimumSize();
     void disablesTransportShortcutsWhileEditing();
     void savesTheSceneAsATemplateFromThePopup();
+    void asksBeforeDiscardingUnsavedChanges();
 };
 
 void EditorTests::initTestCase()
@@ -1059,6 +1060,42 @@ void EditorTests::savesTheSceneAsATemplateFromThePopup()
             found = map.value("name").toString() == QStringLiteral("Saved from the popup");
     }
     QVERIFY(found);
+}
+
+// KAN-216: the "unsaved changes" dialog lives in DirtyProjectDialog.qml. It opens
+// when a new project is asked for with unsaved changes; closing it cancels the
+// request and keeps the scene, and Discard changes carries the request out.
+void EditorTests::asksBeforeDiscardingUnsavedChanges()
+{
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    // An earlier test in this suite can leave a recovery snapshot behind, and New
+    // waits for Recover or Discard first.
+    if (editor.controller.recoveryPending())
+        editor.controller.resolveStartupRecovery(QStringLiteral("discard"));
+    QVERIFY(!editor.controller.recoveryPending());
+    QVERIFY(editor.controller.widgetModel()->addWidget("retroCustomValue") >= 0);
+    QTRY_VERIFY(editor.controller.dirty());
+    auto *dialog = editor.window->findChild<QObject *>("dirtyProjectDialog");
+    auto *discard = editor.window->findChild<QObject *>("dirtyProjectDiscard");
+    QVERIFY(dialog && discard);
+    const int widgets = editor.controller.widgetModel()->rowCount();
+
+    editor.controller.requestNewProject();
+    QTRY_VERIFY(dialog->property("opened").toBool());
+    QCOMPARE(editor.controller.pendingDestructiveAction(), QStringLiteral("new"));
+    QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+    QTRY_VERIFY(!dialog->property("visible").toBool());
+    QVERIFY(editor.controller.pendingDestructiveAction().isEmpty());
+    QVERIFY(editor.controller.dirty());
+    QCOMPARE(editor.controller.widgetModel()->rowCount(), widgets);
+
+    editor.controller.requestNewProject();
+    QTRY_VERIFY(dialog->property("opened").toBool());
+    QVERIFY(QMetaObject::invokeMethod(discard, "clicked"));
+    QTRY_VERIFY(!dialog->property("visible").toBool());
+    QVERIFY(editor.controller.pendingDestructiveAction().isEmpty());
+    QVERIFY(!editor.controller.dirty());
 }
 
 #define main nativeTestMain
