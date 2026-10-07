@@ -188,6 +188,22 @@ checks that a segment restarting 8 m behind after a 10 s gap stays on the same
 lap. Before the change, the first lost its lock and the second restarted at
 260 m on a 208 m axis.
 
+`flappedear_cold_start_branch_tests` (KAN-238, ported from Telemetry FET-256's
+`cold_start_branch_test.dart`) drives synthetic laps with a known distance at
+every fix and checks that a cold start never locks on to another branch: a
+figure-eight at 90, 30 and 10 degrees whose GPS comes back next to the
+crossing after gaps of 30 m to 600 m, parallel straights 15 to 30 m apart with
+a lap off its line toward the other one (with raw GPS gaps and a gap at the
+lap's start), and 3 m and 5 m hairpins cut with 1 m of GPS error. A fix may be
+refused, never misplaced: every projected fix within 5 m of its true distance,
+progress never falling by more than that, and the lap reaching the finish.
+Guards check that a car at 95 or 40 m/s keeps every fix after gaps of up to
+1,000 m, that a lap timed from a line 20 to 100 m from the axis gate keeps
+every fix, and that a car standing for a minute keeps at least 5,950 of 7,115
+fixes. Before the change, 27 of its 33 cases fail. The GPS error comes from
+another random generator than Telemetry's, so its trial counts match
+Telemetry's but its individual laps do not.
+
 ## Longitude across ±180° (KAN-235)
 
 `TelemetryCoreTests::takesLongitudeTheShortWayRoundAcrossTheAntimeridian`
