@@ -8,6 +8,7 @@
 #include "app/PreviewTimeline.h"
 #include "app/ExportSourceOptions.h"
 #include "app/LapNavigation.h"
+#include "app/ChapterPlayback.h"
 #include "export/ExportEngine.h"
 #include "export/FfmpegTools.h"
 #include "export/MediaProbe.h"
@@ -50,6 +51,7 @@ private slots:
     void framesSingleAndChapteredPreviewTimelines();
     void offersExportOptionsForTheSource();
     void presentsLapsForNavigation();
+    void playsChapteredVideoAsOneTimeline();
     void exposesReactivePreviewMetadataToQml();
     void buildsAddWidgetListAndInspectorFromDescriptors();
     void keepsSidebarReachableAtMinimumSize();
@@ -919,6 +921,46 @@ void EditorTests::offersExportOptionsForTheSource()
     QCOMPARE(lap.value("lapNumber").toInt(), 3);
     QVERIFY(!options.lapRange(3, 2.0, 9.0, {60, 1}, 31).value("valid").toBool());
     QVERIFY(!options.lapRange(3, 9.0, 2.0, {60, 1}, 2).value("valid").toBool());
+}
+
+void EditorTests::playsChapteredVideoAsOneTimeline()
+{
+    // KAN-215: a 10 s chapter, a missing 5 s chapter (a gap), then a 20 s chapter.
+    const MediaTimeline timeline = MediaTimeline::fromChapters(
+        {{"/rec/GX010001.MP4", 10.0, true}, {"", 5.0, false}, {"/rec/GX030001.MP4", 20.0, true}});
+    QVERIFY(timeline.isValid());
+
+    QCOMPARE(ChapterPlayback::chapterSource(timeline, 0), QUrl::fromLocalFile("/rec/GX010001.MP4"));
+    QVERIFY(ChapterPlayback::chapterSource(timeline, 1).isEmpty());
+    QVERIFY(ChapterPlayback::chapterSource(timeline, 3).isEmpty());
+    QVERIFY(ChapterPlayback::chapterSource(timeline, -1).isEmpty());
+    QCOMPARE(ChapterPlayback::chapterStartMilliseconds(timeline, 2), 15000);
+    QCOMPARE(ChapterPlayback::chapterStartMilliseconds(timeline, 9), 0);
+
+    const QVariantList chapters = ChapterPlayback::chapterList(
+        timeline, {{"GX010001.MP4", {}}, {"GX020001.MP4", "File not found"}});
+    QCOMPARE(chapters.size(), 3);
+    const QVariantMap gap = chapters.at(1).toMap();
+    QCOMPARE(gap.value("startMilliseconds").toLongLong(), 10000);
+    QCOMPARE(gap.value("durationMilliseconds").toLongLong(), 5000);
+    QVERIFY(!gap.value("available").toBool());
+    QCOMPARE(gap.value("name").toString(), QStringLiteral("GX020001.MP4"));
+    QCOMPARE(gap.value("problem").toString(), QStringLiteral("File not found"));
+    // A chapter without a label still gets an entry.
+    QVERIFY(chapters.at(2).toMap().value("name").toString().isEmpty());
+    QCOMPARE(chapters.at(2).toMap().value("url").toUrl(), QUrl::fromLocalFile("/rec/GX030001.MP4"));
+
+    const QVariantMap inGap = ChapterPlayback::locate(timeline, 12500);
+    QCOMPARE(inGap.value("chapter").toInt(), 1);
+    QCOMPARE(inGap.value("localMilliseconds").toLongLong(), 2500);
+    QVERIFY(inGap.value("gap").toBool());
+    QCOMPARE(ChapterPlayback::locate(timeline, 15000).value("chapter").toInt(), 2);
+    // Positions outside the timeline clamp to its ends.
+    QCOMPARE(ChapterPlayback::locate(timeline, -400).value("localMilliseconds").toLongLong(), 0);
+    const QVariantMap end = ChapterPlayback::locate(timeline, 99000);
+    QCOMPARE(end.value("chapter").toInt(), 2);
+    QCOMPARE(end.value("localMilliseconds").toLongLong(), 20000);
+    QVERIFY(ChapterPlayback::locate(MediaTimeline(), 1000).isEmpty());
 }
 
 void EditorTests::presentsLapsForNavigation()

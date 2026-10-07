@@ -198,6 +198,13 @@ lap bar under the preview (out lap, laps and in lap in video time) and the lap u
 the playhead. They are pure functions of the lap session; `AppController` passes the
 run, its `PreviewTimeline` and its telemetry-to-video mapping.
 
+Step 8 moved how the preview plays a chaptered video (KAN-105) into `ChapterPlayback`
+(`native/src/app/ChapterPlayback.h`): the chapter file to show, where it starts, the
+chapter bar's list (file name and gap reason per chapter) and the chapter and local
+time for a timeline position, clamped to the timeline. They are pure functions of the
+video's `MediaTimeline`; `AppController` keeps the selected chapter and the saved
+chapter references, and still plays a single file without a timeline.
+
 `AdditionalVideoController` (`appController.additionalVideos`, KAN-131) holds the
 run's videos besides the main one, each with its own sync, and the export layout.
 It probes each video in the background (`MediaProbe` and its fingerprint) and binds
