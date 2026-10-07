@@ -2248,7 +2248,12 @@ the throttle with half its samples but not with one sixth.
 `TelemetryCoreTests::readsVboMidnightRolloverByItsGap` (KAN-233) checks the
 rollover rule shared with FlappedEar Telemetry: a dropout from 22:50 to 01:10 and
 an exact 3-hour gap read as passing midnight, while a 3-hour-and-1-second gap and
-a daylight-saving step back skip the row as moved backward.
+a daylight-saving step back skip the row as moved backward. It also checks the
+confirmation step (KAN-240): one bad early-morning row among evening rows is
+dropped with a "not a midnight rollover" warning, also after a skipped duplicate;
+a real midnight followed by a long dropout stays a rollover; and the limits (a
+stale evening repeat after a real midnight loses one row, two bad rows confirm
+each other, a bad last row reads as midnight, two midnights in one recording).
 
 Unsafe numeric ranges reject the complete parse with VboParseError before a
 session can be published. Ordinary malformed text and duplicate/backward rows

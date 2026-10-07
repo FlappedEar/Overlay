@@ -677,6 +677,18 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
     // moved forward by at most three hours (FlappedEar Telemetry FET-211).
     constexpr double secondsPerDay = 24.0 * 3600.0;
     constexpr double maximumRolloverGap = 3.0 * 3600.0;
+    // A rollover is confirmed by the next accepted row (FET-211): if a clock
+    // row before that is back on the evening before (at or up to 3 h after
+    // the time before the rollover), the "rollover" was one bad row, which is
+    // dropped and the day offset restored. Two bad rows in a row confirm each
+    // other; a bad last row cannot be told from a real midnight.
+    struct Rollover {
+        qsizetype row = 0;
+        double absolute = 0.0;
+        double clock = 0.0;
+        double offset = 0.0;
+    };
+    std::optional<Rollover> unconfirmedRollover;
     for (qsizetype rowIndex = 0; rowIndex < dataSection.size(); ++rowIndex) {
         if ((rowIndex & 0xff) == 0) throwIfCancelled(cancelled);
         const auto row = scanRow({dataSection[rowIndex]}, names.size(), false, cancelled);
@@ -701,10 +713,24 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
             continue;
         }
         double absoluteTime = checkedTime(parsedTime->seconds);
+        if (unconfirmedRollover && parsedTime->format == TimestampFormat::Clock
+            && parsedTime->seconds >= unconfirmedRollover->clock
+            && parsedTime->seconds - unconfirmedRollover->clock <= maximumRolloverGap) {
+            rawTimes.removeLast();
+            for (auto &values : rawValues) values.removeLast();
+            previousAbsoluteTime = unconfirmedRollover->absolute;
+            previousClockTime = unconfirmedRollover->clock;
+            clockDayOffset = unconfirmedRollover->offset;
+            appendWarning(QStringLiteral("Row %1: not a midnight rollover after all; row skipped.")
+                              .arg(unconfirmedRollover->row));
+            unconfirmedRollover.reset();
+        }
+        std::optional<Rollover> rolledOver;
         if (parsedTime->format == TimestampFormat::Clock) {
             if (previousClockTime && previousAbsoluteTime
                 && parsedTime->seconds < *previousClockTime
                 && parsedTime->seconds + secondsPerDay - *previousClockTime <= maximumRolloverGap) {
+                rolledOver = Rollover{rowIndex + 1, *previousAbsoluteTime, *previousClockTime, clockDayOffset};
                 clockDayOffset = checkedTime(clockDayOffset + secondsPerDay);
                 appendWarning(QStringLiteral("Row %1: midnight rollover detected.").arg(rowIndex + 1));
             }
@@ -748,6 +774,7 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
                                          ? static_cast<float>(normalized)
                                          : std::numeric_limits<float>::quiet_NaN());
         }
+        unconfirmedRollover = rolledOver;
         previousAbsoluteTime = absoluteTime;
         previousClockTime = parsedTime->format == TimestampFormat::Clock
             ? std::optional<double>(parsedTime->seconds) : std::nullopt;
