@@ -7,6 +7,7 @@
 #include "app/PreviewPlayback.h"
 #include "app/PreviewTimeline.h"
 #include "app/ExportSourceOptions.h"
+#include "app/LapNavigation.h"
 #include "export/ExportEngine.h"
 #include "export/FfmpegTools.h"
 #include "export/MediaProbe.h"
@@ -48,6 +49,7 @@ private slots:
     void derivesStablePreviewViewportAndLastFrameAdapter();
     void framesSingleAndChapteredPreviewTimelines();
     void offersExportOptionsForTheSource();
+    void presentsLapsForNavigation();
     void exposesReactivePreviewMetadataToQml();
     void buildsAddWidgetListAndInspectorFromDescriptors();
     void keepsSidebarReachableAtMinimumSize();
@@ -917,6 +919,48 @@ void EditorTests::offersExportOptionsForTheSource()
     QCOMPARE(lap.value("lapNumber").toInt(), 3);
     QVERIFY(!options.lapRange(3, 2.0, 9.0, {60, 1}, 31).value("valid").toBool());
     QVERIFY(!options.lapRange(3, 9.0, 2.0, {60, 1}, 2).value("valid").toBool());
+}
+
+void EditorTests::presentsLapsForNavigation()
+{
+    // KAN-215: two laps from telemetry 10 s to 30 s and 30 s to 48 s, shown on a
+    // 60 s 60 fps video synced 5 s earlier than the telemetry.
+    LapSession laps;
+    QCOMPARE(LapNavigation::timingStatus(laps, false), QStringLiteral("Open telemetry for lap timing"));
+    QCOMPARE(LapNavigation::timingStatus(laps, true), QStringLiteral("No Start gate in telemetry"));
+    laps.status = LapSessionStatus::Available;
+    laps.timedLaps = {TimedLap{1, 10.0, 30.0, 20.0, 2.0}, TimedLap{2, 30.0, 48.0, 18.0, 0.0}};
+    laps.fastestLapIndex = 1;
+    QCOMPARE(LapNavigation::timingStatus(laps, true), QStringLiteral("2 complete laps"));
+
+    const QVariantList summaries = LapNavigation::summaries(laps, QStringLiteral("run-1"));
+    QCOMPARE(summaries.size(), 2);
+    QCOMPARE(summaries.at(0).toMap().value("runId").toString(), QStringLiteral("run-1"));
+    QCOMPARE(summaries.at(0).toMap().value("deltaToBestSeconds").toDouble(), 2.0);
+    QVERIFY(summaries.at(1).toMap().value("isBest").toBool());
+
+    MediaInfo source;
+    source.videoSize = {1920, 1080};
+    source.frameRate = {60, 1};
+    source.averageFrameRate = {60, 1};
+    source.videoFrameCount = 3'600;
+    const PreviewTimeline timeline(source, std::nullopt);
+    const auto toVideo = [](const double telemetryTime) {
+        return static_cast<qint64>(std::llround((telemetryTime - 5.0) * 1'000.0));
+    };
+    const QVariantList segments = LapNavigation::segments(laps, timeline, toVideo);
+    QStringList kinds;
+    for (const QVariant &segment : segments) kinds.append(segment.toMap().value("kind").toString());
+    QCOMPARE(kinds, (QStringList{"outlap", "lap", "lap", "inlap"}));
+    QCOMPARE(segments.at(1).toMap().value("startMilliseconds").toLongLong(), 5'000);
+    QCOMPARE(segments.at(2).toMap().value("label").toString(), QStringLiteral("Lap 2"));
+    QVERIFY(segments.at(2).toMap().value("isBest").toBool());
+    QCOMPARE(segments.at(3).toMap().value("endMilliseconds").toLongLong(), timeline.endPositionMilliseconds());
+
+    QCOMPARE(LapNavigation::lapNumberAt(laps, 29.9), 1);
+    QCOMPARE(LapNavigation::lapNumberAt(laps, 30.0), 2);
+    QCOMPARE(LapNavigation::lapNumberAt(laps, 48.0), 0);
+    QCOMPARE(LapNavigation::lapNumberAt(laps, std::nullopt), 0);
 }
 
 void EditorTests::exposesReactivePreviewMetadataToQml()

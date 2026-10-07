@@ -192,6 +192,12 @@ rate choices, the recommended bitrate, and the frame ranges for the whole video,
 a typed range or a lap with handles. `AppController::lapExportRange` still finds
 the lap and maps it to video time through the sync transform.
 
+Step 7 moved how the editor presents the run's laps into `LapNavigation`
+(`native/src/app/LapNavigation.h`): the lap timing status line, the lap list, the
+lap bar under the preview (out lap, laps and in lap in video time) and the lap under
+the playhead. They are pure functions of the lap session; `AppController` passes the
+run, its `PreviewTimeline` and its telemetry-to-video mapping.
+
 `AdditionalVideoController` (`appController.additionalVideos`, KAN-131) holds the
 run's videos besides the main one, each with its own sync, and the export layout.
 It probes each video in the background (`MediaProbe` and its fingerprint) and binds
