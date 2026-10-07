@@ -162,6 +162,8 @@ private slots:
     void anchorsAtTheTimedCrossingWhenTheGateCrossesTwice();
     void spreadsDenseLapTracesEvenly();
     void unwrapsAFirstFixJustBeforeTheGate();
+    void keepsTheLockOnAnAxisFromAJitteryTrace();
+    void restartsASegmentAfterAGapWithoutSkippingALap();
     void obliqueOffLineGateKeepsEveryLapsSectors();
     void deltaAtTheFinishEqualsTheLapTimeDifference();
     void marksStraightsWithZeroCurvatureAndCornersWithASpike();
@@ -505,6 +507,84 @@ void TrackProgressTests::unwrapsAFirstFixJustBeforeTheGate()
     const auto atGate = timeAtProgress(trace, 0.0);
     QVERIFY(atGate.has_value());
     QVERIFY(*atGate > 0.0 && *atGate < 1.0);
+}
+
+// KAN-237 (as Telemetry FET-249): an axis built from a jittery recording.
+// The recorded path zig-zags 0.8 m across a 600 x 60 m rectangle every metre,
+// so it is about 28% longer than the axis resampled from it, and progress
+// divided by the spacing falls behind the car. The search window must follow
+// the axis's own distances, or a clean lap loses its lock within 100 m.
+void TrackProgressTests::keepsTheLockOnAnAxisFromAJitteryTrace()
+{
+    const QVector<QPointF> corners{{0, 0}, {600, 0}, {600, 60}, {0, 60}, {0, 0}};
+    const auto alongRectangle = [&corners](const double step, const double zigzag) {
+        QVector<QPointF> path;
+        int ordinal = 0;
+        for (qsizetype side = 1; side < corners.size(); ++side) {
+            const QPointF from = corners[side - 1];
+            const QPointF delta = corners[side] - from;
+            const double length = std::hypot(delta.x(), delta.y());
+            const QPointF across(-delta.y() / length, delta.x() / length);
+            const int steps = static_cast<int>(std::lround(length / step));
+            for (int i = 0; i < steps; ++i, ++ordinal)
+                path.append(from + delta * (double(i) / steps) + across * (ordinal % 2 == 0 ? zigzag : -zigzag));
+        }
+        return path;
+    };
+    LapTrace trace;
+    double time = 0;
+    for (const QPointF &point : alongRectangle(1.0, 0.4)) trace.points.append({time += 0.04, point.x(), point.y()});
+    const GeoCoordinate origin{0.0, 0.0};
+    const TimingGate gate{TimingGateType::Start, "test", origin, origin, {}};
+    const auto axis = buildProgressAxis(trace, origin, gate);
+    QVERIFY(axis.valid);
+    QVERIFY2(axis.cumulative.last() < 0.85 * axis.lengthMeters,
+             qPrintable(QString("axis %1 m of a %2 m path").arg(axis.cumulative.last()).arg(axis.lengthMeters)));
+
+    // A clean lap at 20 m/s, 10 Hz, along the rectangle's centre line.
+    TelemetrySession session;
+    session.aliases = {{"latitude", "lat"}, {"longitude", "lon"}};
+    auto &lat = session.channels["lat"];
+    auto &lon = session.channels["lon"];
+    time = 0;
+    for (const QPointF &point : alongRectangle(2.0, 0.0)) {
+        lat.appendSample(time, static_cast<float>(degreesForMeters(point.y())));
+        lon.appendSample(time, static_cast<float>(degreesForMeters(point.x())));
+        time += 0.1;
+    }
+    session.duration = time - 0.1;
+    const auto projected = projectLapTrace(axis, session, 0.0, session.duration);
+    QCOMPARE(projected.size(), 1);
+    const auto &samples = projected.first().samples;
+    QVERIFY2(samples.last().progressMeters > 0.95 * axis.cumulative.last(),
+             qPrintable(QString("lock held to %1 m of %2 m").arg(samples.last().progressMeters)
+                            .arg(axis.cumulative.last())));
+}
+
+// KAN-237: after a GPS gap the first fix may be found a few metres behind
+// the last one. It is the same lap, not the next: with the 3 m jitter
+// tolerance a fix 8 m back moved the rest of the lap one lap on.
+void TrackProgressTests::restartsASegmentAfterAGapWithoutSkippingALap()
+{
+    const auto axis = buildHairpinAxis();
+    QVERIFY(axis.valid);
+    TelemetrySession session;
+    session.aliases = {{"latitude", "lat"}, {"longitude", "lon"}};
+    auto &lat = session.channels["lat"];
+    auto &lon = session.channels["lon"];
+    const auto addFix = [&](const double time, const double east, const double north) {
+        lat.appendSample(time, static_cast<float>(degreesForMeters(north)));
+        lon.appendSample(time, static_cast<float>(degreesForMeters(east)));
+    };
+    for (int i = 0; i <= 30; ++i) addFix(i * 1.0, i * 2.0, 0.0); // east 0..60 m
+    for (int i = 0; i <= 14; ++i) addFix(40.0 + i, 52.0 + i * 2.0, 0.0); // after a 10 s gap, from 8 m back
+    session.duration = 54.0;
+
+    const auto trace = projectLapTrace(axis, session, 0.0, session.duration);
+    QCOMPARE(trace.size(), 2);
+    const double restart = trace.last().samples.first().progressMeters;
+    QVERIFY2(restart > 45.0 && restart < 55.0, qPrintable(QString("the restart is at %1 m").arg(restart)));
+    QVERIFY(trace.last().samples.last().progressMeters < axis.lengthMeters);
 }
 
 void TrackProgressTests::obliqueOffLineGateKeepsEveryLapsSectors()

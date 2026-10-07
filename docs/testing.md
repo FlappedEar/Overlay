@@ -180,6 +180,14 @@ interpolated. `deltaAtTheFinishEqualsTheLapTimeDifference` checks the timed
 delta is 0 at the start and the lap-time difference at the finish for a lap
 10% slower with a shifted clock. Each fails without the change.
 
+`keepsTheLockOnAnAxisFromAJitteryTrace` (KAN-237) builds the axis from a
+rectangle recorded with 0.8 m zig-zag every metre, so the recorded path is
+about 28% longer than the axis, and checks that a clean lap at 20 m/s, 10 Hz
+keeps one locked segment to the end. `restartsASegmentAfterAGapWithoutSkippingALap`
+checks that a segment restarting 8 m behind after a 10 s gap stays on the same
+lap. Before the change, the first lost its lock and the second restarted at
+260 m on a 208 m axis.
+
 ## Smoothed heading and curvature on track progress (KAN-44)
 
 `computeTrackFeatures` (`native/src/telemetry/TrackProgress.h/.cpp`) is a
