@@ -217,6 +217,7 @@ private slots:
     void derivesDirectionalPassesAndCompleteLaps();
     void finalizesGatePassWhenTelemetryEndsInsideCorridor();
     void acceptsOnlyRealCrossingsOfTheStartLine();
+    void appliesOneGpsGapRuleToPassesAndLaps();
     void keepsImplausibleLapsOutOfRanking();
     void keepsADayGroupsShortLapOutOfRanking();
     void parsesOptionalRealVbo();
@@ -1634,6 +1635,35 @@ void TelemetryCoreTests::acceptsOnlyRealCrossingsOfTheStartLine()
 }
 
 // KAN-225: port of Telemetry FET-199's lap plausibility truth tests (lap_sanity_test.dart).
+// KAN-234 (as Telemetry FET-212): a step that is a gap by either GPS
+// channel's own cadence is a gap for pass detection too, as it already was
+// for lap validation. Here longitude carries a 1 Hz tail, so a 1 s step is a
+// gap only by latitude's 5 Hz cadence; pass detection used to need both.
+void TelemetryCoreTests::appliesOneGpsGapRuleToPassesAndLaps()
+{
+    const TimingGate &gate = gatePathGate;
+    GatePath path;
+    path.points({{30.0, 0.0}}).crossWestward().loopBackEast().travel({{5.0, 0.0}}, 6.0);
+    const double beforeGap = path.times.constLast();
+    path.step = 1.0;
+    path.points({{-5.0, 0.0}}); // the crossing spans a 1 s step
+    path.step = 0.2;
+    path.travel({{-30.0, 0.0}}, 6.0).loopBackEast().crossWestward();
+    TelemetrySession session = path.session();
+    auto &longitude = session.channels["longitude"];
+    const float lastLongitude = longitude.values().constLast();
+    for (int second = 1; second <= 2000; ++second)
+        longitude.appendSample(path.times.constLast() + second, lastLongitude);
+    QVERIFY(telemetryIsGap(session.channels["latitude"], beforeGap, beforeGap + 1.0));
+    QVERIFY(!telemetryIsGap(longitude, beforeGap, beforeGap + 1.0));
+
+    const LapSession laps = detectLaps(session, gate);
+    QCOMPARE(laps.acceptedPasses.size(), qsizetype(2));
+    for (const auto &pass : laps.acceptedPasses)
+        QVERIFY2(pass.telemetryTime < beforeGap || pass.telemetryTime > beforeGap + 1.0,
+                 qPrintable(QString::number(pass.telemetryTime)));
+}
+
 void TelemetryCoreTests::keepsImplausibleLapsOutOfRanking()
 {
     using Issue = LapReferenceIssue;
