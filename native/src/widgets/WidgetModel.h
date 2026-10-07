@@ -52,6 +52,7 @@ public:
         WidgetSettingsRole,
         WidgetCuesRole,
         WidgetGroupIdRole,
+        WidgetRendererRole,
     };
 
     explicit WidgetModel(QObject *parent = nullptr);
