@@ -13,7 +13,10 @@
 
 namespace FlappedEar {
 
-enum class InterpolationMode { Nearest, Previous, Linear };
+// Longitude: Linear for a longitude in degrees, taken the short way round, so
+// across ±180° (179.9999 to -179.9999) it stays near 180°, not near 0°. The
+// same as Linear for neighbours under 180° apart (KAN-241, Telemetry FET-213).
+enum class InterpolationMode { Nearest, Previous, Linear, Longitude };
 
 // sampledSegments() used to return the same empty result for an invalid range,
 // a missing channel, a malformed channel, and a genuinely empty overlap,

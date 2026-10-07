@@ -195,7 +195,11 @@ checks the longitude helpers (unchanged bit for bit inside -180..180), a
 RaceChrono Pro 10.2.4 centre-and-direction gate at 179.99996° whose converted
 end lies past 180° (now wrapped and kept, 20 m wide), and three laps on a start
 line at 180° with fixes either side of it. Without the wrapped projection the
-two sides are 360° apart and no pass is found.
+two sides are 360° apart and no pass is found. It also checks (KAN-241) that
+those laps' traces stay within 100 m of the line, which fails without
+`InterpolationMode::Longitude` (a trace end lands about 12,000 km away), that
+the mode gives ±180° halfway between 179.9998 and -179.9998 while `Linear`
+gives about 0, and that it equals `Linear` bit for bit near 21°.
 
 ## Smoothed heading and curvature on track progress (KAN-44)
 

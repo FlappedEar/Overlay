@@ -110,7 +110,7 @@ OutingTheoreticalBest calculateOutingTheoreticalBest(QVector<OutingLapRow> popul
                 const double at = speeds.valid && speeds.apex.value ? speeds.apex.progressMeters : middle;
                 if (const auto time = timeAtProgress(trace, at)) {
                     const auto latitude = currentSession->valueAt("latitude", *time);
-                    const auto longitude = currentSession->valueAt("longitude", *time);
+                    const auto longitude = currentSession->valueAt("longitude", *time, InterpolationMode::Longitude);
                     if (latitude && longitude) {
                         const auto local = projectCoordinate({*latitude, *longitude}, axis.origin);
                         observation.lineOffsetMeters = lateralOffsetMeters(axis, at, QPointF(local.eastMeters, local.northMeters));

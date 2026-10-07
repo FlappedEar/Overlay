@@ -238,9 +238,9 @@ std::optional<TimingGate> gateFromLapBoundaries(const TelemetrySession &session,
     struct Crossing { double lat, lon, east, north; };
     QVector<Crossing> crossings;
     for (const double time : times) {
-        const auto lat = session.valueAt("latitude", time), lon = session.valueAt("longitude", time);
-        const auto beforeLat = session.valueAt("latitude", time - .5), beforeLon = session.valueAt("longitude", time - .5);
-        const auto afterLat = session.valueAt("latitude", time + .5), afterLon = session.valueAt("longitude", time + .5);
+        const auto lat = session.valueAt("latitude", time), lon = session.valueAt("longitude", time, InterpolationMode::Longitude);
+        const auto beforeLat = session.valueAt("latitude", time - .5), beforeLon = session.valueAt("longitude", time - .5, InterpolationMode::Longitude);
+        const auto afterLat = session.valueAt("latitude", time + .5), afterLon = session.valueAt("longitude", time + .5, InterpolationMode::Longitude);
         if (!lat || !lon || !beforeLat || !beforeLon || !afterLat || !afterLon) continue;
         const double east = longitudeDeltaDegrees(*afterLon, *beforeLon) * degreesToRadians * earthRadiusMeters * std::cos(*lat * degreesToRadians);
         const double north = (*afterLat - *beforeLat) * degreesToRadians * earthRadiusMeters;
