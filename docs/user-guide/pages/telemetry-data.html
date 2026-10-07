@@ -17,7 +17,7 @@
   <li><strong>Timing gates</strong> (start/finish line) from other RaceChrono versions are ignored with the warning <em>Timing gates ignored: this RaceChrono exporter version has not been validated.</em> Telemetry remains available, but laps cannot be derived.</li>
   <li>The recording's date and time are read only from a recognised RaceChrono export. Without them, the recording has no clock and is ordered by import order.</li>
 </ul>
-<p>The time column must be named <code>time</code>, <code>timestamp</code> or <code>utc time</code>. A file without one is not opened, because its sample timing would be unknown; rename the column and open it again. Rows with invalid, duplicate or backwards timestamps are skipped with a warning. Timestamps crossing midnight are handled. Columns without any number are dropped.</p>
+<p>The time column must be named <code>time</code>, <code>timestamp</code> or <code>utc time</code>. A file without one is not opened, because its sample timing would be unknown; rename the column and open it again. Rows with invalid, duplicate or backwards timestamps are skipped with a warning. Timestamps crossing midnight are handled; a single early-morning row among evening rows is skipped as a bad row rather than read as midnight. Columns without any number are dropped.</p>
 
 <h3 id="racechrono-g">RaceChrono G channels</h3>
 <p>For lateral and longitudinal G, export <strong>VBO</strong> from RaceChrono with the calculated acceleration channels (<code>latacc-calc</code>, <code>longacc-calc</code>) enabled. These are preferred automatically. RCZ archives contain only the phone's raw accelerometer axes, which are not aligned with the car, and no calculated G.</p>

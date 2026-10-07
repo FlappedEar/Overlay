@@ -763,6 +763,35 @@ void TelemetryCoreTests::readsVboMidnightRolloverByItsGap()
     QCOMPARE(speedTimes(u"22:00:00 1\n01:00:01 2\n22:00:01 3"), QVector<double>({0.0, 1.0}));
     // A step back within the day, such as a daylight-saving hour, stays backward.
     QCOMPARE(speedTimes(u"02:30:00 1\n01:30:00 2\n02:30:01 3"), QVector<double>({0.0, 1.0}));
+
+    // A rollover is confirmed by the next row (FET-211). One bad early-morning
+    // row among evening rows is no rollover: the next row is back on the
+    // evening, so that row is dropped.
+    const auto badRow = VboParser::parse(QStringLiteral(
+        "[column names]\ntime speed\n[data]\n213000 1\n213001 2\n001500 3\n213002 4\n213003 5"));
+    const auto badSpeed = badRow.channels.value(QStringLiteral("speed"));
+    QCOMPARE(badSpeed.timestamps(), QVector<double>({0.0, 1.0, 2.0, 3.0}));
+    QCOMPARE(badSpeed.values(), QVector<float>({1.0F, 2.0F, 4.0F, 5.0F}));
+    QVERIFY(std::any_of(badRow.warnings.cbegin(), badRow.warnings.cend(), [](const QString &warning) {
+        return warning.contains(QStringLiteral("Row 3: not a midnight rollover"));
+    }));
+    // The same after a skipped duplicate of the bad row.
+    QCOMPARE(speedTimes(u"213000 1\n213001 2\n001500 3\n001500 4\n213002 5"), QVector<double>({0.0, 1.0, 2.0}));
+    // A real midnight followed by a long dropout stays a rollover.
+    QCOMPARE(speedTimes(u"235900 1\n235959 2\n000100 3\n130000 4\n130001 5"),
+             QVector<double>({0.0, 59.0, 120.0, 46860.0, 46861.0}));
+    // Limit: a stale repeat of the last evening row right after a real
+    // midnight reads as back on the evening; one row is lost, and the
+    // midnight is found again on the next row.
+    QCOMPARE(speedTimes(u"235959 1\n000001 2\n235959 3\n000002 4"), QVector<double>({0.0, 3.0}));
+    // Limits: two bad rows in a row confirm each other, and a bad last row
+    // cannot be told from a midnight.
+    QCOMPARE(speedTimes(u"213000 1\n213001 2\n001500 3\n001501 4\n213002 5"),
+             QVector<double>({0.0, 1.0, 9900.0, 9901.0, 86402.0}));
+    QCOMPARE(speedTimes(u"213000 1\n213001 2\n001500 3"), QVector<double>({0.0, 1.0, 9900.0}));
+    // A recording through two midnights.
+    QCOMPARE(speedTimes(u"235959 1\n000001 2\n120000 3\n235959 4\n000001 5"),
+             QVector<double>({0.0, 2.0, 43201.0, 86400.0, 86402.0}));
 }
 
 void TelemetryCoreTests::rejectsUnsafeVboDerivedTimes_data()

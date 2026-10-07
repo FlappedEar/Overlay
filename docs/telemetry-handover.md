@@ -288,6 +288,7 @@ Recordings come from RaceChrono, as VBO text exports and native RCZ archives.
     - It is `time`, `timestamp` or `utc time`. A file without one is rejected; row numbers are never used as time (KAN-207).
     - `HH:MM:SS[.f]` and six-digit `HHMMSS[.f]` clock times are read first, then plain seconds.
     - A clock that goes backward crosses midnight (+24 h) when, read that way, it moved forward by at most 3 hours (KAN-233, Telemetry FET-211). A clock reset within 3 hours before midnight cannot be told from a rollover.
+    - A rollover is confirmed by the next accepted row (KAN-240, FET-211 review): a clock row back on the evening before (at or up to 3 hours after the time before the rollover) drops the rollover row as one bad row and restores the day offset. Two bad rows in a row confirm each other; a bad last row cannot be told from a real midnight.
     - Duplicate or backward rows are skipped with a warning. Time zero is the first accepted row.
 - **Values:**
     - Values are float32. Invalid or out-of-range cells become NaN.
