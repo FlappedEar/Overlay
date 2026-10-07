@@ -396,6 +396,7 @@ qt_add_qml_module(flappedear_native
         qml/FeTextField.qml
         qml/ExportDialog.qml
         qml/ExportProgressPopup.qml
+        qml/TemplateSavePopup.qml
         qml/InspectorPanel.qml
         qml/StartupError.qml
         qml/Main.qml
