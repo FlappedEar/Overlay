@@ -465,10 +465,19 @@ void preferAcceleratorPedalForThrottle(TelemetrySession &session)
 {
     static const QRegularExpression pedal(QStringLiteral("^accelerator.?(?:pedal|pos)"),
         QRegularExpression::CaseInsensitiveOption);
+    const auto finiteSamples = [&session](const QString &name) {
+        const auto channel = session.channels.constFind(name);
+        if (channel == session.channels.cend()) return qsizetype(0);
+        return qsizetype(std::count_if(channel->values().cbegin(), channel->values().cend(),
+            [](const float value) { return std::isfinite(value); }));
+    };
+    // The pedal replaces the throttle only when it has at least half the
+    // throttle's finite samples (KAN-230, Telemetry FET-207).
+    const qsizetype throttleSamples = finiteSamples(session.aliases.value(QStringLiteral("throttle")));
     for (const auto &name : session.channelNames()) {
         if (!pedal.match(name).hasMatch()) continue;
-        const auto &values = session.channels[name].values();
-        if (std::any_of(values.cbegin(), values.cend(), [](const float value) { return std::isfinite(value); })) {
+        const qsizetype samples = finiteSamples(name);
+        if (samples > 0 && 2 * samples >= throttleSamples) {
             session.aliases.insert(QStringLiteral("throttle"), name);
             return;
         }
