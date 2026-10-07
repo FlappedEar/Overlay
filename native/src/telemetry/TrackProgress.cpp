@@ -11,6 +11,9 @@ double pointDistance(const QPointF &a, const QPointF &b) { return std::hypot(a.x
 
 // A projection may step back this far before it is distrusted.
 constexpr double backwardToleranceMeters = 3.0;
+// The first fix of a segment after a gap may be found this far behind the
+// last one and still be the same lap (KAN-237, as Telemetry FET-249).
+constexpr double segmentRestartBackwardMeters = 30.0;
 // A lock older than this is not continued: the next fix is a cold start.
 constexpr double maximumGapSeconds = 5.0;
 // Fixes one lap trace projects at most, besides each run's first and last
@@ -124,6 +127,19 @@ struct Candidate {
 
 // Best match within `count` axis segments starting at `startIndex` (ring
 // topology: indices wrap via modulo, count may exceed axis size).
+// The axis segment that holds a progress, by the axis's own cumulative
+// distances (KAN-237). Its points are evenly spaced along the recorded path,
+// but GPS jitter makes that path longer than the axis, so progress divided by
+// the spacing falls behind, by 16 m after 1.7 km on a 25 Hz RCZ lap.
+int indexAtProgress(const ProgressAxis &axis, const double progressMeters)
+{
+    const int n = axis.points.size();
+    double progress = std::fmod(progressMeters, axis.lengthMeters);
+    if (progress < 0) progress += axis.lengthMeters;
+    const auto next = std::upper_bound(axis.cumulative.cbegin(), axis.cumulative.cend(), progress);
+    return std::clamp(static_cast<int>(std::distance(axis.cumulative.cbegin(), next)) - 1, 0, n - 1);
+}
+
 Candidate bestCandidateInRange(const ProgressAxis &axis, const QPointF &point, const int startIndex, const int count)
 {
     Candidate best;
@@ -374,8 +390,7 @@ ProjectedSample projectSample(const ProgressAxis &axis, const QPointF &localPoin
     const double backwardWindow = std::min(15.0, forwardWindow * 0.3);
     const int forwardCount = std::max(1, static_cast<int>(std::lround(forwardWindow / axis.spacingMeters)));
     const int backwardCount = std::max(1, static_cast<int>(std::lround(backwardWindow / axis.spacingMeters)));
-    const int n = axis.points.size();
-    const int centerIndex = ((static_cast<int>(std::lround(context.lastProgressMeters / axis.spacingMeters)) % n) + n) % n;
+    const int centerIndex = indexAtProgress(axis, context.lastProgressMeters);
     const int startIndex = centerIndex - backwardCount;
     const int count = forwardCount + backwardCount + 1;
 
@@ -462,7 +477,12 @@ QVector<ProgressSegment> projectLapTrace(const ProgressAxis &axis, const Telemet
             if (!lastProgress) {
                 if (progress > axis.lengthMeters / 2 && time - startTime <= maximumGapSeconds) progress -= axis.lengthMeters;
             } else {
-                progress += std::ceil((*lastProgress - backwardToleranceMeters - progress) / axis.lengthMeters)
+                // The first fix after a gap may be found well behind the last
+                // one (KAN-237): with the 3 m jitter tolerance a fix 4 m back
+                // moved the rest of the lap one whole lap on.
+                const double tolerance = current.samples.isEmpty() ? segmentRestartBackwardMeters
+                                                                   : backwardToleranceMeters;
+                progress += std::ceil((*lastProgress - tolerance - progress) / axis.lengthMeters)
                     * axis.lengthMeters;
             }
             // A fix projecting up to the backward tolerance behind the last one
