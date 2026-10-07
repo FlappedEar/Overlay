@@ -1431,6 +1431,9 @@ Rectangle {
                         text: appController.sync.timeScale.toFixed(6)
                         onEditingFinished: appController.sync.timeScale = Number(text)
                     }
+                    AdditionalVideosPanel {
+                        Layout.fillWidth: true
+                    }
 
                     SectionTitle {
                         text: qsTr("Live channels (%1)").arg(appController.channelNames.length)

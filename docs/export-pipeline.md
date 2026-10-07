@@ -134,6 +134,43 @@ refused); `SourceTests::keepsVideoChaptersAsOneTimeline` (the editor exports all
 210 frames, and refuses a gap). Real GoPro chapters are still to be checked with the owner's
 footage (KAN-81).
 
+## Additional videos (KAN-131)
+
+A run's additional videos (see [project-format.md](project-format.md)) are composed in Stage B.
+
+- **Checks.** The editor exports only when every additional video is ready: one still loading,
+  missing, changed since it was saved, or unreadable refuses the export and names it. The worker
+  probes each again and refuses one without a video stream, or with HDR or Log colour.
+  Every additional video is a protected source ([export-output-safety.md](export-output-safety.md)).
+- **Placement.** `VideoComposition::layout` gives every video its rectangle, the same for preview
+  and export. Picture in picture: the main video fills the frame as before; each additional video
+  keeps its aspect ratio inside a box of 28 % of the output's width and height, stacked down the
+  right edge from the top with 3 % margins. Side by side: the main video keeps its aspect ratio
+  in the left half (scaled, then padded black); the additional videos share the right half, one
+  above the other. Every position and size is even. A video keeps its place even when it has no
+  frame in the export, so the others do not move.
+- **Timing.** Both syncs map video time to the same telemetry time, so an additional video's
+  time is linear in the main video's: `rate = mainScale / videoScale`,
+  `shift = (mainOffset - videoOffset) / videoScale`. `VideoComposition::timing` turns that into
+  an input seek one second before the first frame needed (`-seek_timestamp 1 -ss`, on the file's
+  own timestamps, which the global `-copyts` keeps) and a `setpts=(T*factor+shift)/TB` that puts
+  each frame on the output timeline. The video is scaled into its rectangle and overlaid with
+  `eof_action=pass:repeatlast=0`: before its first frame and after its last the main video shows
+  through, never a frozen frame. Overlay takes, for each output frame, the last additional frame
+  whose time rounded to the output rate is not after it. A video with no frame inside the export
+  is left out and logged.
+- **Order and rate.** Additional videos are overlaid on the main video before the telemetry
+  overlay, so widgets stay on top. The main video's `fps` filter sets the output cadence, so the
+  output is CFR at one rate whatever the additional videos' rates. Audio is the main video's only.
+- **Preflight.** The composition preflight runs the same graph shape with a stand-in input per
+  additional video.
+
+Tests: `ExportTests::placesAdditionalVideosByLayout`, `timesAdditionalVideosAgainstTheMainVideo`,
+`composesAnAdditionalVideoOnItsOwnTimeline` (a 25 fps video with a 0.5 s start time beside a 30 fps
+main video: each output frame shows the expected numbered frame, then the main video once it
+ends); `SourceTests::exportsWithAnAdditionalVideo` (the editor through the worker: side by side
+pixels, the additional video refused as the output, export refused while it is loading or missing).
+
 ## CFR and VFR status
 
 Every final export is CFR at the effective exact rational export rate. Authoritative scheduling uses the inclusive integer range `[firstFrame, lastFrame]`, so `expectedFrames = lastFrame - firstFrame + 1`. Full video comes from `nb_frames` when available, with exact `duration_ts/time_base` as fallback; container/decimal duration never chooses the count. When `nb_frames` is more than the stream's `duration_ts` can hold at the nominal rate, as in an MP4 trimmed without re-encoding whose edit list hides the frames before the cut, `MediaProbe::probe` counts the video packets that FFmpeg does not flag as discarded and uses that as the frame count ([KAN-175](https://kozucharkadiusz.atlassian.net/browse/KAN-175)). Other sources pay nothing extra. Custom IN and OUT are C++-parsed `HH:MM:SS:FF` values and both are included; QML carries strings only. Presentation seconds are derived only after this decision for rendering and FFmpeg diagnostics.

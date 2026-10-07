@@ -267,6 +267,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/export/MediaProbe.cpp
     src/export/MediaTimeline.cpp
     src/export/MediaTimeline.h
+    src/export/VideoComposition.cpp
+    src/export/VideoComposition.h
     src/export/VideoFingerprint.cpp
     src/export/VideoFingerprint.h
     src/export/MediaProbe.h
@@ -325,6 +327,8 @@ qt_add_library(flappedear_editor STATIC
     src/app/AppController.h
     src/app/ExportController.cpp
     src/app/ExportController.h
+    src/app/AdditionalVideoController.cpp
+    src/app/AdditionalVideoController.h
     src/app/SyncController.cpp
     src/app/SyncController.h
     src/app/TemplatePicker.cpp
@@ -411,6 +415,8 @@ qt_add_qml_module(flappedear_native
         qml/StartupNoticeDialog.qml
         qml/ProductAboutDialog.qml
         qml/ShortcutHelpDialog.qml
+        qml/AdditionalVideosPanel.qml
+        qml/AdditionalVideosPreview.qml
         qml/InspectorPanel.qml
         qml/StartupError.qml
         qml/Main.qml

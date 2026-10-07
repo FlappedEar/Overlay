@@ -2472,6 +2472,31 @@ and that export protection sees every additional video.
 in the editor, switches runs and back, and checks that Save As keeps the
 active run's additional video with a rebased path, its label and sync, and
 the layout, and adds nothing to the other run.
+`SourceTests::addsAlignsAndChecksAdditionalVideos` uses short MP4 files made
+by FFmpeg. It checks that the editor refuses a non-video file, the main video
+and a duplicate, and allows at most three; that a new video starts with the
+main video's sync and is named after its file; that offset and time scale
+edits are validated and mark the document changed; that `alignAt` sets the
+offset so both moments are one telemetry time and `videoSecondsFor` maps back;
+that a label, a removal and the layout survive Save and reopen; that a changed
+file is marked `mismatch` and a moved one `missing` and kept; that Locate
+refuses a different video and accepts the original; and that a probe finishing
+after the document was closed is ignored.
+`EditorTests::editsAdditionalVideosInTheSyncTab` loads a project with an
+additional video and checks the DATA tab card: its label, offset and layout
+fields, the Add video button, that an offset edit marks the project changed,
+and that a missing video shows Locate and not Align.
+Export composition is tested by `ExportTests::placesAdditionalVideosByLayout`,
+`timesAdditionalVideosAgainstTheMainVideo`,
+`composesAnAdditionalVideoOnItsOwnTimeline` and
+`SourceTests::exportsWithAnAdditionalVideo`; see
+[export-pipeline.md](export-pipeline.md#additional-videos-kan-131). The last
+one runs a real export through the worker, so it needs the OpenGL context
+and FFmpeg 8.1 like the other export tests.
+`EditorTests::previewsAdditionalVideosByTheLayout` loads a main and a helmet
+video in the editor and checks the preview: picture in picture puts the helmet
+video in a small box at the top right over a full-frame main video, side by
+side gives each a half, and a video is hidden before its first frame.
 
 ## KAN-218: .fetproject round-trip vectors
 

@@ -87,7 +87,8 @@
 <ul>
   <li>H.265/HEVC video in an MP4 container, at a constant frame rate equal to the chosen rate.</li>
   <li>The number of frames is exactly the selected range: OUT − IN + 1 frames. An export that <em>completed with warning</em> may be up to 10 frames short at the end.</li>
-  <li>AAC audio when enabled and present in the selected range.</li>
+  <li>AAC audio when enabled and present in the selected range. Audio comes from the main video only.</li>
+  <li>The run's <a href="synchronization.html#additional-videos">additional videos</a>, placed by the layout chosen in the DATA tab. Each one shows from its first frame inside the range to its last; elsewhere the main video shows through. Widgets are drawn on top of every video.</li>
 </ul>
 
 <h2 id="disk-space">Disk space</h2>
@@ -104,8 +105,10 @@
   <tr><td>Bit depth other than 8 or 10 (for example 12-bit)</td><td>…-bit source preservation is not supported by the current HEVC export policy.</td></tr>
   <tr><td>Chapters of one recording that differ in codec, size, frame rate, colour or audio</td><td>Chapter … has a different … from the first chapter, so the chapters cannot be exported as one video.</td></tr>
   <tr><td>A recording with a missing or changed chapter</td><td>Some chapters of this recording are missing or changed.</td></tr>
+  <tr><td>An additional video that is still loading, missing, changed since the project was saved, or unreadable</td><td>The additional video "…" …</td></tr>
+  <tr><td>An additional video with HDR or Log colour</td><td>The additional video … is …. Export does not yet convert HDR or Log colour.</td></tr>
 </table>
 <p>To export such material, convert it first with another tool to a single SDR, 8- or 10-bit, unrotated MP4 or MOV file.</p>
-<p>A GoPro recording opened as chapters exports as one video: the range, timecodes and telemetry run across the chapter files, and none of them can be chosen as the output file.</p>
+<p>A GoPro recording opened as chapters exports as one video: the range, timecodes and telemetry run across the chapter files, and none of them can be chosen as the output file. An additional video cannot be chosen as the output file either.</p>
 <p>A video trimmed by another tool without re-encoding can be exported. Such a file still holds a few frames from before the cut that players never show; the export counts and uses only the frames that are shown.</p>
 <p>Other export errors are listed in <a href="troubleshooting.html#export">Troubleshooting</a>.</p>

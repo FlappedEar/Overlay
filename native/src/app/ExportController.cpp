@@ -191,6 +191,10 @@ bool ExportController::start(const Job &job, const Request &request)
     m_exportSupervisionReadyPath = m_exportConfig->fileName() + QStringLiteral(".supervision-ready");
     QFile::remove(m_exportCancelPath);
     QFile::remove(m_exportSupervisionReadyPath);
+    QJsonArray additionalVideos;
+    for (const auto &video : job.additionalVideos)
+        additionalVideos.append(QJsonObject{{"path", video.path}, {"label", video.label},
+            {"sync", QJsonObject{{"offset", video.sync.offset}, {"timeScale", video.sync.timeScale}}}});
     const QJsonObject config = {
         {"inputPath", inputPath},
         {"chapterPaths", QJsonArray::fromStringList(job.chapterPaths)},
@@ -201,6 +205,9 @@ bool ExportController::start(const Job &job, const Request &request)
         {"lapExclusions", job.lapExclusions},
         {"widgets", job.widgets},
         {"sync", QJsonObject{{"offset", job.sync.offset}, {"timeScale", job.sync.timeScale}}},
+        {"additionalVideos", additionalVideos},
+        {"videoLayout", job.videoLayout == VideoLayoutMode::SideBySide
+            ? QStringLiteral("sideBySide") : QStringLiteral("pictureInPicture")},
         {"outputWidth", outputSize.width()}, {"outputHeight", outputSize.height()},
         {"frameRateNumerator", outputRate.numerator}, {"frameRateDenominator", outputRate.denominator},
         {"videoBitrate", videoBitrate},

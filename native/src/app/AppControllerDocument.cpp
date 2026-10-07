@@ -82,8 +82,8 @@ void AppController::applyEditorProject(const ProjectLoadResult &result)
     // without) loading the video keeps them; the video probe refreshes them.
     m_videoChapterStates.clear();
     const QJsonObject editor = EventProjectCodec::editorProjection(result.project);
-    m_additionalVideos = AdditionalVideosCodec::read(editor.value("sources").toObject().value("additionalVideos"));
-    m_videoLayout = AdditionalVideosCodec::readLayout(editor.value("videoLayout"));
+    m_additionalVideos.restore(AdditionalVideosCodec::read(editor.value("sources").toObject().value("additionalVideos")),
+        AdditionalVideosCodec::readLayout(editor.value("videoLayout")), result.projectPath);
     const auto chapters = VideoChaptersCodec::read(editor.value("sources").toObject().value("video").toObject());
     QVector<TimelineChapter> timelineChapters;
     for (const auto &chapter : chapters) {
@@ -141,7 +141,6 @@ void AppController::clearEditor()
     m_videoSource = QUrl();
     m_videoReference = {};
     m_additionalVideos.clear();
-    m_videoLayout = VideoLayoutMode::PictureInPicture;
     m_videoChapterStates.clear();
     m_videoTimeline = {};
     m_videoChapterIndex = 0;
@@ -218,20 +217,22 @@ QJsonObject AppController::withEditorState(QJsonObject project, const QString &d
         sources.insert(QStringLiteral("video"), videoSource);
     }
     // KAN-131: additional videos by the same reference rules as the video.
-    if (m_additionalVideos.isEmpty()) {
+    const auto additionalVideos = m_additionalVideos.videos();
+    if (additionalVideos.isEmpty()) {
         sources.remove(QStringLiteral("additionalVideos"));
     } else {
         sources.insert(QStringLiteral("additionalVideos"), AdditionalVideosCodec::write(
-            m_additionalVideos, sources.value(QStringLiteral("additionalVideos")), [&](const ProjectSourceReference &reference) {
+            additionalVideos, sources.value(QStringLiteral("additionalVideos")), [&](const ProjectSourceReference &reference) {
                 return eventProject ? EventProjectCodec::referenceForSave(reference, documentPath, targetPath)
                                     : ProjectSourceReferenceCodec::toJson(reference, targetPath);
             }));
     }
     project.insert(QStringLiteral("sources"), sources);
-    if (m_additionalVideos.isEmpty() && m_videoLayout == VideoLayoutMode::PictureInPicture)
+    if (additionalVideos.isEmpty() && m_additionalVideos.layoutMode() == VideoLayoutMode::PictureInPicture)
         project.remove(QStringLiteral("videoLayout"));
     else
-        project.insert(QStringLiteral("videoLayout"), AdditionalVideosCodec::writeLayout(m_videoLayout, project.value(QStringLiteral("videoLayout"))));
+        project.insert(QStringLiteral("videoLayout"),
+            AdditionalVideosCodec::writeLayout(m_additionalVideos.layoutMode(), project.value(QStringLiteral("videoLayout"))));
     QJsonObject sync = project.value("sync").toObject();
     sync.insert("offset", m_syncController.offset());
     sync.insert("timeScale", m_syncController.timeScale());
@@ -270,9 +271,7 @@ void AppController::editorProjectSaved(const QJsonObject &project)
     const auto chapters = VideoChaptersCodec::read(editor.value("sources").toObject().value("video").toObject());
     if (chapters.size() == m_videoChapterStates.size())
         for (qsizetype index = 0; index < chapters.size(); ++index) m_videoChapterStates[index].reference = chapters[index].reference;
-    const auto additional = AdditionalVideosCodec::read(editor.value("sources").toObject().value("additionalVideos"));
-    if (additional.size() == m_additionalVideos.size())
-        for (qsizetype index = 0; index < additional.size(); ++index) m_additionalVideos[index].reference = additional[index].reference;
+    m_additionalVideos.updateReferences(AdditionalVideosCodec::read(editor.value("sources").toObject().value("additionalVideos")));
 }
 
 } // namespace FlappedEar

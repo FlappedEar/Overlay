@@ -6,6 +6,7 @@
 #include "export/ExportProcessSupervisor.h"
 #include "export/MediaProbe.h"
 #include "export/PersistentExportLog.h"
+#include "project/AdditionalVideos.h"
 #include "telemetry/TelemetrySession.h"
 
 #include <QJsonArray>
@@ -57,6 +58,14 @@ public:
         QJsonArray widgets;
         SyncTransform sync;
         MediaInfo source;
+        // KAN-131: videos composed with the main one, and their layout.
+        struct AdditionalVideo {
+            QString path;
+            QString label;
+            SyncTransform sync;
+        };
+        QVector<AdditionalVideo> additionalVideos;
+        VideoLayoutMode videoLayout = VideoLayoutMode::PictureInPicture;
     };
     // What the export dialog asked for.
     struct Request {
