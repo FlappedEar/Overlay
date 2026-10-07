@@ -9,6 +9,8 @@
 #include "app/ExportSourceOptions.h"
 #include "app/LapNavigation.h"
 #include "app/ChapterPlayback.h"
+#include "app/PlaybackReadout.h"
+#include "telemetry/ChannelSeries.h"
 #include "export/ExportEngine.h"
 #include "export/FfmpegTools.h"
 #include "export/MediaProbe.h"
@@ -52,6 +54,7 @@ private slots:
     void offersExportOptionsForTheSource();
     void presentsLapsForNavigation();
     void playsChapteredVideoAsOneTimeline();
+    void readsTelemetryAtTheVideoTime();
     void exposesReactivePreviewMetadataToQml();
     void buildsAddWidgetListAndInspectorFromDescriptors();
     void keepsSidebarReachableAtMinimumSize();
@@ -961,6 +964,41 @@ void EditorTests::playsChapteredVideoAsOneTimeline()
     QCOMPARE(end.value("chapter").toInt(), 2);
     QCOMPARE(end.value("localMilliseconds").toLongLong(), 20000);
     QVERIFY(ChapterPlayback::locate(MediaTimeline(), 1000).isEmpty());
+}
+
+void EditorTests::readsTelemetryAtTheVideoTime()
+{
+    // KAN-215: speed at 1 s steps from telemetry 10 s, with a gap at 13 s; the
+    // video starts 10 s before the telemetry.
+    TelemetrySession session;
+    TelemetryChannel speed;
+    speed.name = QStringLiteral("velocity");
+    speed.setSamples({10.0, 11.0, 12.0, 13.0, 14.0},
+        {100.0F, 110.0F, 120.0F, std::numeric_limits<float>::quiet_NaN(), 140.0F});
+    session.channels.insert(speed.name, speed);
+    session.aliases.insert(QStringLiteral("speed"), speed.name);
+    const SyncTransform sync{10.0, 1.0};
+
+    QCOMPARE(PlaybackReadout::valueAt(&session, sync, 1.5, "speed").value_or(-1.0), 115.0);
+    QCOMPARE(PlaybackReadout::valueAt(&session, sync, 1.5, "velocity").value_or(-1.0), 115.0);
+    QVERIFY(!PlaybackReadout::valueAt(&session, sync, 3.5, "speed"));
+    QVERIFY(!PlaybackReadout::valueAt(&session, sync, 30.0, "speed"));
+    QVERIFY(!PlaybackReadout::valueAt(&session, sync, 1.5, "rpm"));
+    QVERIFY(!PlaybackReadout::valueAt(&session, sync, 1.5, QString()));
+    QVERIFY(!PlaybackReadout::valueAt(nullptr, sync, 1.5, "speed"));
+    QVERIFY(!PlaybackReadout::valueAt(&session, SyncTransform{10.0, 0.0}, 1.5, "speed"));
+
+    QCOMPARE(PlaybackReadout::valueText(&session, sync, 1.25, "speed", 1), QStringLiteral("112.5"));
+    QCOMPARE(PlaybackReadout::valueText(&session, sync, 1.25, "speed", 12), QStringLiteral("112.500000"));
+    QCOMPARE(PlaybackReadout::valueText(&session, sync, 1.25, "speed", -3), QStringLiteral("113"));
+    QCOMPARE(PlaybackReadout::valueText(&session, sync, 3.5, "speed", 1), QStringLiteral("—"));
+
+    const QVariantMap series = PlaybackReadout::series(&session, sync, "speed", 0.0, 4.0, 100);
+    QCOMPARE(series, channelSeries(session, "speed", 10.0, 14.0, 100));
+    QVERIFY(!series.isEmpty());
+    QVERIFY(PlaybackReadout::series(&session, sync, "speed", 0.0, 4.0, 1).isEmpty());
+    QVERIFY(PlaybackReadout::series(&session, sync, "speed", 0.0, qInf(), 100).isEmpty());
+    QVERIFY(PlaybackReadout::series(nullptr, sync, "speed", 0.0, 4.0, 100).isEmpty());
 }
 
 void EditorTests::presentsLapsForNavigation()
