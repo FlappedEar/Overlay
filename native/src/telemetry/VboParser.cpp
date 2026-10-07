@@ -384,8 +384,18 @@ TimingGateParseResult parseTimingGate(const QString &line, const bool centreDire
     return {TimingGate{type, sourceName, endpointA, endpointB, description}, {}};
 }
 
-QHash<QString, QString> resolveAliases(const QStringList &names)
+qsizetype finiteSampleCount(const TelemetrySession &session, const QString &name)
 {
+    const auto &values = session.channels[name].values();
+    return std::count_if(values.cbegin(), values.cend(), [](const float value) { return std::isfinite(value); });
+}
+
+// The first matching column by name wins, unless a later match has more than
+// twice its finite samples (KAN-230, Telemetry FET-207): a mostly empty first
+// column must not hide a full one.
+QHash<QString, QString> resolveAliases(const TelemetrySession &session)
+{
+    const QStringList names = session.channelNames();
     QHash<QString, QString> aliases;
     for (const AliasPattern &aliasPattern : aliasPatterns) {
         // RaceChrono's generic columns may be zero placeholders. Prefer its
@@ -403,19 +413,19 @@ QHash<QString, QString> resolveAliases(const QStringList &names)
                 continue;
             }
         }
+        QString chosen;
+        qsizetype chosenSamples = 0;
         for (const QString &name : names) {
-            bool matched = false;
-            for (const QRegularExpression &pattern : aliasPattern.patterns) {
-                if (pattern.match(name).hasMatch()) {
-                    matched = true;
-                    break;
-                }
-            }
-            if (matched) {
-                aliases.insert(aliasPattern.alias, name);
-                break;
+            const bool matched = std::any_of(aliasPattern.patterns.cbegin(), aliasPattern.patterns.cend(),
+                [&name](const QRegularExpression &pattern) { return pattern.match(name).hasMatch(); });
+            if (!matched) continue;
+            const qsizetype samples = finiteSampleCount(session, name);
+            if (chosen.isEmpty() || samples > 2 * chosenSamples) {
+                chosen = name;
+                chosenSamples = samples;
             }
         }
+        if (!chosen.isEmpty()) aliases.insert(aliasPattern.alias, chosen);
     }
     return aliases;
 }
@@ -808,7 +818,7 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         }
     }
     session.sampleCount = rawTimes.size();
-    session.aliases = resolveAliases(session.channelNames());
+    session.aliases = resolveAliases(session);
     preferAcceleratorPedalForThrottle(session);
     markImplausibleHeartRate(session);
     throwIfCancelled(cancelled);

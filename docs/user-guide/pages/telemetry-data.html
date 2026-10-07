@@ -48,7 +48,7 @@
   <tr><th>Purpose</th><th>Matching column names</th></tr>
   <tr><td>Speed</td><td><code>velocity</code>, <code>speed</code>, names starting with <code>gps speed</code> or <code>obd speed</code></td></tr>
   <tr><td>RPM</td><td><code>rpm</code>, <code>rpm-…</code>, names containing <code>engine speed</code></td></tr>
-  <tr><td>Throttle</td><td>names containing <code>throttle</code> or <code>accelerator pedal</code>; an accelerator-position channel with data takes priority</td></tr>
+  <tr><td>Throttle</td><td>names containing <code>throttle</code> or <code>accelerator pedal</code>; an accelerator-position channel takes priority when it has at least half as many readings as the throttle channel</td></tr>
   <tr><td>Brake</td><td><code>brake</code>, <code>brake-…</code>, names containing <code>brake pressure</code> or <code>brake pedal</code></td></tr>
   <tr><td>Heart rate</td><td>names containing <code>heart rate</code>, or exactly <code>hr</code> or <code>bpm</code></td></tr>
   <tr><td>Latitude / longitude</td><td><code>lat</code>, <code>latitude</code> / <code>lon</code>, <code>long</code>, <code>longitude</code></td></tr>
@@ -56,6 +56,7 @@
   <tr><td>Longitudinal G</td><td><code>longacc-calc</code> first, then <code>longacc</code>, <code>longitudinal accel…</code>, <code>longitudinal g</code>, <code>gy</code></td></tr>
   <tr><td>Gear</td><td>not recognised automatically; select it in the widget</td></tr>
 </table>
+<p>When several columns match, the first by name is used, unless a later one has more than twice as many readings. A mostly empty column therefore does not hide a full one.</p>
 <p>Any channel can still be chosen by name in a widget's <strong>Source channel</strong>.</p>
 
 <h3 id="tyres">Tyre channels</h3>
