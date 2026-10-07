@@ -135,33 +135,7 @@ ApplicationWindow {
 
     DirtyProjectDialog { id: dirtyProjectDialog }
 
-    Dialog {
-        font.family: Theme.sans
-        id: sourceMismatchDialog
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: 470
-        title: qsTr("Source does not match project")
-        contentItem: FeLabel {
-            width: 410
-            text: qsTr("The selected file “%1” does not match the source originally stored with this project. Use it as an intentional replacement?")
-                .arg(appController.sourceMismatchCandidateName)
-            wrapMode: Text.WordWrap
-            color: Theme.onSurface
-        }
-        footer: DialogButtonBox {
-            standardButtons: DialogButtonBox.Yes | DialogButtonBox.Cancel
-            onAccepted: {
-                sourceMismatchDialog.close()
-                appController.resolveSourceMismatch(true)
-            }
-            onRejected: {
-                sourceMismatchDialog.close()
-                appController.resolveSourceMismatch(false)
-            }
-        }
-    }
+    SourceMismatchDialog { id: sourceMismatchDialog }
 
     Connections {
         target: appController
@@ -171,34 +145,7 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
-        font.family: Theme.sans
-        id: recoveryDialog
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        closePolicy: Popup.NoAutoClose
-        width: 460
-        title: qsTr("Recover unsaved changes?")
-        contentItem: FeLabel {
-            width: 400
-            text: qsTr("FlappedEar Overlays found changes that were not saved to the project file. Recover them as an unsaved document, or discard them and open the saved project?")
-            wrapMode: Text.WordWrap
-            color: Theme.onSurface
-        }
-        footer: DialogButtonBox {
-            Button {
-                text: qsTr("Discard")
-                DialogButtonBox.buttonRole: DialogButtonBox.DestructiveRole
-                onClicked: appController.resolveStartupRecovery("discard")
-            }
-            Button {
-                text: qsTr("Recover")
-                DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
-                onClicked: appController.resolveStartupRecovery("recover")
-            }
-        }
-    }
+    RecoveryDialog { id: recoveryDialog }
 
     Connections {
         target: appController
@@ -230,25 +177,7 @@ ApplicationWindow {
             startupNoticeDialog.open()
     }
 
-    // KAN-125: items the move from FlappedEar Telemetry left in their old place.
-    Dialog {
-        font.family: Theme.sans
-        id: startupNoticeDialog
-        objectName: "startupNoticeDialog"
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: 560
-        title: qsTr("Your data from FlappedEar Telemetry")
-        standardButtons: Dialog.Ok
-        contentItem: FeLabel {
-            width: 500
-            text: qsTr("FlappedEar Overlays is the new name of this app. Nothing was deleted or overwritten, but not everything could be moved:") + "\n\n" + appController.startupNotice
-            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-            textFormat: Text.PlainText
-            color: Theme.onSurface
-        }
-    }
+    StartupNoticeDialog { id: startupNoticeDialog }
 
     Dialog {
         font.family: Theme.sans
@@ -385,39 +314,9 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
-        font.family: Theme.sans
-        id: productAboutDialog
-        objectName: "productAboutDialog"
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: Math.min(440, window.width - 40)
-        title: qsTr("About %1").arg(Application.displayName)
-        standardButtons: Dialog.Close
-        contentItem: FeLabel {
-            text: qsTr("Version %1").arg(Application.version) + "\n" + qsTr("Video telemetry overlays for track days.")
-            wrapMode: Text.WordWrap
-        }
-    }
+    ProductAboutDialog { id: productAboutDialog; hostWidth: window.width }
 
-    Dialog {
-        font.family: Theme.sans
-        id: shortcutHelpDialog
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: 450
-        title: qsTr("Keyboard Shortcuts")
-        standardButtons: Dialog.Close
-        contentItem: FeLabel {
-            width: 390
-            text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nCtrl/Cmd+Shift+N  New widget (widget editor)\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
-            color: Theme.onSurface
-            wrapMode: Text.WordWrap
-            font.pixelSize: Theme.body
-        }
-    }
+    ShortcutHelpDialog { id: shortcutHelpDialog }
 
     function toggleFullScreen() {
         if (fullScreenPreview || visibility === Window.FullScreen)

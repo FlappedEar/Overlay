@@ -49,6 +49,8 @@ private slots:
     void disablesTransportShortcutsWhileEditing();
     void savesTheSceneAsATemplateFromThePopup();
     void asksBeforeDiscardingUnsavedChanges();
+    void offersRecoveryAtStartup();
+    void opensTheHelpDialogs();
 };
 
 void EditorTests::initTestCase()
@@ -1096,6 +1098,77 @@ void EditorTests::asksBeforeDiscardingUnsavedChanges()
     QTRY_VERIFY(!dialog->property("visible").toBool());
     QVERIFY(editor.controller.pendingDestructiveAction().isEmpty());
     QVERIFY(!editor.controller.dirty());
+}
+
+// KAN-216: the startup recovery offer lives in RecoveryDialog.qml. It is open
+// when the editor starts with a recovery snapshot, and Discard closes it and
+// drops the snapshot. The source mismatch dialog moved next to it.
+void EditorTests::offersRecoveryAtStartup()
+{
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QString recoveryPath = directory.filePath(QStringLiteral("recovery.json"));
+    {
+        AppController controller(nullptr, recoveryPath);
+        if (controller.recoveryPending())
+            controller.resolveStartupRecovery(QStringLiteral("discard"));
+        QVERIFY(controller.widgetModel()->addWidget("retroCustomValue") >= 0);
+        QTRY_VERIFY(controller.dirty());
+        QTRY_VERIFY(QFileInfo(recoveryPath).isFile());
+    }
+
+    AppController controller(nullptr, recoveryPath);
+    QVERIFY(controller.recoveryPending());
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty("appController", &controller);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(qmlSourcePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create());
+    auto *window = qobject_cast<QQuickWindow *>(object.get());
+    QVERIFY(window);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(window->findChild<QObject *>("sourceMismatchDialog"));
+    auto *dialog = window->findChild<QObject *>("recoveryDialog");
+    auto *discard = window->findChild<QObject *>("recoveryDiscard");
+    QVERIFY(dialog && discard);
+    QTRY_VERIFY(dialog->property("opened").toBool());
+
+    QVERIFY(QMetaObject::invokeMethod(discard, "clicked"));
+    QTRY_VERIFY(!dialog->property("visible").toBool());
+    QVERIFY(!controller.recoveryPending());
+    QVERIFY(!QFileInfo::exists(recoveryPath));
+}
+
+// KAN-216: the About and Keyboard Shortcuts dialogs and the startup notice live
+// in their own files. Help opens the first two; the notice stays closed when
+// nothing was left behind by the move from FlappedEar Telemetry.
+void EditorTests::opensTheHelpDialogs()
+{
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    auto *notice = editor.window->findChild<QObject *>("startupNoticeDialog");
+    QVERIFY(notice);
+    if (editor.controller.startupNotice().isEmpty())
+        QVERIFY(!notice->property("visible").toBool());
+
+    auto *about = editor.window->findChild<QObject *>("productAboutDialog");
+    QVERIFY(about);
+    QVERIFY(QMetaObject::invokeMethod(about, "open"));
+    QTRY_VERIFY(about->property("opened").toBool());
+    QCOMPARE(about->property("width").toReal(), std::min<qreal>(440, editor.window->width() - 40));
+    QVERIFY(about->property("title").toString().startsWith(QStringLiteral("About ")));
+    QVERIFY(QMetaObject::invokeMethod(about, "close"));
+    QTRY_VERIFY(!about->property("visible").toBool());
+
+    auto *shortcuts = editor.window->findChild<QObject *>("shortcutHelpDialog");
+    QVERIFY(shortcuts);
+    QVERIFY(QMetaObject::invokeMethod(shortcuts, "open"));
+    QTRY_VERIFY(shortcuts->property("opened").toBool());
+    auto *text = qvariant_cast<QObject *>(shortcuts->property("contentItem"));
+    QVERIFY(text);
+    QVERIFY(text->property("text").toString().contains(QStringLiteral("Ctrl/Cmd+E  Export")));
+    QVERIFY(QMetaObject::invokeMethod(shortcuts, "close"));
+    QTRY_VERIFY(!shortcuts->property("visible").toBool());
 }
 
 #define main nativeTestMain
