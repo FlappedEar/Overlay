@@ -43,6 +43,31 @@ QVector<AdditionalVideo> AdditionalVideoController::videos() const
     return videos;
 }
 
+QVector<AdditionalVideoController::ExportVideo> AdditionalVideoController::exportVideos(QString *problem) const
+{
+    if (m_pendingAdds > 0) {
+        if (problem) *problem = QStringLiteral("An additional video is still loading. Export when it is ready.");
+        return {};
+    }
+    QVector<ExportVideo> videos;
+    for (const auto &entry : m_entries) {
+        const QString name = entry.video.label.isEmpty()
+            ? QFileInfo(entry.path.isEmpty() ? entry.video.reference.displayPath() : entry.path).fileName()
+            : entry.video.label;
+        QString reason;
+        if (entry.state == QStringLiteral("loading")) reason = QStringLiteral("is still loading. Export when it is ready.");
+        else if (entry.state == QStringLiteral("missing")) reason = QStringLiteral("was not found. Locate it or remove it before exporting.");
+        else if (entry.state == QStringLiteral("mismatch")) reason = QStringLiteral("has changed since it was saved. Locate the original or remove it before exporting.");
+        else if (entry.state != QStringLiteral("ready")) reason = QStringLiteral("could not be read. Remove it before exporting.");
+        if (!reason.isEmpty()) {
+            if (problem) *problem = QStringLiteral("The additional video \"%1\" %2").arg(name, reason);
+            return {};
+        }
+        videos.append({entry.path, name, entry.video.sync});
+    }
+    return videos;
+}
+
 QVariantList AdditionalVideoController::videoList() const
 {
     QVariantList list;

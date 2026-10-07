@@ -653,13 +653,22 @@ QStringList ExportEngine::stageBInputArguments(const StageBSourceAccess &access,
     return {"-copyts", "-seek_timestamp", "1", "-ss", access.inputSeekTimestamp, "-i", path};
 }
 
+QStringList ExportEngine::stageBAdditionalInputArguments(
+    const VideoComposition::Timing &timing, const QString &path)
+{
+    // -copyts is already global (the main input sets it), so the seek and the
+    // filter's input timestamps are both the file's own.
+    return {"-seek_timestamp", "1", "-ss", QString::number(timing.inputSeekSeconds, 'f', 6), "-i", path};
+}
+
 QString ExportEngine::stageBVideoFilterGraph(
     const StageBSourceAccess &sourceAccess,
     const QSize &sourceSize,
     const QSize &outputSize,
     const MediaRational &frameRate,
     const qsizetype expectedFrames,
-    const ExportMediaProfile &mediaProfile)
+    const ExportMediaProfile &mediaProfile,
+    const StageBComposition &composition)
 {
     const bool requiresStraightOverlay = mediaProfile.outputBitDepth == 10;
     const QString overlayPreparation = requiresStraightOverlay
@@ -669,35 +678,69 @@ QString ExportEngine::stageBVideoFilterGraph(
         ? QStringLiteral("straight") : QStringLiteral("premultiplied");
     const QString overlayFormat = requiresStraightOverlay
         ? QStringLiteral("yuv420p10") : QStringLiteral("auto");
+    QString mainScale;
+    if (composition.mainRect.isValid() && composition.mainRect != QRect(QPoint(0, 0), outputSize)) {
+        // Side by side: the main video keeps its aspect ratio in its place.
+        mainScale = QStringLiteral(",scale=%1:%2:flags=lanczos,setsar=1,pad=%3:%4:%5:%6:color=black")
+            .arg(composition.mainRect.width()).arg(composition.mainRect.height())
+            .arg(outputSize.width()).arg(outputSize.height())
+            .arg(composition.mainRect.x()).arg(composition.mainRect.y());
+    } else if (sourceSize != outputSize) {
+        mainScale = QStringLiteral(",scale=%1:%2:flags=lanczos").arg(outputSize.width()).arg(outputSize.height());
+    }
+    // KAN-131: each additional video is retimed onto the output's timeline
+    // and placed over the main video before the telemetry overlay, so widgets
+    // stay on top. Before its first frame and after its last, the main video
+    // shows through (eof_action=pass, no repeated last frame).
+    QString additional;
+    QString mainLabel = composition.additional.isEmpty() ? QStringLiteral("sourceVideo") : QStringLiteral("main0");
+    for (qsizetype index = 0; index < composition.additional.size(); ++index) {
+        const StageBComposition::Input &input = composition.additional[index];
+        const QString next = index + 1 == composition.additional.size()
+            ? QStringLiteral("sourceVideo") : QStringLiteral("main%1").arg(index + 1);
+        additional += QStringLiteral(
+            "[%1:v]setpts=(T*%2+%3)/TB,scale=%4:%5:flags=lanczos,setsar=1[additional%6];"
+            "[main%6][additional%6]overlay=%7:%8:eof_action=pass:repeatlast=0:format=%9[%10];")
+            .arg(index + 2)
+            .arg(QString::number(input.timeFactor, 'f', 12), QString::number(input.timeShift, 'f', 9))
+            .arg(input.rect.width()).arg(input.rect.height())
+            .arg(index)
+            .arg(input.rect.x()).arg(input.rect.y())
+            .arg(requiresStraightOverlay ? QStringLiteral("yuv420p10") : QStringLiteral("auto"), next);
+    }
     return QStringLiteral(
         "[0:v]trim=start=%1,setpts=PTS-STARTPTS%4,"
         "fps=fps=%2:start_time=0:round=near:eof_action=round,"
-        "trim=end_frame=%3,setpts=PTS-STARTPTS[sourceVideo];"
+        "trim=end_frame=%3,setpts=PTS-STARTPTS[%9];%10"
         "[1:v]setpts=PTS-STARTPTS,%5[temporaryOverlay];"
         "[sourceVideo][temporaryOverlay]overlay=0:0:shortest=1:repeatlast=0:eof_action=endall:alpha=%6:format=%7[composited];"
         "[composited]format=pix_fmts=%8[video]")
             .arg(sourceAccess.trimStartTimestamp)
             .arg(rateString(frameRate))
             .arg(expectedFrames)
-            .arg(sourceSize == outputSize ? QString() : QStringLiteral(",scale=%1:%2:flags=lanczos")
-                .arg(outputSize.width()).arg(outputSize.height()))
+            .arg(mainScale)
             .arg(overlayPreparation)
             .arg(overlayAlpha)
             .arg(overlayFormat)
-            .arg(mediaProfile.outputPixelFormat);
+            .arg(mediaProfile.outputPixelFormat)
+            .arg(mainLabel, additional);
 }
 
 QString ExportEngine::verifyCompositionFilters(
-    const QString &program, const QString &graph, const std::function<bool()> &cancelled)
+    const QString &program, const QString &graph, const std::function<bool()> &cancelled,
+    const int additionalInputs)
 {
     throwIfCancelled(cancelled);
     QProcess process;
     ExportProcessSupervisor supervisor(process, false);
-    supervisor.start(program, {"-hide_banner", "-loglevel", "error", "-nostdin",
+    QStringList arguments{"-hide_banner", "-loglevel", "error", "-nostdin",
         "-f", "lavfi", "-i", "color=black:s=64x64:r=30:d=0.1",
-        "-f", "lavfi", "-i", "color=black@0:s=64x64:r=30:d=0.1,format=rgba",
-        "-filter_complex", graph, "-map", "[video]", "-frames:v", "3",
-        "-c:v", "rawvideo", "-f", "null", "-"});
+        "-f", "lavfi", "-i", "color=black@0:s=64x64:r=30:d=0.1,format=rgba"};
+    for (int index = 0; index < additionalInputs; ++index)
+        arguments += QStringList{"-f", "lavfi", "-i", "color=gray:s=48x36:r=25:d=0.1"};
+    arguments += QStringList{"-filter_complex", graph, "-map", "[video]", "-frames:v", "3",
+        "-c:v", "rawvideo", "-f", "null", "-"};
+    supervisor.start(program, arguments);
     if (!supervisor.waitForStarted(5'000))
         return QStringLiteral("Could not start FFmpeg composition preflight: %1").arg(process.errorString());
     BoundedProcessOutput diagnostic(BoundedProcessOutput::Mode::DiagnosticTail,
@@ -875,14 +918,58 @@ ExportResult ExportEngine::exportVideo(
             result.error = encoderSupport.error;
             return result;
         }
+        // KAN-131: each additional video keeps its place in the layout; one
+        // with no frame inside the export leaves its place empty.
+        StageBComposition composition;
+        StageBComposition preflightComposition;
+        QStringList additionalInputArguments;
+        if (!settings.additionalVideos.isEmpty()) {
+            QVector<QSize> sourceSizes{source.displayVideoSize.isEmpty() ? source.videoSize : source.displayVideoSize};
+            for (const auto &video : settings.additionalVideos)
+                sourceSizes.append(video.info.displayVideoSize.isEmpty() ? video.info.videoSize : video.info.displayVideoSize);
+            const QVector<QRect> rects = VideoComposition::layout(settings.videoLayout, outputSize, sourceSizes);
+            const QVector<QRect> preflightRects = VideoComposition::layout(settings.videoLayout, QSize(64, 64), sourceSizes);
+            if (rects.size() != sourceSizes.size() || preflightRects.size() != sourceSizes.size()) {
+                result.error = QStringLiteral("Could not place the additional videos in the export.");
+                return result;
+            }
+            if (settings.videoLayout == VideoLayoutMode::SideBySide) {
+                composition.mainRect = rects[0];
+                preflightComposition.mainRect = preflightRects[0];
+            }
+            for (qsizetype index = 0; index < settings.additionalVideos.size(); ++index) {
+                const auto &video = settings.additionalVideos[index];
+                const auto timing = VideoComposition::timing(settings.sync, video.sync, sourceRangeStart, exportDuration,
+                    video.info.videoStartTime, video.info.videoDuration > 0.0 ? video.info.videoDuration : video.info.duration);
+                if (!timing) {
+                    observe(settings, QStringLiteral("log"), QStringLiteral("preparing"),
+                            QStringLiteral("placeAdditionalVideos"),
+                            QStringLiteral("Additional video has no frame inside the export range"),
+                            QStringLiteral("export"), {{"path", video.path}, {"label", video.label}});
+                    continue;
+                }
+                composition.additional.append({rects[index + 1], timing->timeFactor, timing->timeShift});
+                preflightComposition.additional.append({preflightRects[index + 1], 1.0, 0.0});
+                additionalInputArguments += stageBAdditionalInputArguments(*timing, video.path);
+                observe(settings, QStringLiteral("log"), QStringLiteral("preparing"),
+                        QStringLiteral("placeAdditionalVideos"), QStringLiteral("Additional video placed"),
+                        QStringLiteral("export"),
+                        {{"path", video.path}, {"label", video.label},
+                         {"x", rects[index + 1].x()}, {"y", rects[index + 1].y()},
+                         {"width", rects[index + 1].width()}, {"height", rects[index + 1].height()},
+                         {"inputSeekSeconds", timing->inputSeekSeconds},
+                         {"timeFactor", timing->timeFactor}, {"timeShift", timing->timeShift}});
+            }
+        }
         observe(settings, QStringLiteral("status"), QStringLiteral("preparing"),
                 QStringLiteral("verifyCompositionFilters"),
                 QStringLiteral("Checking FFmpeg overlay filter compatibility"));
         const QString compositionError = verifyCompositionFilters(
             FfmpegTools::ffmpegPath(),
             stageBVideoFilterGraph({"0", "0", "0.1"}, QSize(64, 64), QSize(64, 64),
-                                  {30, 1}, 3, result.mediaProfile),
-            [&settings] { return isCancelled(settings); });
+                                  {30, 1}, 3, result.mediaProfile, preflightComposition),
+            [&settings] { return isCancelled(settings); },
+            static_cast<int>(preflightComposition.additional.size()));
         if (!compositionError.isEmpty()) {
             result.error = compositionError;
             return result;
@@ -1424,7 +1511,7 @@ ExportResult ExportEngine::exportVideo(
         }
         const QString timeRangeFilter = stageBVideoFilterGraph(
             *sourceAccess, source.videoSize, outputSize, exportFrameRate,
-            expectedFrames, result.mediaProfile);
+            expectedFrames, result.mediaProfile, composition);
         QStringList compositionArguments = {
             "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-y",
         };
@@ -1438,8 +1525,9 @@ ExportResult ExportEngine::exportVideo(
             }
             compositionArguments += chapterInput;
         }
+        compositionArguments += QStringList{"-i", temporaryOverlayPath};
+        compositionArguments += additionalInputArguments;
         compositionArguments += QStringList{
-            "-i", temporaryOverlayPath,
             "-filter_complex", timeRangeFilter,
             "-map", "[video]", "-fps_mode:v", "cfr", "-c:v", encoder,
             "-b:v", QString::number(settings.videoBitrate),

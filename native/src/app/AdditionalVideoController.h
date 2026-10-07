@@ -46,6 +46,14 @@ public:
 
     // The videos as saved; runtime state is not part of them.
     [[nodiscard]] QVector<AdditionalVideo> videos() const;
+    // What export composes: every video, by its checked file. Empty, with
+    // `problem` saying which video and why, when one is not ready.
+    struct ExportVideo {
+        QString path;
+        QString label;
+        SyncTransform sync;
+    };
+    [[nodiscard]] QVector<ExportVideo> exportVideos(QString *problem) const;
     [[nodiscard]] VideoLayoutMode layoutMode() const { return m_layout; }
     [[nodiscard]] QVariantList videoList() const;
     [[nodiscard]] int count() const { return static_cast<int>(m_entries.size()); }

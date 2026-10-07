@@ -27,7 +27,8 @@ controller protects:
 - the project file.
 
 Every chapter of a chaptered video is protected too, whether or not an
-event is open (KAN-106).
+event is open (KAN-106), and so is every additional video of the run
+(KAN-131).
 
 Preparation refuses a target that is any of these. Paths are compared
 after canonical resolution, so a symlinked folder or different letter case

@@ -267,6 +267,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/export/MediaProbe.cpp
     src/export/MediaTimeline.cpp
     src/export/MediaTimeline.h
+    src/export/VideoComposition.cpp
+    src/export/VideoComposition.h
     src/export/VideoFingerprint.cpp
     src/export/VideoFingerprint.h
     src/export/MediaProbe.h

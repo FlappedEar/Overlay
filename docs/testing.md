@@ -2486,6 +2486,13 @@ after the document was closed is ignored.
 additional video and checks the DATA tab card: its label, offset and layout
 fields, the Add video button, that an offset edit marks the project changed,
 and that a missing video shows Locate and not Align.
+Export composition is tested by `ExportTests::placesAdditionalVideosByLayout`,
+`timesAdditionalVideosAgainstTheMainVideo`,
+`composesAnAdditionalVideoOnItsOwnTimeline` and
+`SourceTests::exportsWithAnAdditionalVideo`; see
+[export-pipeline.md](export-pipeline.md#additional-videos-kan-131). The last
+one runs a real export through the worker, so it needs the OpenGL context
+and FFmpeg 8.1 like the other export tests.
 
 ## KAN-218: .fetproject round-trip vectors
 
