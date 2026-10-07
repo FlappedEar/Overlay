@@ -386,7 +386,10 @@ TimingGateParseResult parseTimingGate(const QString &line, const bool centreDire
 
 qsizetype finiteSampleCount(const TelemetrySession &session, const QString &name)
 {
-    const auto &values = session.channels[name].values();
+    // A const QHash's operator[] returns a copy, so look the channel up in place.
+    const auto channel = session.channels.constFind(name);
+    if (channel == session.channels.cend()) return 0;
+    const auto &values = channel->values();
     return std::count_if(values.cbegin(), values.cend(), [](const float value) { return std::isfinite(value); });
 }
 
