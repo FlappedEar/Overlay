@@ -2703,3 +2703,8 @@ video while a reversed lap or handles over 30 s are rejected.
 synced 5 s before the telemetry: the status line, the lap list (run, delta to the best, best
 lap), the lap bar (out lap, two laps, in lap to the video's end) and the lap under the playhead
 at lap boundaries.
+
+`EditorTests::playsChapteredVideoAsOneTimeline` checks `ChapterPlayback` with a 10 s chapter, a
+missing 5 s chapter and a 20 s chapter: chapter files and starts (none for a gap or an index out of
+range), the chapter list with names and the gap's reason, and locating positions inside the gap,
+at a chapter start and past both ends of the timeline.

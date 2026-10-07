@@ -3,6 +3,7 @@
 #include "app/PreviewTimeline.h"
 #include "app/ExportSourceOptions.h"
 #include "app/LapNavigation.h"
+#include "app/ChapterPlayback.h"
 #include "export/ExportFormat.h"
 #include "export/ExportEngine.h"
 #include "export/ChapterSource.h"
@@ -672,37 +673,29 @@ void AppController::commitVboLoad(const VboLoadResult &result, const bool markDo
 QUrl AppController::videoChapterSource() const
 {
     if (!videoChaptered()) return m_videoSource;
-    const auto &chapter = m_videoTimeline.chapter(m_videoChapterIndex);
-    return chapter.available ? QUrl::fromLocalFile(chapter.path) : QUrl();
+    return ChapterPlayback::chapterSource(m_videoTimeline, m_videoChapterIndex);
 }
 
 qint64 AppController::videoChapterStartMilliseconds() const
 {
-    return videoChaptered() ? qRound64(m_videoTimeline.chapterStartSeconds(m_videoChapterIndex) * 1000.0) : 0;
+    return videoChaptered() ? ChapterPlayback::chapterStartMilliseconds(m_videoTimeline, m_videoChapterIndex) : 0;
 }
 
 QVariantList AppController::videoChapterList() const
 {
-    QVariantList list;
-    if (!videoChaptered()) return list;
-    for (int index = 0; index < m_videoTimeline.chapterCount(); ++index) {
-        const auto &state = m_videoChapterStates.value(index);
-        list.append(QVariantMap{{"index", index},
-            {"startMilliseconds", qRound64(m_videoTimeline.chapterStartSeconds(index) * 1000.0)},
-            {"durationMilliseconds", qRound64(m_videoTimeline.chapter(index).durationSeconds * 1000.0)},
-            {"available", m_videoTimeline.chapter(index).available},
-            {"url", m_videoTimeline.chapter(index).available ? QUrl::fromLocalFile(m_videoTimeline.chapter(index).path) : QUrl()},
-            {"name", QFileInfo(state.reference.displayPath()).fileName()}, {"problem", state.problem}});
+    if (!videoChaptered()) return {};
+    QVector<ChapterPlayback::ChapterLabel> labels;
+    labels.reserve(m_videoChapterStates.size());
+    for (const VideoChapterState &state : m_videoChapterStates) {
+        labels.append({QFileInfo(state.reference.displayPath()).fileName(), state.problem});
     }
-    return list;
+    return ChapterPlayback::chapterList(m_videoTimeline, labels);
 }
 
 QVariantMap AppController::locateVideoTimeline(const qint64 timelineMilliseconds) const
 {
     if (!videoChaptered()) return {{"chapter", 0}, {"localMilliseconds", timelineMilliseconds}, {"gap", false}};
-    const auto position = m_videoTimeline.locate(std::clamp(timelineMilliseconds / 1000.0, 0.0, m_videoTimeline.durationSeconds()));
-    if (!position) return {};
-    return {{"chapter", position->chapter}, {"localMilliseconds", qRound64(position->localSeconds * 1000.0)}, {"gap", position->gap}};
+    return ChapterPlayback::locate(m_videoTimeline, timelineMilliseconds);
 }
 
 bool AppController::setVideoChapter(const int index)
