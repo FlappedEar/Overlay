@@ -32,7 +32,7 @@
 <p>A project opens even when its video or telemetry cannot be found. The layout and settings stay intact, and the header shows <strong>Video missing · Locate…</strong> or <strong>Telemetry missing · Locate…</strong>. Click the button and pick the file in its new location.</p>
 <ul>
   <li>Keep media in the project's folder, or in a folder up to two levels above it. The project then stores relative paths, and you can move or copy the whole folder to another place or another Mac.</li>
-  <li>Each source is identified by its content, not only by its name. Telemetry is checked byte for byte when it loads. A video opens at once and is checked byte for byte in the background, so a changed video can turn to <strong>Video mismatch</strong> a moment after it opens; long recordings take longer to check.</li>
+  <li>Each source is identified by its content, not only by its name. Telemetry is checked byte for byte when it loads. A video is checked by its size, media details and samples of its content, so it opens without reading the whole file.</li>
   <li>If a file at the expected place differs from the original, the header shows <strong>… mismatch · Locate…</strong>.</li>
   <li>If you pick a different file in a Locate dialog, you are asked <em>Source does not match project</em>. Choose <strong>Yes</strong> only if you intend to replace the source.</li>
 </ul>
