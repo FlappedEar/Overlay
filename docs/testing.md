@@ -2649,3 +2649,8 @@ tachometers draw their faces on a separate canvas (KAN-199).
 A 10 s 60 fps file ends at 9.983 s (`00:00:09:59`), starts on its second frame and clamps a
 seek past the end to the last frame. The same first chapter of a 25 s chaptered recording ends at
 24.983 s (`00:00:24:59`). A source with no frames ends at 0.
+
+`EditorTests::offersExportOptionsForTheSource` checks `ExportSourceOptions` for a 10 s 1080p60
+source: the source is listed first among sizes and rates, the whole range runs `00:00:00:00` to
+`00:00:09:59`, a typed range past the end is rejected, and a lap with 2 s handles is clamped to the
+video while a reversed lap or handles over 30 s are rejected.

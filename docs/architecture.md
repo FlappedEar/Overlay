@@ -186,6 +186,12 @@ the SMPTE timecode for a position. A chaptered video is one timeline of its whol
 duration at the first chapter's rate. `AppController` builds one from the opened
 source per call and keeps its QML properties unchanged.
 
+Step 6 moved what the export dialog offers into `ExportSourceOptions`
+(`native/src/app/ExportSourceOptions.h`): the source summary, the size and frame
+rate choices, the recommended bitrate, and the frame ranges for the whole video,
+a typed range or a lap with handles. `AppController::lapExportRange` still finds
+the lap and maps it to video time through the sync transform.
+
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
 ## Project
