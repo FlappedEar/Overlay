@@ -2587,6 +2587,9 @@ Three `AGENTS.md` UI invariants now have automated tests:
   surface to each visible control and checks the control comes fully into view. The window is
   never larger than 1180×720; a smaller CI display only makes the check stricter. Each tab waits until
   its content height holds still for three samples 50 ms apart (up to 20 s on a loaded runner).
+- **Save as template** (`EditorTests::savesTheSceneAsATemplateFromThePopup`). Opening the
+  popup clears the name, Save stays disabled until a name is typed, and saving closes the popup,
+  selects the new template and marks it as the one the scene came from.
 - **Transport shortcuts while editing**
   (`EditorTests::disablesTransportShortcutsWhileEditing`). Space, Left, Right, Shift+Left,
   Shift+Right, Home and End are off while an inspector text field or spin box has focus, and
