@@ -199,6 +199,20 @@ std::optional<GpsSample> gpsSampleAt(
     return GpsSample{latitudeTime, {projected.eastMeters, projected.northMeters}};
 }
 
+// One GPS gap rule for pass detection and lap validation (KAN-234, as
+// Telemetry FET-212): a step is a gap when it is one by either channel's own
+// cadence, so a lap is never found under one rule and judged under another.
+double gpsGapThreshold(const TelemetryChannel &latitude, const TelemetryChannel &longitude)
+{
+    return std::min(telemetryGapThreshold(latitude), telemetryGapThreshold(longitude));
+}
+
+bool gpsIsGap(const TelemetryChannel &latitude, const TelemetryChannel &longitude,
+              const double before, const double after)
+{
+    return telemetryIsGap(latitude, before, after) || telemetryIsGap(longitude, before, after);
+}
+
 // Whether the GPS covers the lap without a gap or invalid fix, from the sample
 // at or before its start through the first sample at or after its end, and
 // the length of that path (empty when it is not covered).
@@ -219,7 +233,7 @@ std::pair<LapReferenceIssue, std::optional<double>> referenceIssueForLap(
     const auto last = std::lower_bound(first, times.cend(), lap.endTelemetryTime);
     if (first == times.cend() || *first > lap.startTelemetryTime || last == times.cend())
         return {LapReferenceIssue::GpsGap, std::nullopt};
-    const double threshold = std::min(telemetryGapThreshold(*latitude), telemetryGapThreshold(*longitude));
+    const double threshold = gpsGapThreshold(*latitude, *longitude);
     std::optional<GpsSample> previous;
     double distance = 0.0;
     for (auto it = first; it <= last; ++it) {
@@ -229,8 +243,7 @@ std::pair<LapReferenceIssue, std::optional<double>> referenceIssueForLap(
         if (!sample) return {LapReferenceIssue::InvalidGps, std::nullopt};
         if (previous) {
             if (sample->time <= previous->time || threshold <= 0.0
-                || telemetryIsGap(*latitude, previous->time, sample->time)
-                || telemetryIsGap(*longitude, previous->time, sample->time))
+                || gpsIsGap(*latitude, *longitude, previous->time, sample->time))
                 return {LapReferenceIssue::GpsGap, std::nullopt};
             distance += length(subtract(sample->point, previous->point));
         }
@@ -460,8 +473,7 @@ LapSession detectLaps(
     const qsizetype sampleCount = std::max(
         std::max(latitude->timestamps().size(), latitude->values().size()),
         std::max(longitude->timestamps().size(), longitude->values().size()));
-    const double gapThreshold = std::max(
-        telemetryGapThreshold(*latitude), telemetryGapThreshold(*longitude));
+    const double gapThreshold = gpsGapThreshold(*latitude, *longitude);
     // KAN-213: the direction of travel is the one most valid crossings agree
     // on, not the first crossing's. A first pass collects every valid crossing
     // regardless of direction; the second accepts only the majority direction
@@ -549,8 +561,7 @@ LapSession detectLaps(
             }
             const double interval = current->time - previous->time;
             if (!std::isfinite(interval) || interval <= 0.0 || gapThreshold <= 0.0
-                || (telemetryIsGap(*latitude, previous->time, current->time)
-                    && telemetryIsGap(*longitude, previous->time, current->time))) {
+                || gpsIsGap(*latitude, *longitude, previous->time, current->time)) {
                 discardContinuity();
                 previous = current;
                 continue;
