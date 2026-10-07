@@ -267,9 +267,7 @@ QVariantMap TelemetryRenderContext::lapTiming() const
         if (referenceTrace != m_lapSession.lapTraces.cend() && latitude && longitude) {
             const GeoCoordinate currentCoordinate{*latitude, *longitude};
             const TimingGate &gate = *m_lapSession.selectedStartGate;
-            const GeoCoordinate origin{
-                (gate.endpointA.latitudeDegrees + gate.endpointB.latitudeDegrees) / 2.0,
-                (gate.endpointA.longitudeDegrees + gate.endpointB.longitudeDegrees) / 2.0};
+            const GeoCoordinate origin = geoMidpoint(gate.endpointA, gate.endpointB);
             if (isValidCoordinate(currentCoordinate) && isValidCoordinate(origin)) {
                 const MetricPoint currentPoint = projectCoordinate(currentCoordinate, origin);
                 const auto reference = closestReferenceMatch(

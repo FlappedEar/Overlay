@@ -210,8 +210,8 @@ TimingGate gateAcrossTravel(const double lat, const double lon, const double wid
     TimingGate gate;
     gate.type = TimingGateType::Start; gate.sourceName = "Start";
     gate.sourceDescription = description;
-    gate.endpointA = {lat - deltaLat, lon - deltaLon};
-    gate.endpointB = {lat + deltaLat, lon + deltaLon};
+    gate.endpointA = {lat - deltaLat, wrapLongitudeDegrees(lon - deltaLon)};
+    gate.endpointB = {lat + deltaLat, wrapLongitudeDegrees(lon + deltaLon)};
     return gate;
 }
 
@@ -242,18 +242,22 @@ std::optional<TimingGate> gateFromLapBoundaries(const TelemetrySession &session,
         const auto beforeLat = session.valueAt("latitude", time - .5), beforeLon = session.valueAt("longitude", time - .5);
         const auto afterLat = session.valueAt("latitude", time + .5), afterLon = session.valueAt("longitude", time + .5);
         if (!lat || !lon || !beforeLat || !beforeLon || !afterLat || !afterLon) continue;
-        const double east = (*afterLon - *beforeLon) * degreesToRadians * earthRadiusMeters * std::cos(*lat * degreesToRadians);
+        const double east = longitudeDeltaDegrees(*afterLon, *beforeLon) * degreesToRadians * earthRadiusMeters * std::cos(*lat * degreesToRadians);
         const double north = (*afterLat - *beforeLat) * degreesToRadians * earthRadiusMeters;
         const double length = std::hypot(east, north);
         if (length < 1.0) continue; // standing still: no direction of travel
         crossings.append({*lat, *lon, east / length, north / length});
     }
     if (crossings.size() < 2) return std::nullopt;
-    double lat = 0, lon = 0, east = 0, north = 0;
+    // Longitudes are averaged as offsets from the first crossing, so a line
+    // across ±180° is not averaged the long way round.
+    double lat = 0, lonOffset = 0, east = 0, north = 0;
     for (const auto &crossing : crossings) {
-        lat += crossing.lat; lon += crossing.lon; east += crossing.east; north += crossing.north;
+        lat += crossing.lat; lonOffset += longitudeDeltaDegrees(crossing.lon, crossings.first().lon);
+        east += crossing.east; north += crossing.north;
     }
-    lat /= crossings.size(); lon /= crossings.size();
+    lat /= crossings.size();
+    const double lon = wrapLongitudeDegrees(crossings.first().lon + lonOffset / crossings.size());
     const double agreement = std::hypot(east, north) / crossings.size();
     if (agreement < .9) return std::nullopt; // crossings in different directions
     const double bearing = std::fmod(std::atan2(east, north) / degreesToRadians + 360.0, 360.0);
@@ -261,7 +265,7 @@ std::optional<TimingGate> gateFromLapBoundaries(const TelemetrySession &session,
     const double alongEast = std::cos(bearing * degreesToRadians), alongNorth = -std::sin(bearing * degreesToRadians);
     double halfWidth = 10.0;
     for (const auto &crossing : crossings) {
-        const double dx = (crossing.lon - lon) * degreesToRadians * earthRadiusMeters * std::cos(lat * degreesToRadians);
+        const double dx = longitudeDeltaDegrees(crossing.lon, lon) * degreesToRadians * earthRadiusMeters * std::cos(lat * degreesToRadians);
         const double dy = (crossing.lat - lat) * degreesToRadians * earthRadiusMeters;
         if (std::abs(dx * -alongNorth + dy * alongEast) > 25.0) return std::nullopt; // not one line
         halfWidth = std::max(halfWidth, std::abs(dx * alongEast + dy * alongNorth) + 5.0);

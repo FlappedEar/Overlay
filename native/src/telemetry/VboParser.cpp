@@ -369,8 +369,8 @@ TimingGateParseResult parseTimingGate(const QString &line, const bool centreDire
         const double deltaLon = -vector.northMeters * .5
             / (metersPerDegree * std::cos(endpointA.latitudeDegrees * std::numbers::pi / 180.0));
         const GeoCoordinate centre = endpointA;
-        endpointA = {centre.latitudeDegrees - deltaLat, centre.longitudeDegrees - deltaLon};
-        endpointB = {centre.latitudeDegrees + deltaLat, centre.longitudeDegrees + deltaLon};
+        endpointA = {centre.latitudeDegrees - deltaLat, wrapLongitudeDegrees(centre.longitudeDegrees - deltaLon)};
+        endpointB = {centre.latitudeDegrees + deltaLat, wrapLongitudeDegrees(centre.longitudeDegrees + deltaLon)};
         if (!isValidCoordinate(endpointA) || !isValidCoordinate(endpointB))
             return {{}, QStringLiteral("invalid converted RaceChrono gate endpoints")};
     }

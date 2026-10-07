@@ -93,7 +93,7 @@ The extension accepts `:` or `=`, trimmed values and case-insensitive keys/value
 
 Unresolved units produce a bounded warning when GPS columns or gates exist. GPS channels and timing gates are withheld; valid timestamps and other telemetry still import. Supply a known-unit export or the documented declaration to resolve the source. Unit declarations cannot enable an unverified RaceChrono gate geometry: such gates remain omitted with the existing exporter-version warning. `gpsCoordinateUnit` records the source unit or `unresolved`; `gpsCoordinateEvidence` records the resolver result. Input metadata cannot override these derived fields or the derived gate/longitude conventions.
 
-After explicit conversion, non-finite or out-of-range coordinates are missing data (invalid gates are omitted with warnings). A declared latitude of 91 degrees is invalid; it is never reinterpreted as minutes. This iteration uses synthetic boundary/ambiguity regressions and the previously recorded exporter evidence; it does not claim a new private-recording acceptance run.
+After explicit conversion, non-finite or out-of-range coordinates are missing data (invalid gates are omitted with warnings). A declared latitude of 91 degrees is invalid; it is never reinterpreted as minutes. A RaceChrono centre-and-direction gate whose converted end passes ±180° is wrapped back into -180..180 rather than refused, and projections and gate midpoints take longitude the short way round, so a circuit across the antimeridian times like any other (KAN-235). This iteration uses synthetic boundary/ambiguity regressions and the previously recorded exporter evidence; it does not claim a new private-recording acceptance run.
 
 ## Lap timing and comparison values
 

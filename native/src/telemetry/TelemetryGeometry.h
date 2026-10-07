@@ -22,5 +22,10 @@ struct MetricPoint {
 [[nodiscard]] bool isValidCoordinate(const GeoCoordinate &coordinate);
 [[nodiscard]] MetricPoint projectCoordinate(
     const GeoCoordinate &coordinate, const GeoCoordinate &origin);
+// Longitudes the short way round across ±180° (KAN-235, Telemetry FET-213).
+// Values already inside -180..180 are returned unchanged, bit for bit.
+[[nodiscard]] double wrapLongitudeDegrees(double longitudeDegrees);
+[[nodiscard]] double longitudeDeltaDegrees(double toDegrees, double fromDegrees);
+[[nodiscard]] GeoCoordinate geoMidpoint(const GeoCoordinate &a, const GeoCoordinate &b);
 
 } // namespace FlappedEar
