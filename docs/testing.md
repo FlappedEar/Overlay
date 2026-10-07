@@ -2231,6 +2231,11 @@ chart coverage includes the maximum int point budget and a zero-width range.
 Existing timestamp text formats, UTC chronology and valid VBO fixtures stay in
 the complete native gate.
 
+`TelemetryCoreTests::readsVboMidnightRolloverByItsGap` (KAN-233) checks the
+rollover rule shared with FlappedEar Telemetry: a dropout from 22:50 to 01:10 and
+an exact 3-hour gap read as passing midnight, while a 3-hour-and-1-second gap and
+a daylight-saving step back skip the row as moved backward.
+
 Unsafe numeric ranges reject the complete parse with VboParseError before a
 session can be published. Ordinary malformed text and duplicate/backward rows
 inside the supported range retain warning/skip behavior. The numeric bound is
