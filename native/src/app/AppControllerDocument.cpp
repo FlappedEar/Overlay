@@ -187,6 +187,10 @@ QJsonObject AppController::withEditorState(QJsonObject project, const QString &d
         source.remove(QStringLiteral("relativePath"));
         source.remove(QStringLiteral("absolutePath"));
         source.remove(QStringLiteral("fingerprint"));
+        // KAN-208: Overlays checks videos by fingerprint only, so a video's
+        // full-content identity from another writer is not carried past the
+        // fingerprint it was saved with.
+        if (key == QStringLiteral("video")) source.remove(QStringLiteral("contentSha256"));
         for (auto it = known.begin(); it != known.end(); ++it) source.insert(it.key(), it.value());
         if (source.isEmpty()) sources.remove(key);
         else sources.insert(key, source);

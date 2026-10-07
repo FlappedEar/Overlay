@@ -5,7 +5,6 @@
 #include <QJsonObject>
 #include <QString>
 
-#include <functional>
 
 namespace FlappedEar {
 
@@ -36,10 +35,6 @@ public:
         const QString &sourcePath, const QJsonObject &fingerprint, const QString &contentSha256 = {});
     // A well-formed contentSha256 value (64 lowercase hex digits).
     [[nodiscard]] static bool isContentSha256(const QString &value);
-    // SHA-256 of every byte of a file of any size, lowercase hex. Empty when
-    // the file cannot be read, changes size while it is read, or `cancelled`
-    // returns true.
-    [[nodiscard]] static QString fileSha256(const QString &path, const std::function<bool()> &cancelled = {});
 
     // Video fingerprints are built by the overlay layer (export/VideoFingerprint)
     // from these shared, video-free building blocks (KAN-123).

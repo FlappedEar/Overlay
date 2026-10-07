@@ -87,10 +87,10 @@ The bounded byte sampling reads at most 192 KiB per source and is cheap relative
 
 ### Full-content identity (KAN-208)
 
-Since 6 October 2026 a reference (`sources.video`, `sources.telemetry` and each entry of `sources.video.chapters`) may also hold `contentSha256`: the SHA-256 of every byte of the file, as 64 lowercase hex digits. It catches what the fingerprint cannot, such as a same-sized file changed at 80 KiB of 256 KiB. The fingerprint itself is unchanged, so saved projects and FlappedEar Telemetry keep matching.
+Since 6 October 2026 a telemetry reference may also hold `contentSha256`: the SHA-256 of every byte of the file, as 64 lowercase hex digits. It catches what the fingerprint cannot, such as a same-sized file changed at 80 KiB of 256 KiB. The fingerprint itself is unchanged, so saved projects and FlappedEar Telemetry keep matching.
 
 - **Telemetry:** hashed in full while it loads (VBO and RCZ files are at most 128 MiB). A file whose hash differs from the saved `contentSha256` is a mismatch, like a fingerprint mismatch. In an event, the telemetry source keeps its identity in the source's own `contentSha256` ([event projects](event-project-format.md)), not in the reference.
-- **Video:** opens at once after its probe. A full hash of the video, chapter by chapter, then runs in the background; it is cancelled when the source or project changes. If a saved `contentSha256` differs, the video becomes `mismatch`: the preview hides and export is unavailable. Opening a project only reports it. Choosing the file again with **Locate…** asks whether to replace the source; accepting records the new identity. Until the hash finishes, the saved identity is kept and an export can start.
+- **Video:** keeps the sampled `video-v1` fingerprint only (owner decision, 6 October 2026: hashing a long recording reads every byte). Overlays writes no `contentSha256` for a video or chapter. One that another writer saved in `sources.video` or a chapter is accepted when well-formed, but it is not checked and is not kept when Overlays saves the loaded video.
 - **Older documents** have no `contentSha256`. They open as before; the identity is computed and written at the next save, without marking the project changed.
 - A present `contentSha256` that is not 64 lowercase hex digits makes an event document invalid; in a single-recording project it is ignored.
 
