@@ -1,6 +1,7 @@
 #include "app/AppController.h"
 #include "project/VideoChapters.h"
-#include "app/PreviewPlayback.h"
+#include "app/PreviewTimeline.h"
+#include "app/ExportSourceOptions.h"
 #include "export/ExportFormat.h"
 #include "export/ExportEngine.h"
 #include "export/ChapterSource.h"
@@ -47,24 +48,6 @@
 #include <utility>
 
 namespace FlappedEar {
-
-namespace {
-
-std::optional<qint64> frameAtOrBeforePresentationTime(
-    const double seconds, const MediaRational &frameRate)
-{
-    if (!std::isfinite(seconds) || seconds < 0.0 || !frameRate.isValid()) return std::nullopt;
-    const long double frame = static_cast<long double>(seconds)
-        * static_cast<long double>(frameRate.numerator) / static_cast<long double>(frameRate.denominator);
-    if (frame < 0.0L || frame > static_cast<long double>(std::numeric_limits<qint64>::max())) {
-        return std::nullopt;
-    }
-    // This selects the frame that contains the requested presentation time. The
-    // resulting inclusive frame range is still the sole export authority.
-    return static_cast<qint64>(frame);
-}
-
-} // namespace
 
 AppController::AppController(QObject *parent, QString recoveryPath,
                              ProjectRecoveryStore::Operations recoveryOperations)
@@ -210,75 +193,11 @@ double AppController::playbackTime() const { return m_playbackTime; }
 bool AppController::documentBusy() const { return m_export.exporting(); }
 QVariantMap AppController::exportSourceInfo() const
 {
-    if (!m_exportSourceInfo.videoSize.isValid()) {
-        return {};
-    }
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate
-        : m_exportSourceInfo.frameRate;
-    const QString colorSummary = m_exportSourceInfo.sourceColorClass == SourceColorClass::Sdr
-        && m_exportSourceInfo.colorPrimaries == QStringLiteral("bt709")
-        ? QStringLiteral("Rec.709 SDR")
-        : sourceColorClassName(m_exportSourceInfo.sourceColorClass);
-    const bool unsupportedColorManagedSource =
-        isUnsupportedColorManagedClass(m_exportSourceInfo.sourceColorClass);
-    return {
-        {"width", m_exportSourceInfo.videoSize.width()},
-        {"height", m_exportSourceInfo.videoSize.height()},
-        {"codedWidth", m_exportSourceInfo.codedVideoSize.width()},
-        {"codedHeight", m_exportSourceInfo.codedVideoSize.height()},
-        {"displayWidth", m_exportSourceInfo.displayVideoSize.width()},
-        {"displayHeight", m_exportSourceInfo.displayVideoSize.height()},
-        {"duration", m_exportSourceInfo.duration},
-        {"frameRate", rate.value()},
-        {"frameRateText", QStringLiteral("%1/%2 (%3 fps)")
-                              .arg(rate.numerator)
-                              .arg(rate.denominator)
-                              .arg(rate.value(), 0, 'f', 3)},
-        {"videoCodec", m_exportSourceInfo.videoCodec},
-        {"videoCodecProfile", m_exportSourceInfo.videoCodecProfile},
-        {"pixelFormat", m_exportSourceInfo.pixelFormat},
-        {"bitDepth", m_exportSourceInfo.bitDepth
-                         ? QVariant(*m_exportSourceInfo.bitDepth) : QVariant()},
-        {"sourceVideoBitrate", m_exportSourceInfo.sourceVideoBitrate
-                                  ? QVariant(*m_exportSourceInfo.sourceVideoBitrate) : QVariant()},
-        {"sampleAspectRatio", m_exportSourceInfo.sampleAspectRatio.isValid()
-                                  ? QStringLiteral("%1:%2")
-                                        .arg(m_exportSourceInfo.sampleAspectRatio.numerator)
-                                        .arg(m_exportSourceInfo.sampleAspectRatio.denominator)
-                                  : QString()},
-        {"rotationDegrees", m_exportSourceInfo.rotationDegrees
-                                ? QVariant(*m_exportSourceInfo.rotationDegrees) : QVariant()},
-        {"colorRange", m_exportSourceInfo.colorRange},
-        {"colorSpace", m_exportSourceInfo.colorSpace},
-        {"colorTransfer", m_exportSourceInfo.colorTransfer},
-        {"colorPrimaries", m_exportSourceInfo.colorPrimaries},
-        {"colorClass", sourceColorClassName(m_exportSourceInfo.sourceColorClass)},
-        {"colorSummary", colorSummary},
-        {"unsupportedColorManagedSource", unsupportedColorManagedSource},
-        {"audioCodecs", m_exportSourceInfo.audioCodecs.join(QStringLiteral(", "))},
-        {"likelyVariableFrameRate", m_exportSourceInfo.likelyVariableFrameRate},
-    };
+    return ExportSourceOptions(m_exportSourceInfo).sourceInfo();
 }
 QVariantMap AppController::exportFormatOptions() const
 {
-    const MediaRational sourceRate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    QVariantList sizes, rates;
-    int index = 0;
-    for (const QSize &size : ExportFormat::resolutionOptions(m_exportSourceInfo.videoSize)) {
-        const QString label = QStringLiteral("%1×%2%3").arg(size.width()).arg(size.height())
-                                  .arg(index++ == 0 ? QStringLiteral(" (Source)") : QString());
-        sizes.append(QVariantMap{{"width", size.width()}, {"height", size.height()}, {"label", label}});
-    }
-    index = 0;
-    for (const MediaRational &rate : ExportFormat::frameRateOptions(sourceRate)) {
-        const QString label = QString::number(rate.value(), 'f', 2) + QStringLiteral(" fps")
-                              + (index++ == 0 ? QStringLiteral(" (Source)") : QString());
-        rates.append(QVariantMap{{"numerator", rate.numerator}, {"denominator", rate.denominator},
-                                 {"label", label}});
-    }
-    return {{"sizes", sizes}, {"rates", rates}};
+    return ExportSourceOptions(m_exportSourceInfo).formatOptions();
 }
 qint64 AppController::estimateExportSize(const qint64 videoBitrate, const bool audioEnabled, const double seconds) const
 {
@@ -288,74 +207,36 @@ QString AppController::formatEstimatedExportSize(const qint64 bytes) const
 {
     return ExportFormat::formatEstimatedSize(bytes);
 }
+PreviewTimeline AppController::previewTimeline() const
+{
+    return {m_exportSourceInfo,
+            videoChaptered() ? std::optional<double>(m_videoTimeline.durationSeconds()) : std::nullopt};
+}
 QVariantMap AppController::previewViewport(const int availableWidth, const int availableHeight) const
 {
-    const QSize sourceSize = m_exportSourceInfo.displayVideoSize.isValid()
-        ? m_exportSourceInfo.displayVideoSize : m_exportSourceInfo.videoSize;
-    const QRect viewport = PreviewPlayback::aspectFitViewport({availableWidth, availableHeight}, sourceSize);
+    const QRect viewport = previewTimeline().viewport({availableWidth, availableHeight});
     return {{"x", viewport.x()}, {"y", viewport.y()},
             {"width", viewport.width()}, {"height", viewport.height()}};
 }
-std::optional<qint64> AppController::timelineLastFrame() const
-{
-    // KAN-105: the whole chapter timeline, framed at the first chapter's rate.
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    if (!videoChaptered() || !rate.isValid()) return std::nullopt;
-    const auto frames = static_cast<qint64>(std::floor(m_videoTimeline.durationSeconds() * rate.numerator / rate.denominator + 1e-6));
-    return frames >= 1 ? std::optional<qint64>(frames - 1) : std::nullopt;
-}
 qint64 AppController::previewEndPositionMilliseconds() const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    if (const auto last = timelineLastFrame())
-        return PreviewPlayback::framePositionMilliseconds(*last, rate).value_or(0);
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    const auto position = range ? PreviewPlayback::framePositionMilliseconds(range->lastFrame, rate) : std::nullopt;
-    return position.value_or(0);
+    return previewTimeline().endPositionMilliseconds();
 }
 qint64 AppController::previewInitialPositionMilliseconds() const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    if (!range || range->lastFrame < 1) return 0;
-    return PreviewPlayback::firstTimelineFramePositionMilliseconds(rate).value_or(0);
+    return previewTimeline().initialPositionMilliseconds();
 }
 qint64 AppController::clampPreviewPositionMilliseconds(const qint64 requestedMilliseconds) const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    if (const auto last = timelineLastFrame())
-        return PreviewPlayback::clampPositionMilliseconds(requestedMilliseconds, *last, rate).value_or(0);
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    const auto position = range
-        ? PreviewPlayback::clampPositionMilliseconds(requestedMilliseconds, range->lastFrame, rate)
-        : std::nullopt;
-    return position.value_or(0);
+    return previewTimeline().clampPositionMilliseconds(requestedMilliseconds);
 }
 QString AppController::previewTimecodeForPositionMilliseconds(const qint64 positionMilliseconds) const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    if (const auto last = timelineLastFrame()) range = ExportFrameRange{0, *last};
-    if (!range || !rate.isValid() || positionMilliseconds < 0) return {};
-    const qint64 bounded = clampPreviewPositionMilliseconds(positionMilliseconds);
-    if (bounded >= previewEndPositionMilliseconds()) {
-        return ExportEngine::formatSmpteTimecode(range->lastFrame, rate);
-    }
-    const qint64 frame = static_cast<qint64>(bounded) * rate.numerator / (rate.denominator * 1'000);
-    return ExportEngine::formatSmpteTimecode(qBound(range->firstFrame, frame, range->lastFrame), rate);
+    return previewTimeline().timecodeForPositionMilliseconds(positionMilliseconds);
 }
 QString AppController::previewEndTimecode() const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    if (const auto last = timelineLastFrame()) return ExportEngine::formatSmpteTimecode(*last, rate);
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    return range ? ExportEngine::formatSmpteTimecode(range->lastFrame, rate) : QString();
+    return previewTimeline().endTimecode();
 }
 void AppController::reportPlaybackError(const QString &message)
 {
@@ -369,9 +250,8 @@ void AppController::reportPlaybackError(const QString &message)
 qint64 AppController::recommendedExportBitrate(const int width, const int height, const qint64 numerator,
                                                const qint64 denominator, const QString &quality) const
 {
-    return ExportFormat::bitrateForQuality(
-        quality, {width, height}, {numerator, denominator},
-        m_exportSourceInfo.bitDepth.value_or(8));
+    return ExportSourceOptions(m_exportSourceInfo).recommendedBitrate(
+        {width, height}, {numerator, denominator}, quality);
 }
 QString AppController::fixedFontFamily() const
 {
@@ -1204,21 +1084,14 @@ bool AppController::startExport(
 QString AppController::exportFullRangeTimecode(
     const qint64 frameRateNumerator, const qint64 frameRateDenominator, const bool outPoint) const
 {
-    const MediaRational rate{frameRateNumerator, frameRateDenominator};
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    return range ? ExportEngine::formatSmpteTimecode(
-        outPoint ? range->lastFrame : range->firstFrame, rate) : QString();
+    return ExportSourceOptions(m_exportSourceInfo).fullRangeTimecode(
+        {frameRateNumerator, frameRateDenominator}, outPoint);
 }
 
 QVariantMap AppController::lapExportRange(
     const int lapNumber, const qint64 frameRateNumerator, const qint64 frameRateDenominator,
     const int handleSeconds) const
 {
-    const MediaRational rate{frameRateNumerator, frameRateDenominator};
-    const auto fullRange = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    if (!fullRange || handleSeconds < 0 || handleSeconds > 30) {
-        return {{QStringLiteral("valid"), false}};
-    }
     const auto lap = std::find_if(m_lapSession.timedLaps.cbegin(), m_lapSession.timedLaps.cend(),
                                   [lapNumber](const TimedLap &candidate) {
         return candidate.number == lapNumber;
@@ -1227,38 +1100,17 @@ QVariantMap AppController::lapExportRange(
 
     const auto videoStart = telemetryToVideoTime(lap->startTelemetryTime, m_syncController.transform());
     const auto videoEnd = telemetryToVideoTime(lap->startTelemetryTime + lap->durationSeconds, m_syncController.transform());
-    if (!videoStart || !videoEnd || *videoEnd < *videoStart) {
-        return {{QStringLiteral("valid"), false}};
-    }
-    const auto requestedFirst = frameAtOrBeforePresentationTime(
-        std::max(0.0, *videoStart - static_cast<double>(handleSeconds)), rate);
-    const auto requestedLast = frameAtOrBeforePresentationTime(
-        std::max(0.0, *videoEnd + static_cast<double>(handleSeconds)), rate);
-    if (!requestedFirst || !requestedLast) return {{QStringLiteral("valid"), false}};
-
-    const auto range = ExportEngine::frameRangeFromInclusiveFrames(
-        qBound(fullRange->firstFrame, *requestedFirst, fullRange->lastFrame),
-        qBound(fullRange->firstFrame, *requestedLast, fullRange->lastFrame));
-    if (!range) return {{QStringLiteral("valid"), false}};
-    return {{QStringLiteral("valid"), true}, {QStringLiteral("lapNumber"), lapNumber},
-            {QStringLiteral("handleSeconds"), handleSeconds},
-            {QStringLiteral("firstFrame"), range->firstFrame},
-            {QStringLiteral("lastFrame"), range->lastFrame},
-            {QStringLiteral("inTimecode"), ExportEngine::formatSmpteTimecode(range->firstFrame, rate)},
-            {QStringLiteral("outTimecode"), ExportEngine::formatSmpteTimecode(range->lastFrame, rate)},
-            {QStringLiteral("durationSeconds"), static_cast<double>(range->frameCount())
-                * static_cast<double>(rate.denominator) / static_cast<double>(rate.numerator)}};
+    if (!videoStart || !videoEnd) return {{QStringLiteral("valid"), false}};
+    return ExportSourceOptions(m_exportSourceInfo).lapRange(
+        lapNumber, *videoStart, *videoEnd, {frameRateNumerator, frameRateDenominator}, handleSeconds);
 }
 
 double AppController::exportRangeDurationSeconds(
     const qint64 frameRateNumerator, const qint64 frameRateDenominator,
     const QString &rangeIn, const QString &rangeOut) const
 {
-    const MediaRational rate{frameRateNumerator, frameRateDenominator};
-    const auto range = ExportEngine::frameRangeForSourceTimecode(
-        m_exportSourceInfo, rate, rangeIn, rangeOut);
-    return range ? static_cast<double>(range->frameCount())
-            * static_cast<double>(rate.denominator) / static_cast<double>(rate.numerator) : 0.0;
+    return ExportSourceOptions(m_exportSourceInfo).rangeDurationSeconds(
+        {frameRateNumerator, frameRateDenominator}, rangeIn, rangeOut);
 }
 
 

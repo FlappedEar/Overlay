@@ -5,6 +5,8 @@
 #include "app/AppController.h"
 #include "app/BundledFonts.h"
 #include "app/PreviewPlayback.h"
+#include "app/PreviewTimeline.h"
+#include "app/ExportSourceOptions.h"
 #include "export/ExportEngine.h"
 #include "export/FfmpegTools.h"
 #include "export/MediaProbe.h"
@@ -44,6 +46,8 @@ private slots:
     void benchmarksCachedOptionalRealVboPresentationLookups();
     void preservesPartialOverlapInAnalysisSeries();
     void derivesStablePreviewViewportAndLastFrameAdapter();
+    void framesSingleAndChapteredPreviewTimelines();
+    void offersExportOptionsForTheSource();
     void exposesReactivePreviewMetadataToQml();
     void buildsAddWidgetListAndInspectorFromDescriptors();
     void keepsSidebarReachableAtMinimumSize();
@@ -849,6 +853,68 @@ void EditorTests::derivesStablePreviewViewportAndLastFrameAdapter()
              std::optional<qint64>(17));
     QCOMPARE(PreviewPlayback::clampPositionMilliseconds(2'000, 59, {60, 1}),
              std::optional<qint64>(983));
+}
+
+void EditorTests::framesSingleAndChapteredPreviewTimelines()
+{
+    // KAN-215: a 10 s 60 fps file, then the same first chapter of a 25 s recording.
+    MediaInfo source;
+    source.videoSize = {3840, 2160};
+    source.frameRate = {60, 1};
+    source.averageFrameRate = {60, 1};
+    source.videoFrameCount = 600;
+
+    const PreviewTimeline single(source, std::nullopt);
+    QCOMPARE(single.viewport({1600, 1000}), QRect(0, 50, 1600, 900));
+    QCOMPARE(single.endPositionMilliseconds(), 9'983);
+    QCOMPARE(single.initialPositionMilliseconds(), 17);
+    QCOMPARE(single.clampPositionMilliseconds(20'000), 9'983);
+    QCOMPARE(single.timecodeForPositionMilliseconds(1'000), QStringLiteral("00:00:01:00"));
+    QCOMPARE(single.endTimecode(), QStringLiteral("00:00:09:59"));
+
+    const PreviewTimeline chaptered(source, 25.0);
+    QCOMPARE(chaptered.endPositionMilliseconds(), 24'983);
+    QCOMPARE(chaptered.clampPositionMilliseconds(20'000), 20'000);
+    QCOMPARE(chaptered.endTimecode(), QStringLiteral("00:00:24:59"));
+    QCOMPARE(chaptered.timecodeForPositionMilliseconds(30'000), QStringLiteral("00:00:24:59"));
+
+    QCOMPARE(PreviewTimeline(MediaInfo{}, std::nullopt).endPositionMilliseconds(), 0);
+}
+
+void EditorTests::offersExportOptionsForTheSource()
+{
+    // KAN-215: a 10 s 1080p60 source.
+    MediaInfo source;
+    source.videoSize = {1920, 1080};
+    source.frameRate = {60, 1};
+    source.averageFrameRate = {60, 1};
+    source.videoFrameCount = 600;
+    const ExportSourceOptions options(source);
+
+    QCOMPARE(options.sourceInfo().value("frameRateText").toString(), QStringLiteral("60/1 (60.000 fps)"));
+    QVERIFY(ExportSourceOptions(MediaInfo{}).sourceInfo().isEmpty());
+    const QVariantMap formats = options.formatOptions();
+    QCOMPARE(formats.value("sizes").toList().first().toMap().value("label").toString(),
+             QStringLiteral("1920×1080 (Source)"));
+    QCOMPARE(formats.value("rates").toList().size(), 2);
+    QCOMPARE(formats.value("rates").toList().last().toMap().value("numerator").toLongLong(), 30);
+    QVERIFY(options.recommendedBitrate({1920, 1080}, {60, 1}, QStringLiteral("high")) > 0);
+
+    QCOMPARE(options.fullRangeTimecode({60, 1}, false), QStringLiteral("00:00:00:00"));
+    QCOMPARE(options.fullRangeTimecode({60, 1}, true), QStringLiteral("00:00:09:59"));
+    QCOMPARE(options.rangeDurationSeconds({60, 1}, QStringLiteral("00:00:01:00"),
+                                          QStringLiteral("00:00:01:59")), 1.0);
+    QCOMPARE(options.rangeDurationSeconds({60, 1}, QStringLiteral("00:00:01:00"),
+                                          QStringLiteral("00:00:10:00")), 0.0);
+
+    // A lap from 2 s to 9 s with 2 s handles is clamped to the last frame.
+    const QVariantMap lap = options.lapRange(3, 2.0, 9.0, {60, 1}, 2);
+    QVERIFY(lap.value("valid").toBool());
+    QCOMPARE(lap.value("firstFrame").toLongLong(), 0);
+    QCOMPARE(lap.value("lastFrame").toLongLong(), 599);
+    QCOMPARE(lap.value("lapNumber").toInt(), 3);
+    QVERIFY(!options.lapRange(3, 2.0, 9.0, {60, 1}, 31).value("valid").toBool());
+    QVERIFY(!options.lapRange(3, 9.0, 2.0, {60, 1}, 2).value("valid").toBool());
 }
 
 void EditorTests::exposesReactivePreviewMetadataToQml()

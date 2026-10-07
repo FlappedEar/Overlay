@@ -2642,3 +2642,15 @@ Three `AGENTS.md` UI invariants now have automated tests:
 The audit's other two items were already gone: the A/B comparison video left with the analysis
 (KAN-166), and the Dial, Arc and Retro Grand Prix gauges were removed (KAN-192). The remaining
 tachometers draw their faces on a separate canvas (KAN-199).
+
+## KAN-215: preview timeline
+
+`EditorTests::framesSingleAndChapteredPreviewTimelines` checks `PreviewTimeline` on its own.
+A 10 s 60 fps file ends at 9.983 s (`00:00:09:59`), starts on its second frame and clamps a
+seek past the end to the last frame. The same first chapter of a 25 s chaptered recording ends at
+24.983 s (`00:00:24:59`). A source with no frames ends at 0.
+
+`EditorTests::offersExportOptionsForTheSource` checks `ExportSourceOptions` for a 10 s 1080p60
+source: the source is listed first among sizes and rates, the whole range runs `00:00:00:00` to
+`00:00:09:59`, a typed range past the end is rejected, and a lap with 2 s handles is clamped to the
+video while a reversed lap or handles over 30 s are rejected.

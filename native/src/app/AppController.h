@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/PreviewTimeline.h"
 #include "app/VideoChapterReview.h"
 #include "export/MediaTimeline.h"
 #include "app/BestLapFinder.h"
@@ -334,7 +335,7 @@ private:
     // KAN-105: the video as chapters played as one timeline.
     [[nodiscard]] bool videoChaptered() const { return m_videoTimeline.chapterCount() > 1; }
     [[nodiscard]] QVector<VideoChapterInput> videoChapterInputs() const;
-    [[nodiscard]] std::optional<qint64> timelineLastFrame() const;
+    [[nodiscard]] PreviewTimeline previewTimeline() const;
     // KAN-208: expectedContentSha256 is the saved reference's full-content
     // identity; a recording with other bytes is a mismatch.
     void startVboLoad(const QString &path, quint64 generation, bool markDocumentDirty,
