@@ -41,6 +41,19 @@
                 "notes": "Independent three-sample parser fixture; not a comparable lap.",
                 "primaryTelemetrySourceId": "demo-channels-source",
                 "sources": {
+                    "additionalVideos": [
+                        {
+                            "absolutePath": "/vectors/day/helmet.mp4",
+                            "futureKey": "kept by both apps",
+                            "id": "helmet",
+                            "label": "Helmet camera",
+                            "relativePath": "helmet.mp4",
+                            "sync": {
+                                "offset": -2.5,
+                                "timeScale": 1.0002
+                            }
+                        }
+                    ],
                     "telemetry": [
                         {
                             "id": "demo-channels-source",
@@ -54,6 +67,9 @@
                 "sync": {
                     "offset": 0,
                     "timeScale": 1
+                },
+                "videoLayout": {
+                    "mode": "sideBySide"
                 }
             }
         ]

@@ -6,6 +6,7 @@
 #include "telemetry/TrackSegments.h"
 #include "telemetry/TrackSegmentReview.h"
 #include "project/ProjectLimits.h"
+#include "project/AdditionalVideos.h"
 #include "project/VideoChapters.h"
 
 #include <QCryptographicHash>
@@ -338,6 +339,10 @@ bool EventProjectCodec::validate(const QJsonObject &project, QString *error)
                 || !VideoChaptersCodec::valid(sources.value(QStringLiteral("video")).toObject()))) {
             return fail(error, QStringLiteral("Run video reference is invalid."));
         }
+        if (!AdditionalVideosCodec::valid(sources.value(QStringLiteral("additionalVideos")))
+            || !AdditionalVideosCodec::validLayout(run.value(QStringLiteral("videoLayout")))) {
+            return fail(error, QStringLiteral("Run additional videos or video layout are invalid."));
+        }
         const QJsonObject sync = run.value(QStringLiteral("sync")).toObject();
         const QJsonValue offset = sync.value(QStringLiteral("offset"));
         const QJsonValue scale = sync.value(QStringLiteral("timeScale"));
@@ -461,6 +466,8 @@ QJsonObject EventProjectCodec::editorProjection(const QJsonObject &project)
         const QJsonObject runSources = run.value(QStringLiteral("sources")).toObject();
         QJsonObject sources;
         if (runSources.contains(QStringLiteral("video"))) sources.insert(QStringLiteral("video"), runSources.value(QStringLiteral("video")));
+        if (runSources.contains(QStringLiteral("additionalVideos")))
+            sources.insert(QStringLiteral("additionalVideos"), runSources.value(QStringLiteral("additionalVideos")));
         for (const QJsonValue &sourceValue : runSources.value(QStringLiteral("telemetry")).toArray()) {
             const QJsonObject source = sourceValue.toObject();
             if (source.value(QStringLiteral("id")) == run.value(QStringLiteral("primaryTelemetrySourceId"))) {
@@ -469,6 +476,8 @@ QJsonObject EventProjectCodec::editorProjection(const QJsonObject &project)
         }
         editor.insert(QStringLiteral("sources"), sources);
         editor.insert(QStringLiteral("sync"), run.value(QStringLiteral("sync")));
+        if (run.contains(QStringLiteral("videoLayout"))) editor.insert(QStringLiteral("videoLayout"), run.value(QStringLiteral("videoLayout")));
+        else editor.remove(QStringLiteral("videoLayout"));
         break;
     }
     return editor;
@@ -508,6 +517,7 @@ QStringList EventProjectCodec::referencedPaths(const QJsonObject &project, const
         for (const QJsonValue &source : sources.value(QStringLiteral("telemetry")).toArray()) {
             append(source.toObject().value(QStringLiteral("reference")).toObject());
         }
+        for (const QJsonValue &video : sources.value(QStringLiteral("additionalVideos")).toArray()) append(video.toObject());
     }
     paths.removeDuplicates();
     return paths;
@@ -553,9 +563,22 @@ QJsonObject EventProjectCodec::withEditorState(
         if (active) {
             if (editorSources.contains(QStringLiteral("video"))) sources.insert(QStringLiteral("video"), editorSources.value(QStringLiteral("video")));
             else sources.remove(QStringLiteral("video"));
+            if (editorSources.contains(QStringLiteral("additionalVideos")))
+                sources.insert(QStringLiteral("additionalVideos"), editorSources.value(QStringLiteral("additionalVideos")));
+            else sources.remove(QStringLiteral("additionalVideos"));
             run.insert(QStringLiteral("sync"), editorProject.value(QStringLiteral("sync")));
-        } else if (sources.contains(QStringLiteral("video"))) {
-            sources.insert(QStringLiteral("video"), rebaseVideo(sources.value(QStringLiteral("video")).toObject(), previousProjectPath, targetProjectPath));
+            if (editorProject.contains(QStringLiteral("videoLayout")))
+                run.insert(QStringLiteral("videoLayout"), editorProject.value(QStringLiteral("videoLayout")));
+            else run.remove(QStringLiteral("videoLayout"));
+        } else {
+            if (sources.contains(QStringLiteral("video")))
+                sources.insert(QStringLiteral("video"), rebaseVideo(sources.value(QStringLiteral("video")).toObject(), previousProjectPath, targetProjectPath));
+            if (sources.contains(QStringLiteral("additionalVideos"))) {
+                QJsonArray additional;
+                for (const auto &video : sources.value(QStringLiteral("additionalVideos")).toArray())
+                    additional.append(rebaseReference(video.toObject(), previousProjectPath, targetProjectPath));
+                sources.insert(QStringLiteral("additionalVideos"), additional);
+            }
         }
         const auto previousFingerprint = primaryFingerprint(run);
         run.insert(QStringLiteral("sources"), sources);
@@ -572,6 +595,7 @@ QJsonObject EventProjectCodec::withEditorState(
     editorProject.insert(QStringLiteral("event"), event);
     editorProject.remove(QStringLiteral("sources"));
     editorProject.remove(QStringLiteral("sync"));
+    editorProject.remove(QStringLiteral("videoLayout"));
     editorProject.remove(QStringLiteral("videoPath"));
     editorProject.remove(QStringLiteral("vboPath"));
     return editorProject;

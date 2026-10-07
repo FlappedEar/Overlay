@@ -24,6 +24,7 @@
 #include "export/BoundedProcessOutput.h"
 #include "telemetry/TelemetrySyncEngine.h"
 #include "widgets/WidgetModel.h"
+#include "project/AdditionalVideos.h"
 #include "project/ProjectWriter.h"
 #include "project/ProjectDocumentState.h"
 #include "project/ProjectRecoveryStore.h"
@@ -379,6 +380,10 @@ private:
     QString m_telemetryPath;
     ProjectSourceReference m_videoReference;
     ProjectSourceReference m_vboReference;
+    // KAN-131: videos besides the main one, each with its own sync, and how
+    // export places them; kept through every save.
+    QVector<AdditionalVideo> m_additionalVideos;
+    VideoLayoutMode m_videoLayout = VideoLayoutMode::PictureInPicture;
     QString m_statusText = QStringLiteral("Open a video and VBO to begin.");
     QString m_startupNotice;
     QString m_sceneNotice;

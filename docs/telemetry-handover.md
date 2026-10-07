@@ -171,10 +171,10 @@ The `.fetproject` document is the only thing the two apps share ([KAN-170]). A d
     * `trackConfiguration`, `trackInference`, `trackSegments` and `trackSegmentReview`;
     * `fusion`;
     * run name, notes, conditions and setup changes.
-- **Overlays:** `scene.widgets`, `analysis.channels`, and each run's `sync` and `sources.video` with its chapters. Telemetry must keep all of these unchanged.
+- **Overlays:** `scene.widgets`, `analysis.channels`, and each run's `sync`, `sources.video` with its chapters, `sources.additionalVideos` and `videoLayout` (KAN-131). Telemetry must keep all of these unchanged.
 
 **What survives a round trip**
-- **Open objects keep unknown keys** through Save, Save As and recovery: the root, `event`, runs, telemetry sources, references, video and `sync`. The only bounds are generic: depth 32, keys and strings up to 4,096 characters, and 4 MiB per file.
+- **Open objects keep unknown keys** through Save, Save As and recovery: the root, `event`, runs, telemetry sources, references, video, additional videos, `sync` and `videoLayout`. The only bounds are generic: depth 32, keys and strings up to 4,096 characters, and 4 MiB per file.
 - **Closed objects refuse extra keys.** One extra key makes the whole document invalid:
     * a lap reference has exactly 10 keys;
     * a `lapExclusions` entry has exactly 2;

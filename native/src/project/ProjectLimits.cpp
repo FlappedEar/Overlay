@@ -1,3 +1,4 @@
+#include "project/AdditionalVideos.h"
 #include "project/VideoChapters.h"
 #include "project/ProjectLimits.h"
 #include "project/EventProjectCodec.h"
@@ -72,6 +73,9 @@ bool validateProject(const QJsonObject &project, QString *error)
     if (version == 2.0 && project.contains(QStringLiteral("event"))) return fail(error, QStringLiteral("Events require project version 3."));
     if (version == 2.0 && !VideoChaptersCodec::valid(project.value(QStringLiteral("sources")).toObject().value(QStringLiteral("video")).toObject()))
         return fail(error, QStringLiteral("Video chapters are malformed or do not start with the video itself."));
+    if (version == 2.0 && (!AdditionalVideosCodec::valid(project.value(QStringLiteral("sources")).toObject().value(QStringLiteral("additionalVideos")))
+            || !AdditionalVideosCodec::validLayout(project.value(QStringLiteral("videoLayout")))))
+        return fail(error, QStringLiteral("Additional videos or the video layout are malformed."));
     const QJsonValue sceneValue = project.value(QStringLiteral("scene"));
     // KAN-123: an event document may be analysis-only (the Telemetry app
     // writes no overlay scene). A scene that is present must still be valid,

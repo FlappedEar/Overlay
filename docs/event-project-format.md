@@ -19,6 +19,7 @@ An event owns an ordered list of runs and an `activeRunId`. Each run owns:
   New imports write it; matching legacy import provenance also supplies this
   identity. Untouched legacy documents are not rewritten during loading.
 - Optional `sources.video` reference and its `sync.offset`/`sync.timeScale`.
+- Optional `sources.additionalVideos` (up to three further videos, each with its own `sync`) and `videoLayout` (KAN-131; see [project format](project-format.md#additional-videos-kan-131)).
 - `trackConfiguration` on new imports: explicit layout/direction/gate identity,
   bound to the primary source ID and fingerprint (details below).
 - Optional `fusion`: an approved source-fusion decision (KAN-103, details below).
@@ -149,7 +150,7 @@ is separate from synthetic correctness tests.
 Both apps read and write this one schema. Since 6 October 2026, Overlays follows these rules; FlappedEar Telemetry is expected to follow the same ones.
 
 1. **Changes are additive.** A new field is optional, and an app that does not know it must still open the document.
-2. **Unknown keys survive.** Open objects keep keys an app does not know through Save, Save As and recovery. The open objects are the root, `event`, runs, telemetry sources, references, the video and `sync`. Closed objects refuse extra keys, so changing their shape needs a new version tag on the field that holds them. The closed objects are a lap reference, a `lapExclusions` entry, a `trackSegments` item, `trackSegmentReview` and its decisions.
+2. **Unknown keys survive.** Open objects keep keys an app does not know through Save, Save As and recovery. The open objects are the root, `event`, runs, telemetry sources, references, the video, each additional video, `sync` and `videoLayout`. Closed objects refuse extra keys, so changing their shape needs a new version tag on the field that holds them. The closed objects are a lap reference, a `lapExclusions` entry, a `trackSegments` item, `trackSegmentReview` and its decisions.
 3. **Newer versions are kept, not rejected.** A version tag has the form `name-vN`: lowercase letters, digits and hyphens, then `-v` and a number from 1. A well-formed tag that differs from the one an app implements was written by a newer app. The field is kept unchanged and ignored, and the document opens:
     * `fusion.algorithm` other than `channel-fusion-v1`: the fusion's shape is not checked and it is not applied, so the run's laps come from the primary recording alone. The run's recordings list reports it as `newerVersion`.
     * `trackSegmentReview.version` other than `track-segment-review-v1`: its shape is not checked.
@@ -157,7 +158,7 @@ Both apps read and write this one schema. Since 6 October 2026, Overlays follows
     * An identity `<tag>:<value>` whose tag is not `compatibility-v1`, in `analysisDecisions.comparisonGroupId` or in a segment's or review's `trackConfigurationReference`. The value is opaque (nonblank, without NUL, 512 characters in total at most), and the rest of the object is checked as usual. It never matches a group this app derives, so the segments are not used.
 
     A malformed tag, or the current tag with a malformed body, still makes the document invalid.
-4. **Each app writes only its own fields.** The table in the [architect handover](telemetry-handover.md#the-shared-contract-fetproject) lists who owns what. Overlays changes only the scene, `analysis.channels`, the active run's `sync` and video, and the shared identity and revision. Replacing a run's primary recording also resets `trackConfiguration`, as documented below.
+4. **Each app writes only its own fields.** The table in the [architect handover](telemetry-handover.md#the-shared-contract-fetproject) lists who owns what. Overlays changes only the scene, `analysis.channels`, the active run's `sync`, video, additional videos and `videoLayout`, and the shared identity and revision. Replacing a run's primary recording also resets `trackConfiguration`, as documented below.
 5. **Still strict.** These keep their single version, and a change needs owner agreement and new version tags in both apps: a lap reference (`version` 1, `lap-derivation-v1`), `gates-v1` gate revisions, segment types (sector, corner, straight), and the hash identities checked by `QtHashVectorTests`.
 
 The apps share no code (KAN-167), so each implements the schema and this document is the specification. Telemetry keeps its fixtures in `packages/fetproject`. The owner has not yet said who approves a schema change. Until then, every change is agreed with the owner and updates this document in the same pull request.

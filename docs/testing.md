@@ -2457,6 +2457,22 @@ revision followed by a newline, which Qt's `$` used to accept.
 Checked on Linux with Qt 6.8.3 (Debug): the test passes, and altering one
 recorded gate revision makes `gateRevisions` fail.
 
+## KAN-131: additional videos in a project
+
+`EventProjectTests::keepsAdditionalVideosPerRun` checks the
+`sources.additionalVideos` and `videoLayout` rules in both project versions:
+more than three videos, a repeated or missing id, a missing path or sync, an
+absolute `relativePath`, a time scale of 0, a non-string label and an unknown
+layout mode are refused. It also checks that the active run's list is
+projected into the editor and written back with an edited sync, that an
+inactive run's list is rebased on Save As with its sync and unknown keys
+unchanged, that clearing the list in the editor removes it from the run only,
+and that export protection sees every additional video.
+`SourceTests::keepsAdditionalVideosThroughRunSwitchAndSaveAs` opens an event
+in the editor, switches runs and back, and checks that Save As keeps the
+active run's additional video with a rebased path, its label and sync, and
+the layout, and adds nothing to the other run.
+
 ## KAN-218: .fetproject round-trip vectors
 
 `ProjectVectorTests` reads `native/tests/fixtures/project-vectors/vectors.json`.
@@ -2465,7 +2481,7 @@ recordings: `telemetry-day.fetproject` carries every analysis field (lap
 exclusions, comparison group, range and channels, run details, segments and
 their review, newer versions of the versioned fields, unknown keys at the root,
 event and run) and `event-demo.fetproject` is a minimal day with relative paths
-only. The test copies a case into a temporary `day/` folder, opens it in the
+only, whose inactive run has an additional video and a `videoLayout` (KAN-131). The test copies a case into a temporary `day/` folder, opens it in the
 reference analysis app (`TelemetryController`), saves it unchanged to the
 case's `savePath` (in place, or Save As to `archive/2026/`) and compares the
 result, as JSON values, with the expected file. The temporary folder in each
@@ -2480,7 +2496,9 @@ What the expected files pin, as of 6 October 2026: a save keeps every field
 it does not own; Save As rewrites each `relativePath` (`../../day/first.vbo`)
 and keeps `absolutePath`; a day without them gains `absolutePath`,
 `documentState.id`, `savedRevision`, `mapSettings.providerId` `none` and
-`exportSettings.quality` `high`.
+`exportSettings.quality` `high`. Since 7 October (KAN-131), an inactive run's
+additional video keeps its sync, label and unknown keys and gains
+`absolutePath`, like a telemetry reference.
 
 FlappedEar Telemetry should copy this folder and run the same cases against
 its Dart save (KAN-218 port; that repository is not reachable from here). A

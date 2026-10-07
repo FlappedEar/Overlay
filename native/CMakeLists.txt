@@ -67,6 +67,8 @@ qt_add_library(flappedear_telemetry_core STATIC
     src/project/ProjectDocumentState.h
     src/project/ProjectRecoveryStore.cpp
     src/project/ProjectRecoveryStore.h
+    src/project/AdditionalVideos.cpp
+    src/project/AdditionalVideos.h
     src/project/VideoChapters.cpp
     src/project/VideoChapters.h
     src/project/ProjectSourceReference.cpp
