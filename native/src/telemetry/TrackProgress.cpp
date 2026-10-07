@@ -281,9 +281,7 @@ ProgressAxis buildProgressAxis(
         // Rotate so index 0 is the resampled point nearest the gate midpoint.
         const QVector<QPointF> resampled = resampleByArcLength(points, pointCount);
         if (resampled.size() != pointCount) return axis;
-        const GeoCoordinate gateMidpoint{
-            (gate.endpointA.latitudeDegrees + gate.endpointB.latitudeDegrees) / 2,
-            (gate.endpointA.longitudeDegrees + gate.endpointB.longitudeDegrees) / 2};
+        const GeoCoordinate gateMidpoint = geoMidpoint(gate.endpointA, gate.endpointB);
         const MetricPoint gateLocal = projectCoordinate(gateMidpoint, origin);
         int gateIndex = 0;
         double bestDistance = std::numeric_limits<double>::infinity();

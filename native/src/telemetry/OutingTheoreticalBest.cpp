@@ -51,9 +51,7 @@ OutingTheoreticalBest calculateOutingTheoreticalBest(QVector<OutingLapRow> popul
         if (!axisSource.session || !axisSource.hasReferenceGate)
             throw std::runtime_error(axisSource.error.isEmpty()
                 ? "Could not build a shared track axis from the canonical run." : axisSource.error.toStdString());
-        const GeoCoordinate origin{
-            (axisSource.referenceGate.endpointA.latitudeDegrees + axisSource.referenceGate.endpointB.latitudeDegrees) / 2.0,
-            (axisSource.referenceGate.endpointA.longitudeDegrees + axisSource.referenceGate.endpointB.longitudeDegrees) / 2.0};
+        const GeoCoordinate origin = geoMidpoint(axisSource.referenceGate.endpointA, axisSource.referenceGate.endpointB);
         const auto axis = buildProgressAxis(axisSource.referenceTrace, origin, axisSource.referenceGate, cancelled);
         if (!axis.valid) throw std::runtime_error("The shared track axis could not be built from the canonical run's GPS trace.");
 

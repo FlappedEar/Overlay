@@ -188,6 +188,15 @@ checks that a segment restarting 8 m behind after a 10 s gap stays on the same
 lap. Before the change, the first lost its lock and the second restarted at
 260 m on a 208 m axis.
 
+## Longitude across ±180° (KAN-235)
+
+`TelemetryCoreTests::takesLongitudeTheShortWayRoundAcrossTheAntimeridian`
+checks the longitude helpers (unchanged bit for bit inside -180..180), a
+RaceChrono Pro 10.2.4 centre-and-direction gate at 179.99996° whose converted
+end lies past 180° (now wrapped and kept, 20 m wide), and three laps on a start
+line at 180° with fixes either side of it. Without the wrapped projection the
+two sides are 360° apart and no pass is found.
+
 ## Smoothed heading and curvature on track progress (KAN-44)
 
 `computeTrackFeatures` (`native/src/telemetry/TrackProgress.h/.cpp`) is a

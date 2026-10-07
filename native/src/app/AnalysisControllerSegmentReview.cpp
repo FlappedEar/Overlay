@@ -195,8 +195,7 @@ AnalysisController::SegmentReviewResult AnalysisController::computeSegmentReview
             return result;
         }
         const auto &gate = *laps.selectedStartGate;
-        const GeoCoordinate origin{(gate.endpointA.latitudeDegrees + gate.endpointB.latitudeDegrees) / 2.0,
-            (gate.endpointA.longitudeDegrees + gate.endpointB.longitudeDegrees) / 2.0};
+        const GeoCoordinate origin = geoMidpoint(gate.endpointA, gate.endpointB);
         result.axis = buildProgressAxis(*trace, origin, gate, cancelled);
         const auto features = result.axis.valid
             ? computeTrackFeatures(result.axis, segmentReviewSmoothingMeters) : TrackFeatures{};
