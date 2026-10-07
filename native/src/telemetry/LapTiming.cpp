@@ -40,6 +40,11 @@ struct PassageCluster {
     double candidateTime = 0.0;
     double candidateDistance = std::numeric_limits<double>::infinity();
     double candidateGateFraction = 0.0;
+    // KAN-205 (Telemetry FET-198): the side of the gate line the pass starts
+    // and ends on, and whether it reached the line within the widened span.
+    int firstSide = 0;
+    int lastSide = 0;
+    bool reachedLineInSpan = false;
 };
 
 double dot(const Vector2 &left, const Vector2 &right)
@@ -365,6 +370,26 @@ LapSession detectLaps(
         return result;
     }
     const Vector2 gateNormal{-gateVector.y / gateLength, gateVector.x / gateLength};
+    const auto signedDistance = [&](const Vector2 &point) {
+        return dot(subtract(point, gateA), gateNormal);
+    };
+    const auto sideOf = [&](const Vector2 &point) {
+        const double distance = signedDistance(point);
+        return distance > 0.0 ? 1 : (distance < 0.0 ? -1 : 0);
+    };
+    const double spanTolerance = options.innerCorridorMeters / gateLength;
+    // Whether the segment touches or crosses the gate line, and does so within
+    // the gate span widened by the inner corridor at each end.
+    const auto reachesLineInSpan = [&](const Vector2 &start, const Vector2 &end) {
+        const double startDistance = signedDistance(start);
+        const double endDistance = signedDistance(end);
+        if (startDistance == 0.0) return false;
+        if (endDistance != 0.0 && (endDistance > 0.0) == (startDistance > 0.0)) return false;
+        const double fraction = startDistance / (startDistance - endDistance);
+        const Vector2 point = add(start, multiply(subtract(end, start), fraction));
+        const double along = dot(subtract(point, gateA), gateVector) / (gateLength * gateLength);
+        return std::isfinite(along) && along >= -spanTolerance && along <= 1.0 + spanTolerance;
+    };
 
     const auto latitude = session.channels.constFind(session.aliases.value("latitude"));
     const auto longitude = session.channels.constFind(session.aliases.value("longitude"));
@@ -407,6 +432,9 @@ LapSession detectLaps(
             if (!std::isfinite(duration) || duration <= 0.0
                 || duration > options.maximumClusterSeconds) {
                 ++result.diagnostics.rejectedLongClusters;
+            } else if (cluster.firstSide == 0 || cluster.lastSide == cluster.firstSide
+                       || !cluster.reachedLineInSpan) {
+                ++result.diagnostics.rejectedNotCrossingClusters;
             } else if (!std::isfinite(groundSpeed)
                        || groundSpeed < options.minimumGroundSpeedMetersPerSecond) {
                 ++result.diagnostics.rejectedSlowClusters;
@@ -494,9 +522,15 @@ LapSession detectLaps(
                 cluster.candidateTime = previous->time + closest.vehicleFraction * interval;
                 cluster.candidateDistance = closest.distanceMeters;
                 cluster.candidateGateFraction = closest.gateFraction;
+                cluster.firstSide = sideOf(previous->point);
+                cluster.lastSide = sideOf(current->point);
+                cluster.reachedLineInSpan = reachesLineInSpan(previous->point, current->point);
             } else if (cluster.active && !outsideOuter) {
                 cluster.lastTime = current->time;
                 cluster.lastPoint = current->point;
+                cluster.lastSide = sideOf(current->point);
+                if (reachesLineInSpan(previous->point, current->point))
+                    cluster.reachedLineInSpan = true;
                 if (closest.distanceMeters < cluster.candidateDistance) {
                     cluster.candidateTime = previous->time + closest.vehicleFraction * interval;
                     cluster.candidateDistance = closest.distanceMeters;

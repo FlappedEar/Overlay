@@ -13,6 +13,7 @@
 #include "telemetry/VboParser.h"
 #include "UserGuideCapture.h"
 
+#include <QDeadlineTimer>
 #include <QRegularExpression>
 
 #include <stdexcept>
@@ -909,23 +910,6 @@ void collectFlickables(QQuickItem *item, QVector<QQuickItem *> &flickables)
     if (item->inherits("QQuickFlickable")) flickables.append(item);
     for (auto *child : item->childItems()) collectFlickables(child, flickables);
 }
-
-// True once the flickable's content height has held one non-zero value for five
-// checks 50 ms apart; false if it is still changing after five seconds.
-bool waitForSettledHeight(QQuickItem *flickable)
-{
-    QElapsedTimer elapsed;
-    elapsed.start();
-    double settled = -1.0;
-    int stableChecks = 0;
-    while (stableChecks < 5 && elapsed.elapsed() < 5000) {
-        QTest::qWait(50);
-        const double height = flickable->property("contentHeight").toDouble();
-        stableChecks = height == settled && height > 0.0 ? stableChecks + 1 : 0;
-        settled = height;
-    }
-    return stableChecks >= 5;
-}
 }
 
 void EditorTests::keepsSidebarReachableAtMinimumSize()
@@ -947,10 +931,22 @@ void EditorTests::keepsSidebarReachableAtMinimumSize()
         QVERIFY(flickable && flickable->inherits("QQuickFlickable"));
         auto *content = flickable->property("contentItem").value<QQuickItem *>();
         QVERIFY(content);
-        // Let the tab's layout settle: the same non-zero height for 250 ms. This is
-        // not a QTRY condition, because QTRY evaluates its expression again after
-        // the loop and a stateful check can then fail on a later layout pass.
-        QVERIFY(waitForSettledHeight(flickable));
+        // Let the tab's layout settle: its content height must hold still for
+        // three samples 50 ms apart. This is an explicit loop because a
+        // QTRY macro evaluates its expression again after the loop ends, so a
+        // check that remembers the last height failed whenever the height
+        // moved once more (PR #202 on macOS CI, reported as a timeout).
+        QDeadlineTimer settleDeadline(20'000);
+        double settled = -1.0;
+        int stableSamples = 0;
+        while (stableSamples < 3 && !settleDeadline.hasExpired()) {
+            QTest::qWait(50);
+            const double height = flickable->property("contentHeight").toDouble();
+            stableSamples = height == settled && height > 0.0 ? stableSamples + 1 : 0;
+            settled = height;
+        }
+        QVERIFY2(stableSamples >= 3,
+                 qPrintable(QStringLiteral("tab %1: content height still changing at %2").arg(tab).arg(settled)));
         const double viewport = flickable->height();
         // The scroller itself is inside the window.
         const QRectF frame = flickable->mapRectToScene(QRectF(0, 0, flickable->width(), viewport));

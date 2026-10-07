@@ -21,6 +21,7 @@
 
 #include <QDir>
 #include <QElapsedTimer>
+#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QFile>
 #include <QJsonDocument>
@@ -111,6 +112,7 @@ private slots:
     void parsesBoundedRaceChronoTimingGates();
     void derivesDirectionalPassesAndCompleteLaps();
     void finalizesGatePassWhenTelemetryEndsInsideCorridor();
+    void acceptsOnlyRealCrossingsOfTheStartLine();
     void parsesOptionalRealVbo();
     void derivesOptionalRealVboLaps();
     void buildsTrackGeometry();
@@ -1405,6 +1407,187 @@ void TelemetryCoreTests::finalizesGatePassWhenTelemetryEndsInsideCorridor()
     QCOMPARE(result.status, LapSessionStatus::InsufficientPasses);
     QCOMPARE(result.acceptedPasses.size(), qsizetype(1));
     QVERIFY(qAbs(result.acceptedPasses.constFirst().telemetryTime - 2.0) < 0.001);
+}
+
+// KAN-205: port of Telemetry FET-198's crossing truth tests (lap_crossing_test.dart).
+void TelemetryCoreTests::acceptsOnlyRealCrossingsOfTheStartLine()
+{
+    // The gate runs north-south through the origin, about 22 m long: in metres
+    // around the origin it spans north -11.1 ... +11.1 at east 0.
+    const GeoCoordinate origin{52.0001, 21.0};
+    const TimingGate gate{TimingGateType::Start, QStringLiteral("Start"),
+                          {52.0, 21.0}, {52.0002, 21.0}, {}};
+    struct Path {
+        double step = 0.2;
+        QVector<double> times;
+        QVector<double> east;
+        QVector<double> north;
+        Path &points(std::initializer_list<std::pair<double, double>> list)
+        {
+            for (const auto &[e, n] : list) {
+                times.append(times.isEmpty() ? 0.0 : times.constLast() + step);
+                east.append(e);
+                north.append(n);
+            }
+            return *this;
+        }
+        Path &travel(std::initializer_list<std::pair<double, double>> waypoints,
+                     const double maximumStepMeters = 8.0)
+        {
+            for (const auto &[e, n] : waypoints) {
+                const double fromE = east.constLast();
+                const double fromN = north.constLast();
+                const double distance = std::hypot(e - fromE, n - fromN);
+                const int steps = std::max(1, int(std::ceil(distance / maximumStepMeters)));
+                for (int index = 1; index <= steps; ++index) {
+                    const double fraction = double(index) / steps;
+                    points({{fromE + (e - fromE) * fraction, fromN + (n - fromN) * fraction}});
+                }
+            }
+            return *this;
+        }
+        Path &crossWestward() { return travel({{30.0, 0.0}, {-30.0, 0.0}}, 6.0); }
+        Path &loopBackEast()
+        {
+            return travel({{-30.0, 120.0}, {80.0, 120.0}, {80.0, 0.0}, {30.0, 0.0}});
+        }
+    };
+    const auto sessionOf = [&origin](const Path &path) {
+        constexpr double earthRadiusMeters = 6'371'000.0;
+        constexpr double radiansPerDegree = std::numbers::pi / 180.0;
+        TelemetrySession session;
+        TelemetryChannel latitude;
+        latitude.name = QStringLiteral("latitude");
+        TelemetryChannel longitude;
+        longitude.name = QStringLiteral("longitude");
+        for (qsizetype index = 0; index < path.times.size(); ++index) {
+            latitude.appendSample(path.times[index], float(origin.latitudeDegrees
+                + path.north[index] / earthRadiusMeters / radiansPerDegree));
+            longitude.appendSample(path.times[index], float(origin.longitudeDegrees
+                + path.east[index] / (earthRadiusMeters
+                    * std::cos(origin.latitudeDegrees * radiansPerDegree)) / radiansPerDegree));
+        }
+        for (TelemetryChannel *channel : {&latitude, &longitude}) {
+            session.channels.insert(channel->name, *channel);
+            session.aliases.insert(channel->name, channel->name);
+        }
+        session.duration = path.times.constLast();
+        session.sampleCount = path.times.size();
+        return session;
+    };
+
+    {
+        Path path;
+        path.points({{30.0, 0.0}}).crossWestward().loopBackEast().crossWestward();
+        const LapSession laps = detectLaps(sessionOf(path), gate);
+        QCOMPARE(laps.acceptedPasses.size(), qsizetype(2));
+        QCOMPARE(laps.timedLaps.size(), qsizetype(1));
+        QCOMPARE(laps.diagnostics.rejectedNotCrossingClusters, qsizetype(0));
+    }
+    {
+        // Fast in from the east to 2 m short of the line, then away east again
+        // more slowly: enough motion across the line for the old detector.
+        Path path;
+        path.points({{30.0, 0.0}}).crossWestward().loopBackEast().travel({{60.0, -20.0}});
+        path.points({{30.0, -10.0}, {2.0, 0.0}, {6.0, 2.0}, {9.0, 4.0}, {13.0, 6.0},
+                     {17.0, 8.0}});
+        path.travel({{80.0, 30.0}, {80.0, 0.0}, {30.0, 0.0}}).crossWestward();
+        const LapSession laps = detectLaps(sessionOf(path), gate);
+        QCOMPARE(laps.diagnostics.rejectedNotCrossingClusters, qsizetype(1));
+        QCOMPARE(laps.acceptedPasses.size(), qsizetype(2));
+        QCOMPARE(laps.timedLaps.size(), qsizetype(1));
+    }
+    {
+        // Approaching and stopping 1 m before the line at the end.
+        Path path;
+        path.points({{40.0, 0.0}, {30.0, 0.0}, {20.0, 0.0}, {10.0, 0.0}, {1.0, 0.0}});
+        const LapSession laps = detectLaps(sessionOf(path), gate);
+        QVERIFY(laps.acceptedPasses.isEmpty());
+        QCOMPARE(laps.diagnostics.rejectedNotCrossingClusters, qsizetype(1));
+    }
+    {
+        // Running along the line on one side.
+        Path path;
+        path.points({{3.0, -60.0}}).travel({{3.0, 60.0}}, 5.0);
+        QVERIFY(detectLaps(sessionOf(path), gate).acceptedPasses.isEmpty());
+    }
+    {
+        // The gate ends at north 11.1; crossing at north 14 is within the corridor.
+        Path path;
+        path.points({{30.0, 14.0}}).travel({{-30.0, 14.0}}, 6.0);
+        QCOMPARE(detectLaps(sessionOf(path), gate).acceptedPasses.size(), qsizetype(1));
+    }
+    {
+        // Crossing and coming back to leave on the starting side.
+        Path path;
+        path.points({{60.0, 0.0}, {40.0, 0.0}, {-3.0, 0.0}, {-6.0, 2.0}, {4.0, 5.0},
+                     {30.0, 6.0}}).travel({{80.0, 6.0}});
+        const LapSession laps = detectLaps(sessionOf(path), gate);
+        QVERIFY(laps.acceptedPasses.isEmpty());
+        QCOMPARE(laps.diagnostics.rejectedNotCrossingClusters, qsizetype(1));
+    }
+    {
+        // Within 5 m of endpoint B on the east side, then over the line at about
+        // north 20, beyond the 5 m widening.
+        Path path;
+        path.points({{40.0, 0.0}, {25.0, 5.0}, {4.0, 12.0}, {-1.0, 20.0}})
+            .travel({{-30.0, 60.0}});
+        const LapSession laps = detectLaps(sessionOf(path), gate);
+        QVERIFY(laps.acceptedPasses.isEmpty());
+        QCOMPARE(laps.diagnostics.rejectedNotCrossingClusters, qsizetype(1));
+    }
+    {
+        // A pit lane crossing the line 8 m beyond the gate end.
+        Path path;
+        path.points({{40.0, 19.1}}).travel({{-40.0, 19.1}}, 4.0);
+        QVERIFY(detectLaps(sessionOf(path), gate).acceptedPasses.isEmpty());
+    }
+    {
+        // Arriving, oscillating by the line and leaving on the same side.
+        Path path;
+        path.points({{60.0, 0.0}, {30.0, 0.0}, {2.0, 0.0}});
+        for (int index = 0; index < 4; ++index) path.points({{index % 2 == 0 ? -1.0 : 2.0, 0.0}});
+        path.points({{9.0, 0.0}, {30.0, 0.0}, {60.0, 0.0}});
+        const LapSession laps = detectLaps(sessionOf(path), gate);
+        QVERIFY(laps.acceptedPasses.isEmpty());
+        QCOMPARE(laps.diagnostics.rejectedNotCrossingClusters, qsizetype(1));
+    }
+    {
+        // Crossings are found at 1 Hz and at 100 Hz; at 1 Hz the line is crossed a
+        // fifth of the way from 40 m to -10 m, at 1.8 s.
+        Path slow;
+        slow.step = 1.0;
+        slow.points({{80.0, 0.0}, {40.0, 0.0}, {-10.0, 0.0}, {-60.0, 0.0}});
+        const LapSession slowLaps = detectLaps(sessionOf(slow), gate);
+        QCOMPARE(slowLaps.acceptedPasses.size(), qsizetype(1));
+        QVERIFY(std::abs(slowLaps.acceptedPasses.constFirst().telemetryTime - 1.8) < 0.02);
+        Path fast;
+        fast.step = 0.01;
+        fast.points({{30.0, 0.0}}).travel({{-30.0, 0.0}}, 0.3);
+        QCOMPARE(detectLaps(sessionOf(fast), gate).acceptedPasses.size(), qsizetype(1));
+    }
+    {
+        // GPS oscillating around the line while stationary.
+        Path path;
+        for (int index = 0; index < 100; ++index) path.points({{index % 2 == 0 ? 3.0 : -3.0, 0.0}});
+        QVERIFY(detectLaps(sessionOf(path), gate).acceptedPasses.isEmpty());
+    }
+    // Invariant: a path that never reaches the line never gives a pass.
+    QRandomGenerator random(198);
+    for (int trial = 0; trial < 200; ++trial) {
+        Path path;
+        path.step = 0.1 + random.generateDouble() * 0.4;
+        path.points({{60.0, -40.0}});
+        for (int leg = 0; leg < 12; ++leg) {
+            // Random waypoints east of the line, some within a metre of it.
+            const double e = random.bounded(2) == 0 ? 1.0 + random.generateDouble() * 4.0
+                                                    : 1.0 + random.generateDouble() * 80.0;
+            const double n = -40.0 + random.generateDouble() * 80.0;
+            path.travel({{e, n}}, 2.0 + random.generateDouble() * 20.0);
+        }
+        QVERIFY2(detectLaps(sessionOf(path), gate).acceptedPasses.isEmpty(),
+                 qPrintable(QStringLiteral("trial %1").arg(trial)));
+    }
 }
 
 void TelemetryCoreTests::parsesOptionalRealVbo()
