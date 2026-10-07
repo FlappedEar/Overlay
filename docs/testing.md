@@ -2617,6 +2617,10 @@ Three `AGENTS.md` UI invariants now have automated tests:
 - **Unsaved changes** (`EditorTests::asksBeforeDiscardingUnsavedChanges`). With unsaved
   changes, New opens the dialog; closing it cancels the request and keeps the scene, and Discard
   changes carries it out and leaves a clean document.
+- **Recovery at startup** (`EditorTests::offersRecoveryAtStartup`). An editor that starts with a
+  recovery snapshot shows the recovery dialog; Discard closes it and deletes the snapshot.
+- **Help dialogs** (`EditorTests::opensTheHelpDialogs`). About and Keyboard Shortcuts open and
+  close, About fits the window, and the startup notice stays closed when nothing was left behind.
 - **Transport shortcuts while editing**
   (`EditorTests::disablesTransportShortcutsWhileEditing`). Space, Left, Right, Shift+Left,
   Shift+Right, Home and End are off while an inspector text field or spin box has focus, and
