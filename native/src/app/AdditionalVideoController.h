@@ -81,6 +81,11 @@ public:
     Q_INVOKABLE void alignAt(int index, double mainVideoSeconds, double videoSeconds);
     // Where this video is when the main video is at mainVideoSeconds.
     Q_INVOKABLE double videoSecondsFor(int index, double mainVideoSeconds) const;
+    // Seconds of this video per second of the main video, for playback.
+    Q_INVOKABLE double playbackRateFor(int index) const;
+    // The preview's rectangles in a frame of width x height (the main video's
+    // shape), main video first, by the same rules as export.
+    Q_INVOKABLE QVariantList previewRects(double width, double height) const;
 
 signals:
     void changed();

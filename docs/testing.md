@@ -2493,6 +2493,10 @@ Export composition is tested by `ExportTests::placesAdditionalVideosByLayout`,
 [export-pipeline.md](export-pipeline.md#additional-videos-kan-131). The last
 one runs a real export through the worker, so it needs the OpenGL context
 and FFmpeg 8.1 like the other export tests.
+`EditorTests::previewsAdditionalVideosByTheLayout` loads a main and a helmet
+video in the editor and checks the preview: picture in picture puts the helmet
+video in a small box at the top right over a full-frame main video, side by
+side gives each a half, and a video is hidden before its first frame.
 
 ## KAN-218: .fetproject round-trip vectors
 

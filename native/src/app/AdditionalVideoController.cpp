@@ -2,6 +2,7 @@
 
 #include "app/AppLog.h"
 #include "app/DocumentController.h"
+#include "export/VideoComposition.h"
 #include "export/VideoFingerprint.h"
 
 #include <QFileInfo>
@@ -246,6 +247,28 @@ double AdditionalVideoController::videoSecondsFor(const int index, const double 
     const auto telemetry = videoToTelemetryTime(mainVideoSeconds, m_mainVideo().sync);
     const auto video = telemetry ? telemetryToVideoTime(*telemetry, m_entries[index].video.sync) : std::nullopt;
     return video.value_or(0.0);
+}
+
+double AdditionalVideoController::playbackRateFor(const int index) const
+{
+    if (!validIndex(index)) return 1.0;
+    const double scale = m_entries[index].video.sync.timeScale;
+    return scale > 0.0 ? m_mainVideo().sync.timeScale / scale : 1.0;
+}
+
+QVariantList AdditionalVideoController::previewRects(const double width, const double height) const
+{
+    const QSize frame(static_cast<int>(std::lround(width)), static_cast<int>(std::lround(height)));
+    QVector<QSize> sizes{frame};
+    for (const auto &entry : m_entries) {
+        const QSize size = entry.mediaInfo.displayVideoSize.isEmpty() ? entry.mediaInfo.videoSize : entry.mediaInfo.displayVideoSize;
+        sizes.append(size.isEmpty() ? QSize(16, 9) : size); // not ready yet: keep its place
+    }
+    QVariantList rects;
+    for (const QRect &rect : VideoComposition::layout(m_layout, frame, sizes))
+        rects.append(QVariantMap{{QStringLiteral("x"), rect.x()}, {QStringLiteral("y"), rect.y()},
+                                 {QStringLiteral("width"), rect.width()}, {QStringLiteral("height"), rect.height()}});
+    return rects;
 }
 
 void AdditionalVideoController::probe(const QString &id, const QString &path, const ProbePurpose purpose)

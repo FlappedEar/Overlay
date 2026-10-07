@@ -1292,8 +1292,17 @@ ApplicationWindow {
                                 height: geometry.height
                                 VideoOutput {
                                     id: videoOutput
-                                    anchors.fill: parent
+                                    // KAN-131: side by side, the main video keeps its half.
+                                    x: additionalVideosPreview.mainRect.x
+                                    y: additionalVideosPreview.mainRect.y
+                                    width: additionalVideosPreview.mainRect.width
+                                    height: additionalVideosPreview.mainRect.height
                                     fillMode: VideoOutput.PreserveAspectFit
+                                }
+                                AdditionalVideosPreview {
+                                    id: additionalVideosPreview
+                                    anchors.fill: parent
+                                    playing: mediaPlayer.playbackState === MediaPlayer.PlayingState
                                 }
                                 // KAN-105: a missing chapter is an explicit gap, never skipped.
                                 FeLabel {

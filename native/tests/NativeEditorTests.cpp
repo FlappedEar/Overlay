@@ -53,6 +53,7 @@ private slots:
     void keepsSidebarReachableAtMinimumSize();
     void disablesTransportShortcutsWhileEditing();
     void editsAdditionalVideosInTheSyncTab();
+    void previewsAdditionalVideosByTheLayout();
     void savesTheSceneAsATemplateFromThePopup();
     void asksBeforeDiscardingUnsavedChanges();
     void offersRecoveryAtStartup();
@@ -1126,6 +1127,57 @@ void EditorTests::editsAdditionalVideosInTheSyncTab()
     QVERIFY2(!buttons.contains(QStringLiteral("Align…")), qPrintable(buttons.join(", ")));
     videos->clear();
     QTRY_VERIFY(!layout->isVisible());
+}
+
+void EditorTests::previewsAdditionalVideosByTheLayout()
+{
+    // KAN-131: the preview places additional videos as export does. Side by
+    // side, the main video keeps the left half and the helmet video sits in
+    // the right half; it shows while it has a frame at the playhead.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the additional video preview test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto encode = [&](const QString &name, const QString &source) {
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", source,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", directory.filePath(name)});
+        return encoder.waitForFinished(30'000) && encoder.exitCode() == 0;
+    };
+    QVERIFY(encode("main.mp4", "color=c=red:s=320x180:r=30:d=2"));
+    QVERIFY(encode("helmet.mp4", "color=c=blue:s=160x120:r=25:d=2"));
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    editor.controller.loadVideo(QUrl::fromLocalFile(directory.filePath("main.mp4")));
+    QTRY_COMPARE(editor.controller.videoLoadState(), QStringLiteral("ready"));
+    auto *videos = editor.controller.additionalVideoController();
+    videos->addVideo(QUrl::fromLocalFile(directory.filePath("helmet.mp4")));
+    QTRY_COMPARE(videos->count(), 1);
+    auto *preview = editor.window->findChild<QQuickItem *>(QStringLiteral("additionalVideosPreview"));
+    QVERIFY(preview);
+    QTRY_VERIFY(preview->width() > 0);
+    const auto findSlot = [preview] {
+        QList<QQuickItem *> queue{preview};
+        while (!queue.isEmpty()) {
+            auto *item = queue.takeFirst();
+            if (item->objectName() == QStringLiteral("additionalVideoPreview")) return item;
+            queue.append(item->childItems());
+        }
+        return static_cast<QQuickItem *>(nullptr);
+    };
+    QQuickItem *slot = nullptr;
+    QTRY_VERIFY((slot = findSlot()) != nullptr);
+    // Picture in picture: the main video fills the frame, the helmet video
+    // is a box at the top right.
+    QTRY_VERIFY(slot->isVisible());
+    QCOMPARE(preview->property("mainRect").toRectF().width(), std::round(preview->width()));
+    QVERIFY(slot->x() + slot->width() > preview->width() * 0.9);
+    QVERIFY(slot->width() < preview->width() * 0.3);
+    videos->setLayout(QStringLiteral("sideBySide"));
+    QTRY_VERIFY(preview->property("mainRect").toRectF().right() <= preview->width() / 2 + 1);
+    QVERIFY(slot->x() >= preview->width() / 2 - 1);
+    // Before its first frame it is hidden: it starts 5 s after the main video.
+    videos->setOffset(0, 5.0);
+    QTRY_VERIFY(!slot->isVisible());
 }
 
 void EditorTests::disablesTransportShortcutsWhileEditing()

@@ -329,6 +329,14 @@ void SourceTests::addsAlignsAndChecksAdditionalVideos()
     QCOMPARE(videos->layout(), QStringLiteral("pictureInPicture"));
     videos->setLayout(QStringLiteral("sideBySide"));
     QCOMPARE(videos->layoutMode(), VideoLayoutMode::SideBySide);
+    // The preview follows the export layout and the syncs' rate.
+    const auto rects = videos->previewRects(320, 180);
+    QCOMPARE(rects.size(), 2);
+    QCOMPARE(rects[0].toMap().value("y").toInt(), 44);
+    QCOMPARE(rects[0].toMap().value("width").toInt(), 160);
+    QCOMPARE(rects[1].toMap().value("x").toInt(), 160);
+    QCOMPARE(rects[1].toMap().value("height").toInt(), 120);
+    QVERIFY(qAbs(videos->playbackRateFor(0) - 1.0 / 1.001) < 1e-12);
 
     // At most three.
     videos->addVideo(url("chest.mp4"));
