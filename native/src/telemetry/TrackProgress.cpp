@@ -42,6 +42,24 @@ constexpr double ownSpeedFloorMetersPerSecond = 40.0;
 constexpr double minimumHeadingMovementMeters = 0.5;
 constexpr double standingSeconds = 0.5;
 constexpr double standingMetersPerSecond = 1.0;
+// While locked, a part of the match's own branch at least the windowed
+// separation along the axis from the match, and nearly as near the fix as the
+// match (within this ratio of its distance), is still compared as a runner-up
+// (KAN-239, as Telemetry FET-257). The fix's distance from the axis then
+// barely grows along it: the fix is near the centre of a corner, about as near
+// the whole corner, and where it lies along it is not known. Off a straight,
+// 10 m along is never closer than 0.93 of the way within the 20 m proximity.
+constexpr double flatBranchRatio = 0.95;
+// A fix kept off the line by that comparison must not lie on the inside of a
+// bend by more than this share of the bend's radius: further in, the car may
+// be anywhere around the bend, or past its centre on another part of the
+// track, and the nearest point of the axis no longer says where (a hairpin
+// driven 8 m inside at 1 Hz, a tight ess cut).
+constexpr double insideBendShare = 0.5;
+// The match's own branch, for that comparison, runs within 90 degrees of the
+// match's direction; a part turned further, such as a hairpin's other leg, is
+// compared as a runner-up however near.
+constexpr double sameBranchCosine = 0.0;
 
 double cross(const QPointF &a, const QPointF &b) { return a.x() * b.y() - a.y() * b.x(); }
 
@@ -146,6 +164,8 @@ struct Candidate {
     int index = -1;
     double progressMeters = 0.0;
     double distance = std::numeric_limits<double>::infinity();
+    // Where along segment `index` the match lies, 0 at its start, 1 at its end.
+    double fraction = 0.0;
 };
 
 // Best match within `count` axis segments starting at `startIndex` (ring
@@ -174,6 +194,7 @@ Candidate bestCandidateInRange(const ProgressAxis &axis, const QPointF &point, c
         if (projection.distance < best.distance) {
             best.index = index;
             best.distance = projection.distance;
+            best.fraction = projection.fraction;
             best.progressMeters = progressAtSegment(axis, index, projection.fraction);
         }
     }
@@ -253,6 +274,94 @@ double nearestOtherLeg(const ProgressAxis &axis, const QPointF &point, const int
         nearest = std::min(nearest, projection.distance);
     }
     return nearest;
+}
+
+// The runner-up of a fix kept a few metres off the line while locked: the best
+// match anywhere on the axis that lies on another part of the track than
+// `best` (KAN-239). The run of the axis around `best` that would itself make
+// the fix ambiguous (within `ambiguityRatio` of its distance) and runs within
+// 90 degrees of its direction, unbroken along the axis, is the same branch: a
+// fix a few metres off a straight is nearly as close to the line 10 m further
+// on, and comparing the line with itself refused it. Every other part of the
+// axis is another branch, however far along it lies: a hairpin's other leg, a
+// parallel straight, the other pass of a crossing. A part of the branch that is
+// nearly as near the fix as `best` (flatBranchRatio) still counts: the fix is
+// near the centre of a corner. As in the window, nothing within
+// `minimumSeparation` points of `best` counts.
+Candidate runnerUpOnAnotherPart(const ProgressAxis &axis, const QPointF &point, const Candidate &best,
+    const int minimumSeparation, const double ambiguityRatio)
+{
+    const int n = axis.points.size();
+    const auto indexAt = [&](const int offset) { return ((best.index + offset) % n + n) % n; };
+    QVector<double> distances(n);
+    QVector<double> fractions(n);
+    for (int index = 0; index < n; ++index) {
+        const auto projection = projectOntoSegment(point, axis.points[index], axis.points[(index + 1) % n]);
+        distances[index] = projection.distance;
+        fractions[index] = projection.fraction;
+    }
+    const QPointF bestTangent = axisTangent(axis, best.index);
+    // Whether the segment at `index` belongs to the same branch as `best`: near
+    // enough to make the fix ambiguous, and running the same way.
+    const auto sameBranch = [&](const int index) {
+        if (!(best.distance > distances[index] * ambiguityRatio)) return false;
+        const QPointF tangent = axisTangent(axis, index);
+        return tangent.x() * bestTangent.x() + tangent.y() * bestTangent.y() >= sameBranchCosine;
+    };
+    // The branch of `best`, as offsets along the axis either side of it.
+    int behind = 0, ahead = 0;
+    while (behind + ahead + 1 < n && sameBranch(indexAt(-behind - 1))) ++behind;
+    while (behind + ahead + 1 < n && sameBranch(indexAt(ahead + 1))) ++ahead;
+    Candidate runnerUp;
+    for (int offset = -(n / 2); offset < n - n / 2; ++offset) {
+        const int index = indexAt(offset);
+        const bool onBranch = offset >= -behind && offset <= ahead;
+        if (onBranch && !(best.distance > distances[index] * flatBranchRatio)) continue;
+        if (std::abs(offset) < minimumSeparation) continue;
+        if (distances[index] < runnerUp.distance) {
+            runnerUp.index = index;
+            runnerUp.distance = distances[index];
+            runnerUp.fraction = fractions[index];
+            runnerUp.progressMeters = progressAtSegment(axis, index, fractions[index]);
+        }
+    }
+    return runnerUp;
+}
+
+// Whether `point` lies on the inside of a bend of the match's own branch
+// further from the axis than insideBendShare of the bend's radius (KAN-239).
+// The branch is the run of the axis next to `best` near enough to make the fix
+// ambiguous (`ambiguityRatio`); each point's radius comes from the turn over 2
+// points either side. There the nearest point of the axis stops following where
+// the car is: near or past the centre of a hairpin, or off the inside of an ess
+// by more than its radius.
+bool insideBend(const ProgressAxis &axis, const QPointF &point, const Candidate &best, const double ambiguityRatio)
+{
+    const int n = axis.points.size();
+    const auto wrap = [n](const int index) { return (index % n + n) % n; };
+    const QPointF tangent = axisTangent(axis, best.index);
+    const QPointF a = axis.points[best.index], b = axis.points[wrap(best.index + 1)];
+    const QPointF foot = a + (b - a) * best.fraction;
+    const double side = cross(tangent, point - foot);
+    if (side == 0) return false;
+    const auto near = [&](const int index) {
+        const auto projection = projectOntoSegment(point, axis.points[wrap(index)], axis.points[wrap(index + 1)]);
+        return best.distance > projection.distance * ambiguityRatio;
+    };
+    const auto tooTight = [&](const int index) {
+        const QPointF before = axisTangent(axis, wrap(index - 2));
+        const QPointF after = axisTangent(axis, wrap(index + 2));
+        const double turn = std::atan2(cross(before, after), before.x() * after.x() + before.y() * after.y());
+        // Turning toward the fix: the fix is on the inside of the bend.
+        if (!(turn * side > 0)) return false;
+        const double radius = 4 * axis.spacingMeters / std::abs(turn);
+        return best.distance > insideBendShare * radius;
+    };
+    if (tooTight(best.index)) return true;
+    for (const int direction : {-1, 1})
+        for (int step = 1; step < n / 2 && near(best.index + direction * step); ++step)
+            if (tooTight(best.index + direction * step)) return true;
+    return false;
 }
 
 // Whether the lap stands at `time`: its last projected fix, from `recent`
@@ -480,9 +589,10 @@ ProjectedSample projectSample(const ProgressAxis &axis, const QPointF &localPoin
         return result;
     }
 
-    // Adaptive, forward-biased local window: this bounded search is what
-    // keeps a hairpin apex or a nearby parallel straight from being confused
-    // with the correct branch -- the rest of the track is never considered.
+    // Adaptive, forward-biased local window around the previous lock: a fix
+    // matches only near where the lap was. That alone does not keep another
+    // branch out (it can lie inside the window, or beyond it); the runner-up
+    // checks below do.
     const double expectedTravel = dt * std::max(0.0, speedMetersPerSecond);
     const double forwardWindow = std::clamp(expectedTravel * 1.6, 15.0, 150.0);
     const double backwardWindow = std::min(15.0, forwardWindow * 0.3);
@@ -494,9 +604,26 @@ ProjectedSample projectSample(const ProgressAxis &axis, const QPointF &localPoin
 
     const auto best = bestCandidateInRange(axis, localPoint, startIndex, count);
     if (best.index < 0 || best.distance > lockProximityMeters) return result; // lost lock; caller ends the segment
+    // A fix whose nearest point lies beyond the window's forward end matched
+    // only the end of the window, not where it is (KAN-239): it is refused, and
+    // the next fix is a cold start on the whole axis.
+    const int n = axis.points.size();
+    if (count < n && best.index == ((startIndex + count - 1) % n + n) % n && best.fraction >= 1.0) return result;
     const int minimumSeparation = std::max(3, static_cast<int>(std::lround(windowedSeparationMeters / axis.spacingMeters)));
-    const auto second = secondBestCandidate(axis, localPoint, startIndex, count, best.index, minimumSeparation);
-    if (second.index >= 0 && best.distance > second.distance * ambiguityRatio) return result;
+    // The best match in the window at least the windowed separation from
+    // `best`. On a straight it is the same line 10 m on, so a fix about 8 m off
+    // the line is refused by it.
+    const auto windowed = secondBestCandidate(axis, localPoint, startIndex, count, best.index, minimumSeparation);
+    if (windowed.index >= 0 && best.distance > windowed.distance * ambiguityRatio) {
+        // Such a fix is kept only when every other branch of the track is ruled
+        // out (KAN-239). The window alone does not show that: another branch can
+        // lie beyond it (a hairpin's exit leg at 1 Hz, a parallel straight). So
+        // no part of the whole axis beyond the match's own branch may be nearly
+        // as near, and the fix must not lie well inside a bend.
+        const auto second = runnerUpOnAnotherPart(axis, localPoint, best, minimumSeparation, ambiguityRatio);
+        if (second.index >= 0 && best.distance > second.distance * ambiguityRatio) return result;
+        if (insideBend(axis, localPoint, best, ambiguityRatio)) return result;
+    }
     if (!headingAgrees(axis, best.index, movementDirection, minimumHeadingCosine)) return result;
 
     double delta = best.progressMeters - context.lastProgressMeters;

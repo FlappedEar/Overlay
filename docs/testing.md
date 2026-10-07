@@ -204,6 +204,21 @@ fixes. Before the change, 27 of its 33 cases fail. The GPS error comes from
 another random generator than Telemetry's, so its trial counts match
 Telemetry's but its individual laps do not.
 
+`flappedear_locked_off_line_tests` (KAN-239, ported from Telemetry FET-257's
+`locked_off_line_test.dart`) shares the synthetic track fixture
+(`SyntheticTrackFixture.h`) with the cold start tests. It checks that a lap
+8.5 to 15 m off the reference line on an oval, a figure-eight crossing or a
+loop shorter than the search window keeps every fix in one segment; that a
+fix midway between a hairpin's legs (3, 7.5 and 15 m radius), at the centre of
+a hairpin or of a 90 degree corner (10, 15 and 19 m), or midway between two
+straights 15 m apart is still refused while locked; that a lap pushed toward
+the other of two parallel straights is refused there and never placed on
+either; that at 1 to 2 Hz (hairpins of 6 to 8 m, a 20 degree figure-eight, on
+and off the line, four top speeds, with and without 1 m of GPS error) no fix is
+more than 10 m from where the car is; and that a fix beyond the forward end of
+the search window is refused instead of placed at the window's end. Before the
+change, 6 of its 27 cases fail.
+
 ## Longitude across ±180° (KAN-235)
 
 `TelemetryCoreTests::takesLongitudeTheShortWayRoundAcrossTheAntimeridian`
