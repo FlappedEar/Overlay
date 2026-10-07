@@ -5,6 +5,7 @@
 #include "app/AppController.h"
 #include "app/BundledFonts.h"
 #include "app/PreviewPlayback.h"
+#include "app/PreviewTimeline.h"
 #include "export/ExportEngine.h"
 #include "export/FfmpegTools.h"
 #include "export/MediaProbe.h"
@@ -44,6 +45,7 @@ private slots:
     void benchmarksCachedOptionalRealVboPresentationLookups();
     void preservesPartialOverlapInAnalysisSeries();
     void derivesStablePreviewViewportAndLastFrameAdapter();
+    void framesSingleAndChapteredPreviewTimelines();
     void exposesReactivePreviewMetadataToQml();
     void buildsAddWidgetListAndInspectorFromDescriptors();
     void keepsSidebarReachableAtMinimumSize();
@@ -849,6 +851,32 @@ void EditorTests::derivesStablePreviewViewportAndLastFrameAdapter()
              std::optional<qint64>(17));
     QCOMPARE(PreviewPlayback::clampPositionMilliseconds(2'000, 59, {60, 1}),
              std::optional<qint64>(983));
+}
+
+void EditorTests::framesSingleAndChapteredPreviewTimelines()
+{
+    // KAN-215: a 10 s 60 fps file, then the same first chapter of a 25 s recording.
+    MediaInfo source;
+    source.videoSize = {3840, 2160};
+    source.frameRate = {60, 1};
+    source.averageFrameRate = {60, 1};
+    source.videoFrameCount = 600;
+
+    const PreviewTimeline single(source, std::nullopt);
+    QCOMPARE(single.viewport({1600, 1000}), QRect(0, 50, 1600, 900));
+    QCOMPARE(single.endPositionMilliseconds(), 9'983);
+    QCOMPARE(single.initialPositionMilliseconds(), 17);
+    QCOMPARE(single.clampPositionMilliseconds(20'000), 9'983);
+    QCOMPARE(single.timecodeForPositionMilliseconds(1'000), QStringLiteral("00:00:01:00"));
+    QCOMPARE(single.endTimecode(), QStringLiteral("00:00:09:59"));
+
+    const PreviewTimeline chaptered(source, 25.0);
+    QCOMPARE(chaptered.endPositionMilliseconds(), 24'983);
+    QCOMPARE(chaptered.clampPositionMilliseconds(20'000), 20'000);
+    QCOMPARE(chaptered.endTimecode(), QStringLiteral("00:00:24:59"));
+    QCOMPARE(chaptered.timecodeForPositionMilliseconds(30'000), QStringLiteral("00:00:24:59"));
+
+    QCOMPARE(PreviewTimeline(MediaInfo{}, std::nullopt).endPositionMilliseconds(), 0);
 }
 
 void EditorTests::exposesReactivePreviewMetadataToQml()

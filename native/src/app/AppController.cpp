@@ -1,6 +1,6 @@
 #include "app/AppController.h"
 #include "project/VideoChapters.h"
-#include "app/PreviewPlayback.h"
+#include "app/PreviewTimeline.h"
 #include "export/ExportFormat.h"
 #include "export/ExportEngine.h"
 #include "export/ChapterSource.h"
@@ -288,74 +288,36 @@ QString AppController::formatEstimatedExportSize(const qint64 bytes) const
 {
     return ExportFormat::formatEstimatedSize(bytes);
 }
+PreviewTimeline AppController::previewTimeline() const
+{
+    return {m_exportSourceInfo,
+            videoChaptered() ? std::optional<double>(m_videoTimeline.durationSeconds()) : std::nullopt};
+}
 QVariantMap AppController::previewViewport(const int availableWidth, const int availableHeight) const
 {
-    const QSize sourceSize = m_exportSourceInfo.displayVideoSize.isValid()
-        ? m_exportSourceInfo.displayVideoSize : m_exportSourceInfo.videoSize;
-    const QRect viewport = PreviewPlayback::aspectFitViewport({availableWidth, availableHeight}, sourceSize);
+    const QRect viewport = previewTimeline().viewport({availableWidth, availableHeight});
     return {{"x", viewport.x()}, {"y", viewport.y()},
             {"width", viewport.width()}, {"height", viewport.height()}};
 }
-std::optional<qint64> AppController::timelineLastFrame() const
-{
-    // KAN-105: the whole chapter timeline, framed at the first chapter's rate.
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    if (!videoChaptered() || !rate.isValid()) return std::nullopt;
-    const auto frames = static_cast<qint64>(std::floor(m_videoTimeline.durationSeconds() * rate.numerator / rate.denominator + 1e-6));
-    return frames >= 1 ? std::optional<qint64>(frames - 1) : std::nullopt;
-}
 qint64 AppController::previewEndPositionMilliseconds() const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    if (const auto last = timelineLastFrame())
-        return PreviewPlayback::framePositionMilliseconds(*last, rate).value_or(0);
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    const auto position = range ? PreviewPlayback::framePositionMilliseconds(range->lastFrame, rate) : std::nullopt;
-    return position.value_or(0);
+    return previewTimeline().endPositionMilliseconds();
 }
 qint64 AppController::previewInitialPositionMilliseconds() const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    if (!range || range->lastFrame < 1) return 0;
-    return PreviewPlayback::firstTimelineFramePositionMilliseconds(rate).value_or(0);
+    return previewTimeline().initialPositionMilliseconds();
 }
 qint64 AppController::clampPreviewPositionMilliseconds(const qint64 requestedMilliseconds) const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    if (const auto last = timelineLastFrame())
-        return PreviewPlayback::clampPositionMilliseconds(requestedMilliseconds, *last, rate).value_or(0);
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    const auto position = range
-        ? PreviewPlayback::clampPositionMilliseconds(requestedMilliseconds, range->lastFrame, rate)
-        : std::nullopt;
-    return position.value_or(0);
+    return previewTimeline().clampPositionMilliseconds(requestedMilliseconds);
 }
 QString AppController::previewTimecodeForPositionMilliseconds(const qint64 positionMilliseconds) const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    if (const auto last = timelineLastFrame()) range = ExportFrameRange{0, *last};
-    if (!range || !rate.isValid() || positionMilliseconds < 0) return {};
-    const qint64 bounded = clampPreviewPositionMilliseconds(positionMilliseconds);
-    if (bounded >= previewEndPositionMilliseconds()) {
-        return ExportEngine::formatSmpteTimecode(range->lastFrame, rate);
-    }
-    const qint64 frame = static_cast<qint64>(bounded) * rate.numerator / (rate.denominator * 1'000);
-    return ExportEngine::formatSmpteTimecode(qBound(range->firstFrame, frame, range->lastFrame), rate);
+    return previewTimeline().timecodeForPositionMilliseconds(positionMilliseconds);
 }
 QString AppController::previewEndTimecode() const
 {
-    const MediaRational rate = m_exportSourceInfo.averageFrameRate.isValid()
-        ? m_exportSourceInfo.averageFrameRate : m_exportSourceInfo.frameRate;
-    if (const auto last = timelineLastFrame()) return ExportEngine::formatSmpteTimecode(*last, rate);
-    const auto range = ExportEngine::fullVideoFrameRange(m_exportSourceInfo, rate);
-    return range ? ExportEngine::formatSmpteTimecode(range->lastFrame, rate) : QString();
+    return previewTimeline().endTimecode();
 }
 void AppController::reportPlaybackError(const QString &message)
 {
