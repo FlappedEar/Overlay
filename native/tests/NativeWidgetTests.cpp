@@ -916,57 +916,57 @@ void WidgetTests::preservesTemplatePickerSelectionById()
         QVERIFY(!templateA.isEmpty());
         QVERIFY(!templateB.isEmpty());
 
-        controller.selectTemplate(templateB);
-        QCOMPARE(controller.selectedTemplateId(), templateB);
+        controller.templatePicker()->select(templateB);
+        QCOMPARE(controller.templatePicker()->selectedId(), templateB);
         model->reloadTemplates();
-        QCOMPARE(controller.selectedTemplateId(), templateB);
+        QCOMPARE(controller.templatePicker()->selectedId(), templateB);
 
-        QVERIFY(controller.applyTemplate(templateB));
-        QCOMPARE(controller.selectedTemplateId(), templateB);
-        QCOMPARE(controller.activeTemplateId(), templateB);
+        QVERIFY(controller.templatePicker()->apply(templateB));
+        QCOMPARE(controller.templatePicker()->selectedId(), templateB);
+        QCOMPARE(controller.templatePicker()->activeId(), templateB);
         model->setSetting(0, "fontSize", 47);
-        QCOMPARE(controller.selectedTemplateId(), templateB);
-        QCOMPARE(controller.activeTemplateId(), templateB);
-        QVERIFY(controller.saveActiveTemplate());
-        QCOMPARE(controller.selectedTemplateId(), templateB);
-        QCOMPARE(controller.activeTemplateId(), templateB);
+        QCOMPARE(controller.templatePicker()->selectedId(), templateB);
+        QCOMPARE(controller.templatePicker()->activeId(), templateB);
+        QVERIFY(controller.templatePicker()->saveActive());
+        QCOMPARE(controller.templatePicker()->selectedId(), templateB);
+        QCOMPARE(controller.templatePicker()->activeId(), templateB);
 
         templateC = model->saveCurrentAsTemplate("C", "saved as new");
         QVERIFY(!templateC.isEmpty());
-        controller.selectTemplate(templateC);
-        controller.markTemplateActive(templateC);
-        QCOMPARE(controller.selectedTemplateId(), templateC);
-        QCOMPARE(controller.activeTemplateId(), templateC);
+        controller.templatePicker()->select(templateC);
+        controller.templatePicker()->markActive(templateC);
+        QCOMPARE(controller.templatePicker()->selectedId(), templateC);
+        QCOMPARE(controller.templatePicker()->activeId(), templateC);
     }
 
     AppController restored(nullptr, directory.filePath("second-recovery.json"));
-    QCOMPARE(restored.selectedTemplateId(), templateC);
-    QVERIFY(restored.activeTemplateId().isEmpty());
+    QCOMPARE(restored.templatePicker()->selectedId(), templateC);
+    QVERIFY(restored.templatePicker()->activeId().isEmpty());
     QVERIFY(!restored.dirty());
 
-    restored.markTemplateActive(templateC);
+    restored.templatePicker()->markActive(templateC);
     const QString currentProject = directory.filePath("current.fetproject");
     QVERIFY(restored.saveProject(QUrl::fromLocalFile(currentProject)));
     const QString arbitraryProject = directory.filePath("arbitrary.fetproject");
     QVERIFY(writeBytes(arbitraryProject, QJsonDocument(testProject(1.25)).toJson()));
     restored.requestOpenProject(QUrl::fromLocalFile(arbitraryProject));
     QTRY_VERIFY(!restored.projectLoading());
-    QVERIFY(restored.activeTemplateId().isEmpty());
-    QCOMPARE(restored.selectedTemplateId(), templateC);
+    QVERIFY(restored.templatePicker()->activeId().isEmpty());
+    QCOMPARE(restored.templatePicker()->selectedId(), templateC);
     QVERIFY(!restored.dirty());
 
-    restored.selectTemplate(templateB);
-    QCOMPARE(restored.selectedTemplateId(), templateB);
+    restored.templatePicker()->select(templateB);
+    QCOMPARE(restored.templatePicker()->selectedId(), templateB);
     QVERIFY(!restored.dirty());
-    restored.selectTemplate(templateC);
+    restored.templatePicker()->select(templateC);
     QVERIFY(!restored.dirty());
 
     QVERIFY(restored.widgetModel()->deleteTemplate(templateA));
-    QCOMPARE(restored.selectedTemplateId(), templateC);
+    QCOMPARE(restored.templatePicker()->selectedId(), templateC);
     QVERIFY(restored.widgetModel()->deleteTemplate(templateC));
     const QVariantList remaining = restored.widgetModel()->templates();
     QVERIFY(!remaining.isEmpty());
-    QCOMPARE(restored.selectedTemplateId(), remaining.constFirst().toMap().value("id").toString());
+    QCOMPARE(restored.templatePicker()->selectedId(), remaining.constFirst().toMap().value("id").toString());
 
     settings.clear();
     settings.sync();

@@ -27,7 +27,6 @@ QtObject {
     property string batchImportState: "idle"
     property var eventRuns: []
     property string activeRunId: ""
-    property string selectedTemplateId: "motorsport-broadcast-smoke"
 
     // Sources
     property string videoName: ""
@@ -43,6 +42,20 @@ QtObject {
 
     // Playback and timing
     property real playbackTime: 0
+    // Template picker (KAN-215: appController.templatePicker)
+    property QtObject templatePicker: QtObject {
+        property string selectedId: "motorsport-broadcast-smoke"
+        property string activeId: ""
+        function indexForId(id) {
+            const templates = controller.widgetModel.templates;
+            for (let i = 0; i < templates.length; ++i) if (templates[i].id === id) return i;
+            return 0;
+        }
+        function select() {}
+        function markActive() {}
+        function apply() { return false; }
+        function saveActive() { return false; }
+    }
     // Synchronization (KAN-215: appController.sync)
     property QtObject sync: QtObject {
         property real offset: 0
@@ -113,11 +126,6 @@ QtObject {
     }
     property int currentLapNumber: 0
     function lapNumberAtPlayback() { return currentLapNumber; }
-    function templateIndexForId(id) {
-        const templates = widgetModel.templates;
-        for (let i = 0; i < templates.length; ++i) if (templates[i].id === id) return i;
-        return 0;
-    }
     property var formatOptions: ({})
     function exportFormatOptions() { return formatOptions; }
     function exportFullRangeTimecode(num, den, end) { return end ? previewEndTimecode : "00:00:00:00"; }
@@ -151,8 +159,6 @@ QtObject {
 
     // Actions are ignored while capturing screenshots.
     function saveWindowState() {}
-    function markTemplateActive() {}
-    function selectTemplate() {}
     function reportPlaybackError() {}
     function setVideoChapter() {}
     function cancelPendingDestructiveAction() {}

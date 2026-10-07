@@ -113,7 +113,7 @@ void AppController::applyEditorProject(const ProjectLoadResult &result)
     m_playbackTime = 0.0;
     // A .fetproject stores a scene, not template provenance. Retain the picker preference,
     // but never let a newly opened scene overwrite a visible custom template in place.
-    if (!result.runSelection) clearActiveTemplate();
+    if (!result.runSelection) m_templatePicker.clearActive();
 }
 
 void AppController::announceEditorProject()
@@ -158,7 +158,7 @@ void AppController::clearEditor()
     m_playbackTime = 0.0;
     m_syncController.restore({});
     m_previewRenderContext.setSyncTransform(m_syncController.transform());
-    clearActiveTemplate();
+    m_templatePicker.clearActive();
     m_widgetModel.resetDefaults();
     emit videoSourceChanged();
     emit previewMetadataChanged();

@@ -606,11 +606,11 @@ ApplicationWindow {
     function templateIndexById(templateId) {
         // Keep the ID-derived index binding live when the model order changes.
         appController.widgetModel.templates;
-        return appController.templateIndexForId(templateId);
+        return appController.templatePicker.indexForId(templateId);
     }
     function selectedTemplate() {
         const templates = appController.widgetModel.templates;
-        const index = window.templateIndexById(appController.selectedTemplateId);
+        const index = window.templateIndexById(appController.templatePicker.selectedId);
         return index >= 0 && index < templates.length ? templates[index] : null;
     }
     function selectedWidgetCues() {
@@ -947,7 +947,7 @@ ApplicationWindow {
         onAccepted: {
             const templateId = appController.widgetModel.importTemplate(selectedFile);
             if (templateId)
-                appController.selectTemplate(templateId);
+                appController.templatePicker.select(templateId);
         }
     }
     FileDialog {
@@ -1807,8 +1807,8 @@ ApplicationWindow {
                     onClicked: {
                         const templateId = appController.widgetModel.saveCurrentAsTemplate(templateName.text, templateDescription.text);
                         if (templateId) {
-                            appController.selectTemplate(templateId);
-                            appController.markTemplateActive(templateId);
+                            appController.templatePicker.select(templateId);
+                            appController.templatePicker.markActive(templateId);
                             templateSavePopup.close();
                         }
                     }
@@ -2074,11 +2074,11 @@ ApplicationWindow {
                         id: templatePicker
                         Layout.fillWidth: true
                         model: window.templateNames()
-                        currentIndex: window.templateIndexById(appController.selectedTemplateId)
+                        currentIndex: window.templateIndexById(appController.templatePicker.selectedId)
                         onActivated: {
                             const templates = appController.widgetModel.templates;
                             if (currentIndex >= 0 && currentIndex < templates.length)
-                                appController.selectTemplate(templates[currentIndex].id);
+                                appController.templatePicker.select(templates[currentIndex].id);
                         }
                     }
                     FeLabel {
@@ -2096,7 +2096,7 @@ ApplicationWindow {
                             const item = window.selectedTemplate();
                             if (item) {
                                 window.clearWidgetSelection();
-                                appController.applyTemplate(item.id);
+                                appController.templatePicker.apply(item.id);
                             }
                         }
                     }
@@ -2110,7 +2110,7 @@ ApplicationWindow {
                             compact: true
                             text: qsTr("Save current")
                             onClicked: {
-                                if (!appController.saveActiveTemplate()) {
+                                if (!appController.templatePicker.saveActive()) {
                                     templateSavePopup.open();
                                 }
                             }
