@@ -192,6 +192,12 @@ rate choices, the recommended bitrate, and the frame ranges for the whole video,
 a typed range or a lap with handles. `AppController::lapExportRange` still finds
 the lap and maps it to video time through the sync transform.
 
+Step 7 moved how the editor presents the run's laps into `LapNavigation`
+(`native/src/app/LapNavigation.h`): the lap timing status line, the lap list, the
+lap bar under the preview (out lap, laps and in lap in video time) and the lap under
+the playhead. They are pure functions of the lap session; `AppController` passes the
+run, its `PreviewTimeline` and its telemetry-to-video mapping.
+
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 
 ## Project

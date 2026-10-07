@@ -2,6 +2,7 @@
 #include "project/VideoChapters.h"
 #include "app/PreviewTimeline.h"
 #include "app/ExportSourceOptions.h"
+#include "app/LapNavigation.h"
 #include "export/ExportFormat.h"
 #include "export/ExportEngine.h"
 #include "export/ChapterSource.h"
@@ -269,118 +270,17 @@ QVariantMap AppController::currentTrackPoint() const
 }
 QString AppController::lapTimingStatus() const
 {
-    if (!m_session) return QStringLiteral("Open telemetry for lap timing");
-    switch (m_lapSession.status) {
-    case LapSessionStatus::Available:
-        return QStringLiteral("%1 complete lap%2")
-            .arg(m_lapSession.timedLaps.size())
-            .arg(m_lapSession.timedLaps.size() == 1 ? QString() : QStringLiteral("s"));
-    case LapSessionStatus::NoSourceStartGate:
-        return QStringLiteral("No Start gate in telemetry");
-    case LapSessionStatus::AmbiguousSourceStartGate:
-        return QStringLiteral("Multiple Start gates in telemetry");
-    case LapSessionStatus::InvalidGate:
-        return QStringLiteral("Start gate geometry is invalid");
-    case LapSessionStatus::NoUsableGps:
-        return QStringLiteral("No usable GPS for lap timing");
-    case LapSessionStatus::NoAcceptedPasses:
-        return QStringLiteral("No Start-line passages detected");
-    case LapSessionStatus::InsufficientPasses:
-        return QStringLiteral("One Start-line passage detected; no complete lap");
-    }
-    return QStringLiteral("Lap timing unavailable");
+    return LapNavigation::timingStatus(m_lapSession, m_session != nullptr);
 }
 QVariantList AppController::lapSummaries() const
 {
-    if (m_lapSession.status != LapSessionStatus::Available) return {};
-    QVariantList summaries;
-    summaries.reserve(m_lapSession.timedLaps.size());
-    for (qsizetype index = 0; index < m_lapSession.timedLaps.size(); ++index) {
-        const TimedLap &lap = m_lapSession.timedLaps[index];
-        summaries.append(QVariantMap{
-            {QStringLiteral("runId"), activeRunId()},
-            {QStringLiteral("number"), lap.number},
-            {QStringLiteral("startTelemetryTime"), lap.startTelemetryTime},
-            {QStringLiteral("durationSeconds"), lap.durationSeconds},
-            {QStringLiteral("hasDelta"), lap.referenceEligible() && m_lapSession.fastestLapIndex.has_value()},
-            {QStringLiteral("referenceEligible"), lap.referenceEligible()},
-            {QStringLiteral("exclusionReason"), lap.userExclusionReason},
-            {QStringLiteral("referenceIssue"), lap.referenceIssue == LapReferenceIssue::GpsGap
-                ? QStringLiteral("GPS gap") : lap.referenceIssue == LapReferenceIssue::InvalidGps
-                    ? QStringLiteral("Invalid GPS") : lap.referenceIssue == LapReferenceIssue::ImplausibleLap
-                        ? QStringLiteral("Implausible lap") : QString()},
-            {QStringLiteral("deltaToBestSeconds"), lap.referenceEligible() && m_lapSession.fastestLapIndex
-                ? QVariant(lap.deltaToBestSeconds) : QVariant()},
-            {QStringLiteral("isBest"), m_lapSession.fastestLapIndex
-                    && *m_lapSession.fastestLapIndex == index},
-        });
-    }
-    return summaries;
+    return LapNavigation::summaries(m_lapSession, activeRunId());
 }
 QVariantList AppController::lapNavigationSegments() const
 {
-    if (m_lapSession.status != LapSessionStatus::Available
-        || m_lapSession.timedLaps.isEmpty() || previewEndPositionMilliseconds() <= 0) {
-        return {};
-    }
-
-    struct VideoLap final {
-        const TimedLap *lap = nullptr;
-        qsizetype lapIndex = 0;
-        qint64 startMilliseconds = -1;
-        qint64 endMilliseconds = -1;
-    };
-    QVector<VideoLap> videoLaps;
-    videoLaps.reserve(m_lapSession.timedLaps.size());
-    for (qsizetype index = 0; index < m_lapSession.timedLaps.size(); ++index) {
-        const TimedLap &lap = m_lapSession.timedLaps[index];
-        const qint64 start = videoMillisecondsForTelemetryTime(lap.startTelemetryTime);
-        const qint64 end = videoMillisecondsForTelemetryTime(lap.startTelemetryTime + lap.durationSeconds);
-        if (start < 0 || end < start) continue;
-        videoLaps.append({&lap, index, start, end});
-    }
-    if (videoLaps.isEmpty()) return {};
-
-    const qint64 videoEnd = previewEndPositionMilliseconds();
-    QVariantList segments;
-    const auto appendFragment = [this, &segments](const QString &kind, const QString &label,
-                                                   const qint64 start, const qint64 end,
-                                                   const TimedLap *lap = nullptr,
-                                                   const bool isBest = false) {
-        if (start < 0 || end < start) return;
-        QVariantMap segment{{QStringLiteral("kind"), kind}, {QStringLiteral("label"), label},
-                            {QStringLiteral("startMilliseconds"), start},
-                            {QStringLiteral("endMilliseconds"), end},
-                            {QStringLiteral("durationMilliseconds"), end - start},
-                            {QStringLiteral("startTimecode"), previewTimecodeForPositionMilliseconds(start)},
-                            {QStringLiteral("endTimecode"), previewTimecodeForPositionMilliseconds(end)},
-                            {QStringLiteral("seekMilliseconds"), start}};
-        if (lap) {
-            segment.insert(QStringLiteral("number"), lap->number);
-            segment.insert(QStringLiteral("durationSeconds"), lap->durationSeconds);
-            const bool hasDelta = lap->referenceEligible() && m_lapSession.fastestLapIndex.has_value();
-            segment.insert(QStringLiteral("hasDelta"), hasDelta);
-            segment.insert(QStringLiteral("referenceEligible"), lap->referenceEligible());
-            segment.insert(QStringLiteral("deltaToBestSeconds"), hasDelta ? QVariant(lap->deltaToBestSeconds) : QVariant());
-            segment.insert(QStringLiteral("isBest"), isBest);
-        }
-        segments.append(segment);
-    };
-
-    const VideoLap &first = videoLaps.constFirst();
-    if (first.startMilliseconds > 0) {
-        appendFragment(QStringLiteral("outlap"), QStringLiteral("Out lap"), 0, first.startMilliseconds);
-    }
-    for (const VideoLap &videoLap : videoLaps) {
-        appendFragment(QStringLiteral("lap"), QStringLiteral("Lap %1").arg(videoLap.lap->number),
-                       videoLap.startMilliseconds, videoLap.endMilliseconds, videoLap.lap,
-                       m_lapSession.fastestLapIndex && *m_lapSession.fastestLapIndex == videoLap.lapIndex);
-    }
-    const VideoLap &last = videoLaps.constLast();
-    if (last.endMilliseconds < videoEnd) {
-        appendFragment(QStringLiteral("inlap"), QStringLiteral("In lap"), last.endMilliseconds, videoEnd);
-    }
-    return segments;
+    return LapNavigation::segments(m_lapSession, previewTimeline(), [this](const double telemetryTime) {
+        return videoMillisecondsForTelemetryTime(telemetryTime);
+    });
 }
 int AppController::windowX() const { return m_settings.value("window/x", -1).toInt(); }
 int AppController::windowY() const { return m_settings.value("window/y", -1).toInt(); }
@@ -973,11 +873,8 @@ QVariantMap AppController::telemetrySeries(
 
 int AppController::lapNumberAtPlayback() const
 {
-    const auto telemetry = FlappedEar::videoToTelemetryTime(m_playbackTime, m_syncController.transform());
-    if (!telemetry) return 0;
-    for (const auto &lap : m_lapSession.timedLaps)
-        if (*telemetry >= lap.startTelemetryTime && *telemetry < lap.endTelemetryTime) return lap.number;
-    return 0;
+    return LapNavigation::lapNumberAt(
+        m_lapSession, FlappedEar::videoToTelemetryTime(m_playbackTime, m_syncController.transform()));
 }
 
 qint64 AppController::videoMillisecondsForTelemetryTime(const double telemetryTime) const

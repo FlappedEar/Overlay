@@ -2673,3 +2673,8 @@ seek past the end to the last frame. The same first chapter of a 25 s chaptered 
 source: the source is listed first among sizes and rates, the whole range runs `00:00:00:00` to
 `00:00:09:59`, a typed range past the end is rejected, and a lap with 2 s handles is clamped to the
 video while a reversed lap or handles over 30 s are rejected.
+
+`EditorTests::presentsLapsForNavigation` checks `LapNavigation` with two laps on a 60 s video
+synced 5 s before the telemetry: the status line, the lap list (run, delta to the best, best
+lap), the lap bar (out lap, two laps, in lap to the video's end) and the lap under the playhead
+at lap boundaries.

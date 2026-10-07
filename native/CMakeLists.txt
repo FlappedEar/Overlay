@@ -226,6 +226,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/app/LegacyStorageMigration.cpp
     src/app/LegacyStorageMigration.h
     src/app/PreviewPlayback.cpp
+    src/app/LapNavigation.cpp
+    src/app/LapNavigation.h
     src/app/ExportSourceOptions.cpp
     src/app/ExportSourceOptions.h
     src/app/PreviewTimeline.cpp
