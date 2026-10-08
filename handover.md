@@ -46,10 +46,18 @@ that check over this file.
   the full analysis). Steps 3 to 6 removed the Lap Analysis window, its QML and
   tests, `AnalysisController` from `AppController`, and day import (KAN-186);
   step 7 cleans up. Overlays opens days saved by Telemetry and keeps every
-  analysis field. Both apps keep one `.fetproject` format (KAN-170). Since 6 October
+  analysis field. Until 8 October 2026 both apps kept one `.fetproject` format (KAN-170); the
+  owner then made the projects independent (see below). Since 6 October
   2026, a newer version tag on a versioned analysis field is kept and ignored rather
   than rejected; the rules are in
   [`docs/event-project-format.md`](docs/event-project-format.md#compatibility-between-the-two-apps-kan-170).
+- **Independent projects (owner decision, 8 October 2026):** "we stopped caring about
+  compatibility - let's keep both projects independent". Overlays and Telemetry share no
+  format constraint, no parity ports and no Jira items. KAN-223, 224, 227, 228, 231, 232, 236,
+  242, 243 and 244 were closed as not applicable. The `.fetproject` and vector files may change
+  freely (KAN-152 finding 3, the axis a segment was measured on, can be stored without
+  asking Telemetry). The reading rules for newer fields stay in the code until they are
+  removed on purpose.
 - **Widget list reduced (owner decision, 5 October 2026, KAN-192):** only the
   widgets of the owner's track video stay (Speed, Heart rate, Pedals, F1 G-Force
   Radar, G-Force Bar, Retro Custom, Current lap time, Retro RPM), plus Tyres and

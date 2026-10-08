@@ -1,5 +1,7 @@
 # FlappedEar Telemetry: handover to the architect
 
+> **8 October 2026:** the owner made Overlays and Telemetry independent. This handover describes the behaviour Overlays had when the two were kept in step; nothing in it is a requirement on Overlays any more, and no further Telemetry ports are planned.
+
 Written on 2 October 2026 for the architect of the new FlappedEar Telemetry app
 ([KAN-168]). The reference revision is `arekkozuch/VBOOverlay` at `0ec7416`. Paths are
 relative to this repository, which is public. Everything here is cross-reference
