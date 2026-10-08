@@ -42,6 +42,7 @@ private slots:
     void invalidatesDerivationOnConfigurationAndSourceChanges();
     void bindsPrimaryTelemetryFromTheDocument();
     void clearsConfigurationOnSourceReplacementOnly();
+    void replacesARunsRecordingWithFreshGates();
     void revisionsReflectPhysicalGatesWithoutInferringDirection();
     void preservesFiniteExtremeSyncForGuardedConsumers();
     void rejectsMalformedEvents_data();
@@ -165,6 +166,30 @@ void EventProjectTests::boundsAndPreservesAnalysisDecisions()
         event.insert("analysisDecisions", QJsonObject{{"comparisonChannels", channels}});
         project.insert("event", event); QVERIFY(!ProjectLimits::validateProject(project));
     }
+}
+
+void EventProjectTests::replacesARunsRecordingWithFreshGates()
+{
+    auto project = Fixture::project(); auto runs = Fixture::runs(project); auto run = runs[0].toObject();
+    auto config = EventProjectCodec::trackConfiguration(run); config.insert("layoutId", "Circuit");
+    config.insert("direction", "clockwise"); run.insert("trackConfiguration", config);
+    run.insert("trackInference", QJsonObject{{"layoutId", "Circuit"}});
+    runs[0] = run; Fixture::setRuns(project, runs);
+    const QString id = run.value("id").toString();
+
+    const auto replaced = EventProjectCodec::withReplacedRecording(project, id, "gates-1");
+    const auto first = Fixture::runs(replaced)[0].toObject();
+    const auto firstConfig = first.value("trackConfiguration").toObject();
+    QVERIFY(firstConfig.value("layoutId").toString() == "Circuit"); // cleared on save by withEditorState, not here
+    QCOMPARE(firstConfig.value("gateRevision").toString(), QString("gates-1"));
+    QVERIFY(!first.contains("trackInference"));
+    QCOMPARE(Fixture::runs(replaced)[1], runs[1]);
+
+    // No verified gates in the new recording: the revision is null, not empty.
+    QVERIFY(Fixture::runs(EventProjectCodec::withReplacedRecording(project, id, {}))[0].toObject()
+        .value("trackConfiguration").toObject().value("gateRevision").isNull());
+    // A run that is not in the project changes nothing.
+    QCOMPARE(EventProjectCodec::withReplacedRecording(project, "no-such-run", "gates-1"), project);
 }
 
 void EventProjectTests::bindsFullContentWithoutMigratingOnLoad()

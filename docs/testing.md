@@ -2756,3 +2756,5 @@ and a different file as a mismatch), and rejects a file that is not a video.
 `SourceTests::derivesChapterPlaybackAndExportSource` checks `deriveChapters` without FFmpeg: one video
 has no timeline, a missing chapter is a gap that blocks export, a chapter without a duration leaves
 only the first open, and chapters whose probes cannot be joined name the reason.
+`EventProjectTests::replacesARunsRecordingWithFreshGates` checks `withReplacedRecording`: the inference
+is dropped, the gate revision recorded (null when there are none), other runs and unknown run ids untouched.

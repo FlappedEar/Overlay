@@ -34,6 +34,13 @@ public:
     [[nodiscard]] static QJsonObject unknownTrackConfiguration(
         const QString &sourceId, const QJsonObject &fingerprint, const QString &gateRevision = {});
     [[nodiscard]] static QJsonObject trackConfiguration(const QJsonObject &run);
+    // Replacing a run's recording drops the old recording's inference and
+    // records the timing gates verified in the new one (empty: none). The
+    // layout and direction are cleared when the source revision changes on save
+    // (withEditorState), not here. Other runs, and a project without that run,
+    // are unchanged.
+    [[nodiscard]] static QJsonObject withReplacedRecording(
+        const QJsonObject &eventProject, const QString &runId, const QString &gateRevision);
     // Opaque dependency identity, not a lap reference or compatibility decision.
     // Excludes names, notes, video/sync and portable source paths.
     [[nodiscard]] static QByteArray lapDerivationKey(const QJsonObject &run);
