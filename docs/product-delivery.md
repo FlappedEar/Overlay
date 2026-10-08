@@ -20,7 +20,7 @@ This section supersedes the dated baseline below where they differ. The root
 | M3 sectors and corners ([KAN-8]) | 20 of 20 | Done; epic closed 2 October 2026 |
 | M4 losses and report ([KAN-9]) | 16 of 16 | Done; epic closed 2 October 2026 |
 | M5 core acceptance ([KAN-10]) | 6 of 12 | Open: KAN-80 and KAN-81 (matching video), KAN-83 (clean machine), KAN-84 (Windows installer, paused), KAN-85 (notices), KAN-86 (closure) |
-| M6 full vision ([KAN-11]) | 15 of 24 | Open: KAN-89, KAN-94–KAN-96, KAN-98, KAN-99, KAN-108–KAN-110 |
+| M6 full vision ([KAN-11]) | 16 of 24 | KAN-89 done. KAN-94–KAN-96, KAN-98, KAN-99, KAN-108 and KAN-109 closed as not applicable on 8 October 2026 (owner: the analysis backlog is no longer needed in Overlays). Open: KAN-110 (final acceptance) |
 | Product split (KAN-121, superseded by KAN-165) | Phases 1–2 and KAN-132 done; KAN-121 closed; KAN-125 rename merged | Separate repositories (2 October 2026). Stage 1: FlappedEar Overlays standalone in this repository (KAN-125; decision 3 in KAN-122). Stage 2: FlappedEar Telemetry, a new Flutter app from a blank page in its own repository and Jira project (decision KAN-167; architect handover KAN-168; KAN-126–KAN-130 move to the new project), with one `.fetproject` format compatible between both apps (KAN-170; since 6 October 2026, Overlays keeps newer versions of known fields and a test shows it keeps every analysis field through an overlay edit). Stage 3, done on 5 October 2026: the owner approved removing the analysis from Overlays that day (KAN-169 done, recording the last full-analysis commit `7eae6cd`; KAN-166 and KAN-186 done). Done: plan steps 1 and 2 (PRs #153 and #156), the automatic best lap of KAN-185 (PR #158), and step 3 (PR #160), which removes the View, welcome and transport entry points to the Lap Analysis window, adds a run picker to the editor header and drops the Analysis pages from the user guide, step 4 (PR #161), which deletes the 24 analysis QML files and their 38 UI tests (the real-day grouping and best-lap check, the day-decision recovery test and the chapter review test stay), step 5 (PR #162), which removes `AnalysisController` from `AppController` (Overlays' day-decision tests now make their decisions in `TelemetryController`), step 6 (PR #163), which removes **File › Import telemetry runs…** and its dialog, so Overlays opens days saved by Telemetry (KAN-186), and step 7 (PR #164), which removes leftover includes, the unused loaded chart-channel list and stale notes, and brings the handover current. Platforms: Overlays macOS and Windows; Telemetry macOS, Windows, iOS and Android |
 | Widget list (KAN-192) | Done (PR #171) | Owner decision, 5 October 2026: keep the widgets of the owner's track video plus Tyres and designed widgets; 18 types and 9 built-in templates removed; saved documents with removed types open without them |
 | Tech widget style (KAN-193) | Done (PR #176) | Owner choice, 5 October 2026: design D (Chakra Petch, cut-corner plates, amber tab, slanted pedal bars) with design C's thin RPM arc; per-widget Style setting (Classic default) and the Tech HUD built-in template |
@@ -155,8 +155,8 @@ does not establish compatibility. OUT/IN and route outliers remain inspectable.
 The backlog contains **100 separate numbered Tasks plus seven milestone Epics**.
 Steps 001–017 are complete; this reconciliation is step 018. After its closure,
 82 numbered tasks (019–100) remain. Jira holds live status and acceptance criteria.
-Additional analysis UX items [KAN-113]–[KAN-115] remain in the backlog outside the
-100 numbered tasks; their scope is included in the deadline capacity discussion.
+Additional analysis UX items [KAN-113]–[KAN-115] were outside the 100 numbered tasks and
+were closed as not applicable on 8 October 2026 (owner decision).
 
 | Milestone epic | Steps | Task keys | Count |
 | --- | --- | --- | --- |
@@ -257,9 +257,6 @@ tracked separately in KAN-144.
 - **Telemetry sources:** RaceChrono VBO exporter versions other than Pro 10.2.4;
   VBO channel units are not stored (a fingerprint migration is needed first).
 - **Lap timing:** a manual Start/Finish override.
-- **Analysis UX:** more than four channels (KAN-113), interval selection with map
-  highlighting (KAN-114), readable axes, units and grids (KAN-115), chart
-  annotations.
 - **Map:** interactive map tiles and offline-safe map export behaviour.
 - **Distribution:** Developer ID signing and notarization, distribution notices
   and source access (KAN-85, KAN-160), clean-machine acceptance (KAN-83), retained
