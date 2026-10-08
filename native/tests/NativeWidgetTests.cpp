@@ -12,7 +12,10 @@
 #include "project/ProjectLimits.h"
 #include "widgets/WidgetTypes.h"
 
+#include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
 #include <QSignalSpy>
 
@@ -576,6 +579,15 @@ void WidgetTests::describesEachWidgetTypeOnce()
         }
     }
     QVERIFY(seen.contains(QStringLiteral("designed")));
+    // The default settings stay in the catalog file, one entry per descriptor
+    // type plus "common": none missing, none left over from a removed type.
+    QFile catalogFile(QStringLiteral(QML_SOURCE_DIR "/../resources/widget-templates.json"));
+    QVERIFY(catalogFile.open(QIODevice::ReadOnly));
+    const QJsonObject defaults = QJsonDocument::fromJson(catalogFile.readAll()).object().value("widgetDefaults").toObject();
+    QSet<QString> expectedDefaults = seen;
+    expectedDefaults.insert(QStringLiteral("common"));
+    const QStringList defaultKeys = defaults.keys();
+    QCOMPARE(QSet<QString>(defaultKeys.begin(), defaultKeys.end()), expectedDefaults);
     QVERIFY(model.addWidget(QStringLiteral("rpm")) < 0); // retired (KAN-192)
     QCOMPARE(model.unusedControls(QStringLiteral("speed"), QStringLiteral("classic")), QStringList{"accentColor"});
     QVERIFY(model.unusedControls(QStringLiteral("speed"), QStringLiteral("tech")).contains(QStringLiteral("fontWeight")));

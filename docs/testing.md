@@ -2694,7 +2694,9 @@ Three `AGENTS.md` UI invariants now have automated tests:
   the Add widget list offers the nine addable types in order, a new widget gets its descriptor's
   box, every control a descriptor hides is a setting the type has, and the inspector hides exactly
   those controls. Each descriptor's renderer files exist, and a widget's `widgetRenderer` role
-  follows its `style` setting (Classic, Tech, or Classic for a type with no Tech renderer).
+  follows its `style` setting (Classic, Tech, or Classic for a type with no Tech renderer). The
+  default settings in `widget-templates.json` have one entry per descriptor type plus `common`,
+  none missing and none left over from a removed type.
 - **Save as template** (`EditorTests::savesTheSceneAsATemplateFromThePopup`). Opening the
   popup clears the name, Save stays disabled until a name is typed, and saving closes the popup,
   selects the new template and marks it as the one the scene came from.
