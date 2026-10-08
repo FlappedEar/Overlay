@@ -60,6 +60,7 @@ private slots:
     void reviewsGoProChapterGroups();
     void keepsVideoChaptersAsOneTimeline();
     void loadsSourcesInTheBackgroundWorker();
+    void derivesChapterPlaybackAndExportSource();
     void playsVideoChaptersAcrossBoundaries();
     void persistsAndInvalidatesRunTrackConfiguration();
     void decodesGps9Gpmf();
@@ -1472,6 +1473,53 @@ void SourceTests::reviewsGoProChapterGroups()
     QCOMPARE(review->groups().size(), 2);
     review->cancel();
     QCOMPARE(review->state(), QString("idle"));
+}
+
+void SourceTests::derivesChapterPlaybackAndExportSource()
+{
+    // KAN-215: what a probed video's chapters mean, without a controller.
+    using SourceLoading::VideoChapterState;
+    const auto chapter = [](const QString &path, const double seconds, const bool available) {
+        VideoChapterState state;
+        state.path = path;
+        state.durationSeconds = seconds;
+        state.available = available;
+        return state;
+    };
+
+    // One video, or none: no chapters and no timeline to play.
+    auto derived = SourceLoading::deriveChapters({});
+    QVERIFY(derived.chapters.isEmpty());
+    QVERIFY(!derived.timeline.isValid());
+    QCOMPARE(derived.gaps, 0);
+    QVERIFY(derived.exportPaths.isEmpty());
+    QVERIFY(derived.exportProblem.isEmpty());
+    QVERIFY(!derived.gapsBlockExport);
+
+    // A missing chapter plays as a gap of its saved duration and blocks export.
+    derived = SourceLoading::deriveChapters({chapter("a.mp4", 10.0, true), chapter({}, 5.0, false)});
+    QCOMPARE(derived.chapters.size(), 2);
+    QCOMPARE(derived.timeline.chapterCount(), 2);
+    QCOMPARE(derived.timeline.durationSeconds(), 15.0);
+    QCOMPARE(derived.gaps, 1);
+    QVERIFY(derived.gapsBlockExport);
+    QVERIFY(derived.exportPaths.isEmpty());
+    QVERIFY(!derived.exportInfo);
+
+    // A chapter without a known duration cannot hold its place: only the first opens.
+    derived = SourceLoading::deriveChapters({chapter("a.mp4", 10.0, true), chapter("b.mp4", 0.0, true)});
+    QVERIFY(derived.unusableDurations);
+    QVERIFY(derived.chapters.isEmpty());
+    QVERIFY(!derived.timeline.isValid());
+    QCOMPARE(derived.gaps, 0);
+
+    // Chapters whose probes cannot be joined name the reason instead of an export source.
+    derived = SourceLoading::deriveChapters({chapter("a.mp4", 10.0, true), chapter("b.mp4", 5.0, true)});
+    QCOMPARE(derived.timeline.chapterCount(), 2);
+    QVERIFY(!derived.gapsBlockExport);
+    QVERIFY(!derived.exportInfo);
+    QVERIFY(derived.exportPaths.isEmpty());
+    QVERIFY(!derived.exportProblem.isEmpty());
 }
 
 void SourceTests::loadsSourcesInTheBackgroundWorker()

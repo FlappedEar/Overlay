@@ -1,5 +1,6 @@
 #include "app/SourceLoading.h"
 
+#include "export/ChapterSource.h"
 #include "export/VideoFingerprint.h"
 #include "telemetry/SourceOperation.h"
 #include "telemetry/TelemetrySource.h"
@@ -115,6 +116,44 @@ VboLoadResult loadTelemetry(const QString &path, const quint64 generation, const
         result.error = QString::fromUtf8(error.what());
     }
     return result;
+}
+
+ChapterDerivation deriveChapters(const QVector<VideoChapterState> &probed)
+{
+    ChapterDerivation derived;
+    derived.chapters = probed;
+    QVector<TimelineChapter> timelineChapters;
+    for (const auto &chapter : derived.chapters)
+        timelineChapters.append({chapter.path, chapter.durationSeconds, chapter.available});
+    derived.timeline = MediaTimeline::fromChapters(timelineChapters);
+    if (!derived.chapters.isEmpty() && !derived.timeline.isValid()) {
+        // A chapter without a known duration cannot hold its place in time.
+        derived.unusableDurations = true;
+        derived.chapters.clear();
+    }
+    if (derived.chapters.isEmpty()) derived.timeline = {};
+    for (const auto &chapter : derived.chapters) derived.gaps += chapter.available ? 0 : 1;
+    // KAN-106: export reads every chapter as one source. A gap cannot be exported.
+    if (derived.timeline.chapterCount() > 1) {
+        if (derived.gaps > 0) {
+            derived.gapsBlockExport = true;
+        } else {
+            QVector<MediaInfo> infos;
+            QStringList paths;
+            for (const auto &chapter : derived.chapters) {
+                infos.append(chapter.mediaInfo);
+                paths.append(chapter.path);
+            }
+            const auto combination = ChapterSource::combine(infos);
+            if (combination.info) {
+                derived.exportInfo = *combination.info;
+                derived.exportPaths = paths;
+            } else {
+                derived.exportProblem = combination.error;
+            }
+        }
+    }
+    return derived;
 }
 
 } // namespace FlappedEar::SourceLoading

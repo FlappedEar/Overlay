@@ -1,6 +1,7 @@
 #pragma once
 
 #include "export/MediaProbe.h"
+#include "export/MediaTimeline.h"
 #include "project/ProjectSourceReference.h"
 #include "telemetry/LapTiming.h"
 #include "telemetry/TelemetrySession.h"
@@ -9,10 +10,12 @@
 #include <QByteArray>
 #include <QJsonObject>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 #include <atomic>
 #include <memory>
+#include <optional>
 
 namespace FlappedEar {
 
@@ -69,6 +72,22 @@ struct VboLoadResult {
 };
 
 using Cancellation = std::shared_ptr<std::atomic_bool>;
+
+// What a probed video's chapters mean once committed (KAN-105, KAN-106): the
+// chapters that stay (none for one video, or when a duration is unknown), the
+// playback timeline, how many are gaps, and the single source export reads.
+struct ChapterDerivation {
+    QVector<VideoChapterState> chapters;
+    MediaTimeline timeline;                // invalid for one video
+    bool unusableDurations = false;        // a chapter without a known duration: only the first opens
+    int gaps = 0;
+    bool gapsBlockExport = false;          // a chaptered video with a gap cannot be exported
+    QStringList exportPaths;               // the chapters to export as one source; empty if none
+    std::optional<MediaInfo> exportInfo;   // their combined probe
+    QString exportProblem;                 // why they cannot be combined; empty if they can
+};
+
+[[nodiscard]] ChapterDerivation deriveChapters(const QVector<VideoChapterState> &probed);
 
 // Probes the video and fingerprints it. With `chapters`, probes each further
 // chapter too and checks it against its saved fingerprint; one that is

@@ -466,50 +466,27 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     m_videoReference = ProjectSourceReferenceCodec::forLoadedSource(
         result.path, result.fingerprint);
     // KAN-105: chapters play as one timeline; a gap keeps its saved duration.
-    m_videoChapterStates = result.chapters;
+    // KAN-106: export reads every chapter as one source, so its frame domain
+    // and timecodes cover the whole timeline.
+    const auto derived = SourceLoading::deriveChapters(result.chapters);
+    m_videoChapterStates = derived.chapters;
     m_videoChapterIndex = 0;
-    QVector<TimelineChapter> timelineChapters;
-    for (const auto &chapter : m_videoChapterStates)
-        timelineChapters.append({chapter.path, chapter.durationSeconds, chapter.available});
-    m_videoTimeline = MediaTimeline::fromChapters(timelineChapters);
-    if (!m_videoChapterStates.isEmpty() && !m_videoTimeline.isValid()) {
-        // A chapter without a known duration cannot hold its place in time.
+    m_videoTimeline = derived.timeline;
+    if (derived.unusableDurations) {
         AppLog::warn(QStringLiteral("Video chapters without usable durations; opening the first chapter alone"));
-        m_videoChapterStates.clear();
         m_videoChapterNotice = tr("Some chapters have no known duration, so only the first chapter is open.");
     }
-    if (m_videoChapterStates.isEmpty()) m_videoTimeline = {};
-    int gaps = 0;
-    for (const auto &chapter : m_videoChapterStates) gaps += chapter.available ? 0 : 1;
-    if (gaps > 0)
+    if (derived.gaps > 0)
         m_videoChapterNotice = tr("%n chapter(s) are missing or changed and play as a gap. Choose the recording's chapters again to fill it.",
-                                  nullptr, gaps);
-    // KAN-106: export reads every chapter as one source, so its frame domain
-    // and timecodes cover the whole timeline. A gap cannot be exported.
-    m_exportChapterPaths.clear();
-    m_exportChapterProblem.clear();
-    if (videoChaptered()) {
-        if (gaps > 0) {
-            m_exportChapterProblem = tr("Some chapters of this recording are missing or changed. "
-                                        "Choose the recording's chapters again before exporting.");
-        } else {
-            QVector<MediaInfo> chapters;
-            QStringList paths;
-            for (const auto &chapter : m_videoChapterStates) {
-                chapters.append(chapter.mediaInfo);
-                paths.append(chapter.path);
-            }
-            const auto combination = ChapterSource::combine(chapters);
-            if (combination.info) {
-                m_exportSourceInfo = *combination.info;
-                m_exportChapterPaths = paths;
-            } else {
-                m_exportChapterProblem = combination.error;
-            }
-        }
-        if (!m_exportChapterProblem.isEmpty())
-            AppLog::warn(QStringLiteral("Chaptered video cannot be exported: %1").arg(m_exportChapterProblem));
-    }
+                                  nullptr, derived.gaps);
+    m_exportChapterPaths = derived.exportPaths;
+    if (derived.exportInfo) m_exportSourceInfo = *derived.exportInfo;
+    m_exportChapterProblem = derived.gapsBlockExport
+        ? tr("Some chapters of this recording are missing or changed. "
+             "Choose the recording's chapters again before exporting.")
+        : derived.exportProblem;
+    if (!m_exportChapterProblem.isEmpty())
+        AppLog::warn(QStringLiteral("Chaptered video cannot be exported: %1").arg(m_exportChapterProblem));
     emit videoChaptersChanged();
     m_videoLoadState = QStringLiteral("ready");
     m_pendingVideoPath.clear();
