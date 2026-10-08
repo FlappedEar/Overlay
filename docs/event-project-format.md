@@ -1,7 +1,9 @@
 # Event projects (development v3)
 
 The event project format is shared by FlappedEar Overlays (this repository; macOS and Windows) and FlappedEar Telemetry (a separate Flutter app in its own repository; macOS, Windows, iOS and Android; see [product split plan](product-split-plan.md)). The two apps share no code, so this document is the specification the second app implements. The [architect handover](telemetry-handover.md#the-shared-contract-fetproject) summarises what the current code keeps, rejects and rewrites, and the gaps that KAN-170 must close.
-Owner direction (2 October 2026): the two apps keep one format, compatible between them, so that either app opens and re-saves the other's documents without losing anything. The compatibility rules are [below](#compatibility-between-the-two-apps-kan-170) (KAN-170). Telemetry's round-trip tests live in FlappedEar Telemetry: `packages/telemetry_core/tool/cpp_project_roundtrip`, `packages/fetproject/test/fixtures/roundtrip` and `packages/telemetry_core/test/day/overlays_roundtrip_test.dart`.
+> **Owner decision, 8 October 2026: the two apps are independent and compatibility between them no longer matters.** The format below is Overlays' own; it need not stay compatible with FlappedEar Telemetry, and no change here is ported. The rules in the compatibility section stay as Overlays' own policy for opening newer or unknown data without loss.
+
+Owner direction (2 October 2026, superseded on 8 October): the two apps keep one format, compatible between them, so that either app opens and re-saves the other's documents without losing anything. The compatibility rules are [below](#compatibility-between-the-two-apps-kan-170) (KAN-170). Telemetry's round-trip tests live in FlappedEar Telemetry: `packages/telemetry_core/tool/cpp_project_roundtrip`, `packages/fetproject/test/fixtures/roundtrip` and `packages/telemetry_core/test/day/overlays_roundtrip_test.dart`.
 The project schema is developmental: the owner confirmed that no existing user
 data needs migration protection. v3 gives events a single authoritative source
 model; the small existing v2 read/write path remains for single-recording files.
@@ -147,7 +149,7 @@ is separate from synthetic correctness tests.
 
 ## Compatibility between the two apps (KAN-170)
 
-Both apps read and write this one schema. Since 6 October 2026, Overlays follows these rules; FlappedEar Telemetry is expected to follow the same ones.
+Overlays follows these rules since 6 October 2026. Since 8 October 2026 they are Overlays' own policy for opening documents with newer or unknown data without loss; FlappedEar Telemetry is no longer expected to follow them.
 
 1. **Changes are additive.** A new field is optional, and an app that does not know it must still open the document.
 2. **Unknown keys survive.** Open objects keep keys an app does not know through Save, Save As and recovery. The open objects are the root, `event`, runs, telemetry sources, references, the video, each additional video, `sync` and `videoLayout`. Closed objects refuse extra keys, so changing their shape needs a new version tag on the field that holds them. The closed objects are a lap reference, a `lapExclusions` entry, a `trackSegments` item, `trackSegmentReview` and its decisions.
@@ -165,7 +167,7 @@ The apps share no code (KAN-167), so each implements the schema and this documen
 
 Tests in this repository:
 - `EventProjectTests::keepsNewerVersionsOfKnownFields` covers the version rules above;
-- `ProjectVectorTests` (KAN-218) opens the shared days in `native/tests/fixtures/project-vectors/` in the reference analysis app, saves them unchanged in place and with Save As, and compares the result with the expected files. FlappedEar Telemetry runs the same vectors, so the two apps cannot drift apart in how they re-save a day ([testing](testing.md#kan-218-fetproject-round-trip-vectors));
+- `ProjectVectorTests` (KAN-218) opens the shared days in `native/tests/fixtures/project-vectors/` in the reference analysis app, saves them unchanged in place and with Save As, and compares the result with the expected files. Until 8 October 2026 FlappedEar Telemetry ran the same vectors; they now only pin how Overlays re-saves a day ([testing](testing.md#kan-218-fetproject-round-trip-vectors));
 - `SourceTests::keepsEveryTelemetryFieldThroughAnOverlayEdit` opens a day saved by the reference analysis code, without a `scene`, with every analysis field and newer versions added. It edits the synchronization and the scene, saves, and checks that everything else is unchanged.
 
 The analysis code that remains in this repository as a reference for Telemetry treats a newer review or inference as absent. Overlays never edits these fields.

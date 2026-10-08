@@ -101,13 +101,16 @@
   overlay editor, FlappedEar Overlays, for macOS and Windows. FlappedEar Telemetry (macOS,
   Windows, iOS and Android) is a new Flutter app, started from a blank page in its own repository
   (`FlappedEar/Telemetry`) and its own Jira space, FET (epic KAN-165, decision KAN-167). It shares no
-  code with this repository and only cross-references it; the architect handover is
+  code with this repository and, since 8 October 2026, no format or fixes either; the architect handover is
   [docs/telemetry-handover.md](docs/telemetry-handover.md). Do not add Telemetry or mobile app
   targets to this repository, and do not create code dependencies between the two repositories. The desktop app is FlappedEar Overlays (`com.flappedear.overlays`,
   KAN-125). On 5 October 2026 the owner approved removing its Lap Analysis window and analysis workflows
   (KAN-166, done on 5 October 2026 in steps 1 to 7; the plan is on Confluence FEO), and the same day reduced the widget list to the widgets of his track video plus Tyres and designed widgets (KAN-192). Remove nothing else without the owner's word, keep
-  automatic best-lap selection (KAN-185), and keep every analysis field of day documents. Both
-  apps read and write one `.fetproject` format, which must stay compatible between them (KAN-170).
+  automatic best-lap selection (KAN-185), and keep every analysis field of day documents. The
+  owner decided on 8 October 2026 that the two apps are independent and compatibility between
+  them no longer matters: the `.fetproject` format need not stay compatible with Telemetry
+  (KAN-170 is superseded), and fixes are no longer ported to it. Overlays still keeps its own
+  documents lossless across its own versions.
   Keep `flappedear_telemetry_core` and `flappedear_telemetry_app` free of Gui, overlay, video and
   platform-specific code (the boundary checks enforce it); they are the behavioural reference
   that the Telemetry app cross-references.

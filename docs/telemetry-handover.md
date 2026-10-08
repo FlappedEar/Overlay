@@ -21,7 +21,8 @@ The owner's decisions of 2 October 2026:
   Where it states a rule, the rule comes from the owner or from the shared document
   format.
 - **One document format.** Both apps read and write the same `.fetproject` format,
-  and it stays compatible in both directions ([KAN-170]).
+  and it stays compatible in both directions ([KAN-170]). *Superseded on 8 October 2026:
+  the owner made the apps independent and compatibility no longer matters.*
 - **No data loss.** The owner set this condition for every migration and for project
   data.
 - **Overlays becomes an overlay editor.** On 5 October 2026 the owner approved
@@ -140,6 +141,8 @@ Sources: [`handover.md`](../handover.md) "Owner direction and preferences", the 
   before the first release (medium confidence that Flutter's defaults differ).
 
 ## The shared contract: `.fetproject`
+
+> **Owner decision, 8 October 2026: the two apps are independent and compatibility between them no longer matters.** The rest of this section is the history of the shared contract.
 
 The `.fetproject` document is the only thing the two apps share ([KAN-170]). A document written by either app must open in the other and survive a re-save without losing anything.
 

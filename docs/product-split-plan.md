@@ -9,7 +9,7 @@ Telemetry for macOS, Windows, iOS and Android. Decisions 3 (identities) and 4
 (iOS 15 and Android 8.0) was answered; the store licence (KAN-122) is open. **Owner direction (2 October 2026, later the same
 day): separate repositories.** FlappedEar Overlays is finished first as a
 standalone app in this repository; FlappedEar Telemetry is then built in a new
-repository. Overlays stays as it is, with nothing removed, until Telemetry is
+repository. **Owner decision, 8 October 2026: the two apps are independent and compatibility between them no longer matters; the statements below about one compatible format and shared fixtures are superseded.** Overlays stays as it is, with nothing removed, until Telemetry is
 mature enough to replace its analysis ([KAN-166], deferred), and both apps keep
 one compatible `.fetproject` format ([KAN-170]). See
 [Stages (current plan)](#stages-current-plan). **Owner decision (2 October
@@ -139,7 +139,7 @@ Changes:
   referenced relatively. Content fingerprints are unchanged, so a document
   moved between devices still verifies its sources.
 
-Owner direction (2 October 2026, with separate repositories): the two apps keep
+Superseded on 8 October 2026 (the apps are independent): owner direction of 2 October 2026, with separate repositories: the two apps keep
 one format, compatible between them, so that either app opens and re-saves the
 other's documents without losing anything. The compatibility rules are in
 [event projects](event-project-format.md#compatibility-between-the-two-apps-kan-170)

@@ -35,7 +35,8 @@ and more charts are foundations, not completion of this promise.
   [architect handover](telemetry-handover.md)). The overlay editor stays as it is,
   with its day-analysis window, until FlappedEar Telemetry is mature enough to
   replace it (KAN-166, deferred). Both apps read and write one compatible
-  `.fetproject` format (KAN-170).
+  `.fetproject` format (KAN-170; superseded on 8 October 2026, when the owner made the
+  apps independent and compatibility stopped mattering).
 - Event → Run → Lap. An event groups the day; a run owns recording sources,
   optional video, sync and setup/conditions notes. Lap identity includes its run.
 - Analyze across runs without concatenating paddock breaks. Recording time,

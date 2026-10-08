@@ -2463,6 +2463,8 @@ results are in `telemetry-semantics.md`.
 
 ## KAN-180: content ids shared with FlappedEar Telemetry
 
+Since 8 October 2026 the apps are independent: these vectors now only pin Overlays' own content ids.
+
 `ContentIdVectorTests` recomputes every content id in
 `native/tests/fixtures/content-id-vectors.json` with this repository's own
 functions and compares the result byte for byte:
@@ -2530,6 +2532,8 @@ video in a small box at the top right over a full-frame main video, side by
 side gives each a half, and a video is hidden before its first frame.
 
 ## KAN-218: .fetproject round-trip vectors
+
+Since 8 October 2026 the apps are independent: these vectors now only pin how Overlays re-saves a day.
 
 `ProjectVectorTests` reads `native/tests/fixtures/project-vectors/vectors.json`.
 Each accepted case is a day as FlappedEar Telemetry saves it, with its

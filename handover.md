@@ -46,7 +46,10 @@ that check over this file.
   the full analysis). Steps 3 to 6 removed the Lap Analysis window, its QML and
   tests, `AnalysisController` from `AppController`, and day import (KAN-186);
   step 7 cleans up. Overlays opens days saved by Telemetry and keeps every
-  analysis field. Both apps keep one `.fetproject` format (KAN-170). Since 6 October
+  analysis field. **Owner decision, 8 October 2026: the two apps are independent and
+  compatibility between them no longer matters; no more ports to Telemetry, and the
+  shared `.fetproject` format, `widget-templates.json` and test vectors are Overlays' own
+  (KAN-170 superseded).** Until then both apps kept one `.fetproject` format. Since 6 October
   2026, a newer version tag on a versioned analysis field is kept and ignored rather
   than rejected; the rules are in
   [`docs/event-project-format.md`](docs/event-project-format.md#compatibility-between-the-two-apps-kan-170).

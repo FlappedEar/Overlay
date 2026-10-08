@@ -10,7 +10,8 @@ namespace FlappedEar {
 // type check on load, the default box, the inspector's hidden controls and the
 // renderer the scene loads all read this table, so a type is added or changed
 // in one place. Default settings
-// stay in widget-templates.json ("widgetDefaults"), which Telemetry shares.
+// stay in widget-templates.json ("widgetDefaults"); Telemetry no longer shares it
+// (the apps are independent since 8 October 2026).
 struct WidgetTypeDescriptor {
     QString type;
     QString label; // empty: not offered in the Add widget list
