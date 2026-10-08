@@ -55,8 +55,9 @@ that check over this file.
   compatibility - let's keep both projects independent". Overlays and Telemetry share no
   format constraint, no parity ports and no Jira items. KAN-223, 224, 227, 228, 231, 232, 236,
   242, 243 and 244 were closed as not applicable. The `.fetproject` and vector files may change
-  freely (KAN-152 finding 3, the axis a segment was measured on, can be stored without
-  asking Telemetry). The reading rules for newer fields stay in the code until they are
+  freely (KAN-152 finding 3, the axis a segment was measured on, was left undone on
+  8 October: segment review has had no window in Overlays since KAN-166, so nothing
+  reachable in the app reuses segments on another lap's axis; do it if analysis returns). The reading rules for newer fields stay in the code until they are
   removed on purpose.
 - **Widget list reduced (owner decision, 5 October 2026, KAN-192):** only the
   widgets of the owner's track video stay (Speed, Heart rate, Pedals, F1 G-Force
