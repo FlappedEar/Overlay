@@ -4,6 +4,9 @@ Read [AGENTS.md](AGENTS.md) first: it holds the engineering rules, safety invari
 required build/test gate. Then read [handover.md](handover.md) for current state and traps,
 and check `origin/main` and Jira project KAN before starting; other sessions may have moved on.
 
+- Independent projects (owner decision, 8 October 2026): Overlays and FlappedEar Telemetry no
+  longer need to stay compatible. Port nothing from Telemetry's Jira (FET) and keep no format
+  constraint for it.
 - Status records: [docs/product-delivery.md](docs/product-delivery.md) and Jira KAN.
 - Editor look: FlappedEar Telemetry's design language. Editor QML takes colours, fonts and
   corners from `native/qml/Theme.js` and the `Fe*` controls ([docs/ui-theme.md](docs/ui-theme.md)).

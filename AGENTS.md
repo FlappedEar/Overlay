@@ -106,11 +106,13 @@
   targets to this repository, and do not create code dependencies between the two repositories. The desktop app is FlappedEar Overlays (`com.flappedear.overlays`,
   KAN-125). On 5 October 2026 the owner approved removing its Lap Analysis window and analysis workflows
   (KAN-166, done on 5 October 2026 in steps 1 to 7; the plan is on Confluence FEO), and the same day reduced the widget list to the widgets of his track video plus Tyres and designed widgets (KAN-192). Remove nothing else without the owner's word, keep
-  automatic best-lap selection (KAN-185), and keep every analysis field of day documents. Both
-  apps read and write one `.fetproject` format, which must stay compatible between them (KAN-170).
-  Keep `flappedear_telemetry_core` and `flappedear_telemetry_app` free of Gui, overlay, video and
-  platform-specific code (the boundary checks enforce it); they are the behavioural reference
-  that the Telemetry app cross-references.
+  automatic best-lap selection (KAN-185), and keep every analysis field of day documents. On
+  8 October 2026 the owner decided that the two projects are independent: compatibility with
+  Telemetry no longer matters, so the `.fetproject` format and the vector files carry no
+  constraint from Telemetry, nothing is ported from Telemetry, and its Jira items are not
+  planned here (supersedes KAN-170; the code that reads Telemetry's newer fields is kept until
+  it is removed on purpose). Keep `flappedear_telemetry_core` and `flappedear_telemetry_app`
+  free of Gui, overlay, video and platform-specific code (the boundary checks enforce it).
   macOS remains the active development platform. On 2 October 2026 the owner resumed Windows
   code changes: fix the Windows defects that the owner's local Windows validation finds
   (KAN-172 to KAN-176; docs/windows-validation-2026-10-02.md), and the owner builds and tests on
