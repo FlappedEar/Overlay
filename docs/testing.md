@@ -2753,3 +2753,6 @@ recording loads with its content revision, track and fingerprint; a saved revisi
 flags `contentMismatch`; a raised cancellation flag gives `cancelled` and a missing file an error.
 With FFmpeg it also probes a video, then one with chapters (a found one, a missing one as a gap
 and a different file as a mismatch), and rejects a file that is not a video.
+`SourceTests::derivesChapterPlaybackAndExportSource` checks `deriveChapters` without FFmpeg: one video
+has no timeline, a missing chapter is a gap that blocks export, a chapter without a duration leaves
+only the first open, and chapters whose probes cannot be joined name the reason.

@@ -219,6 +219,9 @@ changed one is a gap of its saved duration), and `loadTelemetry` hashes, parses 
 analyses a recording and hashes it again so a file that changed meanwhile fails. They
 take the cancellation flag and report every failure in the result. `AppController`
 still owns the load state, the generations, the results' commit and the cancellation.
+Step 11 moved the chapter part of that commit into `SourceLoading::deriveChapters`: from the
+probed chapters it gives the chapters that stay, the playback timeline, the number of gaps
+and the single source export reads (or why the chapters cannot be joined).
 
 `AdditionalVideoController` (`appController.additionalVideos`, KAN-131) holds the
 run's videos besides the main one, each with its own sync, and the export layout.
