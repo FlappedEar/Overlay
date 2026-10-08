@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app/PreviewTimeline.h"
+#include "app/SourceLoading.h"
 #include "app/VideoChapterReview.h"
 #include "export/MediaTimeline.h"
 #include "app/BestLapFinder.h"
@@ -276,48 +277,10 @@ private:
     // The sources an auto-sync result must still match.
     [[nodiscard]] SyncController::Sources currentSyncSources() const;
 
-    // KAN-105: a chapter after the first, as asked for and as found.
-    struct VideoChapterInput {
-        ProjectSourceReference reference;  // empty for a newly chosen file
-        QString path;                      // resolved; empty when missing
-        double durationSeconds = 0.0;      // saved duration, kept for a gap
-    };
-    struct VideoChapterState {
-        ProjectSourceReference reference;
-        QString path;
-        double durationSeconds = 0.0;
-        bool available = false;
-        QString problem;                   // why it is a gap
-        MediaInfo mediaInfo;               // probed, when available (KAN-106)
-    };
-    struct VideoProbeResult {
-        bool success = false;
-        bool cancelled = false;
-        QString path;
-        MediaInfo mediaInfo;
-        QVector<VideoChapterState> chapters; // all chapters, the first included; empty for one video
-        QString error;
-        quint64 generation = 0;
-        QJsonObject fingerprint;
-        QJsonObject expectedFingerprint;
-        bool relink = false;
-    };
-
-    struct VboLoadResult {
-        bool success = false;
-        bool cancelled = false;
-        QString path;
-        TelemetrySession session;
-        TrackGeometry geometry;
-        LapSession lapSession;
-        QByteArray contentRevision;
-        bool contentMismatch = false;
-        QString error;
-        quint64 generation = 0;
-        QJsonObject fingerprint;
-        QJsonObject expectedFingerprint;
-        bool relink = false;
-    };
+    using VideoChapterInput = SourceLoading::VideoChapterInput;
+    using VideoChapterState = SourceLoading::VideoChapterState;
+    using VideoProbeResult = SourceLoading::VideoProbeResult;
+    using VboLoadResult = SourceLoading::VboLoadResult;
 
     [[nodiscard]] QVariant semanticValue(const QString &alias) const;
     void setStatus(QString status);

@@ -2745,3 +2745,9 @@ gap and a video starting 10 s before the telemetry: values by alias and channel 
 the gap, outside the channel, for an unknown channel, without a session or with an unusable sync,
 the readout text with 1, 12 and negative decimals, and the chart series against `channelSeries`
 for the mapped range, empty for fewer than two points or a non-finite range.
+
+`SourceTests::loadsSourcesInTheBackgroundWorker` runs `SourceLoading` without a controller: a
+recording loads with its content revision, track and fingerprint; a saved revision that differs
+flags `contentMismatch`; a raised cancellation flag gives `cancelled` and a missing file an error.
+With FFmpeg it also probes a video, then one with chapters (a found one, a missing one as a gap
+and a different file as a mismatch), and rejects a file that is not a video.

@@ -5,6 +5,7 @@
 #include "app/LapNavigation.h"
 #include "app/ChapterPlayback.h"
 #include "app/PlaybackReadout.h"
+#include "app/SourceLoading.h"
 #include "export/ExportFormat.h"
 #include "export/ExportEngine.h"
 #include "export/ChapterSource.h"
@@ -406,65 +407,7 @@ void AppController::startVideoProbe(
     m_videoProbeWatcher.setFuture(QtConcurrent::run(
         [path, generation, cancellation, expectedFingerprint = std::move(expectedFingerprint), relink,
          chapters = std::move(chapters)] {
-        VideoProbeResult result;
-        result.path = path;
-        result.generation = generation;
-        result.expectedFingerprint = expectedFingerprint;
-        result.relink = relink;
-        try {
-            result.mediaInfo = MediaProbe::probe(
-                path, {}, false, -1, {}, [cancellation] { return cancellation->load(); });
-            result.fingerprint = videoSourceFingerprint(path, result.mediaInfo);
-            // KAN-105: every further chapter, probed and checked against its
-            // saved fingerprint. One that is missing, unreadable or no longer
-            // the same file is a gap of its saved duration.
-            if (!chapters.isEmpty()) {
-                const auto videoDuration = [](const MediaInfo &info) {
-                    return info.videoDuration > 0.0 ? info.videoDuration : info.duration;
-                };
-                result.chapters.append({ProjectSourceReferenceCodec::forLoadedSource(path, result.fingerprint), path,
-                    videoDuration(result.mediaInfo), true, {}, result.mediaInfo});
-                for (const auto &input : chapters) {
-                    if (cancellation->load()) break;
-                    VideoChapterState chapter{input.reference, input.path, input.durationSeconds, false, {}, {}};
-                    if (input.path.isEmpty()) {
-                        chapter.problem = QStringLiteral("missing");
-                    } else {
-                        try {
-                            const auto info = MediaProbe::probeSummary(input.path, {}, 30'000, {},
-                                [cancellation] { return cancellation->load(); });
-                            const auto fingerprint = videoSourceFingerprint(input.path, info);
-                            if (ProjectSourceReferenceCodec::compareFingerprints(input.reference.fingerprint, fingerprint)
-                                == SourceFingerprintMatch::Mismatch) {
-                                chapter.problem = QStringLiteral("mismatch");
-                            } else {
-                                chapter.reference = ProjectSourceReferenceCodec::forLoadedSource(input.path, fingerprint);
-                                chapter.durationSeconds = videoDuration(info);
-                                chapter.available = true;
-                                chapter.mediaInfo = info;
-                            }
-                        } catch (const OperationCancelled &) {
-                            throw;
-                        } catch (const std::exception &error) {
-                            chapter.problem = QString::fromUtf8(error.what());
-                        }
-                    }
-                    if (!chapter.available) chapter.path.clear();
-                    result.chapters.append(chapter);
-                }
-            }
-            result.success = !cancellation->load();
-            if (!result.success) {
-                result.cancelled = true;
-                result.error = QStringLiteral("Video loading was cancelled.");
-            }
-        } catch (const OperationCancelled &) {
-            result.cancelled = true;
-            result.error = QStringLiteral("Video loading was cancelled.");
-        } catch (const std::exception &error) {
-            result.error = QString::fromUtf8(error.what());
-        }
-        return result;
+        return SourceLoading::probeVideo(path, generation, cancellation, expectedFingerprint, relink, chapters);
     }));
 }
 
@@ -509,43 +452,7 @@ void AppController::startVboLoad(
     if (expectedRevision.isEmpty()) expectedRevision = expectedContentSha256.toLatin1();
     m_vboLoadWatcher.setFuture(QtConcurrent::run(
         [path, generation, cancellation, expectedRevision, expectedFingerprint = std::move(expectedFingerprint), relink] {
-        VboLoadResult result;
-        result.path = path;
-        result.generation = generation;
-        result.expectedFingerprint = expectedFingerprint;
-        result.relink = relink;
-        try {
-            const auto sourceSize = QFileInfo(path).size();
-            result.contentRevision = TelemetrySource::contentSha256(path, sourceSize,
-                [cancellation] { return cancellation->load(); }).toHex();
-            result.contentMismatch = !expectedRevision.isEmpty() && result.contentRevision != expectedRevision;
-            result.session = TelemetrySource::load(
-                path, [cancellation] { return cancellation->load(); });
-            if (cancellation->load()) {
-                result.cancelled = true;
-                result.error = QStringLiteral("Telemetry loading was cancelled.");
-                return result;
-            }
-            result.geometry = buildTrackGeometry(
-                result.session, [cancellation] { return cancellation->load(); });
-            const auto cancelled = [cancellation] { return cancellation->load(); };
-            result.lapSession = deriveSourceLapSession(result.session, {}, cancelled);
-            result.fingerprint = ProjectSourceReferenceCodec::telemetryFingerprint(
-                path, result.session);
-            if (TelemetrySource::contentSha256(path, sourceSize, cancelled).toHex() != result.contentRevision)
-                throw std::runtime_error("Recording changed during loading; reload this source.");
-            result.success = !cancellation->load();
-            if (!result.success) {
-                result.cancelled = true;
-                result.error = QStringLiteral("Telemetry loading was cancelled.");
-            }
-        } catch (const OperationCancelled &) {
-            result.cancelled = true;
-            result.error = QStringLiteral("Telemetry loading was cancelled.");
-        } catch (const std::exception &error) {
-            result.error = QString::fromUtf8(error.what());
-        }
-        return result;
+        return SourceLoading::loadTelemetry(path, generation, cancellation, expectedRevision, expectedFingerprint, relink);
     }));
 }
 
