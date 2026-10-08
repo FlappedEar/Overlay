@@ -230,6 +230,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/app/ChapterPlayback.h
     src/app/PlaybackReadout.cpp
     src/app/PlaybackReadout.h
+    src/app/SourceLoading.cpp
+    src/app/SourceLoading.h
     src/app/LapNavigation.cpp
     src/app/LapNavigation.h
     src/app/ExportSourceOptions.cpp

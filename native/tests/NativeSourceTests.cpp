@@ -3,6 +3,7 @@
 #include "NativeTestSupport.h"
 #include "gopro/GoProTelemetrySource.h"
 #include "app/AppController.h"
+#include "app/SourceLoading.h"
 #include "app/TelemetryController.h"
 #include "export/FfmpegTools.h"
 #include "export/MediaProbe.h"
@@ -58,6 +59,7 @@ private slots:
     void rejectsBatchLinksWithDifferentPersistedFormats();
     void reviewsGoProChapterGroups();
     void keepsVideoChaptersAsOneTimeline();
+    void loadsSourcesInTheBackgroundWorker();
     void playsVideoChaptersAcrossBoundaries();
     void persistsAndInvalidatesRunTrackConfiguration();
     void decodesGps9Gpmf();
@@ -1470,6 +1472,82 @@ void SourceTests::reviewsGoProChapterGroups()
     QCOMPARE(review->groups().size(), 2);
     review->cancel();
     QCOMPARE(review->state(), QString("idle"));
+}
+
+void SourceTests::loadsSourcesInTheBackgroundWorker()
+{
+    // KAN-215: the work behind opening a recording or a video, without a controller.
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const QString vbo = directory.filePath("run.vbo");
+    QVERIFY(writeBytes(vbo, EventProjectFixture::lapsVbo()));
+    const auto flag = [](const bool value) { return std::make_shared<std::atomic_bool>(value); };
+
+    const auto loaded = SourceLoading::loadTelemetry(vbo, 7, flag(false), {}, {}, false);
+    QVERIFY2(loaded.success, qPrintable(loaded.error));
+    QCOMPARE(loaded.generation, quint64(7));
+    QCOMPARE(loaded.path, vbo);
+    QCOMPARE(loaded.contentRevision.size(), 64);
+    QVERIFY(!loaded.contentMismatch);
+    QVERIFY(loaded.session.sampleCount > 0);
+    QVERIFY(!loaded.geometry.points.isEmpty());
+    QVERIFY(!loaded.fingerprint.isEmpty());
+
+    // The saved revision decides whether the recording is the same one.
+    QVERIFY(!SourceLoading::loadTelemetry(vbo, 1, flag(false), loaded.contentRevision, {}, false).contentMismatch);
+    const auto changed = SourceLoading::loadTelemetry(vbo, 1, flag(false), QByteArray(64, 'a'), {}, true);
+    QVERIFY(changed.success);
+    QVERIFY(changed.contentMismatch);
+    QVERIFY(changed.relink);
+
+    const auto cancelled = SourceLoading::loadTelemetry(vbo, 1, flag(true), {}, {}, false);
+    QVERIFY(!cancelled.success);
+    QVERIFY(cancelled.cancelled);
+    const auto missing = SourceLoading::loadTelemetry(directory.filePath("none.vbo"), 1, flag(false), {}, {}, false);
+    QVERIFY(!missing.success);
+    QVERIFY(!missing.cancelled);
+    QVERIFY(!missing.error.isEmpty());
+
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the video half of this test.");
+    const auto encode = [&](const QString &name, const QString &source) {
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", source,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", directory.filePath(name)});
+        return encoder.waitForFinished(30'000) && encoder.exitCode() == 0;
+    };
+    QVERIFY(encode("a.mp4", "testsrc2=s=160x90:r=30:d=1"));
+    QVERIFY(encode("b.mp4", "testsrc2=s=160x90:r=30:d=2"));
+
+    const auto single = SourceLoading::probeVideo(directory.filePath("a.mp4"), 3, flag(false), {}, false, {});
+    QVERIFY2(single.success, qPrintable(single.error));
+    QCOMPARE(single.generation, quint64(3));
+    QVERIFY(!single.fingerprint.isEmpty());
+    QVERIFY(single.chapters.isEmpty());
+
+    // Further chapters: one found, one missing (a gap), one that is another file.
+    const auto foundReference = ProjectSourceReferenceCodec::forLoadedSource(
+        directory.filePath("b.mp4"), videoSourceFingerprint(directory.filePath("b.mp4"),
+            MediaProbe::probeSummary(directory.filePath("b.mp4"), {}, 30'000, {}, {})));
+    QVector<SourceLoading::VideoChapterInput> inputs;
+    inputs.append({foundReference, directory.filePath("b.mp4"), 2.0});
+    inputs.append({foundReference, QString(), 5.0});
+    inputs.append({foundReference, directory.filePath("a.mp4"), 1.0});
+    const auto chaptered = SourceLoading::probeVideo(directory.filePath("a.mp4"), 3, flag(false), {}, false, inputs);
+    QVERIFY2(chaptered.success, qPrintable(chaptered.error));
+    QCOMPARE(chaptered.chapters.size(), 4);
+    QVERIFY(chaptered.chapters.at(0).available);
+    QVERIFY(chaptered.chapters.at(1).available);
+    QVERIFY(!chaptered.chapters.at(2).available);
+    QCOMPARE(chaptered.chapters.at(2).problem, QStringLiteral("missing"));
+    QCOMPARE(chaptered.chapters.at(2).durationSeconds, 5.0);
+    QVERIFY(chaptered.chapters.at(2).path.isEmpty());
+    QVERIFY(!chaptered.chapters.at(3).available);
+    QCOMPARE(chaptered.chapters.at(3).problem, QStringLiteral("mismatch"));
+
+    QVERIFY(SourceLoading::probeVideo(directory.filePath("a.mp4"), 3, flag(true), {}, false, {}).cancelled);
+    const auto notVideo = SourceLoading::probeVideo(vbo, 3, flag(false), {}, false, {});
+    QVERIFY(!notVideo.success);
+    QVERIFY(!notVideo.error.isEmpty());
 }
 
 void SourceTests::keepsVideoChaptersAsOneTimeline()

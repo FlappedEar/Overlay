@@ -212,6 +212,14 @@ range. They are pure functions of the session, the run's sync transform and the 
 `AppController` passes its session, sync and playhead, and its semantic values (speed, rpm,
 heart rate) use the same lookup.
 
+Step 10 moved the background work of opening a source into `SourceLoading`
+(`native/src/app/SourceLoading.h`): `probeVideo` probes and fingerprints a video and
+checks each further chapter against its saved fingerprint (a missing, unreadable or
+changed one is a gap of its saved duration), and `loadTelemetry` hashes, parses and
+analyses a recording and hashes it again so a file that changed meanwhile fails. They
+take the cancellation flag and report every failure in the result. `AppController`
+still owns the load state, the generations, the results' commit and the cancellation.
+
 `AdditionalVideoController` (`appController.additionalVideos`, KAN-131) holds the
 run's videos besides the main one, each with its own sync, and the export layout.
 It probes each video in the background (`MediaProbe` and its fingerprint) and binds
