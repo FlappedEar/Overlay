@@ -196,9 +196,8 @@ and no video.
 - KAN-79 has questions for the owner in its record: lap times against
   RaceChrono, two laps flagged off-route, and an RCZ to close the blocked
   alternative case.
-- KAN-89 (reusable vehicle and track profiles) needs a product decision:
-  where shared profiles live, and how they differ from an event's setup
-  snapshot.
+- KAN-89 (reusable vehicle and track profiles) is closed as done in Jira; the profiles
+  work is not planned further in Overlays.
 - KAN-94–96, KAN-98–99, KAN-108–109 and KAN-113–115 (analysis features) were closed as
   not applicable on 8 October 2026: the owner said the analysis backlog is no longer
   needed in Overlays.
