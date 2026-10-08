@@ -371,6 +371,26 @@ QJsonObject EventProjectCodec::trackConfiguration(const QJsonObject &run)
         : unknownTrackConfiguration(run.value("primaryTelemetrySourceId").toString(), primaryFingerprint(run));
 }
 
+QJsonObject EventProjectCodec::withReplacedRecording(
+    const QJsonObject &eventProject, const QString &runId, const QString &gateRevision)
+{
+    auto project = eventProject;
+    auto event = project.value("event").toObject();
+    auto runs = event.value("runs").toArray();
+    for (qsizetype i = 0; i < runs.size(); ++i) {
+        auto run = runs[i].toObject();
+        if (run.value("id").toString() != runId) continue;
+        auto config = trackConfiguration(run);
+        config.insert("gateRevision", gateRevision.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(gateRevision));
+        run.insert("trackConfiguration", config);
+        run.remove("trackInference");
+        runs[i] = run;
+    }
+    event.insert("runs", runs);
+    project.insert("event", event);
+    return project;
+}
+
 QByteArray EventProjectCodec::lapDerivationKey(const QJsonObject &run)
 {
     return QCryptographicHash::hash(QJsonDocument(QJsonObject{{"version", "lap-derivation-v1"},

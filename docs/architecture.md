@@ -222,6 +222,9 @@ still owns the load state, the generations, the results' commit and the cancella
 Step 11 moved the chapter part of that commit into `SourceLoading::deriveChapters`: from the
 probed chapters it gives the chapters that stay, the playback timeline, the number of gaps
 and the single source export reads (or why the chapters cannot be joined).
+Step 12 moved the project rewrite that follows loading a replacement recording into
+`EventProjectCodec::withReplacedRecording`: the run's old inference goes and the timing gates of
+the new recording are recorded.
 
 `AdditionalVideoController` (`appController.additionalVideos`, KAN-131) holds the
 run's videos besides the main one, each with its own sync, and the export layout.

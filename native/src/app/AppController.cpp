@@ -526,17 +526,8 @@ void AppController::commitVboLoad(const VboLoadResult &result, const bool markDo
         // Replacement clears asserted layout/direction, then records the gates
         // actually verified in the new source. This enables fresh inference;
         // the old source's inference goes, as Overlays no longer derives one.
-        auto project = currentProjectObject(); auto event = project.value("event").toObject();
-        auto runs = event.value("runs").toArray();
-        for (qsizetype i = 0; i < runs.size(); ++i) {
-            auto run = runs[i].toObject();
-            if (run.value("id").toString() != activeRunId()) continue;
-            auto config = EventProjectCodec::trackConfiguration(run);
-            const auto gates = timingGateRevision(result.session);
-            config.insert("gateRevision", gates.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(gates));
-            run.insert("trackConfiguration", config); run.remove("trackInference"); runs[i] = run;
-        }
-        event.insert("runs", runs); project.insert("event", event); m_document.replaceStoredProject(project);
+        m_document.replaceStoredProject(EventProjectCodec::withReplacedRecording(
+            currentProjectObject(), activeRunId(), timingGateRevision(result.session)));
     }
     applyActiveLapExclusions();
     emit telemetryChanged();
