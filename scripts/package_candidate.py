@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import platform
 import plistlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -37,6 +38,25 @@ def smoke_installed(executable, sdk, log_path):
             marker in log for marker in ("ReferenceError", "TypeError", "Binding loop")):
         raise RuntimeError("Installed candidate failed startup smoke:\n" + log[-8000:])
 
+
+
+def project_version(repo):
+    """The product version, read from the one place that defines it."""
+    text = (repo / "native/CMakeLists.txt").read_text(encoding="utf-8")
+    match = re.search(r'set\(FLAPPEDEAR_VERSION "([0-9]+(?:\.[0-9]+)*)"\)', text)
+    if not match:
+        raise RuntimeError("FLAPPEDEAR_VERSION not found in native/CMakeLists.txt")
+    return match.group(1)
+
+
+def qt_version(sdk):
+    """The Qt version the candidate was built with, read from the Qt SDK that is being hidden."""
+    config = sdk / "lib/cmake/Qt6/Qt6ConfigVersionImpl.cmake"
+    match = re.search(r'set\(PACKAGE_VERSION "([0-9]+(?:\.[0-9]+)*)"\)',
+                      config.read_text(encoding="utf-8")) if config.is_file() else None
+    if not match:
+        raise RuntimeError(f"Qt version not found in {config}")
+    return match.group(1)
 
 
 def main():
@@ -88,8 +108,8 @@ def main():
             with path.open("rb") as handle:
                 digest = hashlib.file_digest(handle, "sha256").hexdigest()
             files.append({"path": relative, "bytes": path.stat().st_size, "sha256": digest})
-    manifest = {"productName": "FlappedEar Overlays", "commit": sha, "platform": system, "architecture": platform.machine(),
-                "buildType": "Release", "qt": "6.8.3", "betaApproved": False,
+    manifest = {"productName": "FlappedEar Overlays", "version": project_version(repo), "commit": sha, "platform": system, "architecture": platform.machine(),
+                "buildType": "Release", "qt": qt_version(sdk), "betaApproved": False,
                 "startupWithoutBuildSdk": "passed", "files": files}
     (stage / "candidate-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     artifacts = repo / "native-dist/artifacts"
