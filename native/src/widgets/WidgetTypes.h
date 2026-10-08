@@ -9,8 +9,9 @@ namespace FlappedEar {
 // KAN-217: one descriptor per widget type. The editor's Add widget list, the
 // type check on load, the default box, the inspector's hidden controls and the
 // renderer the scene loads all read this table, so a type is added or changed
-// in one place. Default settings
-// stay in widget-templates.json ("widgetDefaults"), which Telemetry shares.
+// in one place, except the default settings, which stay in
+// widget-templates.json ("widgetDefaults") because the user-guide capture
+// scripts read them too; WidgetTests checks the two lists name the same types.
 struct WidgetTypeDescriptor {
     QString type;
     QString label; // empty: not offered in the Add widget list
