@@ -199,9 +199,9 @@ and no video.
 - KAN-89 (reusable vehicle and track profiles) needs a product decision:
   where shared profiles live, and how they differ from an event's setup
   snapshot.
-- KAN-113, KAN-114 and KAN-115 are owner-marked "backlog only".
-- KAN-94–96 (realistic potential) and KAN-108–109 (Explain this lap) depend
-  on KAN-86. KAN-98–99 (comparable visits) depend on KAN-89.
+- KAN-94–96, KAN-98–99, KAN-108–109 and KAN-113–115 (analysis features) were closed as
+  not applicable on 8 October 2026: the owner said the analysis backlog is no longer
+  needed in Overlays.
 - KAN-132 (tyre data) is done: the source is RaceChrono's CAN tyre channels in the VBO (merged in #125).
 
 KAN-124 (split phase 2) steps 1–11 are merged (#85, #87–#92, #94–#97):
