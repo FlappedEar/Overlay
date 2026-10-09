@@ -1,6 +1,7 @@
 #include "project/AdditionalVideos.h"
 
 #include <QDir>
+#include <QRegularExpression>
 #include <QSet>
 
 #include <cmath>
@@ -42,6 +43,76 @@ ProjectSourceReference referenceOf(const QJsonObject &object)
 QString layoutName(const VideoLayoutMode mode)
 {
     return mode == VideoLayoutMode::SideBySide ? QStringLiteral("sideBySide") : QStringLiteral("pictureInPicture");
+}
+
+bool finiteIn(const QJsonValue &value, const double low, const double high)
+{
+    return value.isDouble() && std::isfinite(value.toDouble()) && value.toDouble() >= low && value.toDouble() <= high;
+}
+
+bool validColor(const QJsonValue &value)
+{
+    if (!value.isString()) return false;
+    static const QRegularExpression pattern(QStringLiteral("^#[0-9A-Fa-f]{6}$"));
+    return pattern.match(value.toString()).hasMatch();
+}
+
+const QStringList &cornerNames()
+{
+    static const QStringList names{"topRight", "topLeft", "bottomRight", "bottomLeft"};
+    return names;
+}
+
+bool validPip(const QJsonValue &pip)
+{
+    if (pip.isUndefined()) return true;
+    if (!pip.isObject()) return false;
+    const auto object = pip.toObject();
+    if (object.contains("enabled") && !object.value("enabled").isBool()) return false;
+    if (object.contains("corner")
+        && (!object.value("corner").isString() || !cornerNames().contains(object.value("corner").toString())))
+        return false;
+    if (object.contains("size") && !finiteIn(object.value("size"), minimumPipSize, maximumPipSize)) return false;
+    if (object.contains("margin") && !finiteIn(object.value("margin"), 0.0, maximumPipMargin)) return false;
+    if (object.contains("borderWidth")) {
+        const auto width = object.value("borderWidth");
+        if (!finiteIn(width, 0.0, maximumBorderWidth) || width.toDouble() != std::floor(width.toDouble())) return false;
+    }
+    if (object.contains("borderColor") && !validColor(object.value("borderColor"))) return false;
+    if (object.contains("cameras")) {
+        const auto cameras = object.value("cameras");
+        if (!cameras.isArray() || cameras.toArray().size() > maximumPipCameras) return false;
+        for (const auto &camera : cameras.toArray())
+            if (!validText(camera, maximumIdCharacters) || camera.toString().trimmed().isEmpty()) return false;
+    }
+    return true;
+}
+
+bool validProgram(const QJsonValue &program)
+{
+    if (program.isUndefined()) return true;
+    if (!program.isObject()) return false;
+    const auto object = program.toObject();
+    if (object.contains("transition")
+        && object.value("transition") != QJsonValue("cut") && object.value("transition") != QJsonValue("crossfade"))
+        return false;
+    if (object.contains("crossfadeSeconds")
+        && !finiteIn(object.value("crossfadeSeconds"), minimumCrossfadeSeconds, maximumCrossfadeSeconds))
+        return false;
+    if (object.contains("cuts")) {
+        const auto cuts = object.value("cuts");
+        if (!cuts.isArray() || cuts.toArray().size() > maximumCuts) return false;
+        double previous = -1.0;
+        for (const auto &value : cuts.toArray()) {
+            if (!value.isObject()) return false;
+            const auto cut = value.toObject();
+            if (!finiteIn(cut.value("time"), 0.0, 1.0e9) || cut.value("time").toDouble() <= previous) return false;
+            if (!validText(cut.value("camera"), maximumIdCharacters) || cut.value("camera").toString().trimmed().isEmpty())
+                return false;
+            previous = cut.value("time").toDouble();
+        }
+    }
+    return true;
 }
 
 } // namespace
@@ -117,8 +188,10 @@ bool validLayout(const QJsonValue &layout)
 {
     if (layout.isUndefined()) return true;
     if (!layout.isObject()) return false;
-    const auto mode = layout.toObject().value("mode");
-    return mode == QJsonValue("pictureInPicture") || mode == QJsonValue("sideBySide");
+    const auto object = layout.toObject();
+    const auto mode = object.value("mode");
+    return (mode == QJsonValue("pictureInPicture") || mode == QJsonValue("sideBySide"))
+        && validPip(object.value("pip")) && validProgram(object.value("program"));
 }
 
 VideoLayoutMode readLayout(const QJsonValue &layout)
@@ -131,6 +204,76 @@ QJsonObject writeLayout(const VideoLayoutMode mode, const QJsonValue &previous)
 {
     QJsonObject object = previous.toObject();
     object.insert("mode", layoutName(mode));
+    return object;
+}
+
+VideoLayout readVideoLayout(const QJsonValue &layout)
+{
+    VideoLayout result;
+    if (!validLayout(layout)) return result;
+    const auto object = layout.toObject();
+    result.mode = readLayout(layout);
+    const auto pip = object.value("pip").toObject();
+    result.pip.enabled = pip.value("enabled").toBool(result.pip.enabled);
+    if (pip.contains("corner")) {
+        const auto index = cornerNames().indexOf(pip.value("corner").toString());
+        result.pip.corner = static_cast<PipCorner>(index);
+    }
+    result.pip.size = pip.value("size").toDouble(result.pip.size);
+    result.pip.margin = pip.value("margin").toDouble(result.pip.margin);
+    result.pip.borderWidth = pip.value("borderWidth").toInt(result.pip.borderWidth);
+    result.pip.borderColor = pip.value("borderColor").toString(result.pip.borderColor).toUpper();
+    if (pip.contains("cameras")) {
+        QStringList cameras;
+        for (const auto &camera : pip.value("cameras").toArray()) cameras.append(camera.toString());
+        result.pip.cameras = cameras;
+    }
+    const auto program = object.value("program").toObject();
+    result.program.transition = program.value("transition").toString() == QStringLiteral("crossfade")
+        ? ProgramTransition::Crossfade : ProgramTransition::Cut;
+    result.program.crossfadeSeconds = program.value("crossfadeSeconds").toDouble(result.program.crossfadeSeconds);
+    for (const auto &value : program.value("cuts").toArray()) {
+        const auto cut = value.toObject();
+        result.program.cuts.append({cut.value("time").toDouble(), cut.value("camera").toString()});
+    }
+    return result;
+}
+
+QJsonObject writeVideoLayout(const VideoLayout &layout, const QJsonValue &previous)
+{
+    QJsonObject object = writeLayout(layout.mode, previous);
+    const PipOptions defaults;
+    if (layout.pip == defaults) {
+        object.remove("pip");
+    } else {
+        QJsonObject pip = object.value("pip").toObject();
+        pip.insert("enabled", layout.pip.enabled);
+        pip.insert("corner", cornerNames().value(static_cast<int>(layout.pip.corner)));
+        pip.insert("size", layout.pip.size);
+        pip.insert("margin", layout.pip.margin);
+        pip.insert("borderWidth", layout.pip.borderWidth);
+        pip.insert("borderColor", layout.pip.borderColor);
+        if (layout.pip.cameras) {
+            QJsonArray cameras;
+            for (const auto &camera : *layout.pip.cameras) cameras.append(camera);
+            pip.insert("cameras", cameras);
+        } else {
+            pip.remove("cameras");
+        }
+        object.insert("pip", pip);
+    }
+    if (layout.program == ProgramOptions{}) {
+        object.remove("program");
+    } else {
+        QJsonObject program = object.value("program").toObject();
+        program.insert("transition", layout.program.transition == ProgramTransition::Crossfade
+            ? QStringLiteral("crossfade") : QStringLiteral("cut"));
+        program.insert("crossfadeSeconds", layout.program.crossfadeSeconds);
+        QJsonArray cuts;
+        for (const auto &cut : layout.program.cuts) cuts.append(QJsonObject{{"time", cut.time}, {"camera", cut.camera}});
+        program.insert("cuts", cuts);
+        object.insert("program", program);
+    }
     return object;
 }
 

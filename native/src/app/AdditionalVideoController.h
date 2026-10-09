@@ -54,7 +54,11 @@ public:
         SyncTransform sync;
     };
     [[nodiscard]] QVector<ExportVideo> exportVideos(QString *problem) const;
-    [[nodiscard]] VideoLayoutMode layoutMode() const { return m_layout; }
+    [[nodiscard]] VideoLayoutMode layoutMode() const { return m_layout.mode; }
+    // The whole layout, picture-in-picture options and camera switching
+    // included (KAN-245). Setting a different one is an edit.
+    [[nodiscard]] const VideoLayout &videoLayout() const { return m_layout; }
+    void setVideoLayout(const VideoLayout &layout);
     [[nodiscard]] QVariantList videoList() const;
     [[nodiscard]] int count() const { return static_cast<int>(m_entries.size()); }
     [[nodiscard]] static int maximum() { return AdditionalVideosCodec::maximumAdditionalVideos; }
@@ -65,6 +69,7 @@ public:
     // Videos read from a project (not an edit, emits changed() only): each
     // one found is probed and checked against its fingerprint.
     void restore(const QVector<AdditionalVideo> &videos, VideoLayoutMode layout, const QString &projectPath);
+    void restore(const QVector<AdditionalVideo> &videos, const VideoLayout &layout, const QString &projectPath);
     void clear();
     // After a save: the references as written (relative paths rebased).
     void updateReferences(const QVector<AdditionalVideo> &saved);
@@ -125,7 +130,7 @@ private:
 
     CurrentMainVideo m_mainVideo;
     QVector<Entry> m_entries;
-    VideoLayoutMode m_layout = VideoLayoutMode::PictureInPicture;
+    VideoLayout m_layout;
     quint64 m_generation = 0;
     quint64 m_nextRequest = 0;
     int m_pendingAdds = 0;

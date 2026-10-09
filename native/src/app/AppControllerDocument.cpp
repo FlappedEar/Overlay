@@ -83,7 +83,7 @@ void AppController::applyEditorProject(const ProjectLoadResult &result)
     m_videoChapterStates.clear();
     const QJsonObject editor = EventProjectCodec::editorProjection(result.project);
     m_additionalVideos.restore(AdditionalVideosCodec::read(editor.value("sources").toObject().value("additionalVideos")),
-        AdditionalVideosCodec::readLayout(editor.value("videoLayout")), result.projectPath);
+        AdditionalVideosCodec::readVideoLayout(editor.value("videoLayout")), result.projectPath);
     const auto chapters = VideoChaptersCodec::read(editor.value("sources").toObject().value("video").toObject());
     QVector<TimelineChapter> timelineChapters;
     for (const auto &chapter : chapters) {
@@ -228,11 +228,11 @@ QJsonObject AppController::withEditorState(QJsonObject project, const QString &d
             }));
     }
     project.insert(QStringLiteral("sources"), sources);
-    if (additionalVideos.isEmpty() && m_additionalVideos.layoutMode() == VideoLayoutMode::PictureInPicture)
+    if (additionalVideos.isEmpty() && m_additionalVideos.videoLayout() == VideoLayout{})
         project.remove(QStringLiteral("videoLayout"));
     else
         project.insert(QStringLiteral("videoLayout"),
-            AdditionalVideosCodec::writeLayout(m_additionalVideos.layoutMode(), project.value(QStringLiteral("videoLayout"))));
+            AdditionalVideosCodec::writeVideoLayout(m_additionalVideos.videoLayout(), project.value(QStringLiteral("videoLayout"))));
     QJsonObject sync = project.value("sync").toObject();
     sync.insert("offset", m_syncController.offset());
     sync.insert("timeScale", m_syncController.timeScale());

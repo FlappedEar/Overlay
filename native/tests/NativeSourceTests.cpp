@@ -334,6 +334,13 @@ void SourceTests::addsAlignsAndChecksAdditionalVideos()
     QCOMPARE(videos->layout(), QStringLiteral("pictureInPicture"));
     videos->setLayout(QStringLiteral("sideBySide"));
     QCOMPARE(videos->layoutMode(), VideoLayoutMode::SideBySide);
+    // KAN-245: picture-in-picture options and cuts are saved with the layout.
+    VideoLayout custom = videos->videoLayout();
+    custom.pip.corner = PipCorner::BottomLeft;
+    custom.pip.size = 0.4;
+    custom.program.cuts = {{0.0, QStringLiteral("main")}, {1.5, QStringLiteral("helmet")}};
+    videos->setVideoLayout(custom);
+    QCOMPARE(videos->videoLayout(), custom);
     // The preview follows the export layout and the syncs' rate.
     const auto rects = videos->previewRects(320, 180);
     QCOMPARE(rects.size(), 2);
@@ -364,6 +371,9 @@ void SourceTests::addsAlignsAndChecksAdditionalVideos()
     QCOMPARE(savedVideos[0].toObject().value("label").toString(), QStringLiteral("Helmet camera"));
     QVERIFY(savedVideos[0].toObject().value("fingerprint").isObject());
     QCOMPARE(saved.value("videoLayout").toObject().value("mode").toString(), QStringLiteral("sideBySide"));
+    QCOMPARE(saved.value("videoLayout").toObject().value("pip").toObject().value("corner").toString(),
+        QStringLiteral("bottomLeft"));
+    QCOMPARE(saved.value("videoLayout").toObject().value("program").toObject().value("cuts").toArray().size(), 2);
 
     // Reopened: both found and ready, sync and layout as saved, not dirty.
     {
@@ -377,6 +387,7 @@ void SourceTests::addsAlignsAndChecksAdditionalVideos()
         QVERIFY(qAbs(loaded->videos()[0].sync.offset - (12.0 - 0.5 * 1.001)) < 1e-9);
         QCOMPARE(loaded->videos()[0].sync.timeScale, 1.001);
         QCOMPARE(loaded->layoutMode(), VideoLayoutMode::SideBySide);
+        QCOMPARE(loaded->videoLayout(), custom);
         QVERIFY(!reopened.dirty());
     }
 

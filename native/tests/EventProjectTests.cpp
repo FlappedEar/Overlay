@@ -36,6 +36,9 @@ private slots:
     void boundsReferenceContentIdentity();
     void boundsAndRebasesVideoChapters();
     void keepsAdditionalVideosPerRun();
+    void readsAndWritesPipAndProgram();
+    void rejectsBadPipAndProgram_data();
+    void rejectsBadPipAndProgram();
     void persistsTrackConfigurationAndUnknownLegacyState();
     void rejectsInvalidTrackConfigurations_data();
     void rejectsInvalidTrackConfigurations();
@@ -495,6 +498,99 @@ void EventProjectTests::boundsAndRebasesVideoChapters()
     QCOMPARE(chapters[2].toObject().value("durationSeconds").toDouble(), 100.0);
     const auto protectedPaths = EventProjectCodec::referencedPaths(project, oldPath);
     QVERIFY(protectedPaths.contains(QDir(directory.filePath("old")).absoluteFilePath("GX030123.MP4")));
+}
+
+void EventProjectTests::readsAndWritesPipAndProgram()
+{
+    // KAN-245: the defaults when the keys are absent, a full round trip, and
+    // that unknown keys survive and defaults are not written.
+    const VideoLayout defaults = AdditionalVideosCodec::readVideoLayout(QJsonValue(QJsonValue::Undefined));
+    QCOMPARE(defaults, VideoLayout{});
+    QVERIFY(defaults.pip.enabled);
+    QCOMPARE(defaults.pip.corner, PipCorner::TopRight);
+    QVERIFY(!defaults.pip.cameras.has_value());
+    QVERIFY(defaults.program.cuts.isEmpty());
+    const QJsonObject minimal{{"mode", "pictureInPicture"}};
+    QCOMPARE(AdditionalVideosCodec::writeVideoLayout(defaults, minimal), minimal);
+
+    const QJsonObject full{{"mode", "pictureInPicture"}, {"futureKey", 1},
+        {"pip", QJsonObject{{"enabled", false}, {"corner", "bottomLeft"}, {"size", 0.4}, {"margin", 0.05},
+            {"borderWidth", 4}, {"borderColor", "#ff8800"}, {"cameras", QJsonArray{"helmet"}}, {"pipFuture", true}}},
+        {"program", QJsonObject{{"transition", "crossfade"}, {"crossfadeSeconds", 0.75},
+            {"cuts", QJsonArray{QJsonObject{{"time", 0.0}, {"camera", "helmet"}},
+                                QJsonObject{{"time", 12.5}, {"camera", "main"}}}}}}};
+    QVERIFY(AdditionalVideosCodec::validLayout(full));
+    const VideoLayout layout = AdditionalVideosCodec::readVideoLayout(full);
+    QVERIFY(!layout.pip.enabled);
+    QCOMPARE(layout.pip.corner, PipCorner::BottomLeft);
+    QCOMPARE(layout.pip.size, 0.4);
+    QCOMPARE(layout.pip.margin, 0.05);
+    QCOMPARE(layout.pip.borderWidth, 4);
+    QCOMPARE(layout.pip.borderColor, QString("#FF8800"));
+    QCOMPARE(layout.pip.cameras.value(), QStringList{"helmet"});
+    QCOMPARE(layout.program.transition, ProgramTransition::Crossfade);
+    QCOMPARE(layout.program.crossfadeSeconds, 0.75);
+    QCOMPARE(layout.program.cuts.size(), 2);
+    QCOMPARE(layout.program.cuts[1].time, 12.5);
+    QCOMPARE(layout.program.cuts[1].camera, mainCameraId);
+    const QJsonObject written = AdditionalVideosCodec::writeVideoLayout(layout, full);
+    QVERIFY(written.value("futureKey").toInt() == 1);
+    QVERIFY(written.value("pip").toObject().value("pipFuture").toBool());
+    QCOMPARE(AdditionalVideosCodec::readVideoLayout(written), layout);
+
+    // Back to the defaults: pip and program leave the file, other keys stay.
+    const QJsonObject cleared = AdditionalVideosCodec::writeVideoLayout(VideoLayout{}, full);
+    QVERIFY(!cleared.contains("pip"));
+    QVERIFY(!cleared.contains("program"));
+    QVERIFY(cleared.contains("futureKey"));
+    // An invalid layout reads as the defaults.
+    QCOMPARE(AdditionalVideosCodec::readVideoLayout(QJsonObject{{"mode", "grid"}}), VideoLayout{});
+}
+
+void EventProjectTests::rejectsBadPipAndProgram_data()
+{
+    QTest::addColumn<QString>("key");
+    QTest::addColumn<QJsonValue>("value");
+    const auto cut = [](const double time, const QString &camera) { return QJsonObject{{"time", time}, {"camera", camera}}; };
+    QTest::newRow("pip-not-object") << "pip" << QJsonValue(3);
+    QTest::newRow("pip-enabled-text") << "pip" << QJsonValue(QJsonObject{{"enabled", "yes"}});
+    QTest::newRow("pip-corner") << "pip" << QJsonValue(QJsonObject{{"corner", "middle"}});
+    QTest::newRow("pip-size-small") << "pip" << QJsonValue(QJsonObject{{"size", 0.05}});
+    QTest::newRow("pip-size-large") << "pip" << QJsonValue(QJsonObject{{"size", 0.9}});
+    QTest::newRow("pip-margin") << "pip" << QJsonValue(QJsonObject{{"margin", 0.5}});
+    QTest::newRow("pip-border-fraction") << "pip" << QJsonValue(QJsonObject{{"borderWidth", 2.5}});
+    QTest::newRow("pip-border-large") << "pip" << QJsonValue(QJsonObject{{"borderWidth", 13}});
+    QTest::newRow("pip-color") << "pip" << QJsonValue(QJsonObject{{"borderColor", "red"}});
+    QTest::newRow("pip-cameras-not-array") << "pip" << QJsonValue(QJsonObject{{"cameras", "helmet"}});
+    QTest::newRow("pip-cameras-empty-id") << "pip" << QJsonValue(QJsonObject{{"cameras", QJsonArray{" "}}});
+    QTest::newRow("pip-cameras-many") << "pip" << QJsonValue(QJsonObject{{"cameras", QJsonArray{"a", "b", "c", "d", "e"}}});
+    QTest::newRow("program-not-object") << "program" << QJsonValue(QJsonArray{});
+    QTest::newRow("program-transition") << "program" << QJsonValue(QJsonObject{{"transition", "wipe"}});
+    QTest::newRow("program-fade-short") << "program" << QJsonValue(QJsonObject{{"crossfadeSeconds", 0.01}});
+    QTest::newRow("program-fade-long") << "program" << QJsonValue(QJsonObject{{"crossfadeSeconds", 5}});
+    QTest::newRow("program-cuts-not-array") << "program" << QJsonValue(QJsonObject{{"cuts", 1}});
+    QTest::newRow("cut-not-object") << "program" << QJsonValue(QJsonObject{{"cuts", QJsonArray{1}}});
+    QTest::newRow("cut-negative") << "program" << QJsonValue(QJsonObject{{"cuts", QJsonArray{cut(-1, "main")}}});
+    QTest::newRow("cut-no-time") << "program" << QJsonValue(QJsonObject{{"cuts", QJsonArray{QJsonObject{{"camera", "main"}}}}});
+    QTest::newRow("cut-no-camera") << "program" << QJsonValue(QJsonObject{{"cuts", QJsonArray{QJsonObject{{"time", 1}}}}});
+    QTest::newRow("cut-empty-camera") << "program" << QJsonValue(QJsonObject{{"cuts", QJsonArray{cut(1, "")}}});
+    QTest::newRow("cuts-equal-times") << "program" << QJsonValue(QJsonObject{{"cuts", QJsonArray{cut(1, "main"), cut(1, "a")}}});
+    QTest::newRow("cuts-decreasing") << "program" << QJsonValue(QJsonObject{{"cuts", QJsonArray{cut(2, "main"), cut(1, "a")}}});
+    QJsonArray many;
+    for (int index = 0; index <= AdditionalVideosCodec::maximumCuts; ++index) many.append(cut(index, "main"));
+    QTest::newRow("too-many-cuts") << "program" << QJsonValue(QJsonObject{{"cuts", many}});
+}
+
+void EventProjectTests::rejectsBadPipAndProgram()
+{
+    QFETCH(QString, key);
+    QFETCH(QJsonValue, value);
+    const QJsonObject layout{{"mode", "pictureInPicture"}, {key, value}};
+    QVERIFY(!AdditionalVideosCodec::validLayout(layout));
+    QCOMPARE(AdditionalVideosCodec::readVideoLayout(layout), VideoLayout{});
+    auto project = Fixture::project(); auto runs = Fixture::runs(project); auto run = runs[0].toObject();
+    run.insert("videoLayout", layout); runs[0] = run; Fixture::setRuns(project, runs);
+    QVERIFY(!ProjectLimits::validateProject(project));
 }
 
 void EventProjectTests::keepsAdditionalVideosPerRun()
