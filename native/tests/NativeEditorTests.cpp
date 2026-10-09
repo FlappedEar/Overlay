@@ -60,6 +60,7 @@ private slots:
     void keepsSidebarReachableAtMinimumSize();
     void disablesTransportShortcutsWhileEditing();
     void editsAdditionalVideosInTheSyncTab();
+    void addsCameraBoxWidgets();
     void previewsAdditionalVideosByTheLayout();
     void showsAFrameInTheAlignmentAid();
     void previewsCameraSwitchingAndPictureInPictureOptions();
@@ -1123,7 +1124,7 @@ void EditorTests::buildsAddWidgetListAndInspectorFromDescriptors()
     auto *repeater = editor.window->findChild<QObject *>("addWidgetRepeater");
     QVERIFY(repeater);
     QCOMPARE(repeater->property("count").toInt(), editor.controller.widgetModel()->widgetCatalog().size());
-    QCOMPARE(repeater->property("count").toInt(), 9);
+    QCOMPARE(repeater->property("count").toInt(), 10);
 
     const QString style = editor.inspector->property("isTech").toBool() ? QStringLiteral("tech") : QStringLiteral("classic");
     const QStringList hidden = editor.controller.widgetModel()->unusedControls(QStringLiteral("retroCustomValue"), style);
@@ -1258,6 +1259,56 @@ void EditorTests::editsAdditionalVideosInTheSyncTab()
     QVERIFY2(!buttons.contains(QStringLiteral("Align…")), qPrintable(buttons.join(", ")));
     videos->clear();
     QTRY_VERIFY(!layout->isVisible());
+}
+
+void EditorTests::addsCameraBoxWidgets()
+{
+    // KAN-254: a new camera box takes the first camera no box uses, starts in the frame
+    // corner the other widgets cover least, and makes the DATA tab say the corner
+    // options are not used.
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    auto *videos = editor.controller.additionalVideoController();
+    ProjectSourceReference missing;
+    missing.relativePath = QStringLiteral("helmet.mp4");
+    videos->restore({{QStringLiteral("helmet"), QStringLiteral("Helmet"), missing, {0.0, 1.0}}},
+        VideoLayoutMode::PictureInPicture, QStringLiteral("/nonexistent-kan254/project.fetproject"));
+    auto *model = editor.controller.widgetModel();
+    QCOMPARE(videos->cameraBoxCount(), 0);
+    const int first = editor.controller.addWidget(QStringLiteral("cameraBox"));
+    const int second = editor.controller.addWidget(QStringLiteral("cameraBox"));
+    const int third = editor.controller.addWidget(QStringLiteral("cameraBox"));
+    QVERIFY(first >= 0 && second > first && third > second);
+    const auto camera = [model](const int index) {
+        return model->widget(index).value(QStringLiteral("settings")).toMap().value(QStringLiteral("camera")).toString();
+    };
+    QCOMPARE(camera(first), QStringLiteral("main"));
+    QCOMPARE(camera(second), QStringLiteral("helmet"));
+    QCOMPARE(camera(third), QStringLiteral("main")); // every camera has a box: start over
+    const auto position = [model](const int index) {
+        return QPointF(model->widget(index).value(QStringLiteral("x")).toDouble(), model->widget(index).value(QStringLiteral("y")).toDouble());
+    };
+    QVERIFY(position(first) != position(second));
+    QVERIFY(position(second) != position(third));
+    QCOMPARE(videos->cameraBoxCount(), 3);
+
+    editor.inspector->setProperty("currentTab", 1);
+    auto *panel = editor.window->findChild<QQuickItem *>(QStringLiteral("additionalVideosPanel"));
+    QVERIFY(panel);
+    QTRY_VERIFY(panel->isVisible());
+    QList<QQuickItem *> pending{panel};
+    QQuickItem *notice = nullptr;
+    while (!pending.isEmpty() && !notice) {
+        auto *item = pending.takeFirst();
+        if (item->objectName() == QStringLiteral("cameraBoxesNotice")) notice = item;
+        pending.append(item->childItems());
+    }
+    QVERIFY(notice);
+    QTRY_VERIFY(notice->isVisible());
+    model->removeWidget(third);
+    model->removeWidget(second);
+    model->removeWidget(first);
+    QTRY_VERIFY(!notice->isVisible());
 }
 
 void EditorTests::previewsAdditionalVideosByTheLayout()

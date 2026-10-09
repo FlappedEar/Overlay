@@ -746,7 +746,11 @@ QString layeredGraph(const StageBComposition &composition, const bool straight)
         const Layer &layer = *drawn[index].layer;
         QStringList chain;
         const bool fullFrameMain = layer.camera == 0 && layer.onAir;
-        if (!fullFrameMain)
+        if (!fullFrameMain && layer.crop)
+            // KAN-254: cover the box, then cut the overhang.
+            chain.append(QStringLiteral("scale=%1:%2:force_original_aspect_ratio=increase:flags=lanczos,crop=%1:%2,setsar=1")
+                .arg(layer.content.width()).arg(layer.content.height()));
+        else if (!fullFrameMain)
             chain.append(QStringLiteral("scale=%1:%2:flags=lanczos,setsar=1")
                 .arg(layer.content.width()).arg(layer.content.height()));
         if (layer.rect != layer.content && !fullFrameMain)
@@ -1107,7 +1111,7 @@ ExportResult ExportEngine::exportVideo(
                     const double last = (video.info.videoStartTime + seconds) * timing->timeFactor + timing->timeShift + sourceRangeStart;
                     footage[index + 1] = {first, last};
                 }
-                const auto layers = VideoComposition::plan(settings.videoLayout, outputSize, cameraIds, sourceSizes, endSeconds, footage);
+                const auto layers = VideoComposition::plan(settings.videoLayout, outputSize, cameraIds, sourceSizes, endSeconds, footage, settings.cameraBoxes);
                 if (layers.isEmpty()) {
                     result.error = QStringLiteral("Could not place the additional videos in the export.");
                     return result;

@@ -37,6 +37,8 @@ class AdditionalVideoController final : public QObject {
     Q_PROPERTY(QVariantMap program READ programMap NOTIFY changed)
     Q_PROPERTY(QVariantList cameras READ cameraList NOTIFY changed)
     Q_PROPERTY(int maximumCuts READ maximumCuts CONSTANT)
+    // KAN-254: the camera box widgets; bindings that depend on the plan read it.
+    Q_PROPERTY(int cameraBoxCount READ cameraBoxCount NOTIFY cameraBoxesChanged)
 
 public:
     // The main video's normalized path and its sync, for duplicate checks,
@@ -65,6 +67,11 @@ public:
     // The whole layout, picture-in-picture options and camera switching
     // included (KAN-245). Setting a different one is an edit.
     [[nodiscard]] const VideoLayout &videoLayout() const { return m_layout; }
+    // KAN-254: the scene's camera box widgets; while any exists they place the
+    // picture-in-picture boxes (VideoComposition::plan).
+    void setCameraBoxes(const QVector<VideoComposition::CameraBox> &boxes);
+    [[nodiscard]] int cameraBoxCount() const { return static_cast<int>(m_cameraBoxes.size()); }
+    [[nodiscard]] const QVector<VideoComposition::CameraBox> &cameraBoxes() const { return m_cameraBoxes; }
     void setVideoLayout(const VideoLayout &layout);
     [[nodiscard]] QVariantList videoList() const;
     [[nodiscard]] int count() const { return static_cast<int>(m_entries.size()); }
@@ -109,7 +116,7 @@ public:
     // width x height, by the same plan as export (VideoComposition::plan), in
     // drawing order. Each is a map with camera (0 main, then each video),
     // index, onAir, x, y, width, height (outer), contentX/Y/Width/Height,
-    // border, borderColor, fadeIn and windows [{start, end}] in main video
+    // border, borderColor, fadeIn, crop and windows [{start, end}] in main video
     // seconds. Empty side by side, or when nothing can be placed.
     Q_INVOKABLE QVariantList previewLayers(double width, double height) const;
 
@@ -139,6 +146,7 @@ public:
 
 signals:
     void changed();
+    void cameraBoxesChanged();
     // The user changed the list, a sync or the layout; the document is dirty.
     void edited();
     void statusMessage(const QString &status);
@@ -180,6 +188,7 @@ private:
     CurrentMainVideo m_mainVideo;
     QVector<Entry> m_entries;
     VideoLayout m_layout;
+    QVector<VideoComposition::CameraBox> m_cameraBoxes;
     quint64 m_generation = 0;
     quint64 m_nextRequest = 0;
     int m_pendingAdds = 0;

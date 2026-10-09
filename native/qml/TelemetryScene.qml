@@ -106,7 +106,7 @@ Item {
             property bool rendererOwnsPanel: ["speed", "pedals", "heartRate",
                                                "retroCustomValue", "gForceMagnitudeBar",
                                                "f1GForceRadar", "retroTachometer",
-                                               "lapCurrent", "designed"].indexOf(widgetType) >= 0
+                                               "lapCurrent", "designed", "cameraBox"].indexOf(widgetType) >= 0
                                            || (widgetType === "tyres" && widgetSettings.style === "tech")
 
             function configuredFontSize() {

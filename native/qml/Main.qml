@@ -956,7 +956,7 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: window.selectWidget(appController.widgetModel.addWidget(modelData.type), false)
+                                    onClicked: window.selectWidget(appController.addWidget(modelData.type), false)
                                 }
                             }
                         }

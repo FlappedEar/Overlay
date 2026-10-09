@@ -43,6 +43,7 @@ function(flappedear_add_native_test_suite name)
         FILES
             ../qml/TelemetryScene.qml
             ../qml/widgets/LapTimeWidget.qml
+            ../qml/widgets/CameraBoxWidget.qml
             ../qml/widgets/DesignedElements.qml
             ../qml/widgets/DesignedWidget.qml
             ../qml/widgets/RetroTachometerWidget.qml

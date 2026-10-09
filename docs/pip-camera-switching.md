@@ -114,18 +114,26 @@ Arek has not reviewed these; each is a revision away.
   `#FFFFFF`) and `fill` (`fill` crops the picture to the box, the default; `fit` keeps the whole
   picture and fills the rest with black).
 - The box's rectangle is the widget's `x`, `y`, `width` and `height` (shares of the frame, as every
-  widget), rounded to even pixels. Rotation, scale and opacity are ignored; a widget that is not
-  visible draws no box.
+  widget), rounded to even pixels. Rotation, scale and opacity are ignored, so the inspector does not
+  offer them for a camera box; a widget that is not visible draws no box.
 - The widget itself draws nothing into the overlay: the video box is drawn under the overlay by the
   same plan in preview and export, so the widget is the box's handle in the editor.
 - A new box starts in the frame corner where it overlaps the existing widgets least, 28 % of the frame wide with the main video's aspect (the real-footage check of 9 October 2026 found the top-right default under the template's map and heart-rate widgets). The video box is under the whole overlay, so widgets draw over it.
 - Boxes follow camera switching as before: a camera's box shows while it is not on air; while it is
   on air it fills the frame and its box is empty. A camera without a box widget has no box.
-- If the project has at least one visible camera box, the boxes replace the `pip` options (corner,
+- If the scene has at least one camera box widget (a hidden one counts, so hiding the last box does not bring the corner box back; delete the widgets to go back to the corner options), the boxes replace the `pip` options (corner,
   size, margin, border, cameras) entirely, and the DATA tab says so. With none, the `pip` options
   work as before, so existing projects do not change. `pip.enabled: false` still hides all boxes.
 - Box widgets are saved with the other widgets (they travel with templates and My widgets); no new
   project keys. Two boxes for one camera are allowed.
+
+### Built (KAN-256 to KAN-258)
+
+`cameraBox` widget type (descriptor, defaults, `CameraBoxWidget.qml` draws nothing); `cameraBoxes()`
+and `plan(..., boxes)`; export crops fill boxes and the preview draws the same crop;
+`AppController::addWidget` gives a new box its camera and `VideoComposition::startingBoxArea` its
+corner; the inspector has Camera, Picture and Border controls (`cameraBoxControls`); the DATA tab
+greys the corner options and says so while a box exists. User guide: Widgets > Camera box.
 
 ### Rules (VideoComposition)
 

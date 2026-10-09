@@ -1,5 +1,7 @@
 #include "export/VideoComposition.h"
 
+#include <QColor>
+#include <QJsonObject>
 #include <QMap>
 #include <QSet>
 
@@ -49,6 +51,26 @@ void addWindow(QVector<Window> &windows, const Window &window)
 }
 
 } // namespace
+
+QRectF startingBoxArea(const QVector<QRectF> &occupied)
+{
+    constexpr double size = 0.28;
+    constexpr double margin = 0.02;
+    const double far = 1.0 - size - margin;
+    const QRectF corners[] = {{far, margin, size, size}, {margin, margin, size, size},
+                              {far, far, size, size}, {margin, far, size, size}};
+    QRectF best = corners[0];
+    double least = -1.0;
+    for (const QRectF &corner : corners) {
+        double overlap = 0.0;
+        for (const QRectF &other : occupied) {
+            const QRectF common = corner.intersected(other);
+            if (common.width() > 0 && common.height() > 0) overlap += common.width() * common.height();
+        }
+        if (least < 0.0 || overlap < least) { least = overlap; best = corner; }
+    }
+    return best;
+}
 
 int onAirAt(const ProgramOptions &program, const QStringList &cameraIds, const double time)
 {
@@ -111,8 +133,35 @@ QVector<Segment> segments(const ProgramOptions &program, const QStringList &came
     return shown;
 }
 
+QVector<CameraBox> cameraBoxes(const QJsonArray &widgets)
+{
+    QVector<CameraBox> result;
+    for (const QJsonValue &entry : widgets) {
+        const QJsonObject widget = entry.toObject();
+        if (widget.value(QStringLiteral("type")).toString() != QStringLiteral("cameraBox")) continue;
+        const QJsonObject settings = widget.value(QStringLiteral("settings")).toObject();
+        CameraBox box;
+        box.shown = widget.value(QStringLiteral("visible")).toBool(true);
+        box.camera = settings.value(QStringLiteral("camera")).toString();
+        if (box.camera.isEmpty()) box.shown = false;
+        box.area = QRectF(widget.value(QStringLiteral("x")).toDouble(), widget.value(QStringLiteral("y")).toDouble(),
+            widget.value(QStringLiteral("width")).toDouble(), widget.value(QStringLiteral("height")).toDouble());
+        if (!std::isfinite(box.area.x()) || !std::isfinite(box.area.y()) || !std::isfinite(box.area.width())
+            || !std::isfinite(box.area.height()) || !(box.area.width() > 0.0) || !(box.area.height() > 0.0))
+            box.shown = false;
+        const double border = settings.value(QStringLiteral("borderWidth")).toDouble(0.0);
+        box.borderWidth = std::isfinite(border) ? static_cast<int>(std::lround(std::clamp(border, 0.0, 12.0))) : 0;
+        const QString color = settings.value(QStringLiteral("borderColor")).toString();
+        if (QColor(color).isValid() && color.size() == 7) box.borderColor = color.toUpper();
+        box.crop = settings.value(QStringLiteral("fill")).toString() != QStringLiteral("fit");
+        result.append(box);
+    }
+    return result;
+}
+
 QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStringList &cameraIds,
-    const QVector<QSize> &sourceSizes, const double endSeconds, const QVector<Window> &available)
+    const QVector<QSize> &sourceSizes, const double endSeconds, const QVector<Window> &available,
+    const QVector<CameraBox> &cameraBoxList)
 {
     if (output.width() < 4 || output.height() < 4 || sourceSizes.size() != cameraIds.size() || cameraIds.isEmpty()
         || !(endSeconds > 0.0) || !std::isfinite(endSeconds))
@@ -157,6 +206,43 @@ QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStrin
 
     // Picture-in-picture boxes.
     if (!pip.enabled) return result;
+    if (!cameraBoxList.isEmpty()) {
+        // KAN-254: each box is a widget's rectangle.
+        for (const CameraBox &widget : cameraBoxList) {
+            if (!widget.shown) continue;
+            const qsizetype camera = cameraIds.indexOf(widget.camera);
+            if (camera < 0) continue;
+            const int border = widget.borderWidth <= 0 ? 0
+                : std::max(2, static_cast<int>(std::lround(widget.borderWidth * output.height() / 1080.0 / 2.0)) * 2);
+            const int x = std::clamp(static_cast<int>(std::lround(widget.area.x() * output.width() / 2.0)) * 2, 0,
+                (output.width() - 2) / 2 * 2);
+            const int y = std::clamp(static_cast<int>(std::lround(widget.area.y() * output.height() / 2.0)) * 2, 0,
+                (output.height() - 2) / 2 * 2);
+            const QSize outer(std::min(evenFloor(widget.area.width() * output.width()), (output.width() - x) / 2 * 2),
+                std::min(evenFloor(widget.area.height() * output.height()), (output.height() - y) / 2 * 2));
+            if (outer.width() <= 2 * border + 2 || outer.height() <= 2 * border + 2) continue;
+            const QSize inner(outer.width() - 2 * border, outer.height() - 2 * border);
+            Layer layer;
+            layer.camera = static_cast<int>(camera);
+            layer.border = border;
+            layer.borderColor = widget.borderColor;
+            layer.crop = widget.crop;
+            if (widget.crop) {
+                layer.rect = QRect(x, y, outer.width(), outer.height());
+                layer.content = layer.rect.adjusted(border, border, -border, -border);
+            } else {
+                // The box closes up on the picture, centred in the widget's rectangle.
+                const QSize picture = fit(sourceSizes[camera], inner);
+                const QRect cell(x, y, outer.width(), outer.height());
+                layer.content = centred(picture, cell.adjusted(border, border, -border, -border));
+                layer.rect = layer.content.adjusted(-border, -border, border, border);
+            }
+            for (const Segment &stretch : stretches)
+                if (stretch.camera != layer.camera) addWindow(layer.windows, stretch.window);
+            if (!layer.windows.isEmpty()) result.append(layer);
+        }
+        return result;
+    }
     QVector<int> eligible;
     for (int camera = 0; camera < cameras; ++camera)
         if (!pip.cameras || pip.cameras->contains(cameraIds[camera])) eligible.append(camera);

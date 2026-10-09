@@ -19,6 +19,7 @@
 #include "telemetry/TrackGeometry.h"
 #include "telemetry/LapTiming.h"
 #include "telemetry/OutingLaps.h"
+#include "export/VideoComposition.h"
 #include "widgets/WidgetModel.h"
 
 #include <QGuiApplication>
@@ -398,6 +399,7 @@ int exportWorker(const QString &configPath)
         if (!FlappedEar::AdditionalVideosCodec::validLayout(config.value("videoLayout")))
             throw std::runtime_error("The video layout in the export configuration is invalid.");
         settings.videoLayout = FlappedEar::AdditionalVideosCodec::readVideoLayout(config.value("videoLayout"));
+        settings.cameraBoxes = FlappedEar::VideoComposition::cameraBoxes(config.value("widgets").toArray());
         settings.outputPath = config.value("outputPath").toString();
         settings.encoder = config.value("encoder").toString();
         settings.outputSize = outputSize;

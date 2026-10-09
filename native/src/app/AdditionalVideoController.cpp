@@ -522,6 +522,17 @@ QString AdditionalVideoController::onAirAt(const double seconds) const
     return ids.value(camera);
 }
 
+void AdditionalVideoController::setCameraBoxes(const QVector<VideoComposition::CameraBox> &boxes)
+{
+    const auto same = [](const VideoComposition::CameraBox &a, const VideoComposition::CameraBox &b) {
+        return a.camera == b.camera && a.area == b.area && a.borderWidth == b.borderWidth
+            && a.borderColor == b.borderColor && a.crop == b.crop;
+    };
+    if (boxes.size() == m_cameraBoxes.size() && std::equal(boxes.cbegin(), boxes.cend(), m_cameraBoxes.cbegin(), same)) return;
+    m_cameraBoxes = boxes;
+    emit cameraBoxesChanged();
+}
+
 QVariantList AdditionalVideoController::previewLayers(const double width, const double height) const
 {
     if (m_layout.mode != VideoLayoutMode::PictureInPicture || m_entries.isEmpty()) return {};
@@ -543,10 +554,11 @@ QVariantList AdditionalVideoController::previewLayers(const double width, const 
         map.insert(outer ? QStringLiteral("height") : prefix + QStringLiteral("Height"), rect.height());
     };
     int index = 0;
-    for (const auto &layer : VideoComposition::plan(m_layout, frame, ids, sizes, 1.0e7, footage)) {
+    for (const auto &layer : VideoComposition::plan(m_layout, frame, ids, sizes, 1.0e7, footage, m_cameraBoxes)) {
         QVariantMap map{{QStringLiteral("camera"), layer.camera}, {QStringLiteral("index"), index++},
             {QStringLiteral("onAir"), layer.onAir}, {QStringLiteral("border"), layer.border},
-            {QStringLiteral("borderColor"), layer.borderColor}, {QStringLiteral("fadeIn"), layer.fadeInSeconds}};
+            {QStringLiteral("borderColor"), layer.borderColor}, {QStringLiteral("fadeIn"), layer.fadeInSeconds},
+            {QStringLiteral("crop"), layer.crop}};
         rectMap(map, QString(), layer.rect);
         rectMap(map, QStringLiteral("content"), layer.content);
         QVariantList windows;

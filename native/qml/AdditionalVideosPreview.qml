@@ -28,6 +28,7 @@ Item {
     readonly property var layers: {
         root.controller.videos;
         root.controller.layout;
+        root.controller.cameraBoxCount;
         return root.width > 0 && root.height > 0 ? root.controller.previewLayers(root.width, root.height) : [];
     }
     // Picture in picture draws the plan's layers, and an empty plan means the
@@ -62,6 +63,16 @@ Item {
         }
         return -1;
     }
+    // The part of a picture of `width` x `height` that covers a box of `boxWidth` x `boxHeight`.
+    function coverRect(width, height, boxWidth, boxHeight) {
+        if (width <= 0 || height <= 0 || boxWidth <= 0 || boxHeight <= 0) return Qt.rect(0, 0, 0, 0);
+        if (boxWidth / boxHeight > width / height) {
+            const h = width * boxHeight / boxWidth;
+            return Qt.rect(0, (height - h) / 2, width, h);
+        }
+        const w = height * boxWidth / boxHeight;
+        return Qt.rect((width - w) / 2, 0, w, height);
+    }
     function fade(active, seconds) {
         return active && active.layer.fadeIn > 0 ? Math.max(0, Math.min(1, (seconds - active.start) / active.layer.fadeIn)) : 1;
     }
@@ -74,6 +85,8 @@ Item {
             required property var modelData
             readonly property var active: modelData.camera === 0 ? root.activeLayer(0, root.time) : null
             readonly property bool current: active !== null && active.layer.index === modelData.index
+            readonly property rect coverRect: root.coverRect(root.mainOutput.width, root.mainOutput.height,
+                                                             modelData.contentWidth, modelData.contentHeight)
             objectName: "mainVideoCopy"
             visible: current
             z: modelData.index
@@ -92,6 +105,8 @@ Item {
                 width: copy.modelData.contentWidth
                 height: copy.modelData.contentHeight
                 sourceItem: root.mainOutput
+                // A camera box set to fill shows the middle of the picture that covers the box.
+                sourceRect: copy.modelData.crop ? copy.coverRect : Qt.rect(0, 0, 0, 0)
                 live: copy.visible
             }
         }
@@ -120,6 +135,7 @@ Item {
             readonly property bool inside: targetSeconds >= 0 && targetSeconds <= modelData.durationSeconds
             readonly property bool placed: layered ? active !== null : legacyRect !== null
             objectName: "additionalVideoPreview"
+            clip: layered
             visible: ready && placed && inside
             z: layered && active ? active.layer.index : 0
             x: layered ? (active ? active.layer.x : 0) : (legacyRect ? legacyRect.x : 0)
@@ -144,18 +160,31 @@ Item {
                 }
             }
 
+            // Layered: the output keeps the whole picture at its own size under the box, and the
+            // box shows a copy of it, so every layer of the camera crops the full picture itself.
+            VideoOutput {
+                id: output
+                x: 0
+                y: 0
+                width: slot.layered ? implicitWidth : slot.width
+                height: slot.layered ? implicitHeight : slot.height
+                fillMode: VideoOutput.Stretch
+            }
             Rectangle {
                 anchors.fill: parent
                 visible: slot.layered && slot.active !== null
                 color: slot.active && slot.active.layer.onAir ? "black" : (slot.active ? slot.active.layer.borderColor : "black")
             }
-            VideoOutput {
-                id: output
-                x: slot.layered && slot.active ? slot.active.layer.contentX - slot.active.layer.x : 0
-                y: slot.layered && slot.active ? slot.active.layer.contentY - slot.active.layer.y : 0
-                width: slot.layered ? (slot.active ? slot.active.layer.contentWidth : 0) : slot.width
-                height: slot.layered ? (slot.active ? slot.active.layer.contentHeight : 0) : slot.height
-                fillMode: VideoOutput.Stretch
+            ShaderEffectSource {
+                visible: slot.layered && slot.active !== null
+                x: slot.active ? slot.active.layer.contentX - slot.active.layer.x : 0
+                y: slot.active ? slot.active.layer.contentY - slot.active.layer.y : 0
+                width: slot.active ? slot.active.layer.contentWidth : 0
+                height: slot.active ? slot.active.layer.contentHeight : 0
+                sourceItem: slot.layered ? output : null
+                sourceRect: slot.active && slot.active.layer.crop
+                    ? root.coverRect(output.width, output.height, width, height) : Qt.rect(0, 0, 0, 0)
+                live: visible
             }
             MediaPlayer {
                 id: player
@@ -207,6 +236,9 @@ Item {
                 width: extra.modelData.contentWidth
                 height: extra.modelData.contentHeight
                 sourceItem: extra.slotItem ? extra.slotItem.videoItem : null
+                sourceRect: extra.modelData.crop && extra.slotItem
+                    ? root.coverRect(extra.slotItem.videoItem.width, extra.slotItem.videoItem.height, width, height)
+                    : Qt.rect(0, 0, 0, 0)
                 live: extra.visible
             }
         }
