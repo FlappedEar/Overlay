@@ -70,23 +70,7 @@ ApplicationWindow {
             fullScreenPreview = systemFullScreen;
     }
 
-    Dialog {
-        font.family: Theme.sans
-        id: exportQuitDialog
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: 390
-        title: qsTr("Export is still running")
-        standardButtons: Dialog.Yes | Dialog.No
-        contentItem: FeLabel {
-            width: 330
-            text: qsTr("Cancel export and quit?")
-            wrapMode: Text.WordWrap
-            color: Theme.onSurface
-        }
-        onAccepted: appController.exporter.cancelAndQuit()
-    }
+    ExportQuitDialog { id: exportQuitDialog }
 
     DirtyProjectDialog { id: dirtyProjectDialog }
 
@@ -134,22 +118,9 @@ ApplicationWindow {
 
     StartupNoticeDialog { id: startupNoticeDialog }
 
-    Dialog {
-        font.family: Theme.sans
+    ExportOverwriteDialog {
         id: exportOverwriteDialog
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: 440
-        title: qsTr("Replace existing file?")
-        standardButtons: Dialog.Yes | Dialog.No
-        contentItem: FeLabel {
-            width: 380
-            text: qsTr("The selected export target already exists. Replace it only after the new video has encoded and passed validation?")
-            wrapMode: Text.WordWrap
-            color: Theme.onSurface
-        }
-        onAccepted: exportDialog.startExport(true)
+        onConfirmed: exportDialog.startExport(true)
     }
 
     menuBar: MenuBar {
