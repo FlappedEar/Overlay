@@ -61,6 +61,7 @@ private slots:
     void disablesTransportShortcutsWhileEditing();
     void editsAdditionalVideosInTheSyncTab();
     void previewsAdditionalVideosByTheLayout();
+    void showsAFrameInTheAlignmentAid();
     void previewsCameraSwitchingAndPictureInPictureOptions();
     void editsPictureInPictureAndCutsInTheDataTab();
     void savesTheSceneAsATemplateFromThePopup();
@@ -1306,6 +1307,48 @@ void EditorTests::previewsAdditionalVideosByTheLayout()
     // Before its first frame it is hidden: it starts 5 s after the main video.
     videos->setOffset(0, 5.0);
     QTRY_VERIFY(!slot->isVisible());
+}
+
+void EditorTests::showsAFrameInTheAlignmentAid()
+{
+    // The alignment aid's player must be paused on a frame: a stopped player
+    // draws nothing, which showed the aid as a black rectangle.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the alignment aid test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto encode = [&](const QString &name, const QString &source) {
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", source,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", directory.filePath(name)});
+        return encoder.waitForFinished(30'000) && encoder.exitCode() == 0;
+    };
+    QVERIFY(encode("main.mp4", "color=c=red:s=320x180:r=30:d=2"));
+    QVERIFY(encode("helmet.mp4", "color=c=blue:s=160x120:r=25:d=2"));
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    editor.controller.loadVideo(QUrl::fromLocalFile(directory.filePath("main.mp4")));
+    QTRY_COMPARE(editor.controller.videoLoadState(), QStringLiteral("ready"));
+    auto *videos = editor.controller.additionalVideoController();
+    videos->addVideo(QUrl::fromLocalFile(directory.filePath("helmet.mp4")));
+    QTRY_COMPARE(videos->count(), 1);
+    editor.inspector->setProperty("currentTab", 1);
+    auto *panel = editor.window->findChild<QQuickItem *>(QStringLiteral("additionalVideosPanel"));
+    QVERIFY(panel);
+    panel->setProperty("alignIndex", 0);
+    QObject *player = nullptr;
+    QTRY_VERIFY(([&] {
+        QList<QQuickItem *> queue{panel};
+        while (!queue.isEmpty()) {
+            auto *item = queue.takeFirst();
+            if (item->objectName() == QStringLiteral("additionalVideoAlignAid"))
+                return (player = item->property("player").value<QObject *>()) != nullptr;
+            queue.append(item->childItems());
+        }
+        return false;
+    })());
+    QTRY_VERIFY(player->property("hasVideo").toBool());
+    constexpr int pausedState = 2; // QMediaPlayer::PausedState
+    QTRY_COMPARE(player->property("playbackState").toInt(), pausedState);
 }
 
 void EditorTests::previewsCameraSwitchingAndPictureInPictureOptions()

@@ -150,6 +150,8 @@ ColumnLayout {
                         font.pixelSize: Theme.labelSmall
                     }
                     Rectangle {
+                        objectName: "additionalVideoAlignAid"
+                        readonly property alias player: alignPlayer
                         Layout.fillWidth: true
                         Layout.preferredHeight: width * 9 / 16
                         color: Theme.surfaceContainerLowest
@@ -161,12 +163,18 @@ ColumnLayout {
                         }
                         MediaPlayer {
                             id: alignPlayer
+                            objectName: "additionalVideoAlignPlayer"
                             source: card.aligning ? card.modelData.url : ""
                             videoOutput: alignOutput
                             onMediaStatusChanged: {
-                                // Show the frame at the main video's moment once loaded.
-                                if (mediaStatus === MediaPlayer.LoadedMedia && followMain.checked)
-                                    alignPlayer.position = Math.max(0, Math.round(root.controller.videoSecondsFor(card.index, appController.playbackTime) * 1000));
+                                // A stopped player draws nothing, so pause it on its first frame;
+                                // then it shows the frame at the main video's moment once loaded.
+                                if (mediaStatus === MediaPlayer.LoadedMedia) {
+                                    if (alignPlayer.playbackState === MediaPlayer.StoppedState)
+                                        alignPlayer.pause();
+                                    if (followMain.checked)
+                                        alignPlayer.position = Math.max(0, Math.round(root.controller.videoSecondsFor(card.index, appController.playbackTime) * 1000));
+                                }
                             }
                         }
                         Connections {
