@@ -2473,10 +2473,24 @@ void TelemetryCoreTests::matchesRaceChronoLapList()
     for (const auto &file : QDir(path).entryInfoList({"*.vbo"}, QDir::Files, QDir::Name)) {
         const QString rcz = QDir(path).filePath(file.completeBaseName() + QStringLiteral(".rcz"));
         if (!QFile::exists(rcz)) continue;
+        // Read session.json in chunks and stop at 1 MiB, so a corrupt or hostile RCZ cannot fill memory.
         QProcess unzip;
         unzip.start(QStringLiteral("unzip"), {QStringLiteral("-p"), rcz, QStringLiteral("session.json")});
-        if (!unzip.waitForFinished(30'000) || unzip.exitCode() != 0) QSKIP("unzip is not available to read session.json");
-        const auto reference = QJsonDocument::fromJson(unzip.readAllStandardOutput()).object().value("laps").toArray();
+        if (!unzip.waitForStarted(10'000)) QSKIP("unzip is not available to read session.json");
+        QByteArray metadata;
+        constexpr qint64 maximumMetadataBytes = 1024 * 1024;
+        while (unzip.state() != QProcess::NotRunning || unzip.bytesAvailable() > 0) {
+            if (unzip.bytesAvailable() == 0 && !unzip.waitForReadyRead(30'000) && unzip.state() != QProcess::NotRunning) break;
+            metadata += unzip.read(64 * 1024);
+            if (metadata.size() > maximumMetadataBytes) break;
+        }
+        const bool complete = unzip.state() == QProcess::NotRunning && metadata.size() <= maximumMetadataBytes;
+        if (!complete) unzip.kill();
+        unzip.waitForFinished(5'000);
+        QVERIFY2(complete && unzip.exitCode() == 0,
+            qPrintable(QStringLiteral("Cannot read session.json from %1").arg(rcz)));
+        const auto reference = QJsonDocument::fromJson(metadata).object().value("laps").toArray();
+        QVERIFY2(!reference.isEmpty(), qPrintable(QStringLiteral("%1 has no lap list").arg(rcz)));
         QVector<double> expected;
         for (const auto &value : reference) {
             const auto lap = value.toObject();
