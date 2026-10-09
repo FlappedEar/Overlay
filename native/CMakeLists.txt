@@ -429,6 +429,7 @@ qt_add_qml_module(flappedear_native
         qml/ProductAboutDialog.qml
         qml/ShortcutHelpDialog.qml
         qml/AdditionalVideosPanel.qml
+        qml/CameraSwitchingPanel.qml
         qml/AdditionalVideosPreview.qml
         qml/InspectorPanel.qml
         qml/StartupError.qml
