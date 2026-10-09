@@ -405,7 +405,7 @@ void AdditionalVideoController::cutAt(const QString &camera, const double second
     bool known = false;
     for (const QVariant &entry : cameraList()) known = known || entry.toMap().value(QStringLiteral("id")).toString() == camera;
     if (!known) return;
-    const double time = std::max(0.0, std::round(seconds * 1000.0) / 1000.0);
+    const double time = std::clamp(std::round(seconds * 1000.0) / 1000.0, 0.0, 1.0e9);
     VideoLayout layout = m_layout;
     auto &cuts = layout.program.cuts;
     qsizetype at = 0;
@@ -433,7 +433,7 @@ bool AdditionalVideoController::cutToNumber(const int number, const double secon
 void AdditionalVideoController::setCutTime(const int index, const double seconds)
 {
     if (index < 0 || index >= m_layout.program.cuts.size() || !std::isfinite(seconds)) return;
-    const double time = std::max(0.0, std::round(seconds * 1000.0) / 1000.0);
+    const double time = std::clamp(std::round(seconds * 1000.0) / 1000.0, 0.0, 1.0e9);
     VideoLayout layout = m_layout;
     auto &cuts = layout.program.cuts;
     ProgramCut moved = cuts[index];
@@ -493,11 +493,33 @@ void AdditionalVideoController::setCrossfadeSeconds(const double seconds)
     setVideoLayout(layout);
 }
 
+QVector<VideoComposition::Window> AdditionalVideoController::footageWindows() const
+{
+    const SyncTransform mainSync = m_mainVideo ? m_mainVideo().sync : SyncTransform{};
+    QVector<VideoComposition::Window> footage(m_entries.size() + 1, VideoComposition::Window{0.0, 1.0e7});
+    for (qsizetype index = 0; index < m_entries.size(); ++index) {
+        const auto &entry = m_entries[index];
+        const double seconds = entry.mediaInfo.videoDuration > 0.0 ? entry.mediaInfo.videoDuration : entry.mediaInfo.duration;
+        const SyncTransform &videoSync = entry.video.sync;
+        if (!(seconds > 0.0) || !(mainSync.timeScale > 0.0) || !(videoSync.timeScale > 0.0)) continue;
+        const double rate = mainSync.timeScale / videoSync.timeScale;
+        const double shift = (mainSync.offset - videoSync.offset) / videoSync.timeScale;
+        const double first = -shift / rate;
+        const double last = (seconds - shift) / rate;
+        if (std::isfinite(first) && std::isfinite(last)) footage[index + 1] = {std::min(first, last), std::max(first, last)};
+    }
+    return footage;
+}
+
 QString AdditionalVideoController::onAirAt(const double seconds) const
 {
     QStringList ids{mainCameraId};
     for (const auto &entry : m_entries) ids.append(entry.video.id);
-    return ids.value(VideoComposition::onAirAt(m_layout.program, ids, seconds));
+    // The camera a cut selects, or the main video when it has no footage now.
+    const int camera = VideoComposition::onAirAt(m_layout.program, ids, seconds);
+    const auto footage = footageWindows();
+    if (camera > 0 && camera < footage.size() && !(seconds >= footage[camera].start && seconds < footage[camera].end)) return ids.value(0);
+    return ids.value(camera);
 }
 
 QVariantList AdditionalVideoController::previewLayers(const double width, const double height) const
@@ -511,21 +533,7 @@ QVariantList AdditionalVideoController::previewLayers(const double width, const 
         const QSize size = entry.mediaInfo.displayVideoSize.isEmpty() ? entry.mediaInfo.videoSize : entry.mediaInfo.displayVideoSize;
         sizes.append(size.isEmpty() ? QSize(16, 9) : size); // not ready yet: keep its place
     }
-    // Where each video has footage on the main video's timeline; the main
-    // video shows outside it. A video not probed yet counts as covering all.
-    const SyncTransform mainSync = m_mainVideo ? m_mainVideo().sync : SyncTransform{};
-    QVector<VideoComposition::Window> footage(ids.size(), VideoComposition::Window{0.0, 1.0e7});
-    for (qsizetype index = 0; index < m_entries.size(); ++index) {
-        const auto &entry = m_entries[index];
-        const double seconds = entry.mediaInfo.videoDuration > 0.0 ? entry.mediaInfo.videoDuration : entry.mediaInfo.duration;
-        const SyncTransform &videoSync = entry.video.sync;
-        if (!(seconds > 0.0) || !(mainSync.timeScale > 0.0) || !(videoSync.timeScale > 0.0)) continue;
-        const double rate = mainSync.timeScale / videoSync.timeScale;
-        const double shift = (mainSync.offset - videoSync.offset) / videoSync.timeScale;
-        const double first = -shift / rate;
-        const double last = (seconds - shift) / rate;
-        if (std::isfinite(first) && std::isfinite(last)) footage[index + 1] = {std::min(first, last), std::max(first, last)};
-    }
+    const QVector<VideoComposition::Window> footage = footageWindows();
     QVariantList result;
     const auto rectMap = [](QVariantMap &map, const QString &prefix, const QRect &rect) {
         const bool outer = prefix.isEmpty();

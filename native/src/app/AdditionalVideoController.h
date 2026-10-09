@@ -1,6 +1,7 @@
 #pragma once
 
 #include "export/MediaProbe.h"
+#include "export/VideoComposition.h"
 #include "project/AdditionalVideos.h"
 
 #include <QHash>
@@ -171,6 +172,10 @@ private:
     [[nodiscard]] QString unusedId() const;
     [[nodiscard]] bool pathInUse(const QString &path, qsizetype except) const;
     void cancelProbes();
+
+    // Where each camera has footage on the main video's timeline (main
+    // first); one not probed yet counts as covering everything.
+    [[nodiscard]] QVector<VideoComposition::Window> footageWindows() const;
 
     CurrentMainVideo m_mainVideo;
     QVector<Entry> m_entries;

@@ -1422,6 +1422,13 @@ void EditorTests::previewsCameraSwitchingAndPictureInPictureOptions()
         QVERIFY(windows[0].toMap().value("end").toDouble() < 4.5);
     }
     QVERIFY(found);
+    // The label follows the footage: after the helmet video ends the main video is on air.
+    QCOMPARE(videos->onAirAt(3.7), videos->videos()[0].id);
+    QCOMPARE(videos->onAirAt(4.5), mainCameraId);
+
+    // A cut time beyond what the project file allows is clamped.
+    videos->cutAt(mainCameraId, 1.0e12);
+    QCOMPARE(videos->videoLayout().program.cuts.last().time, 1.0e9);
 }
 
 void EditorTests::editsPictureInPictureAndCutsInTheDataTab()
