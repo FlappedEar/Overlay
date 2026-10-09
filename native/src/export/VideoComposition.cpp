@@ -1,5 +1,8 @@
 #include "export/VideoComposition.h"
 
+#include <QMap>
+#include <QSet>
+
 #include <algorithm>
 #include <cmath>
 
@@ -27,7 +30,178 @@ QRect centred(const QSize &size, const QRect &cell)
             cell.y() + (cell.height() - size.height()) / 4 * 2, size.width(), size.height()};
 }
 
+int cameraIndex(const QStringList &cameraIds, const QString &id)
+{
+    const qsizetype index = cameraIds.indexOf(id);
+    return index < 0 ? 0 : static_cast<int>(index);
+}
+
+QRect centredRect(const QSize &size, const QSize &frame)
+{
+    return centred(size, QRect(QPoint(0, 0), frame));
+}
+
+void addWindow(QVector<Window> &windows, const Window &window)
+{
+    if (!(window.end > window.start)) return;
+    if (!windows.isEmpty() && windows.last().end >= window.start) windows.last().end = std::max(windows.last().end, window.end);
+    else windows.append(window);
+}
+
 } // namespace
+
+int onAirAt(const ProgramOptions &program, const QStringList &cameraIds, const double time)
+{
+    int camera = 0;
+    double latest = -1.0;
+    for (const ProgramCut &cut : program.cuts) {
+        if (cut.time <= time && cut.time >= latest) {
+            latest = cut.time;
+            camera = cameraIndex(cameraIds, cut.camera);
+        }
+    }
+    return camera;
+}
+
+QVector<Segment> segments(const ProgramOptions &program, const QStringList &cameraIds, const double endSeconds,
+    const QVector<Window> &available)
+{
+    if (!(endSeconds > 0.0) || !std::isfinite(endSeconds)) return {};
+    QVector<ProgramCut> cuts = program.cuts;
+    std::stable_sort(cuts.begin(), cuts.end(), [](const ProgramCut &a, const ProgramCut &b) { return a.time < b.time; });
+    QVector<Segment> result;
+    int camera = 0;
+    double start = 0.0;
+    const auto close = [&](const double end) {
+        if (!(end > start)) return;
+        if (!result.isEmpty() && result.last().camera == camera) result.last().window.end = end;
+        else result.append(Segment{camera, Window{start, end}});
+    };
+    for (const ProgramCut &cut : cuts) {
+        if (!std::isfinite(cut.time) || cut.time >= endSeconds) break;
+        const double at = std::max(0.0, cut.time);
+        close(at);
+        start = std::max(start, at);
+        camera = cameraIndex(cameraIds, cut.camera);
+    }
+    close(endSeconds);
+    if (available.isEmpty()) return result;
+
+    // A camera with no footage for part of its stretch cannot be shown there:
+    // the main video is on air for that part.
+    QVector<Segment> shown;
+    const auto append = [&shown](const int cameraIndex, const double start, const double end) {
+        if (!(end > start)) return;
+        if (!shown.isEmpty() && shown.last().camera == cameraIndex && shown.last().window.end >= start)
+            shown.last().window.end = end;
+        else shown.append(Segment{cameraIndex, Window{start, end}});
+    };
+    for (const Segment &stretch : std::as_const(result)) {
+        if (stretch.camera == 0 || stretch.camera >= available.size()) {
+            append(stretch.camera, stretch.window.start, stretch.window.end);
+            continue;
+        }
+        const Window &footage = available[stretch.camera];
+        const double from = std::clamp(footage.start, stretch.window.start, stretch.window.end);
+        const double to = std::clamp(footage.end, from, stretch.window.end);
+        append(0, stretch.window.start, from);
+        append(stretch.camera, from, to);
+        append(0, to, stretch.window.end);
+    }
+    return shown;
+}
+
+QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStringList &cameraIds,
+    const QVector<QSize> &sourceSizes, const double endSeconds, const QVector<Window> &available)
+{
+    if (output.width() < 4 || output.height() < 4 || sourceSizes.size() != cameraIds.size() || cameraIds.isEmpty()
+        || !(endSeconds > 0.0) || !std::isfinite(endSeconds))
+        return {};
+    if (std::any_of(sourceSizes.cbegin(), sourceSizes.cend(), [](const QSize &size) { return size.isEmpty(); })) return {};
+    const int cameras = static_cast<int>(cameraIds.size());
+    if (cameras < 2) return {};
+    const QVector<Segment> stretches = segments(layout.program, cameraIds, endSeconds, available);
+    const PipOptions &pip = layout.pip;
+    const bool fading = layout.program.transition == ProgramTransition::Crossfade;
+    const double fade = layout.program.crossfadeSeconds;
+    QVector<Layer> result;
+
+    // On-air layers: a camera other than the main video fills the frame
+    // (letterboxed) while it is on air. The main video is the base under
+    // everything; it gets a layer only to fade back in.
+    for (qsizetype index = 0; index < stretches.size(); ++index) {
+        const Segment &stretch = stretches[index];
+        if (stretch.camera == 0 && !(fading && index > 0)) continue;
+        Layer *layer = nullptr;
+        if (!fading) {
+            for (Layer &existing : result)
+                if (existing.camera == stretch.camera) layer = &existing;
+        }
+        if (layer == nullptr) {
+            Layer created;
+            created.camera = stretch.camera;
+            created.onAir = true;
+            created.rect = QRect(QPoint(0, 0), output);
+            created.content = stretch.camera == 0 ? created.rect
+                : centredRect(fit(sourceSizes[stretch.camera], output), output);
+            created.borderColor = QStringLiteral("#000000");
+            created.fadeInSeconds = fading && (index > 0 || stretch.camera != 0) ? fade : 0.0;
+            result.append(created);
+            layer = &result.last();
+        }
+        Window window = stretch.window;
+        // The next camera fades in over this one, so this one stays until it has.
+        if (fading && stretch.camera != 0 && index + 1 < stretches.size()) window.end += fade;
+        addWindow(layer->windows, window);
+    }
+
+    // Picture-in-picture boxes.
+    if (!pip.enabled) return result;
+    QVector<int> eligible;
+    for (int camera = 0; camera < cameras; ++camera)
+        if (!pip.cameras || pip.cameras->contains(cameraIds[camera])) eligible.append(camera);
+    int stackSize = 1;
+    for (const Segment &stretch : stretches)
+        stackSize = std::max(stackSize, static_cast<int>(eligible.size()) - (eligible.contains(stretch.camera) ? 1 : 0));
+    const int margin = evenFloor(std::min(output.width(), output.height()) * pip.margin * 1.0);
+    const int marginPx = pip.margin <= 0.0 ? 0 : margin;
+    QSize box(evenFloor(output.width() * pip.size), evenFloor(output.height() * pip.size));
+    if (stackSize * box.height() + (stackSize + 1) * marginPx > output.height())
+        box.setHeight(std::max(2, (output.height() - (stackSize + 1) * marginPx) / stackSize / 2 * 2));
+    if (box.width() > output.width() - 2 * marginPx) box.setWidth(std::max(2, (output.width() - 2 * marginPx) / 2 * 2));
+    const int border = pip.borderWidth <= 0 ? 0
+        : std::max(2, static_cast<int>(std::lround(pip.borderWidth * output.height() / 1080.0 / 2.0)) * 2);
+    if (box.width() <= 2 * border + 2 || box.height() <= 2 * border + 2) return {};
+    const bool right = pip.corner == PipCorner::TopRight || pip.corner == PipCorner::BottomRight;
+    const bool bottom = pip.corner == PipCorner::BottomLeft || pip.corner == PipCorner::BottomRight;
+
+    QMap<QPair<int, int>, Layer> boxes; // (slot, camera)
+    for (const Segment &stretch : stretches) {
+        int slot = 0;
+        for (const int camera : std::as_const(eligible)) {
+            if (camera == stretch.camera) continue;
+            Layer &layer = boxes[{slot, camera}];
+            if (layer.windows.isEmpty()) {
+                const QSize picture = fit(sourceSizes[camera], QSize(box.width() - 2 * border, box.height() - 2 * border));
+                const int width = picture.width() + 2 * border;
+                const int height = picture.height() + 2 * border;
+                const int slotTop = bottom
+                    ? output.height() - marginPx - box.height() - slot * (box.height() + marginPx)
+                    : marginPx + slot * (box.height() + marginPx);
+                layer.camera = camera;
+                layer.rect = QRect(right ? output.width() - marginPx - width : marginPx,
+                    bottom ? slotTop + box.height() - height : slotTop, width, height);
+                layer.content = layer.rect.adjusted(border, border, -border, -border);
+                layer.border = border;
+                layer.borderColor = pip.borderColor;
+            }
+            addWindow(layer.windows, stretch.window);
+            ++slot;
+        }
+    }
+    for (const Layer &layer : std::as_const(boxes)) result.append(layer);
+    return result;
+}
 
 QVector<QRect> layout(const VideoLayoutMode mode, const QSize &output, const QVector<QSize> &sourceSizes)
 {

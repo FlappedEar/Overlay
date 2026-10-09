@@ -85,6 +85,7 @@ private slots:
     void preservesFramesWithPositiveSourcePts_data();
     void preservesFramesWithPositiveSourcePts();
     void placesAdditionalVideosByLayout();
+    void plansPictureInPictureAndCameraSwitching();
     void timesAdditionalVideosAgainstTheMainVideo();
     void composesAnAdditionalVideoOnItsOwnTimeline();
     void preservesCfrCadenceForCommonRates();
@@ -2019,6 +2020,162 @@ void ExportTests::placesAdditionalVideosByLayout()
     QCOMPARE(layout(VideoLayoutMode::SideBySide, hd, {hd}), QVector<QRect>{QRect(0, 0, 1920, 1080)});
     QVERIFY(layout(VideoLayoutMode::PictureInPicture, hd, {hd, QSize()}).isEmpty());
     QVERIFY(layout(VideoLayoutMode::PictureInPicture, QSize(), {hd}).isEmpty());
+}
+
+void ExportTests::plansPictureInPictureAndCameraSwitching()
+{
+    // KAN-245: the layers preview and export draw. Without options it is the
+    // KAN-131 picture in picture, box for box.
+    using namespace VideoComposition;
+    const QSize hd(1920, 1080);
+    const QStringList ids{mainCameraId, "helmet", "rear"};
+    const QVector<QSize> sizes{hd, hd, QSize(1080, 1920)};
+    VideoLayout layout;
+    auto layers = plan(layout, hd, ids, sizes, 30.0);
+    QCOMPARE(layers.size(), 2);
+    QCOMPARE(layers[0].camera, 1);
+    QCOMPARE(layers[0].rect, QRect(1352, 32, 536, 300));
+    QCOMPARE(layers[1].camera, 2);
+    QCOMPARE(layers[1].rect, QRect(1720, 366, 168, 302));
+    QCOMPARE(layers[0].windows.size(), 1);
+    QCOMPARE(layers[0].windows[0].start, 0.0);
+    QCOMPARE(layers[0].windows[0].end, 30.0);
+    QVERIFY(!layers[0].onAir);
+
+    // Corner, size, margin and border; only the chosen cameras.
+    layout.pip.corner = PipCorner::BottomLeft;
+    layout.pip.size = 0.2;
+    layout.pip.borderWidth = 6;
+    layout.pip.borderColor = "#FF0000";
+    layout.pip.cameras = QStringList{"helmet"};
+    layers = plan(layout, hd, ids, sizes, 30.0);
+    QCOMPARE(layers.size(), 1);
+    QCOMPARE(layers[0].border, 6);
+    QCOMPARE(layers[0].borderColor, QString("#FF0000"));
+    QCOMPARE(layers[0].rect.x(), 32);
+    QCOMPARE(layers[0].rect.bottom() + 1, 1080 - 32);
+    QCOMPARE(layers[0].content, layers[0].rect.adjusted(6, 6, -6, -6));
+    QVERIFY(layers[0].rect.width() <= 384);
+    for (const QRect &rect : {layers[0].rect, layers[0].content})
+        QVERIFY(rect.x() % 2 == 0 && rect.y() % 2 == 0 && rect.width() % 2 == 0 && rect.height() % 2 == 0);
+
+    // Boxes that would not fit are made smaller, never off the frame.
+    layout = VideoLayout{};
+    layout.pip.size = 0.5;
+    layers = plan(layout, hd, ids, sizes, 30.0);
+    for (const Layer &layer : layers) QVERIFY(QRect(0, 0, 1920, 1080).contains(layer.rect));
+    QVERIFY(!layers[0].rect.intersects(layers[1].rect));
+
+    // Switching: the helmet from 10 s, the main video again from 20 s.
+    layout = VideoLayout{};
+    layout.program.cuts = {{10.0, "helmet"}, {20.0, "main"}};
+    QCOMPARE(onAirAt(layout.program, ids, 0.0), 0);
+    QCOMPARE(onAirAt(layout.program, ids, 9.999), 0);
+    QCOMPARE(onAirAt(layout.program, ids, 10.0), 1);
+    QCOMPARE(onAirAt(layout.program, ids, 19.0), 1);
+    QCOMPARE(onAirAt(layout.program, ids, 25.0), 0);
+    const auto stretches = segments(layout.program, ids, 30.0);
+    QCOMPARE(stretches.size(), 3);
+    QCOMPARE(stretches[1].camera, 1);
+    QCOMPARE(stretches[1].window.start, 10.0);
+    QCOMPARE(stretches[1].window.end, 20.0);
+    QCOMPARE(stretches[2].window.end, 30.0);
+    layers = plan(layout, hd, ids, sizes, 30.0);
+    const Layer *onAir = nullptr;
+    const Layer *helmetBox = nullptr;
+    const Layer *mainBox = nullptr;
+    const Layer *rearBox = nullptr;
+    for (const Layer &layer : layers) {
+        if (layer.onAir) onAir = &layer;
+        else if (layer.camera == 1) helmetBox = &layer;
+        else if (layer.camera == 0) mainBox = &layer;
+        else rearBox = &layer;
+    }
+    QVERIFY(onAir && helmetBox && mainBox && rearBox);
+    QCOMPARE(onAir->camera, 1);
+    QCOMPARE(onAir->rect, QRect(0, 0, 1920, 1080));
+    QCOMPARE(onAir->content, QRect(0, 0, 1920, 1080));
+    QCOMPARE(onAir->windows.size(), 1);
+    QCOMPARE(onAir->fadeInSeconds, 0.0);
+    // The camera on air leaves its box and the others close up: the main video
+    // takes the helmet's slot while it is on air, the rear one keeps its own.
+    QCOMPARE(helmetBox->windows.size(), 2);
+    QCOMPARE(helmetBox->windows[0].end, 10.0);
+    QCOMPARE(helmetBox->windows[1].start, 20.0);
+    QCOMPARE(mainBox->windows.size(), 1);
+    QCOMPARE(mainBox->windows[0].start, 10.0);
+    QCOMPARE(mainBox->windows[0].end, 20.0);
+    QCOMPARE(mainBox->rect.topLeft(), helmetBox->rect.topLeft());
+    QCOMPARE(rearBox->windows.size(), 1);
+    QCOMPARE(rearBox->windows[0].end, 30.0);
+
+    // A portrait camera on air is letterboxed in the black frame.
+    layout.program.cuts = {{5.0, "rear"}};
+    layers = plan(layout, hd, ids, sizes, 30.0);
+    QCOMPARE(layers[0].camera, 2);
+    QCOMPARE(layers[0].rect, QRect(0, 0, 1920, 1080));
+    QCOMPARE(layers[0].content, QRect(656, 0, 606, 1080));
+    QCOMPARE(layers[0].borderColor, QString("#000000"));
+
+    // A crossfade gives every switch its own layer, fading in over the last.
+    layout.program.cuts = {{10.0, "helmet"}, {20.0, "main"}};
+    layout.program.transition = ProgramTransition::Crossfade;
+    layout.program.crossfadeSeconds = 0.5;
+    layers = plan(layout, hd, ids, sizes, 30.0);
+    QVector<Layer> fades;
+    for (const Layer &layer : layers) if (layer.onAir) fades.append(layer);
+    QCOMPARE(fades.size(), 2);
+    QCOMPARE(fades[0].camera, 1);
+    QCOMPARE(fades[0].fadeInSeconds, 0.5);
+    QCOMPARE(fades[0].windows[0].start, 10.0);
+    QCOMPARE(fades[0].windows[0].end, 20.5); // stays under the fade back to the main video
+    QCOMPARE(fades[1].camera, 0);
+    QCOMPARE(fades[1].windows[0].start, 20.0);
+    QCOMPARE(fades[1].windows[0].end, 30.0);
+
+    // A cut at time zero still fades the camera in over the main video.
+    layout.program.cuts = {{0.0, "helmet"}};
+    layers = plan(layout, hd, ids, sizes, 30.0);
+    QCOMPARE(layers[0].camera, 1);
+    QCOMPARE(layers[0].fadeInSeconds, 0.5);
+
+    // A camera is on air only where it has footage; the main video fills the rest.
+    layout.program.transition = ProgramTransition::Cut;
+    layout.program.cuts = {{5.0, "helmet"}};
+    QVector<Window> footage(3, Window{0.0, 30.0});
+    footage[1] = Window{8.0, 20.0};
+    const auto shown = segments(layout.program, ids, 30.0, footage);
+    QCOMPARE(shown.size(), 3);
+    QCOMPARE(shown[0].camera, 0);
+    QCOMPARE(shown[0].window.end, 8.0);
+    QCOMPARE(shown[1].camera, 1);
+    QCOMPARE(shown[1].window.start, 8.0);
+    QCOMPARE(shown[1].window.end, 20.0);
+    QCOMPARE(shown[2].camera, 0);
+    QCOMPARE(shown[2].window.end, 30.0);
+    layers = plan(layout, hd, ids, sizes, 30.0, footage);
+    for (const Layer &layer : layers)
+        if (layer.onAir) QCOMPARE(layer.windows[0].start, 8.0);
+    layout.program.cuts = {{10.0, "helmet"}, {20.0, "main"}};
+    layout.program.transition = ProgramTransition::Crossfade;
+
+    // Picture in picture off: only the on-air layers; none with the main video throughout.
+    layout.pip.enabled = false;
+    layers = plan(layout, hd, ids, sizes, 30.0);
+    QCOMPARE(layers.size(), 2);
+    layout.program = {};
+    QVERIFY(plan(layout, hd, ids, sizes, 30.0).isEmpty());
+
+    // A cut for a camera that is not there shows the main video; bad input gives nothing.
+    ProgramOptions unknown;
+    unknown.cuts = {{3.0, "gone"}};
+    QCOMPARE(onAirAt(unknown, ids, 5.0), 0);
+    QCOMPARE(segments(unknown, ids, 10.0).size(), 1);
+    QVERIFY(plan(VideoLayout{}, hd, ids, {hd, hd}, 30.0).isEmpty());
+    QVERIFY(plan(VideoLayout{}, hd, ids, {hd, hd, QSize()}, 30.0).isEmpty());
+    QVERIFY(plan(VideoLayout{}, hd, ids, sizes, 0.0).isEmpty());
+    QVERIFY(plan(VideoLayout{}, hd, {mainCameraId}, {hd}, 30.0).isEmpty());
+    QVERIFY(segments({}, ids, std::numeric_limits<double>::infinity()).isEmpty());
 }
 
 void ExportTests::timesAdditionalVideosAgainstTheMainVideo()
