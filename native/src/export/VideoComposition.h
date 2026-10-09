@@ -5,6 +5,8 @@
 
 #include <QRect>
 #include <QSize>
+#include <QString>
+#include <QStringList>
 #include <QVector>
 
 #include <optional>
@@ -28,6 +30,56 @@ inline constexpr double marginShare = 0.03;
 // videos. Every position and size is even, as 4:2:0 output needs. Empty when
 // a size is not valid.
 [[nodiscard]] QVector<QRect> layout(VideoLayoutMode mode, const QSize &output, const QVector<QSize> &sourceSizes);
+
+// KAN-245: picture-in-picture options and camera switching. Cameras are
+// numbered by the order of `cameraIds`: index 0 is the main video (id
+// `mainCameraId`), then each additional video. Times are seconds on the main
+// video's timeline.
+struct Window {
+    double start = 0.0;
+    double end = 0.0; // exclusive
+};
+
+// One drawn rectangle of the output: a picture-in-picture box, or the
+// on-air camera filling the frame. Layers are in drawing order, later on top;
+// the main video fills the frame under all of them.
+struct Layer {
+    int camera = 0;
+    bool onAir = false;
+    // Outer rectangle, border included; `content` is where the picture goes
+    // (inside the border, or the fitted picture of an on-air camera in the
+    // full frame, whose surroundings are black).
+    QRect rect;
+    QRect content;
+    int border = 0;
+    QString borderColor;
+    // When the layer is drawn. A fading layer keeps its window and ramps its
+    // opacity from 0 to 1 over `fadeInSeconds` from each window's start.
+    QVector<Window> windows;
+    double fadeInSeconds = 0.0;
+};
+
+// The camera on air at `time`: the last cut at or before it, the main video
+// before the first cut or when a cut names a camera that is not in `cameraIds`.
+[[nodiscard]] int onAirAt(const ProgramOptions &program, const QStringList &cameraIds, double time);
+
+// The on-air stretches from the cuts, adjacent stretches of one camera joined;
+// they cover [0, endSeconds). Empty cuts give the main video throughout.
+struct Segment {
+    int camera = 0;
+    Window window;
+};
+[[nodiscard]] QVector<Segment> segments(const ProgramOptions &program, const QStringList &cameraIds, double endSeconds);
+
+// Every layer of a picture-in-picture output for the whole run
+// (`endSeconds` is when the last cut stays on air until). `sourceSizes` are the
+// cameras' display sizes, main first. The boxes keep fixed sizes; the cameras
+// off air are packed into slots from the corner, so a camera moves to the slot
+// its place among the cameras off air gives. With the picture-in-picture
+// switched off there are only on-air layers, and no layers at all while the
+// main video is on air throughout. Empty when a size is not valid.
+[[nodiscard]] QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStringList &cameraIds,
+    const QVector<QSize> &sourceSizes, double endSeconds);
 
 // Which moment of an additional video an output frame shows. Both videos'
 // syncs map their video time to the same telemetry time, so the additional
