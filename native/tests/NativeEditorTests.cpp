@@ -63,6 +63,7 @@ private slots:
     void previewsAdditionalVideosByTheLayout();
     void savesTheSceneAsATemplateFromThePopup();
     void asksBeforeDiscardingUnsavedChanges();
+    void confirmsExportQuitAndOverwrite();
     void offersRecoveryAtStartup();
     void opensTheHelpDialogs();
 };
@@ -1418,6 +1419,37 @@ void EditorTests::asksBeforeDiscardingUnsavedChanges()
     QTRY_VERIFY(!dialog->property("visible").toBool());
     QVERIFY(editor.controller.pendingDestructiveAction().isEmpty());
     QVERIFY(!editor.controller.dirty());
+}
+
+// KAN-216: the two export confirmations live in ExportQuitDialog.qml and
+// ExportOverwriteDialog.qml. Replacing a file is confirmed through the
+// dialog's confirmed() signal, and No does not start anything; the quit
+// question closes without cancelling an export that is not running.
+void EditorTests::confirmsExportQuitAndOverwrite()
+{
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    auto *overwrite = editor.window->findChild<QObject *>("exportOverwriteDialog");
+    auto *quit = editor.window->findChild<QObject *>("exportQuitDialog");
+    QVERIFY(overwrite && quit);
+
+    QSignalSpy confirmed(overwrite, SIGNAL(confirmed()));
+    QVERIFY(QMetaObject::invokeMethod(overwrite, "open"));
+    QTRY_VERIFY(overwrite->property("opened").toBool());
+    QVERIFY(QMetaObject::invokeMethod(overwrite, "reject"));
+    QTRY_VERIFY(!overwrite->property("visible").toBool());
+    QCOMPARE(confirmed.count(), 0);
+    QVERIFY(QMetaObject::invokeMethod(overwrite, "open"));
+    QTRY_VERIFY(overwrite->property("opened").toBool());
+    QVERIFY(QMetaObject::invokeMethod(overwrite, "accept"));
+    QTRY_VERIFY(!overwrite->property("visible").toBool());
+    QCOMPARE(confirmed.count(), 1);
+
+    QVERIFY(QMetaObject::invokeMethod(quit, "open"));
+    QTRY_VERIFY(quit->property("opened").toBool());
+    QVERIFY(QMetaObject::invokeMethod(quit, "reject"));
+    QTRY_VERIFY(!quit->property("visible").toBool());
+    QVERIFY(!editor.controller.exporter()->exporting());
 }
 
 // KAN-216: the startup recovery offer lives in RecoveryDialog.qml. It is open

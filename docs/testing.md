@@ -2712,6 +2712,9 @@ Three `AGENTS.md` UI invariants now have automated tests:
   recovery snapshot shows the recovery dialog; Discard closes it and deletes the snapshot.
 - **Help dialogs** (`EditorTests::opensTheHelpDialogs`). About and Keyboard Shortcuts open and
   close, About fits the window, and the startup notice stays closed when nothing was left behind.
+- **Export confirmations** (`EditorTests::confirmsExportQuitAndOverwrite`). The replace-existing-file
+  question emits `confirmed()` on Yes and nothing on No; the quit question closes on No without
+  cancelling an export.
 - **Transport shortcuts while editing**
   (`EditorTests::disablesTransportShortcutsWhileEditing`). Space, Left, Right, Shift+Left,
   Shift+Right, Home and End are off while an inspector text field or spin box has focus, and
