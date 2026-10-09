@@ -421,6 +421,7 @@ qt_add_qml_module(flappedear_native
         qml/TemplateSavePopup.qml
         qml/DirtyProjectDialog.qml
         qml/ExportQuitDialog.qml
+        qml/FileDialogs.qml
         qml/ExportOverwriteDialog.qml
         qml/SourceMismatchDialog.qml
         qml/RecoveryDialog.qml

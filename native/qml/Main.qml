@@ -143,7 +143,7 @@ ApplicationWindow {
             Action {
                 text: qsTr("Open Project…")
                 shortcut: StandardKey.Open
-                onTriggered: projectOpenDialog.open()
+                onTriggered: fileDialogs.openProject()
             }
             Action {
                 text: qsTr("Save Project")
@@ -168,12 +168,12 @@ ApplicationWindow {
             Action {
                 text: qsTr("Open Video…")
                 shortcut: "Ctrl+Shift+V"
-                onTriggered: videoDialog.open()
+                onTriggered: fileDialogs.openVideo()
             }
             Action {
                 text: qsTr("Open telemetry…")
                 shortcut: "Ctrl+Shift+T"
-                onTriggered: vboDialog.open()
+                onTriggered: fileDialogs.openTelemetry()
             }
             MenuSeparator {}
             Action {
@@ -212,7 +212,7 @@ ApplicationWindow {
             }
             Action {
                 text: qsTr("Import Widget…")
-                onTriggered: widgetImportDialog.open()
+                onTriggered: fileDialogs.openWidgetImport()
             }
         }
         Menu {
@@ -257,9 +257,7 @@ ApplicationWindow {
             appController.requestQuit()
     }
     function openProjectSaveDialog() {
-        // A native macOS FileDialog cannot reliably become modal while the native
-        // Save/Discard/Cancel dialog is still unwinding its button callback.
-        Qt.callLater(() => projectSaveDialog.open())
+        fileDialogs.openProjectSave()
     }
     function enterFullScreen() {
         if (visibility !== Window.FullScreen)
@@ -538,111 +536,18 @@ ApplicationWindow {
         onActivated: window.deleteSelectedWidget()
     }
 
-    FileDialog {
-        id: videoDialog
-        title: qsTr("Open motorsport video")
-        nameFilters: [qsTr("Video files (*.mp4 *.mov *.MP4 *.MOV)")]
-        // KAN-104: several files, or a GoPro chapter, are reviewed as chapter groups first.
-        fileMode: FileDialog.OpenFiles
-        onAccepted: {
-            if (appController.videoFilesNeedReview(selectedFiles)) {
-                appController.videoChapters.review(selectedFiles);
-                videoChaptersDialog.open();
-            } else {
-                appController.loadVideo(selectedFiles[0]);
-            }
-        }
+    FileDialogs {
+        id: fileDialogs
+        host: window
+        onVideoChaptersReviewRequested: videoChaptersDialog.open()
+        onExportOutputChosen: file => exportDialog.outputFile = file
     }
     VideoChaptersDialog { id: videoChaptersDialog }
     WidgetEditor { id: widgetEditor; objectName: "widgetEditor" }
-    property string libraryExportId: ""
-    FileDialog {
-        id: widgetImportDialog
-        title: qsTr("Import widget")
-        nameFilters: [qsTr("FlappedEar widgets (*.fetwidget *.json)")]
-        onAccepted: appController.widgetModel.importLibraryWidget(selectedFile)
-    }
-    FileDialog {
-        id: widgetExportDialog
-        title: qsTr("Export widget")
-        fileMode: FileDialog.SaveFile
-        defaultSuffix: "fetwidget"
-        nameFilters: [qsTr("FlappedEar widgets (*.fetwidget)")]
-        onAccepted: appController.widgetModel.exportLibraryWidget(window.libraryExportId, selectedFile)
-    }
-    FileDialog {
-        id: vboDialog
-        title: qsTr("Open telemetry")
-        nameFilters: [qsTr("Telemetry (*.vbo *.rcz)")]
-        onAccepted: appController.loadVbo(selectedFile)
-    }
-    FileDialog {
-        id: videoRelinkDialog
-        title: qsTr("Locate project video")
-        nameFilters: [qsTr("Video files (*.mp4 *.mov)")]
-        onAccepted: appController.relinkVideo(selectedFile)
-    }
-    FileDialog {
-        id: vboRelinkDialog
-        title: qsTr("Locate project telemetry")
-        nameFilters: [qsTr("Telemetry (*.vbo *.rcz)")]
-        onAccepted: appController.relinkVbo(selectedFile)
-    }
-    FileDialog {
-        id: projectOpenDialog
-        title: qsTr("Open FlappedEar Overlays project")
-        nameFilters: [qsTr("FlappedEar projects (*.fetproject)")]
-        onAccepted: {
-            window.clearWidgetSelection();
-            appController.requestOpenProject(selectedFile);
-        }
-    }
-    FileDialog {
-        id: projectSaveDialog
-        title: qsTr("Save FlappedEar Overlays project")
-        fileMode: FileDialog.SaveFile
-        defaultSuffix: "fetproject"
-        nameFilters: [qsTr("FlappedEar projects (*.fetproject)")]
-        onAccepted: appController.saveProject(selectedFile)
-        onRejected: {
-            if (appController.pendingDestructiveAction.length > 0)
-                appController.cancelPendingDestructiveAction()
-        }
-    }
-    FileDialog {
-        id: exportOutputDialog
-        title: qsTr("Export HEVC video")
-        fileMode: FileDialog.SaveFile
-        defaultSuffix: "mp4"
-        nameFilters: [qsTr("HEVC MP4 video (*.mp4)")]
-        onAccepted: exportDialog.outputFile = selectedFile
-    }
-    FileDialog {
-        id: templateImportDialog
-        title: qsTr("Import layout template")
-        nameFilters: [qsTr("FlappedEar templates (*.fettemplate *.json)")]
-        onAccepted: {
-            const templateId = appController.widgetModel.importTemplate(selectedFile);
-            if (templateId)
-                appController.templatePicker.select(templateId);
-        }
-    }
-    FileDialog {
-        id: templateExportDialog
-        title: qsTr("Export layout template")
-        fileMode: FileDialog.SaveFile
-        defaultSuffix: "fettemplate"
-        nameFilters: [qsTr("FlappedEar templates (*.fettemplate)")]
-        onAccepted: {
-            const item = window.selectedTemplate();
-            if (item)
-                appController.widgetModel.exportTemplate(item.id, selectedFile);
-        }
-    }
 
     ExportDialog {
         id: exportDialog
-        onOutputFileRequested: exportOutputDialog.open()
+        onOutputFileRequested: fileDialogs.openExportOutput()
         onOverwriteConfirmationRequested: exportOverwriteDialog.open()
     }
 
@@ -827,12 +732,12 @@ ApplicationWindow {
                 FeButton {
                     compact: true
                     text: qsTr("Open video")
-                    onClicked: videoDialog.open()
+                    onClicked: fileDialogs.openVideo()
                 }
                 FeButton {
                     compact: true
                     text: qsTr("Open telemetry")
-                    onClicked: vboDialog.open()
+                    onClicked: fileDialogs.openTelemetry()
                 }
                 FeButton {
                     compact: true
@@ -841,7 +746,7 @@ ApplicationWindow {
                              || appController.videoLoadState === "error"
                     text: appController.videoLoadState === "mismatch"
                         ? qsTr("Video mismatch · Locate…") : qsTr("Video missing · Locate…")
-                    onClicked: videoRelinkDialog.open()
+                    onClicked: fileDialogs.openVideoRelink()
                 }
                 FeButton {
                     compact: true
@@ -850,7 +755,7 @@ ApplicationWindow {
                              || appController.vboLoadState === "error"
                     text: appController.vboLoadState === "mismatch"
                         ? qsTr("Telemetry mismatch · Locate…") : qsTr("Telemetry missing · Locate…")
-                    onClicked: vboRelinkDialog.open()
+                    onClicked: fileDialogs.openTelemetryRelink()
                 }
                 FeButton {
                     compact: true
@@ -965,14 +870,14 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             compact: true
                             text: qsTr("Import…")
-                            onClicked: templateImportDialog.open()
+                            onClicked: fileDialogs.openTemplateImport()
                         }
                         FeButton {
                             Layout.fillWidth: true
                             compact: true
                             text: qsTr("Export…")
                             enabled: window.selectedTemplate() !== null
-                            onClicked: templateExportDialog.open()
+                            onClicked: fileDialogs.openTemplateExport()
                         }
                         FeButton {
                             Layout.fillWidth: true
@@ -1104,8 +1009,7 @@ ApplicationWindow {
                                     ToolTip.visible: hovered
                                     ToolTip.text: qsTr("Export…")
                                     onClicked: {
-                                        window.libraryExportId = modelData.id;
-                                        widgetExportDialog.open();
+                                        fileDialogs.exportWidget(modelData.id);
                                     }
                                 }
                                 FeButton {
@@ -1124,7 +1028,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         compact: true
                         text: qsTr("Import widget…")
-                        onClicked: widgetImportDialog.open()
+                        onClicked: fileDialogs.openWidgetImport()
                     }
 
                     SectionTitle {
@@ -1355,7 +1259,7 @@ ApplicationWindow {
                                     Layout.alignment: Qt.AlignHCenter
                                     accent: true
                                     text: qsTr("Choose video")
-                                    onClicked: videoDialog.open()
+                                    onClicked: fileDialogs.openVideo()
                                 }
                             }
                             WidgetOverlay {
@@ -1718,7 +1622,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             text: appController.videoName ? qsTr("Change video") : qsTr("Choose video")
                             accent: !appController.videoName
-                            onClicked: videoDialog.open()
+                            onClicked: fileDialogs.openVideo()
                         }
                     }
                 }
@@ -1764,7 +1668,7 @@ ApplicationWindow {
                         FeButton {
                             Layout.fillWidth: true
                             text: appController.telemetryName ? qsTr("Change telemetry") : qsTr("Choose telemetry")
-                            onClicked: vboDialog.open()
+                            onClicked: fileDialogs.openTelemetry()
                         }
                     }
                 }
@@ -1810,7 +1714,7 @@ ApplicationWindow {
                         FeButton {
                             Layout.fillWidth: true
                             text: qsTr("Open project…")
-                            onClicked: projectOpenDialog.open()
+                            onClicked: fileDialogs.openProject()
                         }
                     }
                 }
