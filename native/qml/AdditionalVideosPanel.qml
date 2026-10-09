@@ -200,18 +200,30 @@ ColumnLayout {
                         Layout.fillWidth: true
                         readonly property real frameMilliseconds: card.modelData.frameRate > 0 ? 1000 / card.modelData.frameRate : 40
                         FeButton {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            Layout.preferredWidth: 1
                             text: "−1 s"
                             onClicked: { followMain.checked = false; alignPlayer.position = Math.max(0, alignPlayer.position - 1000); }
                         }
                         FeButton {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            Layout.preferredWidth: 1
                             text: qsTr("−1 frame")
                             onClicked: { followMain.checked = false; alignPlayer.position = Math.max(0, alignPlayer.position - Math.round(parent.frameMilliseconds)); }
                         }
                         FeButton {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            Layout.preferredWidth: 1
                             text: qsTr("+1 frame")
                             onClicked: { followMain.checked = false; alignPlayer.position = alignPlayer.position + Math.round(parent.frameMilliseconds); }
                         }
                         FeButton {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            Layout.preferredWidth: 1
                             text: "+1 s"
                             onClicked: { followMain.checked = false; alignPlayer.position = alignPlayer.position + 1000; }
                         }

@@ -23,6 +23,7 @@ for text with tabular digits, JetBrains Mono for times.
   so a widget font typed in the editor previews and exports alike. The test
   binary bundles the same files. Chakra Petch (500 to 700, OFL 1.1) is bundled
   for the Tech overlay style (KAN-193); the editor itself does not use it.
+- The inspector's tabs keep `Theme.inspectorGutter` (12 px) at both sides, as the tab buttons above them do. A control that cannot shrink (a row of fixed-width buttons) must not push a tab wider than the pane; `EditorTests::showsAFrameInTheAlignmentAid` and `keepsSidebarReachableAtMinimumSize` check it.
 - The shared controls `FeButton`, `FeCheckBox`, `FeComboBox`, `FeSlider`,
   `FeSpinBox`, `FeTextField`, `SectionTitle` and `ColorField` use only theme
   names. New screens use these controls and theme names, never their own hex

@@ -1194,6 +1194,8 @@ void EditorTests::keepsSidebarReachableAtMinimumSize()
                 .arg(area.top()).arg(area.height()).arg(contentHeight);
             QVERIFY2(area.top() >= -0.5 && area.bottom() <= contentHeight + 0.5 && area.height() <= viewport,
                      qPrintable(where));
+            // Every control keeps the inspector's side gutter, not touching its edges.
+            QVERIFY2(area.left() >= 11.5 && area.right() <= flickable->width() - 11.5, qPrintable(where));
             // Scrolling the one surface brings it fully into view.
             flickable->setProperty("contentY", std::clamp(area.top() - 4.0, 0.0, maximumY));
             const QRectF shown = control->mapRectToItem(flickable, QRectF(0, 0, control->width(), control->height()));
@@ -1347,6 +1349,32 @@ void EditorTests::showsAFrameInTheAlignmentAid()
         return false;
     })());
     QTRY_VERIFY(player->property("hasVideo").toBool());
+    // The aid and the rest of the tab stay inside the inspector's gutters: no
+    // control may push the tab wider than the pane.
+    editor.window->resize(1180, 720);
+    auto *dataScroll = editor.window->findChild<QQuickItem *>(QStringLiteral("inspectorDataScroll"));
+    QVERIFY(dataScroll);
+    QQuickItem *flick = nullptr;
+    QList<QQuickItem *> pending{dataScroll};
+    while (!pending.isEmpty() && !flick) {
+        auto *item = pending.takeFirst();
+        if (item->inherits("QQuickFlickable")) flick = item;
+        pending.append(item->childItems());
+    }
+    QVERIFY(flick);
+    QTRY_VERIFY(flick->width() > 200);
+    QTest::qWait(500);
+    auto *tabContent = flick->property("contentItem").value<QQuickItem *>();
+    QList<QQuickItem *> walk = tabContent->childItems();
+    while (!walk.isEmpty()) {
+        auto *item = walk.takeFirst();
+        walk.append(item->childItems());
+        if (!item->isVisible() || item->width() <= 0) continue;
+        const QRectF area = item->mapRectToItem(flick, QRectF(0, 0, item->width(), item->height()));
+        QVERIFY2(area.right() <= flick->width() - 11.5,
+                 qPrintable(QStringLiteral("%1 %2 reaches %3 of %4").arg(QString::fromLatin1(item->metaObject()->className()),
+                     item->objectName()).arg(area.right()).arg(flick->width())));
+    }
     constexpr int pausedState = 2; // QMediaPlayer::PausedState
     QTRY_COMPARE(player->property("playbackState").toInt(), pausedState);
 }

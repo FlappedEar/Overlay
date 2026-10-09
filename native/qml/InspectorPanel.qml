@@ -110,12 +110,13 @@ Rectangle {
                 objectName: "inspectorWidgetScroll"
                 clip: true
                 contentWidth: availableWidth
-                contentHeight: widgetContent.implicitHeight
+                contentHeight: widgetContent.implicitHeight + Theme.inspectorGutter
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
                 ColumnLayout {
                     id: widgetContent
-                    width: widgetScroll.availableWidth
+                    x: Theme.inspectorGutter
+                    width: widgetScroll.availableWidth - 2 * Theme.inspectorGutter
                     spacing: 7
 
                     Item {
@@ -1326,12 +1327,13 @@ Rectangle {
                 objectName: "inspectorDataScroll"
                 clip: true
                 contentWidth: availableWidth
-                contentHeight: dataContent.implicitHeight
+                contentHeight: dataContent.implicitHeight + Theme.inspectorGutter
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
                 ColumnLayout {
                     id: dataContent
-                    width: dataScroll.availableWidth
+                    x: Theme.inspectorGutter
+                    width: dataScroll.availableWidth - 2 * Theme.inspectorGutter
                     spacing: 7
                     Item {
                         height: 8
@@ -1487,12 +1489,13 @@ Rectangle {
                 objectName: "inspectorCuesScroll"
                 clip: true
                 contentWidth: availableWidth
-                contentHeight: cuesContent.implicitHeight
+                contentHeight: cuesContent.implicitHeight + Theme.inspectorGutter
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
                 ColumnLayout {
                     id: cuesContent
-                    width: cuesScroll.availableWidth
+                    x: Theme.inspectorGutter
+                    width: cuesScroll.availableWidth - 2 * Theme.inspectorGutter
                     spacing: 8
                     Item {
                         height: 8
