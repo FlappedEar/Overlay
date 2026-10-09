@@ -111,6 +111,13 @@ cmake -S . -B build-native \
 open "build-native/native/FlappedEar Overlays.app"
 ```
 
+After an Xcode or Command Line Tools update the cached SDK can disappear. The
+symptom is a CMake warning "Ignoring CMAKE_OSX_SYSROOT value ... because the
+directory does not exist" followed by missing `stdio.h`, `type_traits` or
+`TargetConditionals.h` on every compile. The repository sets no SDK path, so the
+cache is stale: remove `build-native/CMakeCache.txt` (or run
+`cmake -S . -B build-native -UCMAKE_OSX_SYSROOT`) and configure again.
+
 Run the build and tests between configuration and launch. If a different Qt
 installation or generator is already configured, follow the repository's build
 instructions for that environment and report the actual commands used.
