@@ -3,7 +3,9 @@
 #include "project/AdditionalVideos.h"
 #include "telemetry/TelemetrySession.h"
 
+#include <QJsonArray>
 #include <QRect>
+#include <QRectF>
 #include <QSize>
 #include <QString>
 #include <QStringList>
@@ -57,7 +59,25 @@ struct Layer {
     // opacity from 0 to 1 over `fadeInSeconds` from each window's start.
     QVector<Window> windows;
     double fadeInSeconds = 0.0;
+    // A camera box widget set to fill: the picture is scaled to cover `content`
+    // and cropped to it. Otherwise the picture is scaled to fit `content`.
+    bool crop = false;
 };
+
+// KAN-254: a camera box widget (type `cameraBox`). The box is the widget's
+// rectangle, as shares of the output frame, and shows `camera` while another
+// camera is on air.
+struct CameraBox {
+    QString camera;
+    QRectF area;
+    int borderWidth = 0; // pixels at 1080p scale
+    QString borderColor = QStringLiteral("#FFFFFF");
+    bool crop = true;
+};
+
+// The visible camera box widgets of a scene, in drawing order. A widget with
+// no camera, or with a rectangle that is not finite or has no size, is left out.
+[[nodiscard]] QVector<CameraBox> cameraBoxes(const QJsonArray &widgets);
 
 // The camera on air at `time`: the last cut at or before it, the main video
 // before the first cut or when a cut names a camera that is not in `cameraIds`.
@@ -83,8 +103,14 @@ struct Segment {
 // its place among the cameras off air gives. With the picture-in-picture
 // switched off there are only on-air layers, and no layers at all while the
 // main video is on air throughout. Empty when a size is not valid.
+//
+// With `boxes` (KAN-254) the picture-in-picture options (corner, size, margin,
+// border, cameras) are not used: each box is drawn at its widget's rectangle,
+// except boxes of a camera that is not in `cameraIds`, while its camera is not
+// on air. The switch still hides every box.
 [[nodiscard]] QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStringList &cameraIds,
-    const QVector<QSize> &sourceSizes, double endSeconds, const QVector<Window> &available = {});
+    const QVector<QSize> &sourceSizes, double endSeconds, const QVector<Window> &available = {},
+    const QVector<CameraBox> &boxes = {});
 
 // Which moment of an additional video an output frame shows. Both videos'
 // syncs map their video time to the same telemetry time, so the additional

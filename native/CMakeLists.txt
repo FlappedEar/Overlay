@@ -439,6 +439,7 @@ qt_add_qml_module(flappedear_native
         qml/VisualSmokeScene.qml
         qml/WidgetEditor.qml
         qml/WidgetOverlay.qml
+        qml/widgets/CameraBoxWidget.qml
         qml/widgets/DesignedElements.qml
         qml/widgets/DesignedWidget.qml
         qml/widgets/GForceData.qml

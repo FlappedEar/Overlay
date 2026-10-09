@@ -57,6 +57,10 @@
       "barColor": "#f5a623", "barBackgroundColor": "#2b3a46", "textColor": "#f2f5f7",
       "backgroundOpacity": 0.78, "barRadius": 5
     },
+    "cameraBox": {
+      "showBackground": false, "showBorder": false, "padding": 0,
+      "camera": "", "borderWidth": 0, "borderColor": "#FFFFFF", "fill": "fill"
+    },
     "designed": {
       "padding": 0, "cornerRadius": 10, "designName": "", "libraryId": "",
       "elements": [

@@ -86,6 +86,7 @@ private slots:
     void preservesFramesWithPositiveSourcePts();
     void placesAdditionalVideosByLayout();
     void plansPictureInPictureAndCameraSwitching();
+    void plansCameraBoxWidgets();
     void timesAdditionalVideosAgainstTheMainVideo();
     void composesAnAdditionalVideoOnItsOwnTimeline();
     void switchesCamerasAndDrawsPictureInPicture();
@@ -2021,6 +2022,92 @@ void ExportTests::placesAdditionalVideosByLayout()
     QCOMPARE(layout(VideoLayoutMode::SideBySide, hd, {hd}), QVector<QRect>{QRect(0, 0, 1920, 1080)});
     QVERIFY(layout(VideoLayoutMode::PictureInPicture, hd, {hd, QSize()}).isEmpty());
     QVERIFY(layout(VideoLayoutMode::PictureInPicture, QSize(), {hd}).isEmpty());
+}
+
+void ExportTests::plansCameraBoxWidgets()
+{
+    // KAN-254: a camera box widget is a picture-in-picture box at the widget's
+    // rectangle. With any box, the corner options are not used.
+    using namespace VideoComposition;
+    const QSize hd(1920, 1080);
+    const QStringList ids{mainCameraId, "helmet", "rear"};
+    const QVector<QSize> sizes{hd, QSize(1280, 720), QSize(1080, 1920)};
+    const auto widget = [](const QString &type, const QString &camera, double x, double y, double w, double h,
+                           const QJsonObject &extra = {}, bool visible = true) {
+        QJsonObject settings{{"camera", camera}};
+        for (auto it = extra.begin(); it != extra.end(); ++it) settings.insert(it.key(), it.value());
+        return QJsonObject{{"type", type}, {"visible", visible}, {"x", x}, {"y", y}, {"width", w}, {"height", h},
+                           {"settings", settings}};
+    };
+    QJsonArray widgets;
+    widgets.append(widget("speed", "helmet", 0.0, 0.0, 0.1, 0.1));                     // not a box
+    widgets.append(widget("cameraBox", "helmet", 0.05, 0.10, 0.30, 0.25, {{"borderWidth", 6}, {"borderColor", "#ff0000"}}));
+    widgets.append(widget("cameraBox", "rear", 0.70, 0.50, 0.20, 0.40, {{"fill", "fit"}}));
+    widgets.append(widget("cameraBox", "", 0.1, 0.1, 0.1, 0.1));                       // no camera
+    widgets.append(widget("cameraBox", "gone", 0.1, 0.1, 0.1, 0.1));                   // camera not in the run
+    widgets.append(widget("cameraBox", "helmet", 0.5, 0.5, 0.1, 0.1, {}, false));      // hidden
+    widgets.append(widget("cameraBox", "helmet", 0.5, 0.5, 0.0, 0.1));                 // no size
+    const QVector<CameraBox> boxes = cameraBoxes(widgets);
+    QCOMPARE(boxes.size(), 3); // helmet, rear, gone: the widgets that can be read
+    QCOMPARE(boxes[0].camera, QString("helmet"));
+    QCOMPARE(boxes[0].borderWidth, 6);
+    QCOMPARE(boxes[0].borderColor, QString("#FF0000"));
+    QVERIFY(boxes[0].crop);
+    QVERIFY(!boxes[1].crop);
+
+    VideoLayout layout;
+    layout.pip.corner = PipCorner::BottomLeft; // not used while boxes exist
+    auto layers = plan(layout, hd, ids, sizes, 30.0, {}, boxes);
+    QCOMPARE(layers.size(), 2); // "gone" is skipped
+    QCOMPARE(layers[0].camera, 1);
+    // 0.05 x 1920 = 96, 0.10 x 1080 = 108, 576 x 270; a 6 px border at 1080p.
+    QCOMPARE(layers[0].rect, QRect(96, 108, 576, 270));
+    QCOMPARE(layers[0].content, QRect(102, 114, 564, 258));
+    QCOMPARE(layers[0].border, 6);
+    QVERIFY(layers[0].crop);
+    QCOMPARE(layers[0].windows.size(), 1);
+    QCOMPARE(layers[0].windows[0].start, 0.0);
+    QCOMPARE(layers[0].windows[0].end, 30.0);
+    // Fit: the box closes up on the 9:16 picture inside the widget's 384 x 432 rectangle.
+    QCOMPARE(layers[1].camera, 2);
+    QVERIFY(!layers[1].crop);
+    QVERIFY(layers[1].rect.width() < 384);
+    QCOMPARE(layers[1].rect.height(), 432);
+    QVERIFY(QRect(1344, 540, 384, 432).contains(layers[1].rect));
+    for (const Layer &layer : layers)
+        for (const QRect &rect : {layer.rect, layer.content})
+            QVERIFY(rect.x() % 2 == 0 && rect.y() % 2 == 0 && rect.width() % 2 == 0 && rect.height() % 2 == 0);
+
+    // A box shows while its camera is not on air; the main video can have a box.
+    layout.program.cuts = {{10.0, "helmet"}, {20.0, "main"}};
+    QVector<CameraBox> withMain = boxes;
+    withMain.append(CameraBox{"main", QRectF(0.0, 0.7, 0.2, 0.2), 0, "#FFFFFF", true});
+    layers = plan(layout, hd, ids, sizes, 30.0, {}, withMain);
+    const Layer *helmetBox = nullptr;
+    const Layer *mainBox = nullptr;
+    for (const Layer &layer : layers) {
+        if (layer.onAir) continue;
+        if (layer.camera == 1) helmetBox = &layer;
+        if (layer.camera == 0) mainBox = &layer;
+    }
+    QVERIFY(helmetBox && mainBox);
+    QCOMPARE(helmetBox->windows.size(), 2); // [0, 10) and [20, 30)
+    QCOMPARE(helmetBox->windows[0].end, 10.0);
+    QCOMPARE(helmetBox->windows[1].start, 20.0);
+    QCOMPARE(mainBox->windows.size(), 1); // only while the helmet is on air
+    QCOMPARE(mainBox->windows[0].start, 10.0);
+    QCOMPARE(mainBox->windows[0].end, 20.0);
+
+    // Off hides every box; a box outside the frame is kept inside it.
+    layout.pip.enabled = false;
+    layers = plan(layout, hd, ids, sizes, 30.0, {}, boxes);
+    for (const Layer &layer : layers) QVERIFY(layer.onAir);
+    layout.pip.enabled = true;
+    layout.program = ProgramOptions{};
+    const QVector<CameraBox> edge{CameraBox{"helmet", QRectF(0.95, 0.95, 0.30, 0.30), 0, "#FFFFFF", true}};
+    layers = plan(layout, hd, ids, sizes, 30.0, {}, edge);
+    QCOMPARE(layers.size(), 1);
+    QVERIFY(QRect(0, 0, 1920, 1080).contains(layers[0].rect));
 }
 
 void ExportTests::plansPictureInPictureAndCameraSwitching()

@@ -37,6 +37,13 @@ const QList<WidgetTypeDescriptor> &widgetTypeDescriptors()
          {"fontSize", "showBackground", "backgroundOpacity", "unit", "decimals", "prefix", "suffix", "showUnit",
           "dialColor", "needleColor", "panelColor", "panelOpacity"},
          "widgets/RetroTachometerWidget.qml", "widgets/tech/TechTachometer.qml"},
+        // KAN-254: a picture-in-picture box. It draws nothing into the overlay: export and
+        // preview place a camera's video at the widget's rectangle (VideoComposition).
+        {"cameraBox", "Camera box", "▣", 0.28, 0.28,
+         {"accentColor", "backgroundColor", "showBorder", "borderOpacity", "cornerRadius", "padding", "fontFamily",
+          "fontWeight", "valueFontScale", "labelFontScale", "textColor", "secondaryTextColor", "fontSize"},
+         {},
+         "widgets/CameraBoxWidget.qml", {}},
         // KAN-191: made in the widget editor, not from the Add widget list.
         {"designed", {}, {}, 0.20, 0.13, {}, {},
          "widgets/DesignedWidget.qml", {}},
