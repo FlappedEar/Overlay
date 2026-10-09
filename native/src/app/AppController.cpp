@@ -1,5 +1,4 @@
 #include "app/AppController.h"
-#include "project/VideoChapters.h"
 #include "app/PreviewTimeline.h"
 #include "app/ExportSourceOptions.h"
 #include "app/LapNavigation.h"
@@ -753,11 +752,8 @@ void AppController::startEditorSources(const ProjectLoadResult &result)
     if (!result.resolvedVideoPath.isEmpty()) {
         // KAN-105: the saved chapters after the first, each resolved on its own.
         const auto editor = EventProjectCodec::editorProjection(result.project);
-        QVector<VideoChapterInput> chapters;
-        const auto saved = VideoChaptersCodec::read(editor.value("sources").toObject().value("video").toObject());
-        for (qsizetype index = 1; index < saved.size(); ++index)
-            chapters.append({saved[index].reference, ProjectSourceReferenceCodec::resolve(saved[index].reference, result.projectPath),
-                saved[index].durationSeconds});
+        const auto chapters = SourceLoading::savedChapters(
+            editor.value("sources").toObject().value("video").toObject(), result.projectPath).further;
         startVideoProbe(result.resolvedVideoPath, result.generation, false,
                         result.videoReference.fingerprint, false, chapters);
     }

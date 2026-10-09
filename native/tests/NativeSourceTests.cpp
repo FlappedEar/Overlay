@@ -5,6 +5,7 @@
 #include "app/AppController.h"
 #include "app/ExportJobPlan.h"
 #include "app/SourceLoading.h"
+#include "project/VideoChapters.h"
 #include "app/TelemetryController.h"
 #include "export/FfmpegTools.h"
 #include "export/MediaProbe.h"
@@ -62,6 +63,7 @@ private slots:
     void keepsVideoChaptersAsOneTimeline();
     void loadsSourcesInTheBackgroundWorker();
     void derivesChapterPlaybackAndExportSource();
+    void readsTheSavedChaptersOfAProject();
     void plansTheExportJobFromTheLoadedSources();
     void playsVideoChaptersAcrossBoundaries();
     void persistsAndInvalidatesRunTrackConfiguration();
@@ -1522,6 +1524,30 @@ void SourceTests::derivesChapterPlaybackAndExportSource()
     QVERIFY(!derived.exportInfo);
     QVERIFY(derived.exportPaths.isEmpty());
     QVERIFY(!derived.exportProblem.isEmpty());
+}
+
+void SourceTests::readsTheSavedChaptersOfAProject()
+{
+    // KAN-215: what a saved project says about its video's chapters, before any probe.
+    auto none = SourceLoading::savedChapters({}, "/p/day.fetproject");
+    QVERIFY(none.pending.isEmpty());
+    QVERIFY(none.further.isEmpty());
+    QVERIFY(!none.timeline.isValid());
+
+    const auto chapter = [](const QString &path, const double seconds) {
+        return QJsonObject{{"absolutePath", path}, {"durationSeconds", seconds}};
+    };
+    const QJsonObject video{{"absolutePath", "/v/GX01.MP4"},
+        {"chapters", QJsonArray{chapter("/v/GX01.MP4", 10.0), chapter("/v/GX02.MP4", 5.0)}}};
+    QVERIFY2(VideoChaptersCodec::valid(video), "fixture must be a valid chaptered video");
+    const auto saved = SourceLoading::savedChapters(video, "/p/day.fetproject");
+    QCOMPARE(saved.pending.size(), 2);
+    QVERIFY(!saved.pending.at(0).available);
+    QCOMPARE(saved.pending.at(1).problem, QString("loading"));
+    QCOMPARE(saved.timeline.chapterCount(), 2);
+    QCOMPARE(saved.timeline.durationSeconds(), 15.0);
+    QCOMPARE(saved.further.size(), 1);
+    QCOMPARE(saved.further.at(0).durationSeconds, 5.0);
 }
 
 void SourceTests::plansTheExportJobFromTheLoadedSources()
