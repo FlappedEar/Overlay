@@ -1947,6 +1947,16 @@ FLAPPEDEAR_REAL_VBO=/path/to/session.vbo \
   ./build-native/native/tests/flappedear_native_tests
 ```
 
+An opt-in export check covers extra videos, picture-in-picture, camera switching and side by side on real footage (KAN-252). It adds a second recording to the GoPro and VBO pair, aligns it at a fixed point, exports 24 s of lap 2 four times (picture in picture, with hard cuts, with a crossfade, side by side) and writes the files to a folder you choose. Nothing is kept by the test; look at the files and delete them.
+
+```bash
+FLAPPEDEAR_REAL_GOPRO=/path/to/video.mp4 FLAPPEDEAR_REAL_VBO=/path/to/session.vbo \
+FLAPPEDEAR_REAL_EXTRA_VIDEO=/path/to/second-camera.mp4 FLAPPEDEAR_REAL_OUT_DIR=/path/to/output-folder \
+  ./build-native/native/tests/flappedear_native_tests_sources exportsOptionalRealCameraSwitching
+```
+
+Run it on macOS with the default Qt platform: the offscreen platform cannot start the export renderer.
+
 Private VBO and GoPro media are ignored by Git and must remain local. A VBO-only run can set `FLAPPEDEAR_REAL_VBO`; GoPro synchronization requires both variables.
 
 ## Current test coverage
