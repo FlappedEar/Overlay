@@ -1381,6 +1381,26 @@ void EditorTests::previewsCameraSwitchingAndPictureInPictureOptions()
     QTRY_VERIFY(slot->isVisible());
     QTRY_COMPARE(std::round(slot->width()), std::round(preview->width()));
 
+    // Picture in picture off and nobody on air: the main video alone.
+    layout.pip.enabled = false;
+    layout.program.cuts = {};
+    videos->setVideoLayout(layout);
+    editor.controller.setPlaybackTime(1.5);
+    QTRY_VERIFY(!slot->isVisible());
+
+    // A crossfade back to the main video: the helmet camera stays full frame
+    // under the fading main video while its box is already in the plan.
+    layout.pip.enabled = true;
+    layout.program.transition = ProgramTransition::Crossfade;
+    layout.program.crossfadeSeconds = 1.0;
+    layout.program.cuts = {{1.0, videos->videos()[0].id}, {2.0, mainCameraId}};
+    videos->setVideoLayout(layout);
+    editor.controller.setPlaybackTime(2.5);
+    int copies = 0;
+    QTRY_VERIFY((copies = [&] { int n = 0; for (auto *c : find("cameraCopy")) if (c->isVisible()) ++n; return n; }()) == 1);
+    for (auto *c : find("cameraCopy")) if (c->isVisible()) QCOMPARE(std::round(c->width()), std::round(preview->width()));
+    layout.program.transition = ProgramTransition::Cut;
+
     // A camera is on air only where it has footage: the helmet video ends at
     // 4 s, so a cut at 3.5 s fills the frame for half a second and not beyond.
     layout.pip.enabled = true;

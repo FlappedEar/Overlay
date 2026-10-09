@@ -30,6 +30,12 @@ Item {
         root.controller.layout;
         return root.width > 0 && root.height > 0 ? root.controller.previewLayers(root.width, root.height) : [];
     }
+    // Picture in picture draws the plan's layers, and an empty plan means the
+    // main video alone (picture-in-picture off, nothing on air).
+    readonly property bool layered: {
+        root.controller.layout;
+        return root.controller.layout === "pictureInPicture";
+    }
     readonly property rect mainRect: rects.length > 0
         ? Qt.rect(rects[0].x, rects[0].y, rects[0].width, rects[0].height)
         : Qt.rect(0, 0, width, height)
@@ -47,6 +53,14 @@ Item {
             }
         }
         return found;
+    }
+    // The start of the window of `layer` that holds `seconds`, or -1.
+    function windowStart(layer, seconds) {
+        for (let j = 0; j < layer.windows.length; ++j) {
+            const window = layer.windows[j];
+            if (seconds >= window.start && seconds < window.end) return window.start;
+        }
+        return -1;
     }
     function fade(active, seconds) {
         return active && active.layer.fadeIn > 0 ? Math.max(0, Math.min(1, (seconds - active.start) / active.layer.fadeIn)) : 1;
@@ -84,6 +98,7 @@ Item {
     }
 
     Repeater {
+        id: slots
         model: root.controller.videos
         Item {
             id: slot
@@ -92,10 +107,11 @@ Item {
             // Layered (picture in picture): what is drawn for this camera now.
             readonly property var active: {
                 root.controller.videos;
-                return root.layers.length > 0 ? root.activeLayer(slot.index + 1, root.time) : null;
+                return root.layered ? root.activeLayer(slot.index + 1, root.time) : null;
             }
-            readonly property bool layered: root.layers.length > 0
+            readonly property bool layered: root.layered
             readonly property var legacyRect: root.rects.length > index + 1 ? root.rects[index + 1] : null
+            readonly property Item videoItem: output
             readonly property bool ready: modelData.state === "ready"
             readonly property real targetSeconds: {
                 root.controller.videos;
@@ -154,6 +170,45 @@ Item {
             onTargetSecondsChanged: follow(false)
             onInsideChanged: follow(true)
             onPlacedChanged: follow(true)
+        }
+    }
+
+    // A crossfade keeps the outgoing camera full frame under the incoming
+    // one while the plan already has its box: the slot above draws the
+    // topmost layer of a camera, and any other layer of it that is drawn at
+    // the same moment is a copy of that camera's picture.
+    Repeater {
+        model: root.layered ? root.layers : []
+        Item {
+            id: extra
+            required property var modelData
+            readonly property var slotItem: {
+                slots.count;
+                return modelData.camera > 0 ? slots.itemAt(modelData.camera - 1) : null;
+            }
+            readonly property real start: root.windowStart(modelData, root.time)
+            readonly property bool current: slotItem !== null && slotItem.visible && start >= 0
+                && slotItem.active !== null && slotItem.active.layer.index !== modelData.index
+            objectName: "cameraCopy"
+            visible: current
+            z: modelData.index
+            x: modelData.x
+            y: modelData.y
+            width: modelData.width
+            height: modelData.height
+            opacity: modelData.fadeIn > 0 ? Math.max(0, Math.min(1, (root.time - start) / modelData.fadeIn)) : 1
+            Rectangle {
+                anchors.fill: parent
+                color: extra.modelData.onAir ? "black" : extra.modelData.borderColor
+            }
+            ShaderEffectSource {
+                x: extra.modelData.contentX - extra.modelData.x
+                y: extra.modelData.contentY - extra.modelData.y
+                width: extra.modelData.contentWidth
+                height: extra.modelData.contentHeight
+                sourceItem: extra.slotItem ? extra.slotItem.videoItem : null
+                live: extra.visible
+            }
         }
     }
 }
