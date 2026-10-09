@@ -87,7 +87,10 @@ crosses the timing gate.
 
 ## For the owner
 
-- Do the lap times match RaceChrono's lap list for the day?
+- ~~Do the lap times match RaceChrono's lap list for the day?~~ Answered on 9 October 2026
+  from the RCZ `session.json` files: all 25 laps match RaceChrono's own lap list to within
+  16 ms (largest differences +16 ms and -9 ms), and the best lap is 1:49.898 here against
+  RaceChrono's 1:49.906. `matchesRaceChronoLapList` keeps it checked.
 - Did Session 2 LAP 4 and Session 5 LAP 5 include a pit entry, a detour or
   an off? That is what "does not follow the supported route" means.
 - Do "Where to look next" (Corners 9–16; braking at Corners 5–6) match

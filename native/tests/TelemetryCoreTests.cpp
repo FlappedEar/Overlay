@@ -22,6 +22,7 @@
 
 #include <QDir>
 #include <QElapsedTimer>
+#include <QProcess>
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QFile>
@@ -172,6 +173,7 @@ private slots:
     void formatsLapTimesRoundedBeforeMinutes();
     void readsTyreValuesWithoutPlaceholdersOrGaps();
     void readsPrivateTyreData();
+    void matchesRaceChronoLapList();
     void rejectsMalformedLapExclusions_data();
     void rejectsMalformedLapExclusions();
     void groupsOnlyDatedUnambiguousAlternatives();
@@ -2457,6 +2459,40 @@ void TelemetryCoreTests::readsPrivateTyreData()
             QVERIFY(minP > 0.5 && maxP < 5.0);
         }
     }
+}
+
+void TelemetryCoreTests::matchesRaceChronoLapList()
+{
+    // Opt-in: every VBO of a real day (FLAPPEDEAR_REAL_DAY) that has its RCZ
+    // beside it. RaceChrono's own lap list is in the RCZ's session.json; the
+    // laps detected from the VBO must be the same laps to within a VBO sample
+    // (the owner's day agrees to 16 ms, 8 October 2026).
+    const auto path = qEnvironmentVariable("FLAPPEDEAR_REAL_DAY");
+    if (path.isEmpty()) QSKIP("FLAPPEDEAR_REAL_DAY is not set");
+    int compared = 0;
+    for (const auto &file : QDir(path).entryInfoList({"*.vbo"}, QDir::Files, QDir::Name)) {
+        const QString rcz = QDir(path).filePath(file.completeBaseName() + QStringLiteral(".rcz"));
+        if (!QFile::exists(rcz)) continue;
+        QProcess unzip;
+        unzip.start(QStringLiteral("unzip"), {QStringLiteral("-p"), rcz, QStringLiteral("session.json")});
+        if (!unzip.waitForFinished(30'000) || unzip.exitCode() != 0) QSKIP("unzip is not available to read session.json");
+        const auto reference = QJsonDocument::fromJson(unzip.readAllStandardOutput()).object().value("laps").toArray();
+        QVector<double> expected;
+        for (const auto &value : reference) {
+            const auto lap = value.toObject();
+            if (!lap.contains("finishTimestamp")) continue; // the lap still running when logging stopped
+            expected.append((lap.value("finishTimestamp").toDouble() - lap.value("startTimestamp").toDouble()) / 1000.0);
+        }
+        const auto detected = deriveSourceLapSession(VboParser::parseFile(file.absoluteFilePath()));
+        QCOMPARE(detected.timedLaps.size(), expected.size());
+        for (qsizetype i = 0; i < expected.size(); ++i) {
+            QVERIFY2(std::abs(detected.timedLaps[i].durationSeconds - expected[i]) < 0.05,
+                qPrintable(QStringLiteral("%1 lap %2: %3 s against RaceChrono's %4 s").arg(file.baseName().left(24))
+                    .arg(i + 1).arg(detected.timedLaps[i].durationSeconds).arg(expected[i])));
+            ++compared;
+        }
+    }
+    if (compared == 0) QSKIP("No VBO with a matching RCZ in FLAPPEDEAR_REAL_DAY");
 }
 
 #include "TelemetryCoreTests.moc"
