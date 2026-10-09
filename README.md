@@ -69,7 +69,7 @@ ctest --test-dir build-native --output-on-failure
 open "build-native/native/FlappedEar Overlays.app"
 ```
 
-If the build suddenly fails everywhere with `CMAKE_OSX_SYSROOT ... does not exist` and missing system headers (`stdio.h`, `type_traits`, `TargetConditionals.h`), an Xcode or Command Line Tools update removed the SDK that your `build-native` directory cached. The repository does not set the SDK path. Delete `build-native/CMakeCache.txt` and configure again, or run `cmake -S . -B build-native -UCMAKE_OSX_SYSROOT`; if the Command Line Tools are broken, `xcode-select --install` reinstalls them.
+If the build suddenly fails everywhere with `CMAKE_OSX_SYSROOT ... does not exist` and missing system headers (`stdio.h`, `type_traits`, `TargetConditionals.h`), an Xcode or Command Line Tools update removed the SDK that your `build-native` directory cached. The repository does not set the SDK path. Delete `build-native/CMakeCache.txt` and configure again, or run `cmake -S . -B build-native -UCMAKE_OSX_SYSROOT`.
 
 ## Continuous integration
 
