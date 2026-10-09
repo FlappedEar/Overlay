@@ -40,6 +40,7 @@ private slots:
     void keepsAdditionalVideosThroughRunSwitchAndSaveAs();
     void addsAlignsAndChecksAdditionalVideos();
     void exportsWithAnAdditionalVideo();
+    void exportsOptionalRealCameraSwitching();
     void recoversEventAndRelinksOnlyActiveSource();
     void rejectsInvalidEventWithoutReplacingDocument();
     void rejectsLateSourceResultsAfterRunSelection();
@@ -500,6 +501,66 @@ void SourceTests::exportsWithAnAdditionalVideo()
     QVERIFY(!reopened.startExport(url("again.mp4"), 320, 180, 30, 1, 1'000'000, false, false, {}, {}, false));
     QVERIFY(reopened.exporter()->error().contains("was not found"));
     QVERIFY(!QFileInfo::exists(directory.filePath("again.mp4")));
+}
+
+void SourceTests::exportsOptionalRealCameraSwitching()
+{
+    // KAN-252: real GoPro + VBO + a second camera, exported as picture in
+    // picture with cuts, a crossfade and side by side. Opt-in; nothing is kept.
+    const QString mainPath = qEnvironmentVariable("FLAPPEDEAR_REAL_GOPRO");
+    const QString vboPath = qEnvironmentVariable("FLAPPEDEAR_REAL_VBO");
+    const QString extraPath = qEnvironmentVariable("FLAPPEDEAR_REAL_EXTRA_VIDEO");
+    const QString outDirectory = qEnvironmentVariable("FLAPPEDEAR_REAL_OUT_DIR");
+    if (mainPath.isEmpty() || vboPath.isEmpty() || extraPath.isEmpty() || outDirectory.isEmpty())
+        QSKIP("FLAPPEDEAR_REAL_GOPRO, _VBO, _EXTRA_VIDEO and _OUT_DIR are not all set");
+    QSettings settings; settings.clear(); settings.sync();
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    auto *videos = controller.additionalVideoController();
+    controller.loadVideo(QUrl::fromLocalFile(mainPath));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QStringLiteral("ready"), 120000);
+    controller.loadVbo(QUrl::fromLocalFile(vboPath));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QStringLiteral("ready"), 120000);
+    controller.autoSync();
+    QTRY_VERIFY_WITH_TIMEOUT(!controller.syncController()->running(), 300000);
+    if (!controller.syncController()->candidate().isEmpty()) controller.syncController()->applyCandidate();
+    qInfo() << "sync offset" << controller.syncController()->offset() << "scale" << controller.syncController()->timeScale();
+    videos->addVideo(QUrl::fromLocalFile(extraPath));
+    QTRY_COMPARE_WITH_TIMEOUT(videos->count(), 1, 60000);
+    QTRY_COMPARE_WITH_TIMEOUT(videos->videoList().first().toMap().value("state").toString(), QStringLiteral("ready"), 120000);
+    const QString extraId = videos->cameraList().at(1).toMap().value("id").toString();
+    const auto lap = controller.lapExportRange(2, 60000, 1001, 0);
+    QVERIFY(lap.value("valid").toBool());
+    const double lapStart = lap.value("firstFrame").toLongLong() * 1001.0 / 60000.0;
+    // Extra video second 20 sits at main second lapStart + 5.
+    videos->alignAt(0, lapStart + 5.0, 20.0);
+    const auto inTc = lap.value("inTimecode").toString();
+    const auto parts = inTc.split(QRegularExpression("[:;]"));
+    QCOMPARE(parts.size(), 4);
+    const int total = parts[0].toInt() * 3600 + parts[1].toInt() * 60 + parts[2].toInt() + 24;
+    const QString outTc = QStringLiteral("%1:%2:%3:%4").arg(total / 3600, 2, 10, QLatin1Char('0'))
+        .arg(total / 60 % 60, 2, 10, QLatin1Char('0')).arg(total % 60, 2, 10, QLatin1Char('0')).arg(parts[3]);
+    qInfo() << "range" << inTc << outTc << "lapStart" << lapStart << "extra" << extraId;
+    const auto run = [&](const QString &name, bool audio) {
+        const QString target = QDir(outDirectory).filePath(name);
+        QFile::remove(target);
+        QVERIFY2(controller.startExport(QUrl::fromLocalFile(target), 1920, 1080, 60000, 1001, 20'000'000, audio, true,
+                                        inTc, outTc, true), qPrintable(controller.exporter()->error()));
+        QTRY_VERIFY_WITH_TIMEOUT(!controller.exporter()->exporting(), 1800000);
+        QVERIFY2(controller.exporter()->state() == "complete",
+                 qPrintable(controller.exporter()->error() + controller.exporter()->diagnosticLog().right(4000)));
+        qInfo().noquote() << name << controller.exporter()->diagnosticLog().right(1500);
+    };
+    videos->setLayout(QStringLiteral("pictureInPicture"));
+    run(QStringLiteral("pip-default.mp4"), true);
+    videos->cutAt(extraId, lapStart + 8.0);
+    videos->cutAt(QStringLiteral("main"), lapStart + 16.0);
+    run(QStringLiteral("pip-cuts.mp4"), true);
+    videos->setTransition(QStringLiteral("crossfade"));
+    videos->setCrossfadeSeconds(1.0);
+    run(QStringLiteral("pip-crossfade.mp4"), false);
+    videos->setLayout(QStringLiteral("sideBySide"));
+    run(QStringLiteral("side-by-side.mp4"), true);
 }
 
 void SourceTests::recoversEventAndRelinksOnlyActiveSource()
