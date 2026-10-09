@@ -540,9 +540,25 @@ void EventProjectTests::readsAndWritesPipAndProgram()
 
     // Back to the defaults: pip and program leave the file, other keys stay.
     const QJsonObject cleared = AdditionalVideosCodec::writeVideoLayout(VideoLayout{}, full);
-    QVERIFY(!cleared.contains("pip"));
+    QCOMPARE(cleared.value("pip").toObject().keys(), QStringList{"pipFuture"}); // only the unknown key stays
     QVERIFY(!cleared.contains("program"));
     QVERIFY(cleared.contains("futureKey"));
+    // Unknown keys of a newer version survive when everything this build knows is at its default,
+    // and inside cuts that are kept.
+    const QJsonObject future{{"mode", "pictureInPicture"},
+        {"pip", QJsonObject{{"pipFuture", 3}}},
+        {"program", QJsonObject{{"programFuture", true}, {"cuts", QJsonArray{QJsonObject{{"time", 2.0}, {"camera", "main"}, {"cutFuture", "x"}}}}}}};
+    QVERIFY(AdditionalVideosCodec::validLayout(future));
+    VideoLayout parsed = AdditionalVideosCodec::readVideoLayout(future);
+    QCOMPARE(parsed.program.cuts.size(), 1);
+    QJsonObject kept = AdditionalVideosCodec::writeVideoLayout(parsed, future);
+    QCOMPARE(kept.value("program").toObject().value("cuts").toArray()[0].toObject().value("cutFuture").toString(), QString("x"));
+    QVERIFY(kept.value("program").toObject().value("programFuture").toBool());
+    parsed.program = {};
+    kept = AdditionalVideosCodec::writeVideoLayout(parsed, future);
+    QCOMPARE(kept.value("pip").toObject().value("pipFuture").toInt(), 3);
+    QVERIFY(kept.value("program").toObject().value("programFuture").toBool());
+    QVERIFY(!kept.value("program").toObject().contains("cuts"));
     // An invalid layout reads as the defaults.
     QCOMPARE(AdditionalVideosCodec::readVideoLayout(QJsonObject{{"mode", "grid"}}), VideoLayout{});
 }

@@ -244,8 +244,15 @@ QJsonObject writeVideoLayout(const VideoLayout &layout, const QJsonValue &previo
 {
     QJsonObject object = writeLayout(layout.mode, previous);
     const PipOptions defaults;
+    // Keys this build understands; others belong to a newer version and stay.
+    const auto dropKnown = [&object](const char *name, const QStringList &known) {
+        QJsonObject sub = object.value(name).toObject();
+        for (const QString &key : known) sub.remove(key);
+        if (sub.isEmpty()) object.remove(name);
+        else object.insert(name, sub);
+    };
     if (layout.pip == defaults) {
-        object.remove("pip");
+        dropKnown("pip", {"enabled", "corner", "size", "margin", "borderWidth", "borderColor", "cameras"});
     } else {
         QJsonObject pip = object.value("pip").toObject();
         pip.insert("enabled", layout.pip.enabled);
@@ -264,14 +271,25 @@ QJsonObject writeVideoLayout(const VideoLayout &layout, const QJsonValue &previo
         object.insert("pip", pip);
     }
     if (layout.program == ProgramOptions{}) {
-        object.remove("program");
+        dropKnown("program", {"transition", "crossfadeSeconds", "cuts"});
     } else {
         QJsonObject program = object.value("program").toObject();
+        // A cut that is still there keeps the keys of its previous object.
+        QHash<QString, QJsonObject> previousCuts;
+        for (const auto &value : program.value("cuts").toArray()) {
+            const auto cut = value.toObject();
+            previousCuts.insert(QString::number(cut.value("time").toDouble(), 'g', 17) + QLatin1Char('|') + cut.value("camera").toString(), cut);
+        }
         program.insert("transition", layout.program.transition == ProgramTransition::Crossfade
             ? QStringLiteral("crossfade") : QStringLiteral("cut"));
         program.insert("crossfadeSeconds", layout.program.crossfadeSeconds);
         QJsonArray cuts;
-        for (const auto &cut : layout.program.cuts) cuts.append(QJsonObject{{"time", cut.time}, {"camera", cut.camera}});
+        for (const auto &cut : layout.program.cuts) {
+            QJsonObject entry = previousCuts.value(QString::number(cut.time, 'g', 17) + QLatin1Char('|') + cut.camera);
+            entry.insert("time", cut.time);
+            entry.insert("camera", cut.camera);
+            cuts.append(entry);
+        }
         program.insert("cuts", cuts);
         object.insert("program", program);
     }
