@@ -1123,7 +1123,7 @@ void EditorTests::buildsAddWidgetListAndInspectorFromDescriptors()
     auto *repeater = editor.window->findChild<QObject *>("addWidgetRepeater");
     QVERIFY(repeater);
     QCOMPARE(repeater->property("count").toInt(), editor.controller.widgetModel()->widgetCatalog().size());
-    QCOMPARE(repeater->property("count").toInt(), 9);
+    QCOMPARE(repeater->property("count").toInt(), 10);
 
     const QString style = editor.inspector->property("isTech").toBool() ? QStringLiteral("tech") : QStringLiteral("classic");
     const QStringList hidden = editor.controller.widgetModel()->unusedControls(QStringLiteral("retroCustomValue"), style);

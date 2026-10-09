@@ -28,6 +28,7 @@ Item {
     readonly property var layers: {
         root.controller.videos;
         root.controller.layout;
+        root.controller.cameraBoxCount;
         return root.width > 0 && root.height > 0 ? root.controller.previewLayers(root.width, root.height) : [];
     }
     // Picture in picture draws the plan's layers, and an empty plan means the
@@ -74,6 +75,19 @@ Item {
             required property var modelData
             readonly property var active: modelData.camera === 0 ? root.activeLayer(0, root.time) : null
             readonly property bool current: active !== null && active.layer.index === modelData.index
+            readonly property rect coverRect: {
+                const w = root.mainOutput.width;
+                const h = root.mainOutput.height;
+                const cw = modelData.contentWidth;
+                const ch = modelData.contentHeight;
+                if (w <= 0 || h <= 0 || cw <= 0 || ch <= 0) return Qt.rect(0, 0, 0, 0);
+                if (cw / ch > w / h) {
+                    const sh = w * ch / cw;
+                    return Qt.rect(0, (h - sh) / 2, w, sh);
+                }
+                const sw = h * cw / ch;
+                return Qt.rect((w - sw) / 2, 0, sw, h);
+            }
             objectName: "mainVideoCopy"
             visible: current
             z: modelData.index
@@ -92,6 +106,8 @@ Item {
                 width: copy.modelData.contentWidth
                 height: copy.modelData.contentHeight
                 sourceItem: root.mainOutput
+                // A camera box set to fill shows the middle of the picture that covers the box.
+                sourceRect: copy.modelData.crop ? copy.coverRect : Qt.rect(0, 0, 0, 0)
                 live: copy.visible
             }
         }
@@ -155,7 +171,10 @@ Item {
                 y: slot.layered && slot.active ? slot.active.layer.contentY - slot.active.layer.y : 0
                 width: slot.layered ? (slot.active ? slot.active.layer.contentWidth : 0) : slot.width
                 height: slot.layered ? (slot.active ? slot.active.layer.contentHeight : 0) : slot.height
-                fillMode: VideoOutput.Stretch
+                clip: true
+                // A camera box set to fill covers its box and is cropped to it.
+                fillMode: slot.layered && slot.active && slot.active.layer.crop ? VideoOutput.PreserveAspectCrop
+                                                                                : VideoOutput.Stretch
             }
             MediaPlayer {
                 id: player

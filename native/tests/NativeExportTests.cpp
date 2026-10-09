@@ -2420,20 +2420,21 @@ void ExportTests::switchesCamerasAndDrawsPictureInPicture()
     const SyncTransform sync{0.0, 1.0};
 
     // Renders the first five seconds with the layout; returns RGBA frames.
-    const auto render = [&](const VideoLayout &layout, QVector<VideoComposition::Layer> *plannedLayers, const double start = 0.0) {
+    const auto render = [&](const VideoLayout &layout, QVector<VideoComposition::Layer> *plannedLayers, const double start = 0.0,
+                            const QVector<VideoComposition::CameraBox> &boxes = {}, const QString &helmetPath = QString()) {
         StageBComposition composition;
         composition.cameras.resize(3);
         QStringList inputs;
         int input = 2;
         for (int camera = 1; camera < 3; ++camera) {
-            const QString path = camera == 1 ? helmet : rear;
+            const QString path = camera == 1 ? (helmetPath.isEmpty() ? helmet : helmetPath) : rear;
             const auto info = MediaProbe::probe(path);
             const auto timing = VideoComposition::timing(sync, sync, start, 5.0, info.videoStartTime, info.videoDuration);
             if (!timing) return QByteArray();
             composition.cameras[camera] = {input++, timing->timeFactor, timing->timeShift};
             inputs += ExportEngine::stageBAdditionalInputArguments(*timing, path);
         }
-        composition.layers = VideoComposition::plan(layout, {320, 180}, ids, sizes, start + 6.0);
+        composition.layers = VideoComposition::plan(layout, {320, 180}, ids, sizes, start + 6.0, {}, boxes);
         composition.mainStartSeconds = start;
         composition.exportSeconds = 5.0;
         if (plannedLayers) *plannedLayers = composition.layers;
@@ -2543,6 +2544,25 @@ void ExportTests::switchesCamerasAndDrawsPictureInPicture()
     const auto *rgba = reinterpret_cast<const unsigned char *>(frames.constData()) + ((15 * 180 + inBorder.y()) * 320 + inBorder.x()) * 4;
     QVERIFY(rgba[0] > 200 && rgba[1] > 200 && rgba[2] > 200);
     QCOMPARE(at(frames, 15, QPoint(300, 15)), Red);
+
+    // A camera box widget set to fill crops the picture to the box: the blue and red
+    // edges of this helmet picture lie outside the middle that a square box shows.
+    const QString edges = directory.filePath("edges.mp4");
+    QVERIFY(run({"-v", "error", "-y", "-f", "lavfi", "-i",
+        "color=c=lime:s=320x180:r=25:d=8,drawbox=x=0:y=0:w=70:h=180:c=blue:t=fill,drawbox=x=250:y=0:w=70:h=180:c=red:t=fill",
+        "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p", edges}));
+    layout = VideoLayout{};
+    const QVector<VideoComposition::CameraBox> boxes{{"helmet", QRectF(0.6, 0.1, 0.25, 0.4444), 0, "#FFFFFF", true}};
+    frames = render(layout, &layers, 0.0, boxes, edges);
+    QCOMPARE(frames.size(), qsizetype(count * 320 * 180 * 4));
+    QCOMPARE(layers.size(), 1);
+    QVERIFY(layers[0].crop);
+    const QRect content = layers[0].content;
+    QVERIFY(content.width() >= 70 && content.width() < 100);
+    QCOMPARE(at(frames, 15, content.center()), Green);
+    QCOMPARE(at(frames, 15, content.topLeft() + QPoint(2, 2)), Green);
+    QCOMPARE(at(frames, 15, content.bottomRight() - QPoint(2, 2)), Green);
+    QCOMPARE(at(frames, 15, QPoint(20, 90)), Red);
 }
 
 void ExportTests::plansBoundedStageBSourceAccess()

@@ -194,6 +194,11 @@ on the main video's timeline.
   from a second before the range, and FFmpeg's `fade` skips a stream whose first frames are before
   zero, so without the clamp a crossfade into a camera in the middle of its footage was a hard cut
   (found with real footage, KAN-252).
+- **Camera box widgets (KAN-257).** The worker reads the visible `cameraBox` widgets from the job's
+  `widgets` and passes them to `VideoComposition::plan`; any box replaces the corner options. A
+  box set to fill (`crop`) scales its camera with `force_original_aspect_ratio=increase`, then
+  `crop`s to the box; fit keeps the whole picture and closes the box on it. The preview draws the
+  same crop (`AdditionalVideosPreview.qml`).
 - **Inputs.** Only cameras with a layer and footage in the export become FFmpeg inputs.
 - **Worker configuration.** The job carries the whole `videoLayout` object and each additional
   video's `id`; the worker validates it with `AdditionalVideosCodec::validLayout`.
@@ -202,7 +207,8 @@ on the main video's timeline.
 Tests: `ExportTests::plansPictureInPictureAndCameraSwitching` (the layers), and
 `switchesCamerasAndDrawsPictureInPicture` (red main, green and blue cameras: hard cut exact at the
 frame, boxes swap, picture-in-picture off, crossfade mid-point is a mix, also when the export starts
-before the fade in the middle of the camera's footage, corner and border).
+before the fade in the middle of the camera's footage, corner and border, and a fill box that crops
+the picture's edges).
 
 ## CFR and VFR status
 

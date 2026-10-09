@@ -1,4 +1,5 @@
 #include "app/AppController.h"
+#include "export/VideoComposition.h"
 #include "app/PreviewTimeline.h"
 #include "app/ExportSourceOptions.h"
 #include "app/LapNavigation.h"
@@ -81,6 +82,8 @@ AppController::AppController(QObject *parent, QString recoveryPath,
     m_widgetModel.resetDefaults();
     connect(&m_widgetModel, &WidgetModel::revisionChanged, this, [this] {
         markPersistentChange();
+        // KAN-254: camera box widgets place the picture-in-picture boxes.
+        m_additionalVideos.setCameraBoxes(VideoComposition::cameraBoxes(m_widgetModel.toJson()));
     });
     connect(&m_widgetModel, &WidgetModel::lastErrorChanged, this, [this] {
         if (!m_widgetModel.lastError().isEmpty()) setStatus(m_widgetModel.lastError());

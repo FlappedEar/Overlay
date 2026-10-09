@@ -72,6 +72,8 @@ struct ExportSettings {
     SyncTransform sync;
     QVector<ExportAdditionalVideo> additionalVideos;
     VideoLayout videoLayout; // KAN-245: mode, picture-in-picture options, camera cuts
+    // KAN-254: the camera box widgets; while any exists they replace the picture-in-picture options.
+    QVector<VideoComposition::CameraBox> cameraBoxes;
     QString outputPath;
     QSize outputSize;
     MediaRational frameRate;
