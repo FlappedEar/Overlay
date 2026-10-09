@@ -118,6 +118,7 @@ Arek has not reviewed these; each is a revision away.
   visible draws no box.
 - The widget itself draws nothing into the overlay: the video box is drawn under the overlay by the
   same plan in preview and export, so the widget is the box's handle in the editor.
+- A new box starts in the frame corner where it overlaps the existing widgets least, 28 % of the frame wide with the main video's aspect (the real-footage check of 9 October 2026 found the top-right default under the template's map and heart-rate widgets). The video box is under the whole overlay, so widgets draw over it.
 - Boxes follow camera switching as before: a camera's box shows while it is not on air; while it is
   on air it fills the frame and its box is empty. A camera without a box widget has no box.
 - If the project has at least one visible camera box, the boxes replace the `pip` options (corner,
