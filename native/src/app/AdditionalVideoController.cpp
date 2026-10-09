@@ -287,6 +287,41 @@ QVariantList AdditionalVideoController::previewRects(const double width, const d
     return rects;
 }
 
+QVariantList AdditionalVideoController::previewLayers(const double width, const double height) const
+{
+    if (m_layout.mode != VideoLayoutMode::PictureInPicture || m_entries.isEmpty()) return {};
+    const QSize frame(static_cast<int>(std::lround(width)), static_cast<int>(std::lround(height)));
+    QStringList ids{mainCameraId};
+    QVector<QSize> sizes{frame};
+    for (const auto &entry : m_entries) {
+        ids.append(entry.video.id);
+        const QSize size = entry.mediaInfo.displayVideoSize.isEmpty() ? entry.mediaInfo.videoSize : entry.mediaInfo.displayVideoSize;
+        sizes.append(size.isEmpty() ? QSize(16, 9) : size); // not ready yet: keep its place
+    }
+    QVariantList result;
+    const auto rectMap = [](QVariantMap &map, const QString &prefix, const QRect &rect) {
+        const bool outer = prefix.isEmpty();
+        map.insert(outer ? QStringLiteral("x") : prefix + QStringLiteral("X"), rect.x());
+        map.insert(outer ? QStringLiteral("y") : prefix + QStringLiteral("Y"), rect.y());
+        map.insert(outer ? QStringLiteral("width") : prefix + QStringLiteral("Width"), rect.width());
+        map.insert(outer ? QStringLiteral("height") : prefix + QStringLiteral("Height"), rect.height());
+    };
+    int index = 0;
+    for (const auto &layer : VideoComposition::plan(m_layout, frame, ids, sizes, 1.0e7)) {
+        QVariantMap map{{QStringLiteral("camera"), layer.camera}, {QStringLiteral("index"), index++},
+            {QStringLiteral("onAir"), layer.onAir}, {QStringLiteral("border"), layer.border},
+            {QStringLiteral("borderColor"), layer.borderColor}, {QStringLiteral("fadeIn"), layer.fadeInSeconds}};
+        rectMap(map, QString(), layer.rect);
+        rectMap(map, QStringLiteral("content"), layer.content);
+        QVariantList windows;
+        for (const auto &window : layer.windows)
+            windows.append(QVariantMap{{QStringLiteral("start"), window.start}, {QStringLiteral("end"), window.end}});
+        map.insert(QStringLiteral("windows"), windows);
+        result.append(map);
+    }
+    return result;
+}
+
 void AdditionalVideoController::probe(const QString &id, const QString &path, const ProbePurpose purpose)
 {
     const quint64 generation = m_generation;

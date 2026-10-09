@@ -1,25 +1,87 @@
 import QtQuick
 import QtMultimedia
 
-// KAN-131: the run's additional videos in the preview, placed as export
-// places them (VideoComposition) and shown at the moment the main video
-// shows. Each one is hidden before its first frame and after its last. While
-// the main video plays they play at the rate their syncs give and are pulled
-// back when they drift; while it is paused they seek to the exact moment.
+// KAN-131, KAN-245: the run's additional videos in the preview, placed as
+// export places them (VideoComposition) and shown at the moment the main video
+// shows. In picture-in-picture mode the controller's layers say what is drawn
+// at the playhead: the camera on air fills the frame, the cameras off air sit
+// in boxes (with their border), and a crossfade ramps a layer's opacity. A
+// camera with no frame at the playhead is hidden, so the main video shows, as
+// in the export. Each video is hidden before its first frame and after its
+// last; while the main video plays they play at the rate their syncs give and
+// are pulled back when they drift, and while it is paused they seek to the
+// exact moment.
 Item {
     id: root
     objectName: "additionalVideosPreview"
     readonly property var controller: appController.additionalVideos
     property bool playing: false
+    // The main video's output, for its boxes and fades (picture in picture).
+    property Item mainOutput: null
+    readonly property real time: appController.playbackTime
     // Where the main video goes: the whole item, or its half side by side.
     readonly property var rects: {
         root.controller.videos;
         root.controller.layout;
         return root.width > 0 && root.height > 0 ? root.controller.previewRects(root.width, root.height) : [];
     }
+    readonly property var layers: {
+        root.controller.videos;
+        root.controller.layout;
+        return root.width > 0 && root.height > 0 ? root.controller.previewLayers(root.width, root.height) : [];
+    }
     readonly property rect mainRect: rects.length > 0
         ? Qt.rect(rects[0].x, rects[0].y, rects[0].width, rects[0].height)
         : Qt.rect(0, 0, width, height)
+
+    // The topmost layer of a camera drawn at `seconds`, with its window's
+    // start, or null.
+    function activeLayer(camera, seconds) {
+        let found = null;
+        for (let i = 0; i < root.layers.length; ++i) {
+            const layer = root.layers[i];
+            if (layer.camera !== camera) continue;
+            for (let j = 0; j < layer.windows.length; ++j) {
+                const window = layer.windows[j];
+                if (seconds >= window.start && seconds < window.end) found = {layer: layer, start: window.start};
+            }
+        }
+        return found;
+    }
+    function fade(active, seconds) {
+        return active && active.layer.fadeIn > 0 ? Math.max(0, Math.min(1, (seconds - active.start) / active.layer.fadeIn)) : 1;
+    }
+
+    // Boxes and fades of the main video (picture in picture).
+    Repeater {
+        model: root.mainOutput ? root.layers : []
+        Item {
+            id: copy
+            required property var modelData
+            readonly property var active: modelData.camera === 0 ? root.activeLayer(0, root.time) : null
+            readonly property bool current: active !== null && active.layer.index === modelData.index
+            objectName: "mainVideoCopy"
+            visible: current
+            z: modelData.index
+            x: modelData.x
+            y: modelData.y
+            width: modelData.width
+            height: modelData.height
+            opacity: root.fade(active, root.time)
+            Rectangle {
+                anchors.fill: parent
+                color: copy.modelData.onAir ? "black" : copy.modelData.borderColor
+            }
+            ShaderEffectSource {
+                x: copy.modelData.contentX - copy.modelData.x
+                y: copy.modelData.contentY - copy.modelData.y
+                width: copy.modelData.contentWidth
+                height: copy.modelData.contentHeight
+                sourceItem: root.mainOutput
+                live: copy.visible
+            }
+        }
+    }
 
     Repeater {
         model: root.controller.videos
@@ -27,22 +89,31 @@ Item {
             id: slot
             required property var modelData
             required property int index
-            readonly property var rect: root.rects.length > index + 1 ? root.rects[index + 1] : null
+            // Layered (picture in picture): what is drawn for this camera now.
+            readonly property var active: {
+                root.controller.videos;
+                return root.layers.length > 0 ? root.activeLayer(slot.index + 1, root.time) : null;
+            }
+            readonly property bool layered: root.layers.length > 0
+            readonly property var legacyRect: root.rects.length > index + 1 ? root.rects[index + 1] : null
             readonly property bool ready: modelData.state === "ready"
             readonly property real targetSeconds: {
                 root.controller.videos;
                 return root.controller.videoSecondsFor(index, appController.playbackTime);
             }
             readonly property bool inside: targetSeconds >= 0 && targetSeconds <= modelData.durationSeconds
+            readonly property bool placed: layered ? active !== null : legacyRect !== null
             objectName: "additionalVideoPreview"
-            visible: ready && rect !== null && inside
-            x: rect ? rect.x : 0
-            y: rect ? rect.y : 0
-            width: rect ? rect.width : 0
-            height: rect ? rect.height : 0
+            visible: ready && placed && inside
+            z: layered && active ? active.layer.index : 0
+            x: layered ? (active ? active.layer.x : 0) : (legacyRect ? legacyRect.x : 0)
+            y: layered ? (active ? active.layer.y : 0) : (legacyRect ? legacyRect.y : 0)
+            width: layered ? (active ? active.layer.width : 0) : (legacyRect ? legacyRect.width : 0)
+            height: layered ? (active ? active.layer.height : 0) : (legacyRect ? legacyRect.height : 0)
+            opacity: root.fade(active, root.time)
 
             function follow(force) {
-                if (!slot.ready || !slot.inside) {
+                if (!slot.ready || !slot.inside || !slot.placed) {
                     if (player.playbackState === MediaPlayer.PlayingState) player.pause();
                     return;
                 }
@@ -57,9 +128,17 @@ Item {
                 }
             }
 
+            Rectangle {
+                anchors.fill: parent
+                visible: slot.layered && slot.active !== null
+                color: slot.active && slot.active.layer.onAir ? "black" : (slot.active ? slot.active.layer.borderColor : "black")
+            }
             VideoOutput {
                 id: output
-                anchors.fill: parent
+                x: slot.layered && slot.active ? slot.active.layer.contentX - slot.active.layer.x : 0
+                y: slot.layered && slot.active ? slot.active.layer.contentY - slot.active.layer.y : 0
+                width: slot.layered ? (slot.active ? slot.active.layer.contentWidth : 0) : slot.width
+                height: slot.layered ? (slot.active ? slot.active.layer.contentHeight : 0) : slot.height
                 fillMode: VideoOutput.Stretch
             }
             MediaPlayer {
@@ -74,6 +153,7 @@ Item {
             }
             onTargetSecondsChanged: follow(false)
             onInsideChanged: follow(true)
+            onPlacedChanged: follow(true)
         }
     }
 }
