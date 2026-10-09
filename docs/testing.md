@@ -2758,3 +2758,6 @@ has no timeline, a missing chapter is a gap that blocks export, a chapter withou
 only the first open, and chapters whose probes cannot be joined name the reason.
 `EventProjectTests::replacesARunsRecordingWithFreshGates` checks `withReplacedRecording`: the inference
 is dropped, the gate revision recorded (null when there are none), other runs and unknown run ids untouched.
+`SourceTests::plansTheExportJobFromTheLoadedSources` checks `ExportJobPlan` without a controller: the
+reasons an export cannot start, chapters that cannot be joined never export the first alone, and the
+full list of protected paths for a chaptered event with an additional video.
