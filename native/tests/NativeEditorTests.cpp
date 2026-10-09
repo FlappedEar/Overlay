@@ -1380,6 +1380,23 @@ void EditorTests::previewsCameraSwitchingAndPictureInPictureOptions()
     editor.controller.setPlaybackTime(1.5);
     QTRY_VERIFY(slot->isVisible());
     QTRY_COMPARE(std::round(slot->width()), std::round(preview->width()));
+
+    // A camera is on air only where it has footage: the helmet video ends at
+    // 4 s, so a cut at 3.5 s fills the frame for half a second and not beyond.
+    layout.pip.enabled = true;
+    layout.program.cuts = {{3.5, videos->videos()[0].id}};
+    videos->setVideoLayout(layout);
+    bool found = false;
+    for (const QVariant &entry : videos->previewLayers(preview->width(), preview->height())) {
+        const QVariantMap layer = entry.toMap();
+        if (!layer.value("onAir").toBool()) continue;
+        found = true;
+        const QVariantList windows = layer.value("windows").toList();
+        QCOMPARE(windows.size(), 1);
+        QCOMPARE(windows[0].toMap().value("start").toDouble(), 3.5);
+        QVERIFY(windows[0].toMap().value("end").toDouble() < 4.5);
+    }
+    QVERIFY(found);
 }
 
 void EditorTests::disablesTransportShortcutsWhileEditing()
