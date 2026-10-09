@@ -1396,9 +1396,13 @@ void EditorTests::previewsCameraSwitchingAndPictureInPictureOptions()
     layout.program.cuts = {{1.0, videos->videos()[0].id}, {2.0, mainCameraId}};
     videos->setVideoLayout(layout);
     editor.controller.setPlaybackTime(2.5);
-    int copies = 0;
-    QTRY_VERIFY((copies = [&] { int n = 0; for (auto *c : find("cameraCopy")) if (c->isVisible()) ++n; return n; }()) == 1);
-    for (auto *c : find("cameraCopy")) if (c->isVisible()) QCOMPARE(std::round(c->width()), std::round(preview->width()));
+    const auto shownCopies = [&] {
+        QList<QQuickItem *> shown;
+        for (auto *copy : find("cameraCopy")) if (copy->isVisible()) shown.append(copy);
+        return shown;
+    };
+    QTRY_COMPARE(shownCopies().size(), 1);
+    QCOMPARE(std::round(shownCopies().first()->width()), std::round(preview->width()));
     layout.program.transition = ProgramTransition::Cut;
 
     // A camera is on air only where it has footage: the helmet video ends at
