@@ -621,6 +621,54 @@ Rectangle {
                         }
 
                         ColumnLayout {
+                            objectName: "cameraBoxControls"
+                            visible: root.selectedWidget.type === "cameraBox"
+                            Layout.fillWidth: true
+                            spacing: 6
+                            readonly property var cameras: appController.additionalVideos.cameras
+                            SectionTitle { text: qsTr("Camera box") }
+                            FeLabel {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: qsTr("Shows this camera's video in the widget's rectangle while another camera is on air. Move and resize the widget to place the box.")
+                                color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium
+                            }
+                            FeLabel { text: qsTr("Camera"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
+                            FeComboBox {
+                                objectName: "cameraBoxCamera"
+                                Layout.fillWidth: true
+                                model: parent.cameras.map(camera => camera.label)
+                                currentIndex: Math.max(0, parent.cameras.findIndex(camera => camera.id === root.settings.camera))
+                                onActivated: index => root.setSetting("camera", parent.cameras[index].id)
+                            }
+                            FeLabel { text: qsTr("Picture"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium }
+                            FeComboBox {
+                                objectName: "cameraBoxFill"
+                                Layout.fillWidth: true
+                                model: [qsTr("Fill the box (crop)"), qsTr("Fit the whole picture")]
+                                currentIndex: root.settings.fill === "fit" ? 1 : 0
+                                onActivated: index => root.setSetting("fill", index === 1 ? "fit" : "fill")
+                            }
+                            FeLabel {
+                                text: (root.settings.borderWidth ?? 0) === 0 ? qsTr("Border: none") : qsTr("Border: %1 px").arg(root.settings.borderWidth)
+                                color: Theme.onSurfaceVariant; font.pixelSize: Theme.labelMedium
+                            }
+                            FeSlider {
+                                objectName: "cameraBoxBorderWidth"
+                                Layout.fillWidth: true
+                                from: 0; to: 12; stepSize: 1
+                                value: root.settings.borderWidth ?? 0
+                                onMoved: root.setSetting("borderWidth", value)
+                            }
+                            ColorField {
+                                visible: (root.settings.borderWidth ?? 0) > 0
+                                Layout.fillWidth: true
+                                colorValue: root.settings.borderColor || "#FFFFFF"
+                                onEdited: value => root.setSetting("borderColor", value)
+                            }
+                        }
+
+                        ColumnLayout {
                             visible: root.selectedWidget.type === "tyres"
                             Layout.fillWidth: true
                             spacing: 6

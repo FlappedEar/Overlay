@@ -37,9 +37,18 @@ ColumnLayout {
         text: qsTr("Show the other cameras in boxes")
         onToggled: root.controller.setPipOption("enabled", checked)
     }
+    FeLabel {
+        objectName: "cameraBoxesNotice"
+        visible: root.controller.cameraBoxCount > 0
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+        text: qsTr("The scene has camera box widgets, so they place and size the boxes. The corner, size, margin, border and camera options below are not used.")
+        color: Theme.onSurfaceVariant
+        font.pixelSize: Theme.labelMedium
+    }
     ColumnLayout {
         Layout.fillWidth: true
-        enabled: root.pip.enabled
+        enabled: root.pip.enabled && root.controller.cameraBoxCount === 0
         spacing: 5
         FeLabel {
             text: qsTr("Corner")

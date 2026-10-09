@@ -127,6 +127,14 @@ Arek has not reviewed these; each is a revision away.
 - Box widgets are saved with the other widgets (they travel with templates and My widgets); no new
   project keys. Two boxes for one camera are allowed.
 
+### Built (KAN-256 to KAN-258)
+
+`cameraBox` widget type (descriptor, defaults, `CameraBoxWidget.qml` draws nothing); `cameraBoxes()`
+and `plan(..., boxes)`; export crops fill boxes and the preview draws the same crop;
+`AppController::addWidget` gives a new box its camera and `VideoComposition::startingBoxArea` its
+corner; the inspector has Camera, Picture and Border controls (`cameraBoxControls`); the DATA tab
+greys the corner options and says so while a box exists. User guide: Widgets > Camera box.
+
 ### Rules (VideoComposition)
 
 `plan` takes the boxes as input (`CameraBox`: camera id, rectangle as shares of the frame,

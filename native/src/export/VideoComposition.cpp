@@ -52,6 +52,26 @@ void addWindow(QVector<Window> &windows, const Window &window)
 
 } // namespace
 
+QRectF startingBoxArea(const QVector<QRectF> &occupied)
+{
+    constexpr double size = 0.28;
+    constexpr double margin = 0.02;
+    const double far = 1.0 - size - margin;
+    const QRectF corners[] = {{far, margin, size, size}, {margin, margin, size, size},
+                              {far, far, size, size}, {margin, far, size, size}};
+    QRectF best = corners[0];
+    double least = -1.0;
+    for (const QRectF &corner : corners) {
+        double overlap = 0.0;
+        for (const QRectF &other : occupied) {
+            const QRectF common = corner.intersected(other);
+            if (common.width() > 0 && common.height() > 0) overlap += common.width() * common.height();
+        }
+        if (least < 0.0 || overlap < least) { least = overlap; best = corner; }
+    }
+    return best;
+}
+
 int onAirAt(const ProgramOptions &program, const QStringList &cameraIds, const double time)
 {
     int camera = 0;

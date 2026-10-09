@@ -2098,6 +2098,11 @@ void ExportTests::plansCameraBoxWidgets()
     QCOMPARE(mainBox->windows[0].start, 10.0);
     QCOMPARE(mainBox->windows[0].end, 20.0);
 
+    // A new box starts in the corner the widgets cover least, top right first.
+    QCOMPARE(startingBoxArea({}), QRectF(0.70, 0.02, 0.28, 0.28));
+    QCOMPARE(startingBoxArea({QRectF(0.7, 0.0, 0.3, 0.3)}), QRectF(0.02, 0.02, 0.28, 0.28));
+    QCOMPARE(startingBoxArea({QRectF(0.7, 0.0, 0.3, 0.3), QRectF(0.0, 0.0, 0.3, 0.3)}), QRectF(0.70, 0.70, 0.28, 0.28));
+
     // Off hides every box; a box outside the frame is kept inside it.
     layout.pip.enabled = false;
     layers = plan(layout, hd, ids, sizes, 30.0, {}, boxes);

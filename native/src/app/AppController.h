@@ -177,6 +177,9 @@ public:
     [[nodiscard]] QString sourceMismatchType() const;
     [[nodiscard]] QString sourceMismatchCandidateName() const;
 
+    // KAN-254: adds a widget; a camera box gets the first camera no box uses and the frame
+    // corner the visible widgets cover least.
+    Q_INVOKABLE int addWidget(const QString &type);
     Q_INVOKABLE void loadVideo(const QUrl &url);
     // KAN-105: a reviewed chapter group, played as one timeline.
     void loadVideoChapters(const QList<QUrl> &files);

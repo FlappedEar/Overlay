@@ -79,6 +79,12 @@ struct CameraBox {
 // no camera, or with a rectangle that is not finite or has no size, is left out.
 [[nodiscard]] QVector<CameraBox> cameraBoxes(const QJsonArray &widgets);
 
+// KAN-254: where a new camera box starts: the frame corner (top right first) that
+// overlaps `occupied`, the rectangles of the visible widgets as frame shares, the
+// least. 28 % of the frame in both directions, which is 28 % wide with the
+// main video's aspect.
+[[nodiscard]] QRectF startingBoxArea(const QVector<QRectF> &occupied);
+
 // The camera on air at `time`: the last cut at or before it, the main video
 // before the first cut or when a cut names a camera that is not in `cameraIds`.
 [[nodiscard]] int onAirAt(const ProgramOptions &program, const QStringList &cameraIds, double time);

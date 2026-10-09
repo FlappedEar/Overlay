@@ -616,6 +616,35 @@ void AppController::loadVideoChapters(const QList<QUrl> &files)
     setStatus(QStringLiteral("Loading %1 video chapters").arg(files.size()));
 }
 
+int AppController::addWidget(const QString &type)
+{
+    if (type != QLatin1String("cameraBox")) return m_widgetModel.addWidget(type);
+    const QJsonArray existing = m_widgetModel.toJson();
+    QStringList used;
+    QVector<QRectF> occupied;
+    for (const QJsonValue &value : existing) {
+        const QJsonObject widget = value.toObject();
+        if (!widget.value("visible").toBool(true)) continue;
+        occupied.append(QRectF(widget.value("x").toDouble(), widget.value("y").toDouble(),
+                               widget.value("width").toDouble(), widget.value("height").toDouble()));
+        if (widget.value("type").toString() == QLatin1String("cameraBox"))
+            used.append(widget.value("settings").toObject().value("camera").toString());
+    }
+    const int index = m_widgetModel.addWidget(type);
+    if (index < 0) return index;
+    const QVariantList cameras = m_additionalVideos.cameraList();
+    QString camera;
+    for (const QVariant &entry : cameras) {
+        const QString id = entry.toMap().value(QStringLiteral("id")).toString();
+        if (camera.isEmpty()) camera = id; // every camera has a box: start with the first
+        if (!used.contains(id)) { camera = id; break; }
+    }
+    const QRectF area = VideoComposition::startingBoxArea(occupied);
+    m_widgetModel.setSetting(index, QStringLiteral("camera"), camera);
+    m_widgetModel.moveWidget(index, area.x(), area.y());
+    return index;
+}
+
 void AppController::loadVideo(const QUrl &url)
 {
     const QString path = url.toLocalFile();
