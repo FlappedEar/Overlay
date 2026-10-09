@@ -22,6 +22,7 @@
 
 #include <QDir>
 #include <QElapsedTimer>
+#include <QProcess>
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QFile>
@@ -172,6 +173,7 @@ private slots:
     void formatsLapTimesRoundedBeforeMinutes();
     void readsTyreValuesWithoutPlaceholdersOrGaps();
     void readsPrivateTyreData();
+    void matchesRaceChronoLapList();
     void rejectsMalformedLapExclusions_data();
     void rejectsMalformedLapExclusions();
     void groupsOnlyDatedUnambiguousAlternatives();
@@ -2457,6 +2459,54 @@ void TelemetryCoreTests::readsPrivateTyreData()
             QVERIFY(minP > 0.5 && maxP < 5.0);
         }
     }
+}
+
+void TelemetryCoreTests::matchesRaceChronoLapList()
+{
+    // Opt-in: every VBO of a real day (FLAPPEDEAR_REAL_DAY) that has its RCZ
+    // beside it. RaceChrono's own lap list is in the RCZ's session.json; the
+    // laps detected from the VBO must be the same laps to within a VBO sample
+    // (the owner's day agrees to 16 ms, 8 October 2026).
+    const auto path = qEnvironmentVariable("FLAPPEDEAR_REAL_DAY");
+    if (path.isEmpty()) QSKIP("FLAPPEDEAR_REAL_DAY is not set");
+    int compared = 0;
+    for (const auto &file : QDir(path).entryInfoList({"*.vbo"}, QDir::Files, QDir::Name)) {
+        const QString rcz = QDir(path).filePath(file.completeBaseName() + QStringLiteral(".rcz"));
+        if (!QFile::exists(rcz)) continue;
+        // Read session.json in chunks and stop at 1 MiB, so a corrupt or hostile RCZ cannot fill memory.
+        QProcess unzip;
+        unzip.start(QStringLiteral("unzip"), {QStringLiteral("-p"), rcz, QStringLiteral("session.json")});
+        if (!unzip.waitForStarted(10'000)) QSKIP("unzip is not available to read session.json");
+        QByteArray metadata;
+        constexpr qint64 maximumMetadataBytes = 1024 * 1024;
+        while (unzip.state() != QProcess::NotRunning || unzip.bytesAvailable() > 0) {
+            if (unzip.bytesAvailable() == 0 && !unzip.waitForReadyRead(30'000) && unzip.state() != QProcess::NotRunning) break;
+            metadata += unzip.read(64 * 1024);
+            if (metadata.size() > maximumMetadataBytes) break;
+        }
+        const bool complete = unzip.state() == QProcess::NotRunning && metadata.size() <= maximumMetadataBytes;
+        if (!complete) unzip.kill();
+        unzip.waitForFinished(5'000);
+        QVERIFY2(complete && unzip.exitCode() == 0,
+            qPrintable(QStringLiteral("Cannot read session.json from %1").arg(rcz)));
+        const auto reference = QJsonDocument::fromJson(metadata).object().value("laps").toArray();
+        QVERIFY2(!reference.isEmpty(), qPrintable(QStringLiteral("%1 has no lap list").arg(rcz)));
+        QVector<double> expected;
+        for (const auto &value : reference) {
+            const auto lap = value.toObject();
+            if (!lap.contains("finishTimestamp")) continue; // the lap still running when logging stopped
+            expected.append((lap.value("finishTimestamp").toDouble() - lap.value("startTimestamp").toDouble()) / 1000.0);
+        }
+        const auto detected = deriveSourceLapSession(VboParser::parseFile(file.absoluteFilePath()));
+        QCOMPARE(detected.timedLaps.size(), expected.size());
+        for (qsizetype i = 0; i < expected.size(); ++i) {
+            QVERIFY2(std::abs(detected.timedLaps[i].durationSeconds - expected[i]) < 0.05,
+                qPrintable(QStringLiteral("%1 lap %2: %3 s against RaceChrono's %4 s").arg(file.baseName().left(24))
+                    .arg(i + 1).arg(detected.timedLaps[i].durationSeconds).arg(expected[i])));
+            ++compared;
+        }
+    }
+    if (compared == 0) QSKIP("No VBO with a matching RCZ in FLAPPEDEAR_REAL_DAY");
 }
 
 #include "TelemetryCoreTests.moc"

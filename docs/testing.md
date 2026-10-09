@@ -2461,6 +2461,11 @@ coverage and range per session, and a real mid-session export frame
 (`tyres-export-real.png` when `FLAPPEDEAR_LAYOUT_REVIEW_DIR` is set). Private
 results are in `telemetry-semantics.md`.
 
+`FLAPPEDEAR_REAL_DAY` also adds `matchesRaceChronoLapList` (`flappedear_telemetry_core_tests`):
+for each VBO with its RCZ beside it, the lap times detected from the VBO must match the lap
+list in the RCZ's `session.json` (RaceChrono's own timing) to within 50 ms. It needs `unzip`
+and skips without it. The owner's Jastrząb day: all 25 laps agree to within 16 ms.
+
 ## KAN-180: content ids shared with FlappedEar Telemetry
 
 `ContentIdVectorTests` recomputes every content id in
