@@ -360,7 +360,7 @@ int exportWorker(const QString &configPath)
         for (const auto &value : config.value("additionalVideos").toArray()) {
             const QJsonObject video = value.toObject();
             const QJsonObject videoSync = video.value("sync").toObject();
-            FlappedEar::ExportAdditionalVideo additional{video.value("path").toString(), video.value("label").toString(),
+            FlappedEar::ExportAdditionalVideo additional{video.value("id").toString(), video.value("path").toString(), video.value("label").toString(),
                 {videoSync.value("offset").toDouble(), videoSync.value("timeScale").toDouble(1.0)}, {}};
             if (additional.path.isEmpty() || !std::isfinite(additional.sync.offset) || !(additional.sync.timeScale > 0.0))
                 throw std::runtime_error("An additional video in the export configuration is invalid.");
@@ -395,8 +395,9 @@ int exportWorker(const QString &configPath)
         settings.chapterDurationTicks = chapterDurationTicks;
         settings.sync = sync;
         settings.additionalVideos = additionalVideos;
-        settings.videoLayout = config.value("videoLayout").toString() == QStringLiteral("sideBySide")
-            ? FlappedEar::VideoLayoutMode::SideBySide : FlappedEar::VideoLayoutMode::PictureInPicture;
+        if (!FlappedEar::AdditionalVideosCodec::validLayout(config.value("videoLayout")))
+            throw std::runtime_error("The video layout in the export configuration is invalid.");
+        settings.videoLayout = FlappedEar::AdditionalVideosCodec::readVideoLayout(config.value("videoLayout"));
         settings.outputPath = config.value("outputPath").toString();
         settings.encoder = config.value("encoder").toString();
         settings.outputSize = outputSize;
