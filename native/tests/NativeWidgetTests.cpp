@@ -46,6 +46,7 @@ private slots:
     void rejectsNonFiniteWidgetGeometryAndDuplicateIds();
     void loadsVisualTemplates();
     void dropsRetiredWidgetTypes();
+    void keepsTheOptionalLapDeltaSetting();
     void keepsUnknownWidgetTypesUnchanged();
     void keepsRetiredWidgetSettings();
     void providesCustomizableArchetypes();
@@ -435,6 +436,21 @@ void WidgetTests::keepsUnknownWidgetTypesUnchanged()
     QVERIFY(model.fromJson(scene));
     QVERIFY(model.applyTemplate("motorsport-broadcast-smoke"));
     QCOMPARE(model.unknownWidgetsKept(), 0);
+}
+
+void WidgetTests::keepsTheOptionalLapDeltaSetting()
+{
+    // KAN-255: the lap tile's delta is off until chosen, and stays a boolean.
+    WidgetModel model;
+    const int tile = model.addWidget("lapCurrent");
+    QVERIFY(tile >= 0);
+    QVERIFY(!model.widget(tile).value("settings").toMap().value("showDelta").toBool());
+    model.setSetting(tile, "showDelta", true);
+    QCOMPARE(model.widget(tile).value("settings").toMap().value("showDelta").typeId(), QMetaType::Bool);
+    QVERIFY(model.widget(tile).value("settings").toMap().value("showDelta").toBool());
+    WidgetModel reloaded;
+    QVERIFY(reloaded.fromJson(model.toJson()));
+    QVERIFY(reloaded.widget(0).value("settings").toMap().value("showDelta").toBool());
 }
 
 void WidgetTests::dropsRetiredWidgetTypes()

@@ -409,6 +409,8 @@ The Lap Analysis window and its panels and dialogs were deleted by KAN-166 step 
 
 The Current lap time tile shows hundredths by default. **Lap time decimals** in Widget options switches between 1, 2 and 3 decimals (`timingDecimals`); tiles saved before this keep their stored setting (KAN-135).
 
+**Delta to the best lap (KAN-255).** The setting `showDelta` (off by default; any `show*` setting is a boolean) adds `lapDelta` to the Classic and Tech tiles. It shows `TelemetryRenderContext::lapTiming().liveDeltaSeconds`, the live gap to the best completed lap from `closestReferenceMatch`, formatted by `formatLapDelta` with the tile's decimals (1 to 3): `+0.34` behind, `-1.20` ahead, `0.00` for zero. Green (`#20d05a`, Tech `#4fd17a`) when the gap is 0 or negative, orange (`#ff9f1a`) when positive. It is hidden in hotlap mode, before a lap has been completed, and whenever `liveDeltaSeconds` is missing.
+
 **Hotlap mode (KAN-134).** The Current lap time tile has a hotlap option: settings `hotlapMode`, and `hotlapLap`, where 0 is the recording's best lap. The inspector offers the option, the lap list and "Use the lap at the playhead" (`AppController::lapNumberAtPlayback`). `TelemetryRenderContext::fixedLapTiming(lap)` supplies the timing, so preview and export show the same:
 - before the lap's start/finish crossing the tile shows 0:00;
 - during the lap it counts;

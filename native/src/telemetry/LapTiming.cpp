@@ -696,6 +696,13 @@ QString formatLapTime(const double seconds, const int decimals)
     return text;
 }
 
+QString formatLapDelta(const double seconds, const int decimals)
+{
+    if (!std::isfinite(seconds)) return {};
+    const int places = std::clamp(decimals, 1, 3);
+    return (seconds > 0.0 ? QStringLiteral("+") : QString()) + QString::number(seconds, 'f', places);
+}
+
 QString formatElapsedTime(const double seconds)
 {
     if (!std::isfinite(seconds)) return QStringLiteral("—");

@@ -27,6 +27,9 @@ Item {
     readonly property bool waiting: !hotlap && timing.state === "waiting"
     readonly property color goodColor: frame.widgetSettings.accentColor || "#20d05a"
     readonly property var lapNumber: hotlap ? hotlapTiming.lapNumber : timing.currentLapNumber
+    // Optional live delta to the best completed lap (KAN-255): green ahead, orange behind.
+    readonly property real delta: Number(timing.liveDeltaSeconds)
+    readonly property bool showDelta: (frame.widgetSettings.showDelta ?? false) && !hotlap && Number.isFinite(delta)
 
     function formatTime(seconds) {
         const value = Number(seconds);
@@ -54,6 +57,20 @@ Item {
         font.pixelSize: Math.min(24 * root.frame.labelScale * root.tileScale,
                                  root.height * 0.22)
         font.weight: Font.Medium
+    }
+
+    Label {
+        objectName: "lapDelta"
+        visible: root.showDelta
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.rightMargin: 12 * root.tileScale
+        anchors.topMargin: 7 * root.tileScale
+        text: frame.renderContext.formatLapDelta(root.delta, root.decimals)
+        color: root.delta <= 0 ? "#20d05a" : "#ff9f1a"
+        font.family: root.frame.family
+        font.pixelSize: Math.min(24 * root.frame.labelScale * root.tileScale, root.height * 0.22)
+        font.weight: Font.DemiBold
     }
 
     Label {
