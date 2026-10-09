@@ -2133,6 +2133,32 @@ void ExportTests::plansPictureInPictureAndCameraSwitching()
     QCOMPARE(fades[1].windows[0].start, 20.0);
     QCOMPARE(fades[1].windows[0].end, 30.0);
 
+    // A cut at time zero still fades the camera in over the main video.
+    layout.program.cuts = {{0.0, "helmet"}};
+    layers = plan(layout, hd, ids, sizes, 30.0);
+    QCOMPARE(layers[0].camera, 1);
+    QCOMPARE(layers[0].fadeInSeconds, 0.5);
+
+    // A camera is on air only where it has footage; the main video fills the rest.
+    layout.program.transition = ProgramTransition::Cut;
+    layout.program.cuts = {{5.0, "helmet"}};
+    QVector<Window> footage(3, Window{0.0, 30.0});
+    footage[1] = Window{8.0, 20.0};
+    const auto shown = segments(layout.program, ids, 30.0, footage);
+    QCOMPARE(shown.size(), 3);
+    QCOMPARE(shown[0].camera, 0);
+    QCOMPARE(shown[0].window.end, 8.0);
+    QCOMPARE(shown[1].camera, 1);
+    QCOMPARE(shown[1].window.start, 8.0);
+    QCOMPARE(shown[1].window.end, 20.0);
+    QCOMPARE(shown[2].camera, 0);
+    QCOMPARE(shown[2].window.end, 30.0);
+    layers = plan(layout, hd, ids, sizes, 30.0, footage);
+    for (const Layer &layer : layers)
+        if (layer.onAir) QCOMPARE(layer.windows[0].start, 8.0);
+    layout.program.cuts = {{10.0, "helmet"}, {20.0, "main"}};
+    layout.program.transition = ProgramTransition::Crossfade;
+
     // Picture in picture off: only the on-air layers; none with the main video throughout.
     layout.pip.enabled = false;
     layers = plan(layout, hd, ids, sizes, 30.0);

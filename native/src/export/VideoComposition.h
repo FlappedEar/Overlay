@@ -69,7 +69,12 @@ struct Segment {
     int camera = 0;
     Window window;
 };
-[[nodiscard]] QVector<Segment> segments(const ProgramOptions &program, const QStringList &cameraIds, double endSeconds);
+//
+// `available` (empty: every camera has footage throughout) holds, per camera
+// in `cameraIds` order, the span of the main video's timeline with footage;
+// outside it the main video is on air instead of that camera. Entry 0 is unused.
+[[nodiscard]] QVector<Segment> segments(const ProgramOptions &program, const QStringList &cameraIds, double endSeconds,
+    const QVector<Window> &available = {});
 
 // Every layer of a picture-in-picture output for the whole run
 // (`endSeconds` is when the last cut stays on air until). `sourceSizes` are the
@@ -79,7 +84,7 @@ struct Segment {
 // switched off there are only on-air layers, and no layers at all while the
 // main video is on air throughout. Empty when a size is not valid.
 [[nodiscard]] QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStringList &cameraIds,
-    const QVector<QSize> &sourceSizes, double endSeconds);
+    const QVector<QSize> &sourceSizes, double endSeconds, const QVector<Window> &available = {});
 
 // Which moment of an additional video an output frame shows. Both videos'
 // syncs map their video time to the same telemetry time, so the additional

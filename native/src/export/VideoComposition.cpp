@@ -63,7 +63,8 @@ int onAirAt(const ProgramOptions &program, const QStringList &cameraIds, const d
     return camera;
 }
 
-QVector<Segment> segments(const ProgramOptions &program, const QStringList &cameraIds, const double endSeconds)
+QVector<Segment> segments(const ProgramOptions &program, const QStringList &cameraIds, const double endSeconds,
+    const QVector<Window> &available)
 {
     if (!(endSeconds > 0.0) || !std::isfinite(endSeconds)) return {};
     QVector<ProgramCut> cuts = program.cuts;
@@ -84,11 +85,34 @@ QVector<Segment> segments(const ProgramOptions &program, const QStringList &came
         camera = cameraIndex(cameraIds, cut.camera);
     }
     close(endSeconds);
-    return result;
+    if (available.isEmpty()) return result;
+
+    // A camera with no footage for part of its stretch cannot be shown there:
+    // the main video is on air for that part.
+    QVector<Segment> shown;
+    const auto append = [&shown](const int cameraIndex, const double start, const double end) {
+        if (!(end > start)) return;
+        if (!shown.isEmpty() && shown.last().camera == cameraIndex && shown.last().window.end >= start)
+            shown.last().window.end = end;
+        else shown.append(Segment{cameraIndex, Window{start, end}});
+    };
+    for (const Segment &stretch : std::as_const(result)) {
+        if (stretch.camera == 0 || stretch.camera >= available.size()) {
+            append(stretch.camera, stretch.window.start, stretch.window.end);
+            continue;
+        }
+        const Window &footage = available[stretch.camera];
+        const double from = std::clamp(footage.start, stretch.window.start, stretch.window.end);
+        const double to = std::clamp(footage.end, from, stretch.window.end);
+        append(0, stretch.window.start, from);
+        append(stretch.camera, from, to);
+        append(0, to, stretch.window.end);
+    }
+    return shown;
 }
 
 QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStringList &cameraIds,
-    const QVector<QSize> &sourceSizes, const double endSeconds)
+    const QVector<QSize> &sourceSizes, const double endSeconds, const QVector<Window> &available)
 {
     if (output.width() < 4 || output.height() < 4 || sourceSizes.size() != cameraIds.size() || cameraIds.isEmpty()
         || !(endSeconds > 0.0) || !std::isfinite(endSeconds))
@@ -96,7 +120,7 @@ QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStrin
     if (std::any_of(sourceSizes.cbegin(), sourceSizes.cend(), [](const QSize &size) { return size.isEmpty(); })) return {};
     const int cameras = static_cast<int>(cameraIds.size());
     if (cameras < 2) return {};
-    const QVector<Segment> stretches = segments(layout.program, cameraIds, endSeconds);
+    const QVector<Segment> stretches = segments(layout.program, cameraIds, endSeconds, available);
     const PipOptions &pip = layout.pip;
     const bool fading = layout.program.transition == ProgramTransition::Crossfade;
     const double fade = layout.program.crossfadeSeconds;
@@ -121,7 +145,7 @@ QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStrin
             created.content = stretch.camera == 0 ? created.rect
                 : centredRect(fit(sourceSizes[stretch.camera], output), output);
             created.borderColor = QStringLiteral("#000000");
-            created.fadeInSeconds = fading && index > 0 ? fade : 0.0;
+            created.fadeInSeconds = fading && (index > 0 || stretch.camera != 0) ? fade : 0.0;
             result.append(created);
             layer = &result.last();
         }
