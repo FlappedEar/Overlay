@@ -96,6 +96,47 @@ is active). DATA tab, Additional videos panel: a Picture-in-picture group (switc
 camera checkboxes) and a Camera switching group (list of cuts with time and camera, **Cut here** at
 the playhead, delete, transition and crossfade length). Edits mark the project dirty (the editor has no undo stack for documents).
 
+## Camera box widget (KAN-254)
+
+Owner request (Arek, 9 October 2026): "I wish the PIP box would be a widget - editable to my needs".
+Steps: KAN-256 (widget type and composition rules), KAN-257 (export and preview), KAN-258 (editor
+and user guide). Jira umbrella: KAN-254.
+
+### Defaults chosen by Claude
+
+Arek has not reviewed these; each is a revision away.
+
+- A picture-in-picture box becomes a widget of the new type `cameraBox` ("Camera box" in the Add
+  widget list). One widget is one box. You place and size it on the canvas like any widget, so the
+  corner, size and margin options are no longer the only way.
+- Settings: `camera` (`main` or an additional video's id; a new widget takes the first camera no box
+  uses yet), `borderWidth` (pixels at 1080p scale, 0 to 12, default 0), `borderColor` (default
+  `#FFFFFF`) and `fill` (`fill` crops the picture to the box, the default; `fit` keeps the whole
+  picture and fills the rest with black).
+- The box's rectangle is the widget's `x`, `y`, `width` and `height` (shares of the frame, as every
+  widget), rounded to even pixels. Rotation, scale and opacity are ignored; a widget that is not
+  visible draws no box.
+- The widget itself draws nothing into the overlay: the video box is drawn under the overlay by the
+  same plan in preview and export, so the widget is the box's handle in the editor.
+- A new box starts in the frame corner where it overlaps the existing widgets least, 28 % of the frame wide with the main video's aspect (the real-footage check of 9 October 2026 found the top-right default under the template's map and heart-rate widgets). The video box is under the whole overlay, so widgets draw over it.
+- Boxes follow camera switching as before: a camera's box shows while it is not on air; while it is
+  on air it fills the frame and its box is empty. A camera without a box widget has no box.
+- If the project has at least one visible camera box, the boxes replace the `pip` options (corner,
+  size, margin, border, cameras) entirely, and the DATA tab says so. With none, the `pip` options
+  work as before, so existing projects do not change. `pip.enabled: false` still hides all boxes.
+- Box widgets are saved with the other widgets (they travel with templates and My widgets); no new
+  project keys. Two boxes for one camera are allowed.
+
+### Rules (VideoComposition)
+
+`plan` takes the boxes as input (`CameraBox`: camera id, rectangle as shares of the frame,
+border, colour, fill) read from the widgets by one function both callers use. Boxes whose camera is
+not in the run are skipped. Every box position and size stays even and inside the frame.
+
+### Not planned yet
+
+Rounded corners, box opacity or fades, labels, and showing a box through widget cues.
+
 ## Not planned
 
 Per-cut transitions other than crossfade, picture-in-picture animation, audio switching, a
