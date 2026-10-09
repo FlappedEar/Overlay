@@ -230,6 +230,11 @@ Step 13 moved the assembly of an export into `ExportJobPlan` (`native/src/app/Ex
 `buildJob` gives the job with every source the output must never overwrite (telemetry, each chapter,
 the event document and its sources, each additional video). `AppController::startExport` gathers the
 inputs and starts the run.
+Step 14 moved the reading of a saved project's video chapters into `SourceLoading::savedChapters`:
+the chapters kept unverified until the probe finishes (so a save before then writes them back), the
+timeline of their saved durations, and the chapters after the first, resolved against the project,
+for the probe to check. Loading a project (`applyEditorProject`) and starting its sources
+(`startEditorSources`) both use it.
 
 `AdditionalVideoController` (`appController.additionalVideos`, KAN-131) holds the
 run's videos besides the main one, each with its own sync, and the export layout.

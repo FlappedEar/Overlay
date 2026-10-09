@@ -89,6 +89,19 @@ struct ChapterDerivation {
 
 [[nodiscard]] ChapterDerivation deriveChapters(const QVector<VideoChapterState> &probed);
 
+// KAN-215: the chapters a saved project names for its video, before anything
+// is probed. `pending` keeps them (the first included) as not yet verified, so
+// a save before the probe finishes writes them back; `timeline` holds their
+// saved durations; `further` are the chapters after the first, each resolved
+// against the project, for the probe to check.
+struct SavedChapters {
+    QVector<VideoChapterState> pending;
+    MediaTimeline timeline;                // invalid for one video
+    QVector<VideoChapterInput> further;
+};
+
+[[nodiscard]] SavedChapters savedChapters(const QJsonObject &video, const QString &projectPath);
+
 // Probes the video and fingerprints it. With `chapters`, probes each further
 // chapter too and checks it against its saved fingerprint; one that is
 // missing, unreadable or no longer the same file is a gap of its saved

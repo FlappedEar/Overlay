@@ -2769,3 +2769,6 @@ is dropped, the gate revision recorded (null when there are none), other runs an
 `SourceTests::plansTheExportJobFromTheLoadedSources` checks `ExportJobPlan` without a controller: the
 reasons an export cannot start, chapters that cannot be joined never export the first alone, and the
 full list of protected paths for a chaptered event with an additional video.
+`SourceTests::readsTheSavedChaptersOfAProject` checks `SourceLoading::savedChapters`: no chapters for an
+ordinary video, and for a chaptered one the unverified chapters, the saved-duration timeline and the
+chapters after the first.

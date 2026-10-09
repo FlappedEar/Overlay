@@ -80,17 +80,13 @@ void AppController::applyEditorProject(const ProjectLoadResult &result)
     m_videoSource = QUrl();
     // KAN-105: the saved chapters, not yet verified, so a save before (or
     // without) loading the video keeps them; the video probe refreshes them.
-    m_videoChapterStates.clear();
     const QJsonObject editor = EventProjectCodec::editorProjection(result.project);
     m_additionalVideos.restore(AdditionalVideosCodec::read(editor.value("sources").toObject().value("additionalVideos")),
         AdditionalVideosCodec::readVideoLayout(editor.value("videoLayout")), result.projectPath);
-    const auto chapters = VideoChaptersCodec::read(editor.value("sources").toObject().value("video").toObject());
-    QVector<TimelineChapter> timelineChapters;
-    for (const auto &chapter : chapters) {
-        m_videoChapterStates.append({chapter.reference, {}, chapter.durationSeconds, false, QStringLiteral("loading"), {}});
-        timelineChapters.append({{}, chapter.durationSeconds, false});
-    }
-    m_videoTimeline = MediaTimeline::fromChapters(timelineChapters);
+    auto saved = SourceLoading::savedChapters(editor.value("sources").toObject().value("video").toObject(),
+        result.projectPath);
+    m_videoChapterStates = std::move(saved.pending);
+    m_videoTimeline = std::move(saved.timeline);
     m_videoChapterIndex = 0;
     m_exportSourceInfo = {};
     m_exportChapterPaths.clear();

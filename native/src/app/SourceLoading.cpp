@@ -2,6 +2,7 @@
 
 #include "export/ChapterSource.h"
 #include "export/VideoFingerprint.h"
+#include "project/VideoChapters.h"
 #include "telemetry/SourceOperation.h"
 #include "telemetry/TelemetrySource.h"
 
@@ -116,6 +117,24 @@ VboLoadResult loadTelemetry(const QString &path, const quint64 generation, const
         result.error = QString::fromUtf8(error.what());
     }
     return result;
+}
+
+SavedChapters savedChapters(const QJsonObject &video, const QString &projectPath)
+{
+    SavedChapters saved;
+    const auto chapters = VideoChaptersCodec::read(video);
+    QVector<TimelineChapter> timelineChapters;
+    for (qsizetype index = 0; index < chapters.size(); ++index) {
+        const auto &chapter = chapters[index];
+        saved.pending.append({chapter.reference, {}, chapter.durationSeconds, false, QStringLiteral("loading"), {}});
+        timelineChapters.append({{}, chapter.durationSeconds, false});
+        if (index > 0) {
+            saved.further.append({chapter.reference, ProjectSourceReferenceCodec::resolve(chapter.reference, projectPath),
+                chapter.durationSeconds});
+        }
+    }
+    saved.timeline = MediaTimeline::fromChapters(timelineChapters);
+    return saved;
 }
 
 ChapterDerivation deriveChapters(const QVector<VideoChapterState> &probed)
