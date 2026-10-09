@@ -1177,6 +1177,7 @@ ApplicationWindow {
                                 AdditionalVideosPreview {
                                     id: additionalVideosPreview
                                     anchors.fill: parent
+                                    mainOutput: videoOutput
                                     playing: mediaPlayer.playbackState === MediaPlayer.PlayingState
                                 }
                                 // KAN-105: a missing chapter is an explicit gap, never skipped.

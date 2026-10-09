@@ -244,7 +244,7 @@ document or an older request is ignored. A saved video is used only when its
 fingerprint matches; a missing or changed file stays in the project, marked. A user
 edit reaches `AppController` as `edited()` and marks the document dirty; restoring
 a project does not. Export composes the videos by `VideoComposition` (`native/src/export/`), whose
-layout rules `AdditionalVideosPreview.qml` shares through `previewRects`, so the preview matches the file ([export-pipeline.md](export-pipeline.md#additional-videos-kan-131)).
+layout rules `AdditionalVideosPreview.qml` shares through `previewRects`, so the preview matches the file ([export-pipeline.md](export-pipeline.md#additional-videos-kan-131)). In picture-in-picture mode the preview draws `previewLayers`, the same `VideoComposition::plan` as export (KAN-245): the camera on air fills the frame, the others sit in boxes with their border, and a crossfade is an opacity ramp; a copy of the main video for its boxes and fades is a `ShaderEffectSource` of the main `VideoOutput`.
 
 Editor chrome keeps one vertical scroll surface for the complete left sidebar and independent explicit scroll extents for each inspector tab, so no controls are unreachable at the 1180×720 minimum window size. Playback transport is centralized on the primary `MediaPlayer`; the Analysis window forwards the same keyboard seeks and play/pause action to it, and full-screen presentation uses that player and timeline rather than a second transport state. Text, numeric, and focused interactive controls suppress playback shortcuts. Qt decoder failures stop the affected player, enter the application log/status boundary, and remain visible over both the editor preview and Analysis video pane.
 

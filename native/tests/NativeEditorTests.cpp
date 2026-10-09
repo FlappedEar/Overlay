@@ -61,6 +61,7 @@ private slots:
     void disablesTransportShortcutsWhileEditing();
     void editsAdditionalVideosInTheSyncTab();
     void previewsAdditionalVideosByTheLayout();
+    void previewsCameraSwitchingAndPictureInPictureOptions();
     void savesTheSceneAsATemplateFromThePopup();
     void asksBeforeDiscardingUnsavedChanges();
     void confirmsExportQuitAndOverwrite();
@@ -1304,6 +1305,122 @@ void EditorTests::previewsAdditionalVideosByTheLayout()
     // Before its first frame it is hidden: it starts 5 s after the main video.
     videos->setOffset(0, 5.0);
     QTRY_VERIFY(!slot->isVisible());
+}
+
+void EditorTests::previewsCameraSwitchingAndPictureInPictureOptions()
+{
+    // KAN-245: the preview follows the plan of picture-in-picture options and
+    // cuts. The helmet camera is a box until its cut at 1 s, then fills the
+    // frame while the main video moves to a box; the box moves with the corner.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the camera switching preview test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto encode = [&](const QString &name, const QString &source) {
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", source,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", directory.filePath(name)});
+        return encoder.waitForFinished(30'000) && encoder.exitCode() == 0;
+    };
+    QVERIFY(encode("main.mp4", "color=c=red:s=320x180:r=30:d=4"));
+    QVERIFY(encode("helmet.mp4", "color=c=blue:s=320x180:r=25:d=4"));
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    editor.controller.loadVideo(QUrl::fromLocalFile(directory.filePath("main.mp4")));
+    QTRY_COMPARE(editor.controller.videoLoadState(), QStringLiteral("ready"));
+    auto *videos = editor.controller.additionalVideoController();
+    videos->addVideo(QUrl::fromLocalFile(directory.filePath("helmet.mp4")));
+    QTRY_COMPARE(videos->count(), 1);
+    QTRY_VERIFY(!videos->loading());
+    auto *preview = editor.window->findChild<QQuickItem *>(QStringLiteral("additionalVideosPreview"));
+    QVERIFY(preview);
+    QTRY_VERIFY(preview->width() > 0);
+    const auto find = [preview](const QString &name) {
+        QList<QQuickItem *> found, queue{preview};
+        while (!queue.isEmpty()) {
+            auto *item = queue.takeFirst();
+            if (item->objectName() == name) found.append(item);
+            queue.append(item->childItems());
+        }
+        return found;
+    };
+    QQuickItem *slot = nullptr;
+    QTRY_VERIFY((slot = find("additionalVideoPreview").value(0)) != nullptr);
+
+    // Before the cut: a box at the top right, and no copy of the main video.
+    VideoLayout layout = videos->videoLayout();
+    layout.program.cuts = {{1.0, videos->videos()[0].id}, {3.0, mainCameraId}};
+    videos->setVideoLayout(layout);
+    editor.controller.setPlaybackTime(0.5);
+    QTRY_VERIFY(slot->isVisible());
+    QVERIFY(slot->width() < preview->width() * 0.3);
+    QVERIFY(slot->x() + slot->width() > preview->width() * 0.9);
+    for (auto *copy : find("mainVideoCopy")) QVERIFY(!copy->isVisible());
+
+    // The cut: the helmet camera fills the frame, the main video is in a box.
+    editor.controller.setPlaybackTime(1.5);
+    QTRY_COMPARE(std::round(slot->width()), std::round(preview->width()));
+    QTRY_VERIFY(slot->isVisible());
+    int visibleCopies = 0;
+    for (auto *copy : find("mainVideoCopy")) if (copy->isVisible()) {
+        ++visibleCopies;
+        QVERIFY(copy->width() < preview->width() * 0.3);
+    }
+    QCOMPARE(visibleCopies, 1);
+
+    // Back to the main video; the corner and the switch are options.
+    editor.controller.setPlaybackTime(3.5);
+    QTRY_VERIFY(slot->width() < preview->width() * 0.3);
+    layout.pip.corner = PipCorner::BottomLeft;
+    videos->setVideoLayout(layout);
+    QTRY_VERIFY(slot->x() < preview->width() * 0.1);
+    QVERIFY(slot->y() > preview->height() * 0.5);
+    layout.pip.enabled = false;
+    videos->setVideoLayout(layout);
+    QTRY_VERIFY(!slot->isVisible());
+    editor.controller.setPlaybackTime(1.5);
+    QTRY_VERIFY(slot->isVisible());
+    QTRY_COMPARE(std::round(slot->width()), std::round(preview->width()));
+
+    // Picture in picture off and nobody on air: the main video alone.
+    layout.pip.enabled = false;
+    layout.program.cuts = {};
+    videos->setVideoLayout(layout);
+    editor.controller.setPlaybackTime(1.5);
+    QTRY_VERIFY(!slot->isVisible());
+
+    // A crossfade back to the main video: the helmet camera stays full frame
+    // under the fading main video while its box is already in the plan.
+    layout.pip.enabled = true;
+    layout.program.transition = ProgramTransition::Crossfade;
+    layout.program.crossfadeSeconds = 1.0;
+    layout.program.cuts = {{1.0, videos->videos()[0].id}, {2.0, mainCameraId}};
+    videos->setVideoLayout(layout);
+    editor.controller.setPlaybackTime(2.5);
+    const auto shownCopies = [&] {
+        QList<QQuickItem *> shown;
+        for (auto *copy : find("cameraCopy")) if (copy->isVisible()) shown.append(copy);
+        return shown;
+    };
+    QTRY_COMPARE(shownCopies().size(), 1);
+    QCOMPARE(std::round(shownCopies().first()->width()), std::round(preview->width()));
+    layout.program.transition = ProgramTransition::Cut;
+
+    // A camera is on air only where it has footage: the helmet video ends at
+    // 4 s, so a cut at 3.5 s fills the frame for half a second and not beyond.
+    layout.pip.enabled = true;
+    layout.program.cuts = {{3.5, videos->videos()[0].id}};
+    videos->setVideoLayout(layout);
+    bool found = false;
+    for (const QVariant &entry : videos->previewLayers(preview->width(), preview->height())) {
+        const QVariantMap layer = entry.toMap();
+        if (!layer.value("onAir").toBool()) continue;
+        found = true;
+        const QVariantList windows = layer.value("windows").toList();
+        QCOMPARE(windows.size(), 1);
+        QCOMPARE(windows[0].toMap().value("start").toDouble(), 3.5);
+        QVERIFY(windows[0].toMap().value("end").toDouble() < 4.5);
+    }
+    QVERIFY(found);
 }
 
 void EditorTests::disablesTransportShortcutsWhileEditing()

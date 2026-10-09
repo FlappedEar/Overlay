@@ -92,6 +92,13 @@ public:
     // The preview's rectangles in a frame of width x height (the main video's
     // shape), main video first, by the same rules as export.
     Q_INVOKABLE QVariantList previewRects(double width, double height) const;
+    // KAN-245: the layers of the picture-in-picture preview in a frame of
+    // width x height, by the same plan as export (VideoComposition::plan), in
+    // drawing order. Each is a map with camera (0 main, then each video),
+    // index, onAir, x, y, width, height (outer), contentX/Y/Width/Height,
+    // border, borderColor, fadeIn and windows [{start, end}] in main video
+    // seconds. Empty side by side, or when nothing can be placed.
+    Q_INVOKABLE QVariantList previewLayers(double width, double height) const;
 
 signals:
     void changed();
