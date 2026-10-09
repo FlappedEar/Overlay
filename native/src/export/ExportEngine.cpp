@@ -1085,8 +1085,23 @@ ExportResult ExportEngine::exportVideo(
                 QStringList cameraIds{mainCameraId};
                 for (const auto &video : settings.additionalVideos) cameraIds.append(video.id);
                 const double endSeconds = sourceRangeStart + exportDuration + 1.0;
-                const auto layers = VideoComposition::plan(settings.videoLayout, outputSize, cameraIds, sourceSizes, endSeconds);
-                const auto preflightLayers = VideoComposition::plan(settings.videoLayout, QSize(64, 64), cameraIds, sourceSizes, endSeconds);
+                // Where each camera has footage, on the main video's timeline;
+                // the main video is on air outside it.
+                QVector<VideoComposition::Window> footage(cameraIds.size(), {0.0, endSeconds});
+                for (qsizetype index = 0; index < settings.additionalVideos.size(); ++index) {
+                    const auto &video = settings.additionalVideos[index];
+                    const auto &timing = timings[index];
+                    if (!timing) {
+                        footage[index + 1] = {0.0, 0.0};
+                        continue;
+                    }
+                    const double seconds = video.info.videoDuration > 0.0 ? video.info.videoDuration : video.info.duration;
+                    const double first = video.info.videoStartTime * timing->timeFactor + timing->timeShift + sourceRangeStart;
+                    const double last = (video.info.videoStartTime + seconds) * timing->timeFactor + timing->timeShift + sourceRangeStart;
+                    footage[index + 1] = {first, last};
+                }
+                const auto layers = VideoComposition::plan(settings.videoLayout, outputSize, cameraIds, sourceSizes, endSeconds, footage);
+                const auto preflightLayers = VideoComposition::plan(settings.videoLayout, QSize(64, 64), cameraIds, sourceSizes, endSeconds, footage);
                 if (layers.isEmpty() != preflightLayers.isEmpty()) {
                     result.error = QStringLiteral("Could not place the additional videos in the export.");
                     return result;
