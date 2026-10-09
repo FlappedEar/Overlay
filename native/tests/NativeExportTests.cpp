@@ -2433,6 +2433,14 @@ void ExportTests::switchesCamerasAndDrawsPictureInPicture()
     QCOMPARE(at(frames, 0, middle), Green);
     QCOMPARE(at(frames, 30, middle), Green);
 
+    // An export that starts before the fade, in the middle of a camera's footage, still
+    // fades it in: the input's lead-in frames (before the export's zero) must not skip it.
+    frames = render(layout, &layers, 0.5);
+    QCOMPARE(frames.size(), qsizetype(count * 320 * 180 * 4));
+    QCOMPARE(at(frames, 0, middle), Red);
+    QCOMPARE(at(frames, 30, middle), Mixed);
+    QCOMPARE(at(frames, 60, middle), Green);
+
     // A corner and a border: the bordered box of the helmet camera at the bottom left.
     layout = VideoLayout{};
     layout.pip.corner = PipCorner::BottomLeft;

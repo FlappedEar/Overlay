@@ -731,7 +731,11 @@ QString layeredGraph(const StageBComposition &composition, const bool straight)
         const auto &camera = composition.cameras[it.key()];
         QString labels;
         for (int copy = 0; copy < it.value(); ++copy) labels += QStringLiteral("[cam%1_%2]").arg(it.key()).arg(copy);
-        graph += QStringLiteral("[%1:v]setpts=(T*%2+%3)/TB,%4%5;")
+        // The input is read from a second before the range, so its first frames sit at negative
+        // export time. FFmpeg's fade ignores a stream that starts before zero (the camera would
+        // appear at full strength), so those frames are clamped to zero: the last of them still
+        // covers the first export frame.
+        graph += QStringLiteral("[%1:v]setpts=max(0\\,(T*%2+%3))/TB,%4%5;")
             .arg(camera.input)
             .arg(QString::number(camera.timeFactor, 'f', 12), QString::number(camera.timeShift, 'f', 9))
             .arg(it.value() == 1 ? QStringLiteral("null") : QStringLiteral("split=%1").arg(it.value()), labels);

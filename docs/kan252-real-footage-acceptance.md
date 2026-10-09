@@ -21,7 +21,7 @@ from the footage is committed or published.
 | Extra video added, probed, ready (KAN-131) | Pass. The video is kept as a source, not a target. |
 | Picture in picture, no cuts | Pass. The helmet camera shows in the top-right box, overlay widgets over it. |
 | Hard cuts (to the helmet camera at +8 s, back to main at +16 s) | Pass. Frames at 7.5 s, 8.5 s, 12 s and 16.5 s show the right camera filling the frame and the other in the box. |
-| Crossfade (1 s) | Pass. A blended frame is seen at the cut (frame at 12 s is the full second camera, at 16.5 s the blend towards main). |
+| Crossfade (1 s) | **Failed, fixed in the same change.** The fade back to main at +16 s was blended, but the fade into the second camera at +8 s was a hard cut. Cause: the second camera is read from a second before the range, so its first frames had negative export time, and FFmpeg's `fade` skips such a stream. Fix: timestamps clamped at zero (`ExportEngine.cpp`, [export-pipeline.md](export-pipeline.md)); regression in `switchesCamerasAndDrawsPictureInPicture`. Re-export on the real footage blends over 8.0 to 9.0 s. |
 | Side by side | Pass. Main left, second camera right, both letterboxed, widgets over the whole frame. |
 | Main audio only (KAN-131) | Pass. One AAC stream; correlation 0.997 (lag 4 samples at 8 kHz) with the GoPro's own audio for the same 24 s; the crossfade export without audio has none. |
 | Export validation | Each 24.04 s, 1441-frame 1920×1080 HEVC export passed final validation (frame count, A/V start delta 0, audio duration within one frame). |

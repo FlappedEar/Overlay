@@ -190,6 +190,10 @@ on the main video's timeline.
   `yuva420p10le`. A fade that began before the export's first frame is not drawn (FFmpeg's `fade`
   counts progress from the first frame at or after its start): the camera is fully in from the first
   frame. The preview and a full export show the whole fade.
+  Every additional camera's timestamps are clamped at zero (`setpts=max(0,...)`): the input is read
+  from a second before the range, and FFmpeg's `fade` skips a stream whose first frames are before
+  zero, so without the clamp a crossfade into a camera in the middle of its footage was a hard cut
+  (found with real footage, KAN-252).
 - **Inputs.** Only cameras with a layer and footage in the export become FFmpeg inputs.
 - **Worker configuration.** The job carries the whole `videoLayout` object and each additional
   video's `id`; the worker validates it with `AdditionalVideosCodec::validLayout`.
@@ -197,7 +201,8 @@ on the main video's timeline.
 
 Tests: `ExportTests::plansPictureInPictureAndCameraSwitching` (the layers), and
 `switchesCamerasAndDrawsPictureInPicture` (red main, green and blue cameras: hard cut exact at the
-frame, boxes swap, picture-in-picture off, crossfade mid-point is a mix, corner and border).
+frame, boxes swap, picture-in-picture off, crossfade mid-point is a mix, also when the export starts
+before the fade in the middle of the camera's footage, corner and border).
 
 ## CFR and VFR status
 
