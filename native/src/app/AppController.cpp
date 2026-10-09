@@ -625,8 +625,11 @@ int AppController::addWidget(const QString &type)
     for (const QJsonValue &value : existing) {
         const QJsonObject widget = value.toObject();
         if (!widget.value("visible").toBool(true)) continue;
-        occupied.append(QRectF(widget.value("x").toDouble(), widget.value("y").toDouble(),
-                               widget.value("width").toDouble(), widget.value("height").toDouble()));
+        // A widget scales about its centre.
+        const double scale = std::max(0.0, widget.value("scale").toDouble(1.0));
+        const double width = widget.value("width").toDouble() * scale, height = widget.value("height").toDouble() * scale;
+        occupied.append(QRectF(widget.value("x").toDouble() + (widget.value("width").toDouble() - width) / 2.0,
+                               widget.value("y").toDouble() + (widget.value("height").toDouble() - height) / 2.0, width, height));
         if (widget.value("type").toString() == QLatin1String("cameraBox"))
             used.append(widget.value("settings").toObject().value("camera").toString());
     }
