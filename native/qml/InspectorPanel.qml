@@ -971,11 +971,13 @@ Rectangle {
                             }
                         }
                         FeLabel {
+                            visible: root.selectedWidget.type !== "cameraBox"
                             text: qsTr("Scale  %1×").arg(Number(root.selectedWidget.scale || 1).toFixed(2))
                             color: Theme.onSurfaceVariant
                             font.pixelSize: Theme.labelMedium
                         }
                         FeSlider {
+                            visible: root.selectedWidget.type !== "cameraBox"
                             Layout.fillWidth: true
                             from: 0.25
                             to: 3
@@ -984,11 +986,13 @@ Rectangle {
                             onMoved: appController.widgetModel.setWidgetProperty(root.selectedIndex, "scale", value)
                         }
                         FeLabel {
+                            visible: root.selectedWidget.type !== "cameraBox"
                             text: qsTr("Rotation  %1°").arg(Number(root.selectedWidget.rotation || 0).toFixed(0))
                             color: Theme.onSurfaceVariant
                             font.pixelSize: Theme.labelMedium
                         }
                         FeSlider {
+                            visible: root.selectedWidget.type !== "cameraBox"
                             Layout.fillWidth: true
                             from: -180
                             to: 180
@@ -997,11 +1001,13 @@ Rectangle {
                             onMoved: appController.widgetModel.setWidgetProperty(root.selectedIndex, "rotation", value)
                         }
                         FeLabel {
+                            visible: root.selectedWidget.type !== "cameraBox"
                             text: qsTr("Opacity  %1%").arg((Number(root.selectedWidget.opacity ?? 1) * 100).toFixed(0))
                             color: Theme.onSurfaceVariant
                             font.pixelSize: Theme.labelMedium
                         }
                         FeSlider {
+                            visible: root.selectedWidget.type !== "cameraBox"
                             Layout.fillWidth: true
                             from: 0
                             to: 1

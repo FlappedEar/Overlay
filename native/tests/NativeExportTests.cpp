@@ -2048,7 +2048,8 @@ void ExportTests::plansCameraBoxWidgets()
     widgets.append(widget("cameraBox", "helmet", 0.5, 0.5, 0.1, 0.1, {}, false));      // hidden
     widgets.append(widget("cameraBox", "helmet", 0.5, 0.5, 0.0, 0.1));                 // no size
     const QVector<CameraBox> boxes = cameraBoxes(widgets);
-    QCOMPARE(boxes.size(), 3); // helmet, rear, gone: the widgets that can be read
+    QCOMPARE(boxes.size(), 6); // every box widget counts, shown or not
+    QCOMPARE(std::count_if(boxes.cbegin(), boxes.cend(), [](const CameraBox &box) { return box.shown; }), 3); // helmet, rear, gone
     QCOMPARE(boxes[0].camera, QString("helmet"));
     QCOMPARE(boxes[0].borderWidth, 6);
     QCOMPARE(boxes[0].borderColor, QString("#FF0000"));
@@ -2097,6 +2098,12 @@ void ExportTests::plansCameraBoxWidgets()
     QCOMPARE(mainBox->windows.size(), 1); // only while the helmet is on air
     QCOMPARE(mainBox->windows[0].start, 10.0);
     QCOMPARE(mainBox->windows[0].end, 20.0);
+
+    // Hiding the last box does not bring the corner box back.
+    const QVector<CameraBox> hiddenOnly{CameraBox{"helmet", QRectF(0.5, 0.5, 0.2, 0.2), 0, "#FFFFFF", true, false}};
+    layout.pip.enabled = true;
+    const auto hiddenLayers = plan(layout, hd, ids, sizes, 30.0, {}, hiddenOnly);
+    for (const Layer &layer : hiddenLayers) QVERIFY(layer.onAir);
 
     // A new box starts in the corner the widgets cover least, top right first.
     QCOMPARE(startingBoxArea({}), QRectF(0.70, 0.02, 0.28, 0.28));

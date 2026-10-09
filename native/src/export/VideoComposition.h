@@ -73,10 +73,13 @@ struct CameraBox {
     int borderWidth = 0; // pixels at 1080p scale
     QString borderColor = QStringLiteral("#FFFFFF");
     bool crop = true;
+    bool shown = true; // false: a widget that is hidden or unreadable still counts as a box widget
 };
 
-// The visible camera box widgets of a scene, in drawing order. A widget with
-// no camera, or with a rectangle that is not finite or has no size, is left out.
+// The camera box widgets of a scene, in drawing order. A widget that is not
+// visible, has no camera, or has a rectangle that is not finite or has no size is
+// kept with `shown` false: any box widget puts the scene in box mode (the
+// corner options are not used), but only shown boxes are drawn.
 [[nodiscard]] QVector<CameraBox> cameraBoxes(const QJsonArray &widgets);
 
 // KAN-254: where a new camera box starts: the frame corner (top right first) that

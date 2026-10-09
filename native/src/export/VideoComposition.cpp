@@ -139,16 +139,16 @@ QVector<CameraBox> cameraBoxes(const QJsonArray &widgets)
     for (const QJsonValue &entry : widgets) {
         const QJsonObject widget = entry.toObject();
         if (widget.value(QStringLiteral("type")).toString() != QStringLiteral("cameraBox")) continue;
-        if (!widget.value(QStringLiteral("visible")).toBool(true)) continue;
         const QJsonObject settings = widget.value(QStringLiteral("settings")).toObject();
         CameraBox box;
+        box.shown = widget.value(QStringLiteral("visible")).toBool(true);
         box.camera = settings.value(QStringLiteral("camera")).toString();
-        if (box.camera.isEmpty()) continue;
+        if (box.camera.isEmpty()) box.shown = false;
         box.area = QRectF(widget.value(QStringLiteral("x")).toDouble(), widget.value(QStringLiteral("y")).toDouble(),
             widget.value(QStringLiteral("width")).toDouble(), widget.value(QStringLiteral("height")).toDouble());
         if (!std::isfinite(box.area.x()) || !std::isfinite(box.area.y()) || !std::isfinite(box.area.width())
             || !std::isfinite(box.area.height()) || !(box.area.width() > 0.0) || !(box.area.height() > 0.0))
-            continue;
+            box.shown = false;
         const double border = settings.value(QStringLiteral("borderWidth")).toDouble(0.0);
         box.borderWidth = std::isfinite(border) ? static_cast<int>(std::lround(std::clamp(border, 0.0, 12.0))) : 0;
         const QString color = settings.value(QStringLiteral("borderColor")).toString();
@@ -209,6 +209,7 @@ QVector<Layer> plan(const VideoLayout &layout, const QSize &output, const QStrin
     if (!cameraBoxList.isEmpty()) {
         // KAN-254: each box is a widget's rectangle.
         for (const CameraBox &widget : cameraBoxList) {
+            if (!widget.shown) continue;
             const qsizetype camera = cameraIds.indexOf(widget.camera);
             if (camera < 0) continue;
             const int border = widget.borderWidth <= 0 ? 0
