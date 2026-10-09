@@ -64,6 +64,7 @@ private slots:
     void savesTheSceneAsATemplateFromThePopup();
     void asksBeforeDiscardingUnsavedChanges();
     void confirmsExportQuitAndOverwrite();
+    void routesTheFileDialogChoices();
     void offersRecoveryAtStartup();
     void opensTheHelpDialogs();
 };
@@ -1450,6 +1451,23 @@ void EditorTests::confirmsExportQuitAndOverwrite()
     QVERIFY(QMetaObject::invokeMethod(quit, "reject"));
     QTRY_VERIFY(!quit->property("visible").toBool());
     QVERIFY(!editor.controller.exporter()->exporting());
+}
+
+// KAN-216: the file dialogs live in FileDialogs.qml, which Main.qml hosts. A
+// chosen export file reaches the export dialog through the component's signal.
+// The native dialogs are never opened here.
+void EditorTests::routesTheFileDialogChoices()
+{
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    auto *dialogs = editor.window->findChild<QObject *>("fileDialogs");
+    auto *exportDialog = editor.window->findChild<QObject *>("exportDialog");
+    QVERIFY(dialogs && exportDialog);
+    QVERIFY(dialogs->property("host").value<QObject *>() == editor.window);
+
+    const QUrl output = QUrl::fromLocalFile(QStringLiteral("/tmp/lap.mp4"));
+    QVERIFY(QMetaObject::invokeMethod(dialogs, "exportOutputChosen", Q_ARG(QUrl, output)));
+    QCOMPARE(exportDialog->property("outputFile").toUrl(), output);
 }
 
 // KAN-216: the startup recovery offer lives in RecoveryDialog.qml. It is open

@@ -2715,6 +2715,9 @@ Three `AGENTS.md` UI invariants now have automated tests:
 - **Export confirmations** (`EditorTests::confirmsExportQuitAndOverwrite`). The replace-existing-file
   question emits `confirmed()` on Yes and nothing on No; the quit question closes on No without
   cancelling an export.
+- **File dialogs** (`EditorTests::routesTheFileDialogChoices`). `FileDialogs` is hosted by the
+  window, and a chosen export file reaches the export dialog through its signal. The native
+  dialogs are not opened in tests.
 - **Transport shortcuts while editing**
   (`EditorTests::disablesTransportShortcutsWhileEditing`). Space, Left, Right, Shift+Left,
   Shift+Right, Home and End are off while an inspector text field or spin box has focus, and
