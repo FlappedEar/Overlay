@@ -103,7 +103,7 @@ bool AdditionalVideoController::loading() const
 
 QString AdditionalVideoController::layout() const
 {
-    return m_layout == VideoLayoutMode::SideBySide ? QStringLiteral("sideBySide") : QStringLiteral("pictureInPicture");
+    return m_layout.mode == VideoLayoutMode::SideBySide ? QStringLiteral("sideBySide") : QStringLiteral("pictureInPicture");
 }
 
 void AdditionalVideoController::setLayout(const QString &layout)
@@ -112,14 +112,30 @@ void AdditionalVideoController::setLayout(const QString &layout)
     if (layout == QStringLiteral("sideBySide")) mode = VideoLayoutMode::SideBySide;
     else if (layout == QStringLiteral("pictureInPicture")) mode = VideoLayoutMode::PictureInPicture;
     else return;
-    if (mode == m_layout) return;
-    m_layout = mode;
+    if (mode == m_layout.mode) return;
+    m_layout.mode = mode;
+    emit edited();
+    emit changed();
+}
+
+void AdditionalVideoController::setVideoLayout(const VideoLayout &layout)
+{
+    if (layout == m_layout) return;
+    m_layout = layout;
     emit edited();
     emit changed();
 }
 
 void AdditionalVideoController::restore(
     const QVector<AdditionalVideo> &videos, const VideoLayoutMode layout, const QString &projectPath)
+{
+    VideoLayout settings;
+    settings.mode = layout;
+    restore(videos, settings, projectPath);
+}
+
+void AdditionalVideoController::restore(
+    const QVector<AdditionalVideo> &videos, const VideoLayout &layout, const QString &projectPath)
 {
     cancelProbes();
     ++m_generation;
@@ -265,7 +281,7 @@ QVariantList AdditionalVideoController::previewRects(const double width, const d
         sizes.append(size.isEmpty() ? QSize(16, 9) : size); // not ready yet: keep its place
     }
     QVariantList rects;
-    for (const QRect &rect : VideoComposition::layout(m_layout, frame, sizes))
+    for (const QRect &rect : VideoComposition::layout(m_layout.mode, frame, sizes))
         rects.append(QVariantMap{{QStringLiteral("x"), rect.x()}, {QStringLiteral("y"), rect.y()},
                                  {QStringLiteral("width"), rect.width()}, {QStringLiteral("height"), rect.height()}});
     return rects;
