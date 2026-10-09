@@ -15,7 +15,7 @@ Dialog {
     standardButtons: Dialog.Close
     contentItem: FeLabel {
         width: 390
-        text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nCtrl/Cmd+Shift+N  New widget (widget editor)\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
+        text: qsTr("Space  Play / pause\n← / →  Seek 5 seconds\nShift+← / →  Seek 30 seconds\nHome / End  Beginning / end\n1 – 4  Cut to camera 1 – 4 at the playhead (additional videos)\nCtrl/Cmd+E  Export\nCtrl/Cmd+Shift+V  Open video · Ctrl/Cmd+Shift+T  Open telemetry\nCtrl/Cmd+G  Group · Ctrl/Cmd+Shift+G  Ungroup\nCtrl/Cmd+Shift+N  New widget (widget editor)\nDelete / Backspace  Delete selected layer\nCtrl+Cmd+F (macOS)  Full screen · Escape  Exit or dismiss")
         color: Theme.onSurface
         wrapMode: Text.WordWrap
         font.pixelSize: Theme.body

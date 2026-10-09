@@ -55,7 +55,8 @@ run switching, Save As and recovery). Unknown keys are kept. Keys equal to the d
 - `borderWidth`: pixels at 1080p scale, 0 to 12 (default 0); `borderColor`: `#RRGGBB`.
 - `cameras`: camera ids shown in PIP; absent means every camera that is not the program camera.
 - `cuts`: at most 200, `time` finite and at least 0, `camera` is `main` or an additional video id,
-  strictly increasing times. A cut naming a removed video is kept and ignored (the main video shows).
+  strictly increasing times. A file that names a camera that is not there is valid: the
+  main video shows for it. Removing a video in the editor removes its cuts and box choices.
 - `transition`: `cut` (default) or `crossfade`; `crossfadeSeconds` 0.1 to 2 (default 0.5).
 
 ## Rules shared by preview and export (`VideoComposition`)
@@ -82,7 +83,8 @@ the item, PIP boxes show the other cameras, and a crossfade is an opacity ramp.
 
 ## Editor
 
-DATA tab, Additional videos panel: a Picture-in-picture group (switch, corner, size, margin, border,
+Keys 1 to 4 cut to the first to fourth camera of the list at the playhead (not while a text field
+is active). DATA tab, Additional videos panel: a Picture-in-picture group (switch, corner, size, margin, border,
 camera checkboxes) and a Camera switching group (list of cuts with time and camera, **Cut here** at
 the playhead, delete, transition and crossfade length). Edits mark the project dirty (the editor has no undo stack for documents).
 

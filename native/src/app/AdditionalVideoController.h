@@ -31,6 +31,11 @@ class AdditionalVideoController final : public QObject {
     Q_PROPERTY(int maximum READ maximum CONSTANT)
     Q_PROPERTY(bool loading READ loading NOTIFY changed)
     Q_PROPERTY(QString layout READ layout WRITE setLayout NOTIFY changed)
+    // KAN-245: picture-in-picture options and camera switching.
+    Q_PROPERTY(QVariantMap pip READ pipMap NOTIFY changed)
+    Q_PROPERTY(QVariantMap program READ programMap NOTIFY changed)
+    Q_PROPERTY(QVariantList cameras READ cameraList NOTIFY changed)
+    Q_PROPERTY(int maximumCuts READ maximumCuts CONSTANT)
 
 public:
     // The main video's normalized path and its sync, for duplicate checks,
@@ -67,6 +72,13 @@ public:
     [[nodiscard]] QString layout() const;
     void setLayout(const QString &layout);
 
+    [[nodiscard]] QVariantMap pipMap() const;
+    // transition, crossfadeSeconds and cuts [{time, camera, label}].
+    [[nodiscard]] QVariantMap programMap() const;
+    // Main video first: [{id, label}].
+    [[nodiscard]] QVariantList cameraList() const;
+    [[nodiscard]] static int maximumCuts() { return AdditionalVideosCodec::maximumCuts; }
+
     // Videos read from a project (not an edit, emits changed() only): each
     // one found is probed and checked against its fingerprint.
     void restore(const QVector<AdditionalVideo> &videos, VideoLayoutMode layout, const QString &projectPath);
@@ -99,6 +111,30 @@ public:
     // border, borderColor, fadeIn and windows [{start, end}] in main video
     // seconds. Empty side by side, or when nothing can be placed.
     Q_INVOKABLE QVariantList previewLayers(double width, double height) const;
+
+    // Picture-in-picture options. `key` is enabled, corner, size, margin,
+    // borderWidth or borderColor; a value out of range is clamped, a wrong
+    // key or type is ignored.
+    Q_INVOKABLE void setPipOption(const QString &key, const QVariant &value);
+    // Whether a camera has a box. Choosing a camera makes the list explicit;
+    // `resetPipCameras` goes back to every camera that is not on air.
+    Q_INVOKABLE void setPipCameraShown(const QString &camera, bool shown);
+    Q_INVOKABLE void resetPipCameras();
+    // Camera switching. `camera` is an id from `cameras`; times are seconds
+    // on the main video's timeline, rounded to milliseconds. A cut within a
+    // millisecond of another replaces its camera.
+    Q_INVOKABLE void cutAt(const QString &camera, double seconds);
+    // Cut to the camera at this number (0 main, 1 first additional video…)
+    // at `seconds`; false when there is no such camera.
+    Q_INVOKABLE bool cutToNumber(int number, double seconds);
+    Q_INVOKABLE void setCutTime(int index, double seconds);
+    Q_INVOKABLE void setCutCamera(int index, const QString &camera);
+    Q_INVOKABLE void removeCut(int index);
+    Q_INVOKABLE void clearCuts();
+    Q_INVOKABLE void setTransition(const QString &transition);
+    Q_INVOKABLE void setCrossfadeSeconds(double seconds);
+    // The camera id on air at `seconds`.
+    Q_INVOKABLE QString onAirAt(double seconds) const;
 
 signals:
     void changed();

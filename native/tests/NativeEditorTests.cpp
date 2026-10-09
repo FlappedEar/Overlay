@@ -62,6 +62,7 @@ private slots:
     void editsAdditionalVideosInTheSyncTab();
     void previewsAdditionalVideosByTheLayout();
     void previewsCameraSwitchingAndPictureInPictureOptions();
+    void editsPictureInPictureAndCutsInTheDataTab();
     void savesTheSceneAsATemplateFromThePopup();
     void asksBeforeDiscardingUnsavedChanges();
     void confirmsExportQuitAndOverwrite();
@@ -1421,6 +1422,131 @@ void EditorTests::previewsCameraSwitchingAndPictureInPictureOptions()
         QVERIFY(windows[0].toMap().value("end").toDouble() < 4.5);
     }
     QVERIFY(found);
+}
+
+void EditorTests::editsPictureInPictureAndCutsInTheDataTab()
+{
+    // KAN-245: the controller edits behind the DATA tab's picture-in-picture
+    // and camera switching controls, and the panel that shows them.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the camera switching test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto encode = [&](const QString &name, const QString &source) {
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", source,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", directory.filePath(name)});
+        return encoder.waitForFinished(30'000) && encoder.exitCode() == 0;
+    };
+    QVERIFY(encode("main.mp4", "color=c=red:s=320x180:r=30:d=4"));
+    QVERIFY(encode("helmet.mp4", "color=c=blue:s=320x180:r=25:d=4"));
+    QVERIFY(encode("rear.mp4", "color=c=green:s=320x180:r=25:d=4"));
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    editor.controller.loadVideo(QUrl::fromLocalFile(directory.filePath("main.mp4")));
+    QTRY_COMPARE(editor.controller.videoLoadState(), QStringLiteral("ready"));
+    auto *videos = editor.controller.additionalVideoController();
+    videos->addVideo(QUrl::fromLocalFile(directory.filePath("helmet.mp4")));
+    QTRY_COMPARE(videos->count(), 1);
+    videos->addVideo(QUrl::fromLocalFile(directory.filePath("rear.mp4")));
+    QTRY_COMPARE(videos->count(), 2);
+    QTRY_VERIFY(!videos->loading());
+    const QString helmet = videos->videos()[0].id, rear = videos->videos()[1].id;
+    QCOMPARE(videos->cameraList().size(), 3);
+
+    // Options are clamped, wrong keys and types ignored, and each is an edit.
+    bool edited = false;
+    QObject::connect(videos, &AdditionalVideoController::edited, [&] { edited = true; });
+    videos->setPipOption("size", 0.9);
+    QCOMPARE(videos->videoLayout().pip.size, 0.5);
+    videos->setPipOption("size", 0.02);
+    QCOMPARE(videos->videoLayout().pip.size, 0.1);
+    videos->setPipOption("margin", 0.5);
+    QCOMPARE(videos->videoLayout().pip.margin, 0.1);
+    videos->setPipOption("borderWidth", 40);
+    QCOMPARE(videos->videoLayout().pip.borderWidth, 12);
+    videos->setPipOption("borderColor", "#a0b0c0");
+    QCOMPARE(videos->videoLayout().pip.borderColor, QString("#A0B0C0"));
+    videos->setPipOption("borderColor", "red");
+    QCOMPARE(videos->videoLayout().pip.borderColor, QString("#A0B0C0"));
+    videos->setPipOption("corner", "middle");
+    QCOMPARE(videos->videoLayout().pip.corner, PipCorner::TopRight);
+    videos->setPipOption("corner", "bottomLeft");
+    QCOMPARE(videos->videoLayout().pip.corner, PipCorner::BottomLeft);
+    videos->setPipOption("enabled", "yes");
+    QVERIFY(videos->videoLayout().pip.enabled);
+    videos->setPipOption("enabled", false);
+    QVERIFY(!videos->videoLayout().pip.enabled);
+    videos->setPipOption("nonsense", 1);
+    QVERIFY(edited);
+    videos->setPipCameraShown(helmet, false);
+    QCOMPARE(videos->videoLayout().pip.cameras.value(), (QStringList{mainCameraId, rear}));
+    videos->setPipCameraShown("gone", true);
+    QCOMPARE(videos->videoLayout().pip.cameras.value(), (QStringList{mainCameraId, rear}));
+    videos->setPipCameraShown(helmet, true);
+    QCOMPARE(videos->videoLayout().pip.cameras.value(), (QStringList{mainCameraId, helmet, rear}));
+    videos->resetPipCameras();
+    QVERIFY(!videos->videoLayout().pip.cameras.has_value());
+    videos->setPipOption("enabled", true);
+
+    // Cuts stay in time order; a cut at the same millisecond replaces the camera.
+    videos->cutAt(rear, 20.0004);
+    videos->cutAt(helmet, 5.0);
+    videos->cutAt(mainCameraId, 12.5);
+    videos->cutAt("gone", 3.0);
+    videos->cutAt(helmet, -4.0);
+    auto cuts = videos->videoLayout().program.cuts;
+    QCOMPARE(cuts.size(), 4);
+    QCOMPARE(cuts[0], (ProgramCut{0.0, helmet}));
+    QCOMPARE(cuts[1], (ProgramCut{5.0, helmet}));
+    QCOMPARE(cuts[2], (ProgramCut{12.5, mainCameraId}));
+    QCOMPARE(cuts[3], (ProgramCut{20.0, rear}));
+    videos->cutAt(mainCameraId, 20.0);
+    QCOMPARE(videos->videoLayout().program.cuts.size(), 4);
+    QCOMPARE(videos->videoLayout().program.cuts[3].camera, mainCameraId);
+    QCOMPARE(videos->onAirAt(1.0), helmet);
+    QCOMPARE(videos->onAirAt(13.0), mainCameraId);
+    // Moving a cut re-sorts; moving onto another cut is refused.
+    videos->setCutTime(0, 30.0);
+    QCOMPARE(videos->videoLayout().program.cuts[3].time, 30.0);
+    QCOMPARE(videos->videoLayout().program.cuts[0].time, 5.0);
+    videos->setCutTime(0, 12.5);
+    QCOMPARE(videos->videoLayout().program.cuts[0].time, 5.0);
+    videos->setCutCamera(0, rear);
+    QCOMPARE(videos->videoLayout().program.cuts[0].camera, rear);
+    QVERIFY(videos->cutToNumber(1, 40.0));
+    QVERIFY(!videos->cutToNumber(3, 41.0));
+    QCOMPARE(videos->videoLayout().program.cuts.size(), 5);
+    videos->setTransition("wipe");
+    QCOMPARE(videos->videoLayout().program.transition, ProgramTransition::Cut);
+    videos->setTransition("crossfade");
+    videos->setCrossfadeSeconds(9.0);
+    QCOMPARE(videos->videoLayout().program.crossfadeSeconds, 2.0);
+    videos->setCrossfadeSeconds(0.0);
+    QCOMPARE(videos->videoLayout().program.crossfadeSeconds, 0.1);
+
+    // The panel lists the cuts.
+    auto *panel = editor.window->findChild<QQuickItem *>(QStringLiteral("cameraSwitchingPanel"));
+    QVERIFY(panel);
+    const auto rows = [panel] {
+        int count = 0;
+        QList<QQuickItem *> queue{panel};
+        while (!queue.isEmpty()) {
+            auto *item = queue.takeFirst();
+            if (item->objectName() == QStringLiteral("cutRow")) ++count;
+            queue.append(item->childItems());
+        }
+        return count;
+    };
+    QTRY_COMPARE(rows(), 5);
+    videos->removeCut(0);
+    QTRY_COMPARE(rows(), 4);
+
+    // Removing a video takes its cuts and box choices with it.
+    videos->setPipCameraShown(helmet, true);
+    videos->removeVideo(1); // rear
+    for (const auto &cut : videos->videoLayout().program.cuts) QVERIFY(cut.camera != rear);
+    videos->clearCuts();
+    QVERIFY(videos->videoLayout().program.cuts.isEmpty());
 }
 
 void EditorTests::disablesTransportShortcutsWhileEditing()

@@ -93,3 +93,23 @@
   <li><em>Side by side</em>: the main video is in the left half. The additional videos share the right half, one above the other. Each keeps its shape, with black around it.</li>
 </ul>
 <p>Widgets are drawn on top of every video, so move any that cover an additional video. An additional video shows only while it has frames; before it starts and after it ends, the main video shows through. The preview shows the additional videos in the same places, playing with the main video, so you can check the layout and the timing before you export.</p>
+
+<h2 id="picture-in-picture">Picture in picture</h2>
+<p>With <em>Picture in picture</em> chosen, the <strong>Picture in picture</strong> group under <strong>Layout in export</strong> shapes the boxes. The settings are saved with the run and apply to the preview and to export.</p>
+<ul>
+  <li><strong>Show the other cameras in boxes</strong> switches the boxes on or off at any time. With them off, only the camera on air is seen.</li>
+  <li><strong>Corner</strong> puts the boxes in the top right (the default), top left, bottom right or bottom left. They stack away from that corner.</li>
+  <li><strong>Box size</strong> (10 to 50 % of the frame) and <strong>Margin</strong> (0 to 10 %) set how big the boxes are and how far from the edge. Boxes that would not fit are made smaller so they stay inside the frame.</li>
+  <li><strong>Border</strong> draws a frame of 0 to 12 pixels (at 1080p) around each box, in the <strong>Border colour</strong> you type as <code>#RRGGBB</code>.</li>
+  <li><strong>Cameras with a box</strong> chooses which cameras get a box (at most four). <strong>All cameras off air</strong> goes back to the default.</li>
+</ul>
+
+<h2 id="camera-switching">Switching cameras</h2>
+<p>Like a broadcast, a run can cut between its cameras. The <strong>Camera switching</strong> group lists the main video and each additional video. The camera on air fills the frame; the other cameras are in boxes. Until the first cut, the main video is on air.</p>
+<ol class="steps">
+  <li>Align every additional video first (see above): a cut only makes sense when the cameras show the same moment.</li>
+  <li>Play the main video, or move the playhead. Click <strong>Cut to …</strong> on a camera, or press <kbd>1</kbd> to <kbd>4</kbd> for the first to fourth camera in the list. The camera is on air from the playhead on.</li>
+  <li>Each cut appears in the list with its time on the main video's timeline in seconds. Edit the time, choose another camera, or click <strong>✕</strong> to remove the cut. <strong>Remove all cuts</strong> puts the main video back on air throughout.</li>
+  <li>Choose the <strong>Transition</strong>: <em>Hard cut</em> (the default) changes on the exact frame; <em>Crossfade</em> fades the new camera in over the chosen number of seconds (0.1 to 2).</li>
+</ol>
+<p>If the camera on air has no frames at the moment (before it starts or after it ends), the main video shows instead, in the preview and in the export. Removing an additional video removes its cuts. Cutting works with <em>Picture in picture</em> only; <em>Side by side</em> keeps its fixed layout. Audio always comes from the main video.</p>

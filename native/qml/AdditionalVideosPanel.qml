@@ -258,6 +258,10 @@ ColumnLayout {
         currentIndex: root.controller.layout === "sideBySide" ? 1 : 0
         onActivated: index => root.controller.layout = index === 1 ? "sideBySide" : "pictureInPicture"
     }
+    CameraSwitchingPanel {
+        visible: root.controller.count > 0 && root.controller.layout === "pictureInPicture"
+        Layout.fillWidth: true
+    }
 
     FileDialog {
         id: addDialog

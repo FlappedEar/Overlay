@@ -475,6 +475,20 @@ ApplicationWindow {
     Shortcut { sequence: "Right"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: window.seekPlayback(5000) }
     Shortcut { sequence: "Shift+Left"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: window.seekPlayback(-30000) }
     Shortcut { sequence: "Shift+Right"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: window.seekPlayback(30000) }
+    // KAN-245: cut to the first to fourth camera at the playhead, as in a broadcast.
+    Repeater {
+        model: 4
+        Item {
+            required property int index
+            Shortcut {
+                sequence: String(index + 1)
+                context: Qt.WindowShortcut
+                enabled: !window.playbackShortcutBlocked() && appController.additionalVideos.count > 0
+                    && appController.additionalVideos.layout === "pictureInPicture"
+                onActivated: appController.additionalVideos.cutToNumber(index, appController.playbackTime)
+            }
+        }
+    }
     Shortcut { sequence: "Home"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: { window.seekTimeline(0); window.showFullScreenControls(); } }
     Shortcut { sequence: "End"; context: Qt.WindowShortcut; enabled: !window.playbackShortcutBlocked(); onActivated: { window.seekTimeline(appController.previewEndPositionMilliseconds); window.showFullScreenControls(); } }
     Shortcut {

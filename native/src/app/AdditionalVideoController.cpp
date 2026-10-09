@@ -6,9 +6,11 @@
 #include "export/VideoFingerprint.h"
 
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QFutureWatcher>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include <algorithm>
 #include <cmath>
 
 namespace FlappedEar {
@@ -197,7 +199,11 @@ void AdditionalVideoController::addVideo(const QUrl &url)
 void AdditionalVideoController::removeVideo(const int index)
 {
     if (!validIndex(index)) return;
+    // Cuts and picture-in-picture choices naming the video go with it.
+    const QString id = m_entries[index].video.id;
     m_entries.removeAt(index);
+    m_layout.program.cuts.removeIf([&id](const ProgramCut &cut) { return cut.camera == id; });
+    if (m_layout.pip.cameras) m_layout.pip.cameras->removeAll(id);
     emit edited();
     emit changed();
 }
@@ -285,6 +291,213 @@ QVariantList AdditionalVideoController::previewRects(const double width, const d
         rects.append(QVariantMap{{QStringLiteral("x"), rect.x()}, {QStringLiteral("y"), rect.y()},
                                  {QStringLiteral("width"), rect.width()}, {QStringLiteral("height"), rect.height()}});
     return rects;
+}
+
+QVariantMap AdditionalVideoController::pipMap() const
+{
+    const PipOptions &pip = m_layout.pip;
+    static const QStringList corners{"topRight", "topLeft", "bottomRight", "bottomLeft"};
+    return {{QStringLiteral("enabled"), pip.enabled}, {QStringLiteral("corner"), corners.value(static_cast<int>(pip.corner))},
+        {QStringLiteral("size"), pip.size}, {QStringLiteral("margin"), pip.margin},
+        {QStringLiteral("borderWidth"), pip.borderWidth}, {QStringLiteral("borderColor"), pip.borderColor},
+        {QStringLiteral("allCameras"), !pip.cameras.has_value()},
+        {QStringLiteral("cameras"), pip.cameras.value_or(QStringList())}};
+}
+
+QVariantList AdditionalVideoController::cameraList() const
+{
+    QVariantList list{QVariantMap{{QStringLiteral("id"), mainCameraId}, {QStringLiteral("label"), QStringLiteral("Main video")}}};
+    for (const auto &entry : m_entries) {
+        const QString shown = entry.path.isEmpty() ? entry.video.reference.displayPath() : entry.path;
+        list.append(QVariantMap{{QStringLiteral("id"), entry.video.id},
+            {QStringLiteral("label"), entry.video.label.isEmpty() ? QFileInfo(shown).fileName() : entry.video.label}});
+    }
+    return list;
+}
+
+QVariantMap AdditionalVideoController::programMap() const
+{
+    const QVariantList cameras = cameraList();
+    QVariantList cuts;
+    for (const ProgramCut &cut : m_layout.program.cuts) {
+        QString label = cut.camera;
+        for (const QVariant &camera : cameras)
+            if (camera.toMap().value(QStringLiteral("id")).toString() == cut.camera) label = camera.toMap().value(QStringLiteral("label")).toString();
+        cuts.append(QVariantMap{{QStringLiteral("time"), cut.time}, {QStringLiteral("camera"), cut.camera}, {QStringLiteral("label"), label}});
+    }
+    return {{QStringLiteral("transition"), m_layout.program.transition == ProgramTransition::Crossfade
+                 ? QStringLiteral("crossfade") : QStringLiteral("cut")},
+        {QStringLiteral("crossfadeSeconds"), m_layout.program.crossfadeSeconds}, {QStringLiteral("cuts"), cuts}};
+}
+
+void AdditionalVideoController::setPipOption(const QString &key, const QVariant &value)
+{
+    VideoLayout layout = m_layout;
+    PipOptions &pip = layout.pip;
+    const auto number = [&value](const double low, const double high, double *target) {
+        bool ok = false;
+        const double parsed = value.toDouble(&ok);
+        if (!ok || !std::isfinite(parsed)) return false;
+        *target = std::clamp(parsed, low, high);
+        return true;
+    };
+    if (key == QStringLiteral("enabled")) {
+        if (value.typeId() != QMetaType::Bool) return;
+        pip.enabled = value.toBool();
+    } else if (key == QStringLiteral("corner")) {
+        static const QStringList corners{"topRight", "topLeft", "bottomRight", "bottomLeft"};
+        const qsizetype index = corners.indexOf(value.toString());
+        if (index < 0) return;
+        pip.corner = static_cast<PipCorner>(index);
+    } else if (key == QStringLiteral("size")) {
+        if (!number(AdditionalVideosCodec::minimumPipSize, AdditionalVideosCodec::maximumPipSize, &pip.size)) return;
+    } else if (key == QStringLiteral("margin")) {
+        if (!number(0.0, AdditionalVideosCodec::maximumPipMargin, &pip.margin)) return;
+    } else if (key == QStringLiteral("borderWidth")) {
+        double width = 0.0;
+        if (!number(0.0, AdditionalVideosCodec::maximumBorderWidth, &width)) return;
+        pip.borderWidth = static_cast<int>(std::lround(width));
+    } else if (key == QStringLiteral("borderColor")) {
+        const QString color = value.toString().trimmed().toUpper();
+        static const QRegularExpression pattern(QStringLiteral("^#[0-9A-F]{6}$"));
+        if (!pattern.match(color).hasMatch()) return;
+        pip.borderColor = color;
+    } else {
+        return;
+    }
+    setVideoLayout(layout);
+}
+
+void AdditionalVideoController::setPipCameraShown(const QString &camera, const bool shown)
+{
+    const QVariantList cameras = cameraList();
+    bool known = false;
+    QStringList all;
+    for (const QVariant &entry : cameras) {
+        all.append(entry.toMap().value(QStringLiteral("id")).toString());
+        known = known || all.last() == camera;
+    }
+    if (!known) return;
+    VideoLayout layout = m_layout;
+    QStringList chosen = layout.pip.cameras.value_or(all);
+    if (shown && !chosen.contains(camera)) {
+        if (chosen.size() >= AdditionalVideosCodec::maximumPipCameras) return;
+        chosen.append(camera);
+    } else if (!shown) {
+        chosen.removeAll(camera);
+    }
+    QStringList ordered; // in camera order, so the boxes keep their places
+    for (const QString &id : std::as_const(all)) if (chosen.contains(id)) ordered.append(id);
+    layout.pip.cameras = ordered;
+    setVideoLayout(layout);
+}
+
+void AdditionalVideoController::resetPipCameras()
+{
+    VideoLayout layout = m_layout;
+    layout.pip.cameras.reset();
+    setVideoLayout(layout);
+}
+
+void AdditionalVideoController::cutAt(const QString &camera, const double seconds)
+{
+    if (!std::isfinite(seconds)) return;
+    bool known = false;
+    for (const QVariant &entry : cameraList()) known = known || entry.toMap().value(QStringLiteral("id")).toString() == camera;
+    if (!known) return;
+    const double time = std::max(0.0, std::round(seconds * 1000.0) / 1000.0);
+    VideoLayout layout = m_layout;
+    auto &cuts = layout.program.cuts;
+    qsizetype at = 0;
+    while (at < cuts.size() && cuts[at].time < time - 0.0005) ++at;
+    if (at < cuts.size() && std::abs(cuts[at].time - time) < 0.0005) {
+        cuts[at].camera = camera;
+    } else {
+        if (cuts.size() >= AdditionalVideosCodec::maximumCuts) {
+            emit statusMessage(QStringLiteral("At most %1 camera cuts.").arg(AdditionalVideosCodec::maximumCuts));
+            return;
+        }
+        cuts.insert(at, {time, camera});
+    }
+    setVideoLayout(layout);
+}
+
+bool AdditionalVideoController::cutToNumber(const int number, const double seconds)
+{
+    const QVariantList cameras = cameraList();
+    if (number < 0 || number >= cameras.size()) return false;
+    cutAt(cameras[number].toMap().value(QStringLiteral("id")).toString(), seconds);
+    return true;
+}
+
+void AdditionalVideoController::setCutTime(const int index, const double seconds)
+{
+    if (index < 0 || index >= m_layout.program.cuts.size() || !std::isfinite(seconds)) return;
+    const double time = std::max(0.0, std::round(seconds * 1000.0) / 1000.0);
+    VideoLayout layout = m_layout;
+    auto &cuts = layout.program.cuts;
+    ProgramCut moved = cuts[index];
+    moved.time = time;
+    cuts.removeAt(index);
+    qsizetype at = 0;
+    while (at < cuts.size() && cuts[at].time < time - 0.0005) ++at;
+    if (at < cuts.size() && std::abs(cuts[at].time - time) < 0.0005) {
+        emit statusMessage(QStringLiteral("Another cut is already at that time."));
+        emit changed(); // put the field back
+        return;
+    }
+    cuts.insert(at, moved);
+    setVideoLayout(layout);
+}
+
+void AdditionalVideoController::setCutCamera(const int index, const QString &camera)
+{
+    if (index < 0 || index >= m_layout.program.cuts.size()) return;
+    bool known = false;
+    for (const QVariant &entry : cameraList()) known = known || entry.toMap().value(QStringLiteral("id")).toString() == camera;
+    if (!known) return;
+    VideoLayout layout = m_layout;
+    layout.program.cuts[index].camera = camera;
+    setVideoLayout(layout);
+}
+
+void AdditionalVideoController::removeCut(const int index)
+{
+    if (index < 0 || index >= m_layout.program.cuts.size()) return;
+    VideoLayout layout = m_layout;
+    layout.program.cuts.removeAt(index);
+    setVideoLayout(layout);
+}
+
+void AdditionalVideoController::clearCuts()
+{
+    VideoLayout layout = m_layout;
+    layout.program.cuts.clear();
+    setVideoLayout(layout);
+}
+
+void AdditionalVideoController::setTransition(const QString &transition)
+{
+    if (transition != QStringLiteral("cut") && transition != QStringLiteral("crossfade")) return;
+    VideoLayout layout = m_layout;
+    layout.program.transition = transition == QStringLiteral("crossfade") ? ProgramTransition::Crossfade : ProgramTransition::Cut;
+    setVideoLayout(layout);
+}
+
+void AdditionalVideoController::setCrossfadeSeconds(const double seconds)
+{
+    if (!std::isfinite(seconds)) return;
+    VideoLayout layout = m_layout;
+    layout.program.crossfadeSeconds = std::clamp(seconds, AdditionalVideosCodec::minimumCrossfadeSeconds,
+        AdditionalVideosCodec::maximumCrossfadeSeconds);
+    setVideoLayout(layout);
+}
+
+QString AdditionalVideoController::onAirAt(const double seconds) const
+{
+    QStringList ids{mainCameraId};
+    for (const auto &entry : m_entries) ids.append(entry.video.id);
+    return ids.value(VideoComposition::onAirAt(m_layout.program, ids, seconds));
 }
 
 QVariantList AdditionalVideoController::previewLayers(const double width, const double height) const
