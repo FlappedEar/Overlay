@@ -65,6 +65,7 @@ public:
     [[nodiscard]] bool tyreChannelsMissing() const;
     // KAN-149: lap times for the tiles, rounded before minutes are split.
     Q_INVOKABLE QString formatLapTime(double seconds, int decimals) const { return FlappedEar::formatLapTime(seconds, decimals); }
+    Q_INVOKABLE QString formatLapDelta(double seconds, int decimals) const { return FlappedEar::formatLapDelta(seconds, decimals); }
 
 public slots:
     void setTime(double time);

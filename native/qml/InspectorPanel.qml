@@ -1255,6 +1255,22 @@ Rectangle {
                             checked: root.settings.showZones ?? false
                             onToggled: root.setSetting("showZones", checked)
                         }
+                        // Delta to the best completed lap, live (off by default).
+                        FeCheckBox {
+                            objectName: "lapDeltaCheck"
+                            visible: root.selectedWidget.type === "lapCurrent" && !(root.settings.hotlapMode ?? false)
+                            text: qsTr("Show delta to best lap")
+                            checked: root.settings.showDelta ?? false
+                            onToggled: root.setSetting("showDelta", checked)
+                        }
+                        FeLabel {
+                            Layout.fillWidth: true
+                            visible: root.selectedWidget.type === "lapCurrent" && !(root.settings.hotlapMode ?? false) && (root.settings.showDelta ?? false)
+                            text: qsTr("Green when this lap is ahead of the best completed lap at the same point of the track, orange when it is behind. Appears once a lap has been completed.")
+                            color: Theme.onSurfaceVariant
+                            wrapMode: Text.WordWrap
+                            font.pixelSize: Theme.labelMedium
+                        }
                         FeCheckBox {
                             visible: root.isTech && root.selectedWidget.type === "lapCurrent"
                             text: qsTr("Show best lap")

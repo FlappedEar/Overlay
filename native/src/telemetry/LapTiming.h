@@ -119,6 +119,8 @@ void recomputeLapRanking(LapSession &session);
 // is "1:00.0", never "0:60.0" (KAN-149). Empty for a negative or non-finite
 // time: callers show their own placeholder.
 [[nodiscard]] QString formatLapTime(double seconds, int decimals);
+// A signed gap such as "+0.34" or "-1.20" (KAN-255); 1 to 3 decimals, empty if not finite.
+[[nodiscard]] QString formatLapDelta(double seconds, int decimals);
 
 // Content revision of the ordered source gates in east-positive coordinates.
 // Empty means unresolved (missing/ambiguous start gate or invalid coordinates).

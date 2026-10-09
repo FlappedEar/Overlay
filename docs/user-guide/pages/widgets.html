@@ -97,6 +97,8 @@
   <figcaption>Current lap time</figcaption>
 </figure>
 <p>The running time of the current lap and its lap number. It shows <em>READY</em> before the first start-line crossing. It needs lap timing, which requires a start/finish gate in the telemetry and usable GPS (see <a href="telemetry-data.html#lap-timing">How laps are found</a>). <strong>Label</strong> sets the heading (default <em>Current</em>) and <strong>Lap time decimals</strong> (1, 2 or 3) the precision. <strong>Primary accent</strong> colours the final time of a finished hotlap.</p>
+<h4 id="lap-delta">Delta to the best lap</h4>
+<p>Tick <strong>Show delta to best lap</strong> to add a live gap in the top-right corner of the tile: how far this lap is ahead of or behind the best completed lap at the same point of the track, for example <code>-0.34</code> or <code>+0.52</code>. It is <span style="color:#20d05a">green</span> when the lap is ahead (zero or negative) and <span style="color:#ff9f1a">orange</span> when it is behind. It is off by default, appears once a lap has been completed, and is hidden in hotlap mode. In the Tech style it sits at the bottom right.</p>
 <h4 id="hotlap">Hotlap mode</h4>
 <p>On the <strong>Current lap time</strong> tile, <strong>Show one lap only (hotlap)</strong> makes the tile show <code>0:00</code> until the chosen lap starts, count during that lap, and then keep its final time. Choose the lap from the list (<em>Best lap of this recording</em> or a specific lap) or click <strong>Use the lap at the playhead</strong>. When you then open Export, it starts in <a href="export.html#range">Single lap · hotlap</a> mode with the same lap.</p>
 
