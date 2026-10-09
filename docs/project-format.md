@@ -100,7 +100,7 @@ A run can hold up to three videos besides its main one, such as a helmet camera 
 ```
 
 - Each entry is a source reference with the same path, `fingerprint` and `contentSha256` rules as `video`, plus:
-    * a unique, nonblank `id` of at most 64 characters;
+    * a unique, nonblank `id` of at most 64 characters, other than `main` (which names the main video in camera cuts);
     * an optional `label` of at most 128 characters;
     * its own `sync`, with the meaning of the run's: telemetry time = video time × `timeScale` + `offset`, both finite and `timeScale` above 0.
 - Chapters are not supported on an additional video.

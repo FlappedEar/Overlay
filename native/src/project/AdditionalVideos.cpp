@@ -128,7 +128,8 @@ bool valid(const QJsonValue &additionalVideos)
         if (!value.isObject()) return false;
         const auto video = value.toObject();
         const auto id = video.value("id");
-        if (!validText(id, maximumIdCharacters) || id.toString().trimmed().isEmpty() || ids.contains(id.toString()))
+        if (!validText(id, maximumIdCharacters) || id.toString().trimmed().isEmpty() || ids.contains(id.toString())
+            || id.toString() == mainCameraId) // "main" names the main video in cuts (KAN-245)
             return false;
         ids.insert(id.toString());
         if (video.contains("label") && !validText(video.value("label"), maximumLabelCharacters)) return false;

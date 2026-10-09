@@ -631,6 +631,7 @@ void EventProjectTests::keepsAdditionalVideosPerRun()
     bad.append(QJsonArray{zeroScale});
     auto badLabel = helmet("x", "a.mp4"); badLabel.insert("label", 3); bad.append(QJsonArray{badLabel});
     bad.append(QJsonArray{7});
+    bad.append(QJsonArray{helmet("main", "a.mp4")}); // reserved for the main video in cuts (KAN-245)
     bad.append(QJsonObject{});
     for (const auto &value : bad) {
         QVERIFY(!AdditionalVideosCodec::valid(value));
