@@ -17,6 +17,8 @@
 #include "export/TemporaryOverlayValidation.h"
 
 #include <QFileInfo>
+#include <QMap>
+#include <QSet>
 #include <QDir>
 #include <QProcess>
 #include <QTemporaryFile>
@@ -661,6 +663,115 @@ QStringList ExportEngine::stageBAdditionalInputArguments(
     return {"-seek_timestamp", "1", "-ss", QString::number(timing.inputSeekSeconds, 'f', 6), "-i", path};
 }
 
+namespace {
+
+int additionalInputCount(const StageBComposition &composition)
+{
+    int count = 0;
+    for (const auto &camera : composition.cameras)
+        if (camera.input >= 0) ++count;
+    return count;
+}
+
+QString seconds6(const double value)
+{
+    return QString::number(value, 'f', 6);
+}
+
+// FFmpeg colour from "#RRGGBB".
+QString ffmpegColor(const QString &color)
+{
+    return QStringLiteral("0x") + color.mid(1);
+}
+
+// KAN-245: the filter graph that draws the plan's layers over the main video.
+// `mainLabel` is the main video prepared at the output size. Every layer is
+// scaled, bordered or letterboxed, optionally faded in, and overlaid inside
+// its windows. The result is `[sourceVideo]`.
+QString layeredGraph(const StageBComposition &composition, const bool straight)
+{
+    using VideoComposition::Layer;
+    const QString format = straight ? QStringLiteral("yuv420p10") : QStringLiteral("auto");
+    const QString alphaFormat = straight ? QStringLiteral("yuva420p10le") : QStringLiteral("yuva420p");
+    // The windows in export time; a layer with none left is not drawn.
+    struct Drawn {
+        const Layer *layer;
+        QString enable; // empty: always
+        double fadeStart;
+    };
+    QVector<Drawn> drawn;
+    for (const Layer &layer : composition.layers) {
+        QStringList terms;
+        bool always = false;
+        for (const auto &window : layer.windows) {
+            const double start = window.start - composition.mainStartSeconds;
+            const double end = window.end - composition.mainStartSeconds;
+            if (end <= 0.0 || start >= composition.exportSeconds) continue;
+            if (start <= 0.0 && end >= composition.exportSeconds) always = true;
+            terms.append(QStringLiteral("gte(t,%1)*lt(t,%2)").arg(seconds6(start), seconds6(end)));
+        }
+        if (terms.isEmpty()) continue;
+        const double firstStart = layer.windows.first().start - composition.mainStartSeconds;
+        drawn.append({&layer, always ? QString() : terms.join(QLatin1Char('+')), firstStart});
+    }
+    if (drawn.isEmpty()) return QStringLiteral("[mainPre]null[sourceVideo];");
+    QMap<int, int> uses; // layers per camera
+    for (const Drawn &item : drawn) ++uses[item.layer->camera];
+    QString graph;
+    // The main video: the base and one copy for each layer that shows it.
+    const int mainCopies = uses.value(0) + 1;
+    graph += mainCopies == 1 ? QStringLiteral("[mainPre]null[mainBase];")
+        : QStringLiteral("[mainPre]split=%1[mainBase]").arg(mainCopies) + [&] {
+            QString labels;
+            for (int copy = 0; copy < uses.value(0); ++copy) labels += QStringLiteral("[cam0_%1]").arg(copy);
+            return labels + QLatin1Char(';');
+        }();
+    for (auto it = uses.cbegin(); it != uses.cend(); ++it) {
+        if (it.key() == 0) continue;
+        const auto &camera = composition.cameras[it.key()];
+        QString labels;
+        for (int copy = 0; copy < it.value(); ++copy) labels += QStringLiteral("[cam%1_%2]").arg(it.key()).arg(copy);
+        graph += QStringLiteral("[%1:v]setpts=(T*%2+%3)/TB,%4%5;")
+            .arg(camera.input)
+            .arg(QString::number(camera.timeFactor, 'f', 12), QString::number(camera.timeShift, 'f', 9))
+            .arg(it.value() == 1 ? QStringLiteral("null") : QStringLiteral("split=%1").arg(it.value()), labels);
+    }
+    QMap<int, int> nextCopy;
+    QString accumulated = QStringLiteral("mainBase");
+    for (qsizetype index = 0; index < drawn.size(); ++index) {
+        const Layer &layer = *drawn[index].layer;
+        QStringList chain;
+        const bool fullFrameMain = layer.camera == 0 && layer.onAir;
+        if (!fullFrameMain)
+            chain.append(QStringLiteral("scale=%1:%2:flags=lanczos,setsar=1")
+                .arg(layer.content.width()).arg(layer.content.height()));
+        if (layer.rect != layer.content && !fullFrameMain)
+            chain.append(QStringLiteral("pad=%1:%2:%3:%4:color=%5")
+                .arg(layer.rect.width()).arg(layer.rect.height())
+                .arg(layer.content.x() - layer.rect.x()).arg(layer.content.y() - layer.rect.y())
+                .arg(ffmpegColor(layer.borderColor)));
+        // FFmpeg's fade counts its progress from the first frame at or after its
+        // start, so a fade that began before the export is not drawn: the camera
+        // is fully in from the first frame (see docs/export-pipeline.md).
+        if (layer.fadeInSeconds > 0.0 && drawn[index].fadeStart >= 0.0)
+            chain.append(QStringLiteral("format=%1,fade=t=in:st=%2:d=%3:alpha=1")
+                .arg(alphaFormat, seconds6(drawn[index].fadeStart), seconds6(layer.fadeInSeconds)));
+        if (chain.isEmpty()) chain.append(QStringLiteral("null"));
+        const QString source = QStringLiteral("cam%1_%2").arg(layer.camera).arg(nextCopy[layer.camera]++);
+        const bool last = index + 1 == drawn.size();
+        const QString output = last ? QStringLiteral("sourceVideo") : QStringLiteral("acc%1").arg(index);
+        const QString enable = drawn[index].enable.isEmpty() ? QString()
+            : QStringLiteral(":enable='%1'").arg(drawn[index].enable);
+        graph += QStringLiteral("[%1]%2[layer%3];[%4][layer%3]overlay=%5:%6:eof_action=pass:repeatlast=0:format=%7%8[%9];")
+            .arg(source, chain.join(QLatin1Char(',')), QString::number(index), accumulated)
+            .arg(layer.rect.x()).arg(layer.rect.y()).arg(format, enable, output);
+        accumulated = output;
+    }
+    return graph;
+}
+
+} // namespace
+
 QString ExportEngine::stageBVideoFilterGraph(
     const StageBSourceAccess &sourceAccess,
     const QSize &sourceSize,
@@ -694,6 +805,10 @@ QString ExportEngine::stageBVideoFilterGraph(
     // shows through (eof_action=pass, no repeated last frame).
     QString additional;
     QString mainLabel = composition.additional.isEmpty() ? QStringLiteral("sourceVideo") : QStringLiteral("main0");
+    if (!composition.layers.isEmpty()) {
+        mainLabel = QStringLiteral("mainPre");
+        additional = layeredGraph(composition, requiresStraightOverlay);
+    }
     for (qsizetype index = 0; index < composition.additional.size(); ++index) {
         const StageBComposition::Input &input = composition.additional[index];
         const QString next = index + 1 == composition.additional.size()
@@ -927,18 +1042,10 @@ ExportResult ExportEngine::exportVideo(
             QVector<QSize> sourceSizes{source.displayVideoSize.isEmpty() ? source.videoSize : source.displayVideoSize};
             for (const auto &video : settings.additionalVideos)
                 sourceSizes.append(video.info.displayVideoSize.isEmpty() ? video.info.videoSize : video.info.displayVideoSize);
-            const QVector<QRect> rects = VideoComposition::layout(settings.videoLayout, outputSize, sourceSizes);
-            const QVector<QRect> preflightRects = VideoComposition::layout(settings.videoLayout, QSize(64, 64), sourceSizes);
-            if (rects.size() != sourceSizes.size() || preflightRects.size() != sourceSizes.size()) {
-                result.error = QStringLiteral("Could not place the additional videos in the export.");
-                return result;
-            }
-            if (settings.videoLayout == VideoLayoutMode::SideBySide) {
-                composition.mainRect = rects[0];
-                preflightComposition.mainRect = preflightRects[0];
-            }
-            for (qsizetype index = 0; index < settings.additionalVideos.size(); ++index) {
-                const auto &video = settings.additionalVideos[index];
+            // Where each video is on the output timeline, or nothing when it
+            // has no frame inside the export.
+            QVector<std::optional<VideoComposition::Timing>> timings;
+            for (const auto &video : settings.additionalVideos) {
                 const auto timing = VideoComposition::timing(settings.sync, video.sync, sourceRangeStart, exportDuration,
                     video.info.videoStartTime, video.info.videoDuration > 0.0 ? video.info.videoDuration : video.info.duration);
                 if (!timing) {
@@ -946,19 +1053,95 @@ ExportResult ExportEngine::exportVideo(
                             QStringLiteral("placeAdditionalVideos"),
                             QStringLiteral("Additional video has no frame inside the export range"),
                             QStringLiteral("export"), {{"path", video.path}, {"label", video.label}});
-                    continue;
                 }
-                composition.additional.append({rects[index + 1], timing->timeFactor, timing->timeShift});
-                preflightComposition.additional.append({preflightRects[index + 1], 1.0, 0.0});
-                additionalInputArguments += stageBAdditionalInputArguments(*timing, video.path);
-                observe(settings, QStringLiteral("log"), QStringLiteral("preparing"),
-                        QStringLiteral("placeAdditionalVideos"), QStringLiteral("Additional video placed"),
-                        QStringLiteral("export"),
-                        {{"path", video.path}, {"label", video.label},
-                         {"x", rects[index + 1].x()}, {"y", rects[index + 1].y()},
-                         {"width", rects[index + 1].width()}, {"height", rects[index + 1].height()},
-                         {"inputSeekSeconds", timing->inputSeekSeconds},
-                         {"timeFactor", timing->timeFactor}, {"timeShift", timing->timeShift}});
+                timings.append(timing);
+            }
+            if (settings.videoLayout.mode == VideoLayoutMode::SideBySide) {
+                const QVector<QRect> rects = VideoComposition::layout(settings.videoLayout.mode, outputSize, sourceSizes);
+                const QVector<QRect> preflightRects = VideoComposition::layout(settings.videoLayout.mode, QSize(64, 64), sourceSizes);
+                if (rects.size() != sourceSizes.size() || preflightRects.size() != sourceSizes.size()) {
+                    result.error = QStringLiteral("Could not place the additional videos in the export.");
+                    return result;
+                }
+                composition.mainRect = rects[0];
+                preflightComposition.mainRect = preflightRects[0];
+                for (qsizetype index = 0; index < settings.additionalVideos.size(); ++index) {
+                    const auto &video = settings.additionalVideos[index];
+                    const auto &timing = timings[index];
+                    if (!timing) continue;
+                    composition.additional.append({rects[index + 1], timing->timeFactor, timing->timeShift});
+                    preflightComposition.additional.append({preflightRects[index + 1], 1.0, 0.0});
+                    additionalInputArguments += stageBAdditionalInputArguments(*timing, video.path);
+                    observe(settings, QStringLiteral("log"), QStringLiteral("preparing"),
+                            QStringLiteral("placeAdditionalVideos"), QStringLiteral("Additional video placed"),
+                            QStringLiteral("export"),
+                            {{"path", video.path}, {"label", video.label},
+                             {"x", rects[index + 1].x()}, {"y", rects[index + 1].y()},
+                             {"width", rects[index + 1].width()}, {"height", rects[index + 1].height()},
+                             {"inputSeekSeconds", timing->inputSeekSeconds},
+                             {"timeFactor", timing->timeFactor}, {"timeShift", timing->timeShift}});
+                }
+            } else {
+                // KAN-245: picture in picture and camera switching. Every
+                // layer of the plan whose camera has footage in the export is
+                // drawn; a camera without footage leaves the main video.
+                QStringList cameraIds{mainCameraId};
+                for (const auto &video : settings.additionalVideos) cameraIds.append(video.id);
+                const double endSeconds = sourceRangeStart + exportDuration + 1.0;
+                // Where each camera has footage, on the main video's timeline;
+                // the main video is on air outside it.
+                QVector<VideoComposition::Window> footage(cameraIds.size(), {0.0, endSeconds});
+                for (qsizetype index = 0; index < settings.additionalVideos.size(); ++index) {
+                    const auto &video = settings.additionalVideos[index];
+                    const auto &timing = timings[index];
+                    if (!timing) {
+                        footage[index + 1] = {0.0, 0.0};
+                        continue;
+                    }
+                    const double seconds = video.info.videoDuration > 0.0 ? video.info.videoDuration : video.info.duration;
+                    const double first = video.info.videoStartTime * timing->timeFactor + timing->timeShift + sourceRangeStart;
+                    const double last = (video.info.videoStartTime + seconds) * timing->timeFactor + timing->timeShift + sourceRangeStart;
+                    footage[index + 1] = {first, last};
+                }
+                const auto layers = VideoComposition::plan(settings.videoLayout, outputSize, cameraIds, sourceSizes, endSeconds, footage);
+                if (layers.isEmpty()) {
+                    result.error = QStringLiteral("Could not place the additional videos in the export.");
+                    return result;
+                }
+                // The preflight probes the filters on a tiny frame; the layers keep
+                // their real geometry, which overlay clips, so a small bordered
+                // box is not rejected for the probe's size.
+                const auto &preflightLayers = layers;
+                composition.cameras.resize(cameraIds.size());
+                preflightComposition.cameras.resize(cameraIds.size());
+                QSet<int> used;
+                for (const auto &layer : layers) used.insert(layer.camera);
+                int input = 2;
+                for (qsizetype index = 0; index < settings.additionalVideos.size(); ++index) {
+                    const auto &video = settings.additionalVideos[index];
+                    const auto &timing = timings[index];
+                    if (!timing || !used.contains(static_cast<int>(index) + 1)) continue;
+                    composition.cameras[index + 1] = {input, timing->timeFactor, timing->timeShift};
+                    preflightComposition.cameras[index + 1] = {input, 1.0, 0.0};
+                    ++input;
+                    additionalInputArguments += stageBAdditionalInputArguments(*timing, video.path);
+                    observe(settings, QStringLiteral("log"), QStringLiteral("preparing"),
+                            QStringLiteral("placeAdditionalVideos"), QStringLiteral("Additional video placed"),
+                            QStringLiteral("export"),
+                            {{"path", video.path}, {"label", video.label}, {"camera", video.id},
+                             {"inputSeekSeconds", timing->inputSeekSeconds},
+                             {"timeFactor", timing->timeFactor}, {"timeShift", timing->timeShift}});
+                }
+                const auto available = [](const StageBComposition &target, const QVector<VideoComposition::Layer> &all) {
+                    QVector<VideoComposition::Layer> kept;
+                    for (const auto &layer : all)
+                        if (layer.camera == 0 || target.cameras[layer.camera].input >= 0) kept.append(layer);
+                    return kept;
+                };
+                composition.layers = available(composition, layers);
+                preflightComposition.layers = available(preflightComposition, preflightLayers);
+                composition.mainStartSeconds = preflightComposition.mainStartSeconds = sourceRangeStart;
+                composition.exportSeconds = preflightComposition.exportSeconds = exportDuration;
             }
         }
         observe(settings, QStringLiteral("status"), QStringLiteral("preparing"),
@@ -969,7 +1152,8 @@ ExportResult ExportEngine::exportVideo(
             stageBVideoFilterGraph({"0", "0", "0.1"}, QSize(64, 64), QSize(64, 64),
                                   {30, 1}, 3, result.mediaProfile, preflightComposition),
             [&settings] { return isCancelled(settings); },
-            static_cast<int>(preflightComposition.additional.size()));
+            static_cast<int>(preflightComposition.layers.isEmpty() ? preflightComposition.additional.size()
+                : additionalInputCount(preflightComposition)));
         if (!compositionError.isEmpty()) {
             result.error = compositionError;
             return result;

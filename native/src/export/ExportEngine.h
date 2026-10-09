@@ -54,6 +54,7 @@ struct ExportPipelineProgress {
 
 // KAN-131: a video placed with the main one, such as a helmet camera.
 struct ExportAdditionalVideo {
+    QString id;
     QString path;
     QString label;
     SyncTransform sync;
@@ -70,7 +71,7 @@ struct ExportSettings {
     // The main video's sync and the additional videos (KAN-131).
     SyncTransform sync;
     QVector<ExportAdditionalVideo> additionalVideos;
-    VideoLayoutMode videoLayout = VideoLayoutMode::PictureInPicture;
+    VideoLayout videoLayout; // KAN-245: mode, picture-in-picture options, camera cuts
     QString outputPath;
     QSize outputSize;
     MediaRational frameRate;
@@ -143,6 +144,19 @@ struct StageBComposition {
         double timeShift = 0.0;
     };
     QVector<Input> additional;
+
+    // KAN-245: picture-in-picture layers and camera switching. When `layers`
+    // is not empty it replaces `additional`: every layer is drawn from its
+    // camera's stream (a camera may feed several layers), within its windows.
+    struct Camera {
+        int input = -1; // FFmpeg input of an additional video; -1 for the main video
+        double timeFactor = 1.0;
+        double timeShift = 0.0;
+    };
+    QVector<Camera> cameras = {}; // by camera number; 0 is the main video
+    QVector<VideoComposition::Layer> layers = {};
+    double mainStartSeconds = 0.0; // the export's first frame on the main video's time
+    double exportSeconds = 0.0;
 };
 
 class ExportEngine final {

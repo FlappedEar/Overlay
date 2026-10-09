@@ -820,7 +820,7 @@ bool AppController::startExport(
     inputs.widgets = m_widgetModel.toJson();
     inputs.sync = m_syncController.transform();
     inputs.source = m_exportSourceInfo;
-    inputs.videoLayout = m_additionalVideos.layoutMode();
+    inputs.videoLayout = m_additionalVideos.videoLayout();
     const auto job = ExportJobPlan::buildJob(inputs);
     const QString outputPath = inputs.sources.outputPath;
     return m_export.start(job, {outputPath, QSize(outputWidth, outputHeight),

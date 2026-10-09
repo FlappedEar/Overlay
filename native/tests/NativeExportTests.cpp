@@ -88,6 +88,7 @@ private slots:
     void plansPictureInPictureAndCameraSwitching();
     void timesAdditionalVideosAgainstTheMainVideo();
     void composesAnAdditionalVideoOnItsOwnTimeline();
+    void switchesCamerasAndDrawsPictureInPicture();
     void preservesCfrCadenceForCommonRates();
     void validatesQuantizedTemporaryOverlayCadence();
     void preservesAbsoluteExportTimestamps();
@@ -2296,6 +2297,157 @@ void ExportTests::composesAnAdditionalVideoOnItsOwnTimeline()
     // so its marker bar (x 56 to 61 of 128) is at x 28 to 30.
     QVERIFY(pixel(0, 29, 4) < 64);
     QVERIFY(pixel(0, 29, 16) > 127);
+}
+
+void ExportTests::switchesCamerasAndDrawsPictureInPicture()
+{
+    // KAN-245: a red main video, a green helmet camera and a blue rear one,
+    // all on the same clock. Cuts put the helmet camera on air from 1 s to
+    // 3 s; the cameras off air sit in boxes. The pixels say who is where.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto run = [](const QStringList &args) {
+        QProcess process; process.start(FfmpegTools::ffmpegPath(), args);
+        if (!process.waitForFinished(60'000) || process.exitCode() != 0)
+            qWarning().noquote() << process.readAllStandardError();
+        return process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
+    };
+    const auto solid = [&](const QString &name, const QString &colour, const int rate) {
+        const QString path = directory.filePath(name);
+        return run({"-v", "error", "-y", "-f", "lavfi", "-i", QStringLiteral("color=c=%1:s=320x180:r=%2:d=8").arg(colour).arg(rate),
+            "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p", path}) ? path : QString();
+    };
+    const QString main = solid("main.mp4", "red", 30), helmet = solid("helmet.mp4", "lime", 25), rear = solid("rear.mp4", "blue", 25);
+    QVERIFY(!main.isEmpty() && !helmet.isEmpty() && !rear.isEmpty());
+    constexpr int count = 150;
+    const QString overlayRaw = directory.filePath("overlay.rgba"), overlay = directory.filePath("overlay.mkv");
+    QVERIFY(writeBytes(overlayRaw, QByteArray(count * 320 * 180 * 4, '\0')));
+    QVERIFY(run({"-v", "error", "-y", "-f", "rawvideo", "-pixel_format", "rgba", "-video_size", "320x180", "-framerate", "30",
+        "-i", overlayRaw, "-c:v", "ffv1", "-pix_fmt", "bgra", overlay}));
+    const auto mainInfo = MediaProbe::probe(main);
+    const auto access = ExportEngine::stageBSourceAccess(mainInfo, {0, count - 1}, {30, 1});
+    QVERIFY(access.has_value());
+    const auto profile = ExportMediaProfile::derive(mainInfo, {320, 180}, {30, 1}, 1'000'000, "libx265");
+    const QStringList ids{mainCameraId, "helmet", "rear"};
+    const QVector<QSize> sizes{QSize(320, 180), QSize(320, 180), QSize(320, 180)};
+    const SyncTransform sync{0.0, 1.0};
+
+    // Renders the first five seconds with the layout; returns RGBA frames.
+    const auto render = [&](const VideoLayout &layout, QVector<VideoComposition::Layer> *plannedLayers, const double start = 0.0) {
+        StageBComposition composition;
+        composition.cameras.resize(3);
+        QStringList inputs;
+        int input = 2;
+        for (int camera = 1; camera < 3; ++camera) {
+            const QString path = camera == 1 ? helmet : rear;
+            const auto info = MediaProbe::probe(path);
+            const auto timing = VideoComposition::timing(sync, sync, start, 5.0, info.videoStartTime, info.videoDuration);
+            if (!timing) return QByteArray();
+            composition.cameras[camera] = {input++, timing->timeFactor, timing->timeShift};
+            inputs += ExportEngine::stageBAdditionalInputArguments(*timing, path);
+        }
+        composition.layers = VideoComposition::plan(layout, {320, 180}, ids, sizes, start + 6.0);
+        composition.mainStartSeconds = start;
+        composition.exportSeconds = 5.0;
+        if (plannedLayers) *plannedLayers = composition.layers;
+        const QString graph = ExportEngine::stageBVideoFilterGraph(*access, mainInfo.videoSize, {320, 180}, {30, 1}, count, profile, composition);
+        const QString preflight = ExportEngine::verifyCompositionFilters(FfmpegTools::ffmpegPath(), graph, {}, 2);
+        if (!preflight.isEmpty()) { qWarning().noquote() << preflight << graph; return QByteArray(); }
+        const QString output = directory.filePath("output.rgba");
+        QStringList args{"-v", "error", "-y"};
+        args += ExportEngine::stageBInputArguments(*access, main);
+        args += QStringList{"-i", overlay};
+        args += inputs;
+        args += QStringList{"-filter_complex", graph, "-map", "[video]", "-fps_mode", "cfr", "-f", "rawvideo", "-pix_fmt", "rgba", output};
+        if (!run(args)) { qWarning().noquote() << graph; return QByteArray(); }
+        return readBytes(output);
+    };
+    enum Colour { Red, Green, Blue, Black, Mixed };
+    const auto at = [](const QByteArray &frames, const int frame, const QPoint point) {
+        const auto *p = reinterpret_cast<const unsigned char *>(frames.constData()) + ((frame * 180 + point.y()) * 320 + point.x()) * 4;
+        const int r = p[0], g = p[1], b = p[2];
+        if (r > 190 && g < 70 && b < 70) return Red;
+        if (g > 190 && r < 90 && b < 90) return Green;
+        if (b > 190 && r < 70 && g < 70) return Blue;
+        if (r < 40 && g < 40 && b < 40) return Black;
+        return Mixed;
+    };
+    const auto centre = [](const VideoComposition::Layer &layer) { return layer.content.center(); };
+    const QPoint middle(160, 90);
+
+    VideoLayout layout;
+    layout.program.cuts = {{1.0, "helmet"}, {3.0, "main"}};
+    QVector<VideoComposition::Layer> layers;
+    auto frames = render(layout, &layers);
+    QCOMPARE(frames.size(), qsizetype(count * 320 * 180 * 4));
+    // The box of a camera, by what it shows at the time.
+    const auto boxOf = [&](const int camera, const double second) {
+        for (const auto &layer : layers) {
+            if (layer.onAir || layer.camera != camera) continue;
+            for (const auto &window : layer.windows) if (second >= window.start && second < window.end) return centre(layer);
+        }
+        return QPoint(-1, -1);
+    };
+    // 0.5 s: the main video is on air; the helmet and rear cameras sit in boxes.
+    QCOMPARE(at(frames, 15, middle), Red);
+    QCOMPARE(at(frames, 15, boxOf(1, 0.5)), Green);
+    QCOMPARE(at(frames, 15, boxOf(2, 0.5)), Blue);
+    // 2 s: the helmet camera is on air; the main video is in a box.
+    QCOMPARE(at(frames, 60, middle), Green);
+    QCOMPARE(at(frames, 60, boxOf(0, 2.0)), Red);
+    QCOMPARE(at(frames, 60, boxOf(2, 2.0)), Blue);
+    // The cut is hard: the last frame before it and the first after it.
+    QCOMPARE(at(frames, 29, middle), Red);
+    QCOMPARE(at(frames, 30, middle), Green);
+    QCOMPARE(at(frames, 89, middle), Green);
+    QCOMPARE(at(frames, 90, middle), Red);
+    QCOMPARE(at(frames, 120, middle), Red);
+
+    // Picture in picture off: the cameras off air are not drawn.
+    layout.pip.enabled = false;
+    frames = render(layout, &layers);
+    QCOMPARE(frames.size(), qsizetype(count * 320 * 180 * 4));
+    QCOMPARE(at(frames, 15, QPoint(300, 15)), Red);
+    QCOMPARE(at(frames, 60, middle), Green);
+    QCOMPARE(at(frames, 60, QPoint(300, 15)), Green);
+    QCOMPARE(at(frames, 120, middle), Red);
+
+    // A crossfade: halfway through its second the picture is a mix.
+    layout = VideoLayout{};
+    layout.pip.enabled = false;
+    layout.program.cuts = {{1.0, "helmet"}, {3.0, "main"}};
+    layout.program.transition = ProgramTransition::Crossfade;
+    layout.program.crossfadeSeconds = 1.0;
+    frames = render(layout, &layers);
+    QCOMPARE(frames.size(), qsizetype(count * 320 * 180 * 4));
+    QCOMPARE(at(frames, 15, middle), Red);
+    QCOMPARE(at(frames, 30, middle), Red);
+    QCOMPARE(at(frames, 45, middle), Mixed);
+    QCOMPARE(at(frames, 75, middle), Green);
+    QCOMPARE(at(frames, 105, middle), Mixed);
+    QCOMPARE(at(frames, 135, middle), Red);
+
+    // An export that starts halfway through the fade shows the camera fully in.
+    frames = render(layout, &layers, 1.5);
+    QCOMPARE(frames.size(), qsizetype(count * 320 * 180 * 4));
+    QCOMPARE(at(frames, 0, middle), Green);
+    QCOMPARE(at(frames, 30, middle), Green);
+
+    // A corner and a border: the bordered box of the helmet camera at the bottom left.
+    layout = VideoLayout{};
+    layout.pip.corner = PipCorner::BottomLeft;
+    layout.pip.cameras = QStringList{"helmet"};
+    layout.pip.borderWidth = 12;
+    layout.pip.borderColor = "#FFFFFF";
+    frames = render(layout, &layers);
+    QCOMPARE(layers.size(), 1);
+    QVERIFY(layers[0].rect.x() < 20 && layers[0].rect.bottom() > 180 - 20);
+    QVERIFY(layers[0].border >= 2);
+    QCOMPARE(at(frames, 15, centre(layers[0])), Green);
+    const QPoint inBorder = layers[0].rect.topLeft() + QPoint(1, 1);
+    const auto *rgba = reinterpret_cast<const unsigned char *>(frames.constData()) + ((15 * 180 + inBorder.y()) * 320 + inBorder.x()) * 4;
+    QVERIFY(rgba[0] > 200 && rgba[1] > 200 && rgba[2] > 200);
+    QCOMPARE(at(frames, 15, QPoint(300, 15)), Red);
 }
 
 void ExportTests::plansBoundedStageBSourceAccess()

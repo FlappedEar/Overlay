@@ -171,6 +171,34 @@ main video: each output frame shows the expected numbered frame, then the main v
 ends); `SourceTests::exportsWithAnAdditionalVideo` (the editor through the worker: side by side
 pixels, the additional video refused as the output, export refused while it is loading or missing).
 
+### Picture-in-picture options and camera switching (KAN-245)
+
+In picture-in-picture mode the project's `videoLayout.pip` and `videoLayout.program`
+([design](pip-camera-switching.md)) decide what Stage B draws. `VideoComposition::plan` turns them
+into layers, the same list the preview draws: full-frame layers for the camera on air (letterboxed
+in black) and boxes for the cameras off air (with the border inside the box). Each layer has windows
+on the main video's timeline.
+
+- **Graph.** Each camera is retimed once (`setpts`), then `split` into one copy per layer. A layer is
+  scaled to its content rectangle, padded for border or letterbox, and overlaid on the previous
+  result with `enable='gte(t,a)*lt(t,b)+...'` (export time = main video time minus the export's
+  start; windows are half-open, so a cut is exact to the frame). The main video is the base under
+  everything, so a camera with no footage at its time leaves the main video. A window that covers
+  the whole export has no `enable`.
+- **Crossfade.** A switch gets its own layer: `format=yuva420p`, then `fade=t=in:st=...:d=...:alpha=1`
+  at the window's start; the previous layer stays enabled for the fade. 10-bit output uses
+  `yuva420p10le`. A fade that began before the export's first frame is not drawn (FFmpeg's `fade`
+  counts progress from the first frame at or after its start): the camera is fully in from the first
+  frame. The preview and a full export show the whole fade.
+- **Inputs.** Only cameras with a layer and footage in the export become FFmpeg inputs.
+- **Worker configuration.** The job carries the whole `videoLayout` object and each additional
+  video's `id`; the worker validates it with `AdditionalVideosCodec::validLayout`.
+- Side by side keeps the fixed layout above and ignores `pip` and `program`.
+
+Tests: `ExportTests::plansPictureInPictureAndCameraSwitching` (the layers), and
+`switchesCamerasAndDrawsPictureInPicture` (red main, green and blue cameras: hard cut exact at the
+frame, boxes swap, picture-in-picture off, crossfade mid-point is a mix, corner and border).
+
 ## CFR and VFR status
 
 Every final export is CFR at the effective exact rational export rate. Authoritative scheduling uses the inclusive integer range `[firstFrame, lastFrame]`, so `expectedFrames = lastFrame - firstFrame + 1`. Full video comes from `nb_frames` when available, with exact `duration_ts/time_base` as fallback; container/decimal duration never chooses the count. When `nb_frames` is more than the stream's `duration_ts` can hold at the nominal rate, as in an MP4 trimmed without re-encoding whose edit list hides the frames before the cut, `MediaProbe::probe` counts the video packets that FFmpeg does not flag as discarded and uses that as the frame count ([KAN-175](https://kozucharkadiusz.atlassian.net/browse/KAN-175)). Other sources pay nothing extra. Custom IN and OUT are C++-parsed `HH:MM:SS:FF` values and both are included; QML carries strings only. Presentation seconds are derived only after this decision for rendering and FFmpeg diagnostics.

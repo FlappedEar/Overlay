@@ -49,6 +49,7 @@ public:
     // What export composes: every video, by its checked file. Empty, with
     // `problem` saying which video and why, when one is not ready.
     struct ExportVideo {
+        QString id;
         QString path;
         QString label;
         SyncTransform sync;

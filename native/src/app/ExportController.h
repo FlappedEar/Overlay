@@ -60,12 +60,13 @@ public:
         MediaInfo source;
         // KAN-131: videos composed with the main one, and their layout.
         struct AdditionalVideo {
+            QString id;
             QString path;
             QString label;
             SyncTransform sync;
         };
         QVector<AdditionalVideo> additionalVideos;
-        VideoLayoutMode videoLayout = VideoLayoutMode::PictureInPicture;
+        VideoLayout videoLayout;
     };
     // What the export dialog asked for.
     struct Request {

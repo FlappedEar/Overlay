@@ -64,7 +64,7 @@ QVector<AdditionalVideoController::ExportVideo> AdditionalVideoController::expor
             if (problem) *problem = QStringLiteral("The additional video \"%1\" %2").arg(name, reason);
             return {};
         }
-        videos.append({entry.path, name, entry.video.sync});
+        videos.append({entry.video.id, entry.path, name, entry.video.sync});
     }
     return videos;
 }

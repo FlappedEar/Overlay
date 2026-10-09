@@ -35,7 +35,7 @@ ExportController::Job buildJob(const JobInputs &inputs)
     job.sync = inputs.sync;
     job.source = inputs.source;
     for (const auto &video : inputs.additionalVideos) {
-        job.additionalVideos.append({video.path, video.label, video.sync});
+        job.additionalVideos.append({video.id, video.path, video.label, video.sync});
         job.protectedPaths.append(video.path); // KAN-131: never overwritten by the output
     }
     job.videoLayout = inputs.videoLayout;

@@ -43,7 +43,7 @@ struct JobInputs {
     SyncTransform sync;
     MediaInfo source;
     QVector<AdditionalVideoController::ExportVideo> additionalVideos;
-    VideoLayoutMode videoLayout = VideoLayoutMode::PictureInPicture;
+    VideoLayout videoLayout;
 };
 
 [[nodiscard]] ExportController::Job buildJob(const JobInputs &inputs);
