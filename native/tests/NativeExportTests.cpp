@@ -2333,7 +2333,7 @@ void ExportTests::switchesCamerasAndDrawsPictureInPicture()
     const SyncTransform sync{0.0, 1.0};
 
     // Renders the first five seconds with the layout; returns RGBA frames.
-    const auto render = [&](const VideoLayout &layout, QVector<VideoComposition::Layer> *plannedLayers) {
+    const auto render = [&](const VideoLayout &layout, QVector<VideoComposition::Layer> *plannedLayers, const double start = 0.0) {
         StageBComposition composition;
         composition.cameras.resize(3);
         QStringList inputs;
@@ -2341,13 +2341,13 @@ void ExportTests::switchesCamerasAndDrawsPictureInPicture()
         for (int camera = 1; camera < 3; ++camera) {
             const QString path = camera == 1 ? helmet : rear;
             const auto info = MediaProbe::probe(path);
-            const auto timing = VideoComposition::timing(sync, sync, 0.0, 5.0, info.videoStartTime, info.videoDuration);
+            const auto timing = VideoComposition::timing(sync, sync, start, 5.0, info.videoStartTime, info.videoDuration);
             if (!timing) return QByteArray();
             composition.cameras[camera] = {input++, timing->timeFactor, timing->timeShift};
             inputs += ExportEngine::stageBAdditionalInputArguments(*timing, path);
         }
-        composition.layers = VideoComposition::plan(layout, {320, 180}, ids, sizes, 6.0);
-        composition.mainStartSeconds = 0.0;
+        composition.layers = VideoComposition::plan(layout, {320, 180}, ids, sizes, start + 6.0);
+        composition.mainStartSeconds = start;
         composition.exportSeconds = 5.0;
         if (plannedLayers) *plannedLayers = composition.layers;
         const QString graph = ExportEngine::stageBVideoFilterGraph(*access, mainInfo.videoSize, {320, 180}, {30, 1}, count, profile, composition);
@@ -2426,6 +2426,12 @@ void ExportTests::switchesCamerasAndDrawsPictureInPicture()
     QCOMPARE(at(frames, 75, middle), Green);
     QCOMPARE(at(frames, 105, middle), Mixed);
     QCOMPARE(at(frames, 135, middle), Red);
+
+    // An export that starts halfway through the fade shows the camera fully in.
+    frames = render(layout, &layers, 1.5);
+    QCOMPARE(frames.size(), qsizetype(count * 320 * 180 * 4));
+    QCOMPARE(at(frames, 0, middle), Green);
+    QCOMPARE(at(frames, 30, middle), Green);
 
     // A corner and a border: the bordered box of the helmet camera at the bottom left.
     layout = VideoLayout{};

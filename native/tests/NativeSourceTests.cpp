@@ -1566,7 +1566,7 @@ void SourceTests::plansTheExportJobFromTheLoadedSources()
     inputs.isEvent = true;
     inputs.documentPath = "/d/day.fetproject";
     inputs.referencedPaths = {"/t/other.vbo"};
-    inputs.additionalVideos = {{"/v/helmet.MP4", "Helmet", {}}};
+    inputs.additionalVideos = {{"helmet", "/v/helmet.MP4", "Helmet", {}}};
     inputs.lapBinding = QJsonObject{{"lap", 3}};
     const auto job = ExportJobPlan::buildJob(inputs);
     QCOMPARE(job.inputPath, QString("/v/GX01.MP4"));

@@ -187,7 +187,9 @@ on the main video's timeline.
   the whole export has no `enable`.
 - **Crossfade.** A switch gets its own layer: `format=yuva420p`, then `fade=t=in:st=...:d=...:alpha=1`
   at the window's start; the previous layer stays enabled for the fade. 10-bit output uses
-  `yuva420p10le`.
+  `yuva420p10le`. A fade that began before the export's first frame is not drawn (FFmpeg's `fade`
+  counts progress from the first frame at or after its start): the camera is fully in from the first
+  frame. The preview and a full export show the whole fade.
 - **Inputs.** Only cameras with a layer and footage in the export become FFmpeg inputs.
 - **Worker configuration.** The job carries the whole `videoLayout` object and each additional
   video's `id`; the worker validates it with `AdditionalVideosCodec::validLayout`.

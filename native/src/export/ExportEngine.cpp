@@ -750,6 +750,9 @@ QString layeredGraph(const StageBComposition &composition, const bool straight)
                 .arg(layer.rect.width()).arg(layer.rect.height())
                 .arg(layer.content.x() - layer.rect.x()).arg(layer.content.y() - layer.rect.y())
                 .arg(ffmpegColor(layer.borderColor)));
+        // FFmpeg's fade counts its progress from the first frame at or after its
+        // start, so a fade that began before the export is not drawn: the camera
+        // is fully in from the first frame (see docs/export-pipeline.md).
         if (layer.fadeInSeconds > 0.0 && drawn[index].fadeStart >= 0.0)
             chain.append(QStringLiteral("format=%1,fade=t=in:st=%2:d=%3:alpha=1")
                 .arg(alphaFormat, seconds6(drawn[index].fadeStart), seconds6(layer.fadeInSeconds)));
@@ -1101,11 +1104,14 @@ ExportResult ExportEngine::exportVideo(
                     footage[index + 1] = {first, last};
                 }
                 const auto layers = VideoComposition::plan(settings.videoLayout, outputSize, cameraIds, sourceSizes, endSeconds, footage);
-                const auto preflightLayers = VideoComposition::plan(settings.videoLayout, QSize(64, 64), cameraIds, sourceSizes, endSeconds, footage);
-                if (layers.isEmpty() != preflightLayers.isEmpty()) {
+                if (layers.isEmpty()) {
                     result.error = QStringLiteral("Could not place the additional videos in the export.");
                     return result;
                 }
+                // The preflight probes the filters on a tiny frame; the layers keep
+                // their real geometry, which overlay clips, so a small bordered
+                // box is not rejected for the probe's size.
+                const auto &preflightLayers = layers;
                 composition.cameras.resize(cameraIds.size());
                 preflightComposition.cameras.resize(cameraIds.size());
                 QSet<int> used;

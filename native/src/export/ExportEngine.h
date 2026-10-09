@@ -153,8 +153,8 @@ struct StageBComposition {
         double timeFactor = 1.0;
         double timeShift = 0.0;
     };
-    QVector<Camera> cameras; // by camera number; 0 is the main video
-    QVector<VideoComposition::Layer> layers;
+    QVector<Camera> cameras = {}; // by camera number; 0 is the main video
+    QVector<VideoComposition::Layer> layers = {};
     double mainStartSeconds = 0.0; // the export's first frame on the main video's time
     double exportSeconds = 0.0;
 };
