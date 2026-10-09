@@ -61,6 +61,7 @@ private slots:
     void disablesTransportShortcutsWhileEditing();
     void editsAdditionalVideosInTheSyncTab();
     void previewsAdditionalVideosByTheLayout();
+    void showsAFrameInTheAlignmentAid();
     void previewsCameraSwitchingAndPictureInPictureOptions();
     void editsPictureInPictureAndCutsInTheDataTab();
     void savesTheSceneAsATemplateFromThePopup();
@@ -1193,6 +1194,8 @@ void EditorTests::keepsSidebarReachableAtMinimumSize()
                 .arg(area.top()).arg(area.height()).arg(contentHeight);
             QVERIFY2(area.top() >= -0.5 && area.bottom() <= contentHeight + 0.5 && area.height() <= viewport,
                      qPrintable(where));
+            // Every control keeps the inspector's side gutter, not touching its edges.
+            QVERIFY2(area.left() >= 11.5 && area.right() <= flickable->width() - 11.5, qPrintable(where));
             // Scrolling the one surface brings it fully into view.
             flickable->setProperty("contentY", std::clamp(area.top() - 4.0, 0.0, maximumY));
             const QRectF shown = control->mapRectToItem(flickable, QRectF(0, 0, control->width(), control->height()));
@@ -1306,6 +1309,81 @@ void EditorTests::previewsAdditionalVideosByTheLayout()
     // Before its first frame it is hidden: it starts 5 s after the main video.
     videos->setOffset(0, 5.0);
     QTRY_VERIFY(!slot->isVisible());
+}
+
+void EditorTests::showsAFrameInTheAlignmentAid()
+{
+    // The alignment aid's player must be primed and paused on a frame: a
+    // stopped player draws nothing, which showed the aid as a black rectangle.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the alignment aid test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    const auto encode = [&](const QString &name, const QString &source) {
+        QProcess encoder;
+        encoder.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", source,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", directory.filePath(name)});
+        return encoder.waitForFinished(30'000) && encoder.exitCode() == 0;
+    };
+    QVERIFY(encode("main.mp4", "color=c=red:s=320x180:r=30:d=2"));
+    QVERIFY(encode("helmet.mp4", "color=c=blue:s=160x120:r=25:d=2"));
+    MinimumEditor editor;
+    QVERIFY(openMinimumEditor(editor));
+    editor.controller.loadVideo(QUrl::fromLocalFile(directory.filePath("main.mp4")));
+    QTRY_COMPARE(editor.controller.videoLoadState(), QStringLiteral("ready"));
+    auto *videos = editor.controller.additionalVideoController();
+    videos->addVideo(QUrl::fromLocalFile(directory.filePath("helmet.mp4")));
+    QTRY_COMPARE(videos->count(), 1);
+    editor.inspector->setProperty("currentTab", 1);
+    auto *panel = editor.window->findChild<QQuickItem *>(QStringLiteral("additionalVideosPanel"));
+    QVERIFY(panel);
+    panel->setProperty("alignIndex", 0);
+    QObject *player = nullptr;
+    QQuickItem *aid = nullptr;
+    QTRY_VERIFY(([&] {
+        QList<QQuickItem *> queue{panel};
+        while (!queue.isEmpty()) {
+            auto *item = queue.takeFirst();
+            if (item->objectName() == QStringLiteral("additionalVideoAlignAid")) {
+                aid = item;
+                return (player = item->property("player").value<QObject *>()) != nullptr;
+            }
+            queue.append(item->childItems());
+        }
+        return false;
+    })());
+    // The player is primed (seek, play, pause once a frame at the target arrived),
+    // as AVFoundation submits no frame for a paused seek.
+    QTRY_VERIFY(aid->property("frameShown").toBool());
+    QVERIFY(!aid->property("priming").toBool());
+    QTRY_VERIFY(player->property("hasVideo").toBool());
+    // The aid and the rest of the tab stay inside the inspector's gutters: no
+    // control may push the tab wider than the pane.
+    editor.window->resize(1180, 720);
+    auto *dataScroll = editor.window->findChild<QQuickItem *>(QStringLiteral("inspectorDataScroll"));
+    QVERIFY(dataScroll);
+    QQuickItem *flick = nullptr;
+    QList<QQuickItem *> pending{dataScroll};
+    while (!pending.isEmpty() && !flick) {
+        auto *item = pending.takeFirst();
+        if (item->inherits("QQuickFlickable")) flick = item;
+        pending.append(item->childItems());
+    }
+    QVERIFY(flick);
+    QTRY_VERIFY(flick->width() > 200);
+    QTest::qWait(500);
+    auto *tabContent = flick->property("contentItem").value<QQuickItem *>();
+    QList<QQuickItem *> walk = tabContent->childItems();
+    while (!walk.isEmpty()) {
+        auto *item = walk.takeFirst();
+        walk.append(item->childItems());
+        if (!item->isVisible() || item->width() <= 0) continue;
+        const QRectF area = item->mapRectToItem(flick, QRectF(0, 0, item->width(), item->height()));
+        QVERIFY2(area.right() <= flick->width() - 11.5,
+                 qPrintable(QStringLiteral("%1 %2 reaches %3 of %4").arg(QString::fromLatin1(item->metaObject()->className()),
+                     item->objectName()).arg(area.right()).arg(flick->width())));
+    }
+    constexpr int pausedState = 2; // QMediaPlayer::PausedState
+    QTRY_COMPARE(player->property("playbackState").toInt(), pausedState);
 }
 
 void EditorTests::previewsCameraSwitchingAndPictureInPictureOptions()

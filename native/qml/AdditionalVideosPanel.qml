@@ -150,6 +150,9 @@ ColumnLayout {
                         font.pixelSize: Theme.labelSmall
                     }
                     Rectangle {
+                        id: alignAid
+                        objectName: "additionalVideoAlignAid"
+                        readonly property alias player: alignPlayer
                         Layout.fillWidth: true
                         Layout.preferredHeight: width * 9 / 16
                         color: Theme.surfaceContainerLowest
@@ -159,14 +162,53 @@ ColumnLayout {
                             anchors.fill: parent
                             fillMode: VideoOutput.PreserveAspectFit
                         }
+                        // AVFoundation does not submit a paused seek frame for a GoPro source (as
+                        // for the main preview in Main.qml), so prime the player: seek, play
+                        // silently, and pause once a frame at the target has reached the output.
+                        property bool priming: false
+                        property bool frameShown: false
+                        property int primeTarget: 0
+                        property string primedSource: ""
+                        function targetMilliseconds() {
+                            return followMain.checked
+                                ? Math.max(0, Math.round(root.controller.videoSecondsFor(card.index, appController.playbackTime) * 1000))
+                                : 0;
+                        }
+                        function finishPriming() {
+                            primeTimeout.stop();
+                            priming = false;
+                            alignPlayer.pause();
+                        }
                         MediaPlayer {
                             id: alignPlayer
+                            objectName: "additionalVideoAlignPlayer"
                             source: card.aligning ? card.modelData.url : ""
                             videoOutput: alignOutput
+                            onSourceChanged: { alignAid.primedSource = ""; alignAid.frameShown = false; }
                             onMediaStatusChanged: {
-                                // Show the frame at the main video's moment once loaded.
-                                if (mediaStatus === MediaPlayer.LoadedMedia && followMain.checked)
-                                    alignPlayer.position = Math.max(0, Math.round(root.controller.videoSecondsFor(card.index, appController.playbackTime) * 1000));
+                                // Once per source: a repeated LoadedMedia must not undo a seek.
+                                if (mediaStatus !== MediaPlayer.LoadedMedia || alignAid.primedSource === String(source))
+                                    return;
+                                alignAid.primedSource = String(source);
+                                alignAid.primeTarget = alignAid.targetMilliseconds();
+                                alignAid.priming = true;
+                                alignPlayer.position = alignAid.primeTarget;
+                                alignPlayer.play();
+                                primeTimeout.restart();
+                            }
+                        }
+                        Timer {
+                            id: primeTimeout
+                            interval: 1000
+                            onTriggered: if (alignAid.priming) alignAid.finishPriming()
+                        }
+                        Connections {
+                            target: alignOutput.videoSink
+                            function onVideoFrameChanged(frame) {
+                                if (!alignAid.priming || alignPlayer.position < alignAid.primeTarget)
+                                    return;
+                                alignAid.frameShown = true;
+                                alignAid.finishPriming();
                             }
                         }
                         Connections {
@@ -192,18 +234,30 @@ ColumnLayout {
                         Layout.fillWidth: true
                         readonly property real frameMilliseconds: card.modelData.frameRate > 0 ? 1000 / card.modelData.frameRate : 40
                         FeButton {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            Layout.preferredWidth: 1
                             text: "−1 s"
                             onClicked: { followMain.checked = false; alignPlayer.position = Math.max(0, alignPlayer.position - 1000); }
                         }
                         FeButton {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            Layout.preferredWidth: 1
                             text: qsTr("−1 frame")
                             onClicked: { followMain.checked = false; alignPlayer.position = Math.max(0, alignPlayer.position - Math.round(parent.frameMilliseconds)); }
                         }
                         FeButton {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            Layout.preferredWidth: 1
                             text: qsTr("+1 frame")
                             onClicked: { followMain.checked = false; alignPlayer.position = alignPlayer.position + Math.round(parent.frameMilliseconds); }
                         }
                         FeButton {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            Layout.preferredWidth: 1
                             text: "+1 s"
                             onClicked: { followMain.checked = false; alignPlayer.position = alignPlayer.position + 1000; }
                         }

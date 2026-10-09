@@ -70,6 +70,7 @@ var onLap = "#111214";
 // Shape.
 var radius = 3;
 var dialogRadius = 6;
+var inspectorGutter = 12;   // side margin of the inspector's tabs, as the tab buttons above them
 
 // Type scale for a desktop editor (pixel sizes). Editor QML takes every font
 // size from here (KAN-199).
