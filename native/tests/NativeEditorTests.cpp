@@ -1313,8 +1313,8 @@ void EditorTests::previewsAdditionalVideosByTheLayout()
 
 void EditorTests::showsAFrameInTheAlignmentAid()
 {
-    // The alignment aid's player must be paused on a frame: a stopped player
-    // draws nothing, which showed the aid as a black rectangle.
+    // The alignment aid's player must be primed and paused on a frame: a
+    // stopped player draws nothing, which showed the aid as a black rectangle.
     const QString ffmpeg = FfmpegTools::ffmpegPath();
     if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the alignment aid test.");
     QTemporaryDir directory; QVERIFY(directory.isValid());
@@ -1338,16 +1338,23 @@ void EditorTests::showsAFrameInTheAlignmentAid()
     QVERIFY(panel);
     panel->setProperty("alignIndex", 0);
     QObject *player = nullptr;
+    QQuickItem *aid = nullptr;
     QTRY_VERIFY(([&] {
         QList<QQuickItem *> queue{panel};
         while (!queue.isEmpty()) {
             auto *item = queue.takeFirst();
-            if (item->objectName() == QStringLiteral("additionalVideoAlignAid"))
+            if (item->objectName() == QStringLiteral("additionalVideoAlignAid")) {
+                aid = item;
                 return (player = item->property("player").value<QObject *>()) != nullptr;
+            }
             queue.append(item->childItems());
         }
         return false;
     })());
+    // The player is primed (seek, play, pause once a frame at the target arrived),
+    // as AVFoundation submits no frame for a paused seek.
+    QTRY_VERIFY(aid->property("frameShown").toBool());
+    QVERIFY(!aid->property("priming").toBool());
     QTRY_VERIFY(player->property("hasVideo").toBool());
     // The aid and the rest of the tab stay inside the inspector's gutters: no
     // control may push the tab wider than the pane.
