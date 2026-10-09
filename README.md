@@ -69,6 +69,8 @@ ctest --test-dir build-native --output-on-failure
 open "build-native/native/FlappedEar Overlays.app"
 ```
 
+If the build suddenly fails everywhere with `CMAKE_OSX_SYSROOT ... does not exist` and missing system headers (`stdio.h`, `type_traits`, `TargetConditionals.h`), an Xcode or Command Line Tools update removed the SDK that your `build-native` directory cached. The repository does not set the SDK path. Delete `build-native/CMakeCache.txt` and configure again, or run `cmake -S . -B build-native -UCMAKE_OSX_SYSROOT`.
+
 ## Continuous integration
 
 [Native CI](.github/workflows/build.yml) runs on pull requests, pushes to `main`, and manual dispatch. It builds and tests macOS Debug and Release; Release also validates deployed startup and produces an internal candidate. Windows remains paused. Keep local builds and CTest, and report hardware-encoder and private-media acceptance separately. See [CI guidance](docs/testing.md#cloud-ci).
