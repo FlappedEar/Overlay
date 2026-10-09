@@ -26,7 +26,8 @@ Arek has not reviewed these; each is a revision away.
 
 ## Project format
 
-Both objects sit next to `videoLayout` in the run's sources and are optional. Unknown keys are kept.
+`pip` and `program` are optional objects inside `videoLayout` (so they travel with the layout through
+run switching, Save As and recovery). Unknown keys are kept. Keys equal to the defaults are not written.
 
 ```json
 "videoLayout": {
@@ -39,12 +40,12 @@ Both objects sit next to `videoLayout` in the run's sources and are optional. Un
     "borderWidth": 0,
     "borderColor": "#FFFFFF",
     "cameras": ["helmet"]
+  },
+  "program": {
+    "transition": "cut",
+    "crossfadeSeconds": 0.5,
+    "cuts": [ { "time": 12.0, "camera": "helmet" }, { "time": 30.5, "camera": "main" } ]
   }
-},
-"videoProgram": {
-  "transition": "cut",
-  "crossfadeSeconds": 0.5,
-  "cuts": [ { "time": 12.0, "camera": "helmet" }, { "time": 30.5, "camera": "main" } ]
 }
 ```
 
@@ -83,8 +84,7 @@ the item, PIP boxes show the other cameras, and a crossfade is an opacity ramp.
 
 DATA tab, Additional videos panel: a Picture-in-picture group (switch, corner, size, margin, border,
 camera checkboxes) and a Camera switching group (list of cuts with time and camera, **Cut here** at
-the playhead, delete, transition and crossfade length). Edits go through the document's undo stack
-and mark the project dirty.
+the playhead, delete, transition and crossfade length). Edits mark the project dirty (the editor has no undo stack for documents).
 
 ## Not planned
 

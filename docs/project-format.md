@@ -100,11 +100,12 @@ A run can hold up to three videos besides its main one, such as a helmet camera 
 ```
 
 - Each entry is a source reference with the same path, `fingerprint` and `contentSha256` rules as `video`, plus:
-    * a unique, nonblank `id` of at most 64 characters;
+    * a unique, nonblank `id` of at most 64 characters, other than `main` (which names the main video in camera cuts);
     * an optional `label` of at most 128 characters;
     * its own `sync`, with the meaning of the run's: telemetry time = video time × `timeScale` + `offset`, both finite and `timeScale` above 0.
 - Chapters are not supported on an additional video.
 - `videoLayout.mode` says how export places the additional videos beside the main one: `pictureInPicture` (the default when absent) or `sideBySide`.
+- `videoLayout.pip` and `videoLayout.program` (KAN-245, [design](pip-camera-switching.md)) are optional. `pip`: `enabled` (boolean, default true), `corner` (`topRight` default, `topLeft`, `bottomRight`, `bottomLeft`), `size` (0.10 to 0.50, default 0.28), `margin` (0 to 0.10, default 0.03), `borderWidth` (whole pixels 0 to 12), `borderColor` (`#RRGGBB`), `cameras` (up to four camera ids; absent means every camera that is not on air). `program`: `transition` (`cut` default or `crossfade`), `crossfadeSeconds` (0.1 to 2, default 0.5) and `cuts` (up to 200 of `{time, camera}`, `time` in seconds on the main video's timeline, strictly increasing; `camera` is `main` or an additional video's id). A wrong type or range makes the document invalid; keys at their defaults are not written; unknown keys survive.
 - In a version 3 event both belong to the run (`run.sources.additionalVideos`, `run.videoLayout`). The editor's version 2 projection carries them as `sources.additionalVideos` and a root `videoLayout`.
 - A malformed list, more than three entries, a repeated `id`, a missing path or sync, or an unknown layout mode makes the document invalid in both versions.
 - Unknown keys in an entry, in its `sync` and in `videoLayout` survive. Save As rebases every entry, in inactive runs too, and export never overwrites one.
