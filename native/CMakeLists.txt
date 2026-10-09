@@ -234,6 +234,8 @@ qt_add_library(flappedear_overlay_core STATIC
     src/app/SourceLoading.h
     src/app/LapNavigation.cpp
     src/app/LapNavigation.h
+    src/app/ExportJobPlan.cpp
+    src/app/ExportJobPlan.h
     src/app/ExportSourceOptions.cpp
     src/app/ExportSourceOptions.h
     src/app/PreviewTimeline.cpp

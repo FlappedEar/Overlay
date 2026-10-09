@@ -225,6 +225,11 @@ and the single source export reads (or why the chapters cannot be joined).
 Step 12 moved the project rewrite that follows loading a replacement recording into
 `EventProjectCodec::withReplacedRecording`: the run's old inference goes and the timing gates of
 the new recording are recorded.
+Step 13 moved the assembly of an export into `ExportJobPlan` (`native/src/app/ExportJobPlan.h`):
+`startProblem` says whether an export can start (sources open, chapters exportable together) and
+`buildJob` gives the job with every source the output must never overwrite (telemetry, each chapter,
+the event document and its sources, each additional video). `AppController::startExport` gathers the
+inputs and starts the run.
 
 `AdditionalVideoController` (`appController.additionalVideos`, KAN-131) holds the
 run's videos besides the main one, each with its own sync, and the export layout.

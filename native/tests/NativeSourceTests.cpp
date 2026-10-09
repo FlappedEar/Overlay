@@ -3,6 +3,7 @@
 #include "NativeTestSupport.h"
 #include "gopro/GoProTelemetrySource.h"
 #include "app/AppController.h"
+#include "app/ExportJobPlan.h"
 #include "app/SourceLoading.h"
 #include "app/TelemetryController.h"
 #include "export/FfmpegTools.h"
@@ -61,6 +62,7 @@ private slots:
     void keepsVideoChaptersAsOneTimeline();
     void loadsSourcesInTheBackgroundWorker();
     void derivesChapterPlaybackAndExportSource();
+    void plansTheExportJobFromTheLoadedSources();
     void playsVideoChaptersAcrossBoundaries();
     void persistsAndInvalidatesRunTrackConfiguration();
     void decodesGps9Gpmf();
@@ -1520,6 +1522,59 @@ void SourceTests::derivesChapterPlaybackAndExportSource()
     QVERIFY(!derived.exportInfo);
     QVERIFY(derived.exportPaths.isEmpty());
     QVERIFY(!derived.exportProblem.isEmpty());
+}
+
+void SourceTests::plansTheExportJobFromTheLoadedSources()
+{
+    // KAN-215: whether an export can start and what it must never overwrite,
+    // without a controller.
+    ExportJobPlan::Sources sources{true, "/v/GX01.MP4", "/t/run.vbo", "/o/out.mov", false, {}, {}};
+    QVERIFY(ExportJobPlan::startProblem(sources).isEmpty());
+    auto missing = sources; missing.telemetryLoaded = false;
+    QVERIFY(!ExportJobPlan::startProblem(missing).isEmpty());
+    missing = sources; missing.videoPath.clear();
+    QVERIFY(!ExportJobPlan::startProblem(missing).isEmpty());
+    missing = sources; missing.outputPath.clear();
+    QVERIFY(!ExportJobPlan::startProblem(missing).isEmpty());
+
+    // Chapters that cannot be exported together never export the first alone (KAN-106).
+    auto chaptered = sources; chaptered.chaptered = true;
+    QVERIFY(ExportJobPlan::startProblem(chaptered).contains("chapters"));
+    chaptered.chapterProblem = "Chapter 2 differs.";
+    QCOMPARE(ExportJobPlan::startProblem(chaptered), QString("Chapter 2 differs."));
+    chaptered.chapterPaths = {"/v/GX01.MP4", "/v/GX02.MP4"};
+    QVERIFY(ExportJobPlan::startProblem(chaptered).isEmpty());
+
+    // Every source is protected from the output: telemetry, each chapter, the event
+    // document and its sources, each additional video.
+    ExportJobPlan::JobInputs inputs;
+    inputs.sources = chaptered;
+    inputs.chapters.resize(2);
+    inputs.chapters[0].mediaInfo.videoDurationTicks = 100;
+    inputs.chapters[1].mediaInfo.videoDurationTicks = 250;
+    inputs.isEvent = true;
+    inputs.documentPath = "/d/day.fetproject";
+    inputs.referencedPaths = {"/t/other.vbo"};
+    inputs.additionalVideos = {{"/v/helmet.MP4", "Helmet", {}}};
+    inputs.lapBinding = QJsonObject{{"lap", 3}};
+    const auto job = ExportJobPlan::buildJob(inputs);
+    QCOMPARE(job.inputPath, QString("/v/GX01.MP4"));
+    QCOMPARE(job.chapterPaths, chaptered.chapterPaths);
+    QCOMPARE(job.chapterDurationTicks, (QJsonArray{100, 250}));
+    QCOMPARE(job.telemetryPath, QString("/t/run.vbo"));
+    QCOMPARE(job.protectedPaths, (QStringList{"/t/run.vbo", "/v/GX01.MP4", "/v/GX02.MP4", "/d/day.fetproject",
+        "/t/other.vbo", "/v/helmet.MP4"}));
+    QCOMPARE(job.additionalVideos.size(), 1);
+    QCOMPARE(job.additionalVideos[0].label, QString("Helmet"));
+    QCOMPARE(job.lapBinding, (QJsonObject{{"lap", 3}}));
+
+    // One video outside an event: only the telemetry and the additional videos are protected,
+    // and no chapter durations are listed.
+    ExportJobPlan::JobInputs plain;
+    plain.sources = sources;
+    const auto single = ExportJobPlan::buildJob(plain);
+    QVERIFY(single.chapterDurationTicks.isEmpty());
+    QCOMPARE(single.protectedPaths, (QStringList{"/t/run.vbo"}));
 }
 
 void SourceTests::loadsSourcesInTheBackgroundWorker()

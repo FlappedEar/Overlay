@@ -4,6 +4,7 @@
 #include "app/ExportSourceOptions.h"
 #include "app/LapNavigation.h"
 #include "app/ChapterPlayback.h"
+#include "app/ExportJobPlan.h"
 #include "app/PlaybackReadout.h"
 #include "app/SourceLoading.h"
 #include "export/ExportFormat.h"
@@ -799,46 +800,33 @@ bool AppController::startExport(
         AppLog::warn(QStringLiteral("Export request ignored because an export is already running"));
         return false;
     }
-    const QString inputPath = m_videoSource.toLocalFile();
-    const QString outputPath = output.toLocalFile();
-    if (!m_session || inputPath.isEmpty() || m_telemetryPath.isEmpty() || outputPath.isEmpty()) {
-        m_export.fail(QStringLiteral("Open a video and telemetry, then choose an output file."));
-        return false;
-    }
-    if (videoChaptered() && m_exportChapterPaths.isEmpty()) {
-        // KAN-106: never export the first chapter alone as if it were the
-        // whole recording.
-        m_export.fail(m_exportChapterProblem.isEmpty()
-            ? QStringLiteral("The chapters of this recording cannot be exported together.") : m_exportChapterProblem);
+    ExportJobPlan::JobInputs inputs;
+    inputs.sources = {m_session != nullptr, m_videoSource.toLocalFile(), m_telemetryPath, output.toLocalFile(),
+                      videoChaptered(), m_exportChapterPaths, m_exportChapterProblem};
+    if (const QString problem = ExportJobPlan::startProblem(inputs.sources); !problem.isEmpty()) {
+        m_export.fail(problem);
         return false;
     }
     QString additionalProblem;
-    const auto additionalVideos = m_additionalVideos.exportVideos(&additionalProblem);
+    inputs.additionalVideos = m_additionalVideos.exportVideos(&additionalProblem);
     if (!additionalProblem.isEmpty()) {
         m_export.fail(additionalProblem);
         return false;
     }
-    ExportController::Job job;
-    job.inputPath = inputPath;
-    job.chapterPaths = m_exportChapterPaths;
-    if (!m_exportChapterPaths.isEmpty())
-        for (const auto &chapter : m_videoChapterStates) job.chapterDurationTicks.append(chapter.mediaInfo.videoDurationTicks);
-    job.telemetryPath = m_telemetryPath;
-    job.protectedPaths = QStringList{m_telemetryPath} + m_exportChapterPaths; // every chapter is a source (KAN-106)
-    if (EventProjectCodec::isEvent(m_document.storedProject())) {
-        job.protectedPaths.append(m_document.documentPath());
-        job.protectedPaths.append(EventProjectCodec::referencedPaths(currentProjectObject(), m_document.documentPath()));
+    inputs.chapters = m_videoChapterStates;
+    inputs.isEvent = EventProjectCodec::isEvent(m_document.storedProject());
+    if (inputs.isEvent) {
+        inputs.documentPath = m_document.documentPath();
+        inputs.referencedPaths = EventProjectCodec::referencedPaths(currentProjectObject(), m_document.documentPath());
     }
-    job.lapBinding = activeLapBinding();
-    job.lapExclusions = currentProjectObject().value("event").toObject().value("lapExclusions").toArray();
-    job.widgets = m_widgetModel.toJson();
-    job.sync = m_syncController.transform();
-    job.source = m_exportSourceInfo;
-    for (const auto &video : additionalVideos) {
-        job.additionalVideos.append({video.path, video.label, video.sync});
-        job.protectedPaths.append(video.path); // KAN-131: never overwritten by the output
-    }
-    job.videoLayout = m_additionalVideos.layoutMode();
+    inputs.lapBinding = activeLapBinding();
+    inputs.lapExclusions = currentProjectObject().value("event").toObject().value("lapExclusions").toArray();
+    inputs.widgets = m_widgetModel.toJson();
+    inputs.sync = m_syncController.transform();
+    inputs.source = m_exportSourceInfo;
+    inputs.videoLayout = m_additionalVideos.layoutMode();
+    const auto job = ExportJobPlan::buildJob(inputs);
+    const QString outputPath = inputs.sources.outputPath;
     return m_export.start(job, {outputPath, QSize(outputWidth, outputHeight),
                                 MediaRational{frameRateNumerator, frameRateDenominator}, videoBitrate,
                                 audioEnabled, customRange, rangeIn, rangeOut, overwriteAllowed});
