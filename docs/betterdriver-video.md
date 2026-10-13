@@ -1,6 +1,6 @@
 # BetterDriver video: a clip series (KAN-260)
 
-Status: plan and step 1 (the parser, KAN-261) merged in #261; step 2 (the model, KAN-262) in progress; later steps are listed at the end.
+Status: plan and step 1 (the parser, KAN-261) merged in #261; steps 2 and 3 (the model, KAN-262, and linking, KAN-263) in progress; later steps are listed at the end.
 
 BetterDriver is the owner's Android recorder. Its "Export VBO + video" writes a `.vbo` and the
 session's video next to it. Overlays reads the VBO's GPS since KAN-259 (see
@@ -71,9 +71,18 @@ sync, not an offset the user aligns by hand.
    before it, taken from the offsets (`offset(n) - offset(n-1) - duration(n-1)`, since the timeline of
    the video starts at clip 1's media time 0 and the run's sync offset is clip 1's offset). Gaps of a
    series are known and exportable; a gap from a missing file stays a block.
-3. **Discovery (step 3).** Opening a VBO with a series looks for `<base><nnnn>.<ext>` in the VBO's
-   folder, offers to link the clips it finds, and shows a number that is missing as a gap. No recursive
-   search; a name never leaves the VBO's folder.
+3. **Discovery and linking (step 3, KAN-263: `BetterDriverClips`, `AppController::betterDriverVideo` and
+   `loadBetterDriverVideo`).** For a loaded recording with a series, `betterDriverVideo()` says how many
+   of its clips are beside it, and `loadBetterDriverVideo()` opens them. Only the recording's own folder
+   is looked in (no recursive search; the names are plain file names the parser has checked). The video
+   starts at the first clip that exists; a later clip that is not there stays on the timeline as a gap
+   of the length the recording gives it (its last row with video minus its offset), and the saved
+   project keeps where the file should be. After probing, each clip's gap is its offset minus the first
+   clip's offset, minus where the previous clip ended on the timeline (`applyRecordedGaps`: never
+   below 0, never above 3,600 s), so the probed lengths place the clips and the VBO's offsets decide the
+   gaps. The sync is set from the first clip's offset (telemetry time = video time + offset, scale 1),
+   which is what the owner would otherwise align by hand; it stays editable. Nothing is opened by itself:
+   the user chooses to link (the button comes with KAN-266). Only an MP4 or MOV series can be opened.
 4. **Preview (step 4).** The chapter playback already shows the clip at a time; a gap with `gapBeforeSeconds`
    shows no picture for its length, and the telemetry keeps running.
 5. **Export (step 5).** The concat demuxer cannot express a gap or a size change, so a series with either
@@ -89,6 +98,15 @@ camera in the same session (BetterDriver exports one camera's clips; GoPro foota
 additional-video path of KAN-131 and KAN-245).
 
 ## Tests
+
+Step 3: `SourceTests::plansBetterDriverClipsBesideTheRecording` (own folder only, a directory is not a
+file, clips before the first existing one dropped, later missing ones kept as gaps with expected path and
+estimated length, no files and a non-MP4/MOV extension give a problem),
+`placesRecordedGapsFromRecordingOffsets` (gap arithmetic, overlap clamps to 0, chapters without an offset
+keep theirs, the 3,600 s limit) and `linksBetterDriverClipsAsOneTimeline` (generated MP4 clips for a
+generated recording with one clip missing: chapter starts and gaps within 60 ms, the missing clip is
+a gap, the sync offset is the first clip's, a time in a gap is flagged, the project saves, validates and
+reopens with the same timeline and sync).
 
 Step 1: `TelemetryCoreTests::readsBetterDriverVideoClips` (a generated two-clip recording with a gap
 between and 3 ms of jitter: file names, offsets, spread, first and last time, row counts, the columns kept

@@ -195,6 +195,13 @@ public:
     // True when the chosen files need a chapter review rather than a direct load.
     Q_INVOKABLE bool videoFilesNeedReview(const QList<QUrl> &urls) const { return VideoChapterReview::needsReview(urls); }
     Q_INVOKABLE void loadVbo(const QUrl &url);
+    // KAN-263: the video clips the loaded BetterDriver recording names.
+    // {available, found, total, problem}: `available` when at least one clip
+    // file is beside the recording.
+    Q_INVOKABLE QVariantMap betterDriverVideo() const;
+    // Opens those clips as the video (a chaptered video with the recording's
+    // gaps) and sets the sync from the recording's own clip offsets.
+    Q_INVOKABLE void loadBetterDriverVideo();
     Q_INVOKABLE bool selectEventRun(const QString &runId) { return m_document.selectEventRun(runId); }
     [[nodiscard]] QVariantMap dayBestLap() const { return m_bestLapFinder.result(); }
     Q_INVOKABLE void requestDayBestLap() { m_bestLapFinder.request(); }
@@ -294,13 +301,15 @@ private:
         bool relink = false;
         QVector<VideoChapterInput> chapters;
         QString expectedContentSha256 = {}; // KAN-208: telemetry only
+        std::optional<double> recordingOffsetSeconds = std::nullopt; // KAN-263: video only
     };
     [[nodiscard]] quint64 beginSourceReplacement(bool replacingVideo);
     [[nodiscard]] quint64 beginSourceGeneration(bool preserveOuting = false) override;
     void cancelSourceJobs();
     void startVideoProbe(const QString &path, quint64 generation, bool markDocumentDirty,
                          QJsonObject expectedFingerprint = {}, bool relink = false,
-                         QVector<VideoChapterInput> chapters = {});
+                         QVector<VideoChapterInput> chapters = {},
+                         std::optional<double> recordingOffsetSeconds = std::nullopt);
     // KAN-105: the video as chapters played as one timeline.
     [[nodiscard]] bool videoChaptered() const { return m_videoTimeline.chapterCount() > 1; }
     [[nodiscard]] QVector<VideoChapterInput> videoChapterInputs() const;
