@@ -21,8 +21,16 @@ ExportController::Job buildJob(const JobInputs &inputs)
     ExportController::Job job;
     job.inputPath = inputs.sources.videoPath;
     job.chapterPaths = inputs.sources.chapterPaths;
-    if (!job.chapterPaths.isEmpty())
-        for (const auto &chapter : inputs.chapters) job.chapterDurationTicks.append(chapter.mediaInfo.videoDurationTicks);
+    if (!job.chapterPaths.isEmpty()) {
+        bool recordedGaps = false;
+        for (const auto &chapter : inputs.chapters) {
+            job.chapterDurationTicks.append(chapter.mediaInfo.videoDurationTicks);
+            recordedGaps = recordedGaps || chapter.gapBeforeSeconds > 0.0;
+        }
+        // KAN-265: a series with recorded gaps is joined in a filter graph, not the concat demuxer.
+        if (recordedGaps)
+            for (const auto &chapter : inputs.chapters) job.chapterGapSeconds.append(chapter.gapBeforeSeconds);
+    }
     job.telemetryPath = inputs.sources.telemetryPath;
     job.protectedPaths = QStringList{inputs.sources.telemetryPath} + job.chapterPaths; // every chapter is a source (KAN-106)
     if (inputs.isEvent) {

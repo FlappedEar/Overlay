@@ -51,6 +51,7 @@ public:
         QString inputPath;
         QStringList chapterPaths;          // every chapter of a chaptered source (KAN-106)
         QJsonArray chapterDurationTicks;
+        QJsonArray chapterGapSeconds;      // clip series with recorded gaps (KAN-265); empty otherwise
         QString telemetryPath;
         QStringList protectedPaths;        // never overwritten by the output
         QJsonObject lapBinding;

@@ -199,6 +199,7 @@ bool ExportController::start(const Job &job, const Request &request)
         {"inputPath", inputPath},
         {"chapterPaths", QJsonArray::fromStringList(job.chapterPaths)},
         {"chapterDurationTicks", job.chapterDurationTicks},
+        {"chapterGapSeconds", job.chapterGapSeconds},
         {"outputPath", m_exportOutputTransaction->stagingPath()},
         {"vboPath", job.telemetryPath},
         {"lapBinding", job.lapBinding},

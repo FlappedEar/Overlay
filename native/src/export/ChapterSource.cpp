@@ -157,6 +157,100 @@ ChapterSourceCombination ChapterSource::combine(const QVector<MediaInfo> &chapte
     return {combined, {}};
 }
 
+ChapterSourceCombination ChapterSource::combineSeries(const QVector<MediaInfo> &clips, const QVector<double> &gapsBefore)
+{
+    if (clips.size() < 2 || clips.size() > MediaTimeline::maximumChapters || gapsBefore.size() != clips.size())
+        return {std::nullopt, QStringLiteral("A clip series needs 2 to %1 clips with a gap for each.").arg(MediaTimeline::maximumChapters)};
+    const MediaInfo &first = clips.first();
+    if (!first.timeBase.isValid() || !first.videoSize.isValid())
+        return {std::nullopt, QStringLiteral("The first clip has no usable video stream.")};
+    MediaInfo combined = first;
+    double total = 0.0;
+    const MediaInfo *audioClip = nullptr;
+    for (int index = 0; index < clips.size(); ++index) {
+        const MediaInfo &clip = clips[index];
+        if (!std::isfinite(clip.videoDuration) || clip.videoDuration <= 0.0 || !clip.videoSize.isValid())
+            return {std::nullopt, QStringLiteral("Clip %1 has no exact video duration.").arg(index + 1)};
+        if (!std::isfinite(gapsBefore[index]) || gapsBefore[index] < 0.0)
+            return {std::nullopt, QStringLiteral("Clip %1 has an invalid gap before it.").arg(index + 1)};
+        // Size, frame rate and audio may differ, but a clip is never converted between
+        // colour or bit-depth classes the export would handle differently.
+        if (index > 0 && (clip.pixelFormat != first.pixelFormat || clip.bitDepth != first.bitDepth
+                          || clip.colorRange != first.colorRange || clip.colorSpace != first.colorSpace
+                          || clip.colorTransfer != first.colorTransfer || clip.colorPrimaries != first.colorPrimaries
+                          || clip.sourceColorClass != first.sourceColorClass))
+            return {std::nullopt, mismatch(index, QStringLiteral("colour description or pixel format"))};
+        total += gapsBefore[index] + clip.videoDuration;
+        if (!audioClip && hasAudio(clip)) audioClip = &clip;
+    }
+    combined.videoStartTicks = 0;
+    combined.videoStartKnown = true;
+    combined.videoStartTime = 0.0;
+    combined.startTime = 0.0;
+    combined.videoDuration = total;
+    combined.duration = total;
+    combined.videoDurationTicks = qRound64(total * first.timeBase.denominator / first.timeBase.numerator);
+    combined.videoFrameCount = 0;
+    combined.videoPacketCount = 0;
+    combined.likelyVariableFrameRate = true;
+    combined.audioCodecs = audioClip ? audioClip->audioCodecs : QStringList();
+    combined.audioSampleRate = audioClip ? audioClip->audioSampleRate : 0;
+    combined.audioStartTime = 0.0;
+    combined.audioDuration = audioClip ? total : 0.0;
+    return {combined, {}};
+}
+
+ChapterSource::SeriesGraph ChapterSource::seriesGraph(const QVector<MediaInfo> &clips, const QVector<double> &gapsBefore,
+                                                      const QString &frameRate, const int firstExtraInput)
+{
+    if (clips.size() < 2 || gapsBefore.size() != clips.size() || !clips.first().videoSize.isValid()) return {};
+    const MediaInfo &first = clips.first();
+    const QString size = QStringLiteral("%1:%2").arg(first.videoSize.width()).arg(first.videoSize.height());
+    const QString pixelFormat = first.pixelFormat.isEmpty() ? QStringLiteral("yuv420p") : first.pixelFormat;
+    int rate = 48000;
+    for (const auto &clip : clips)
+        if (hasAudio(clip) && clip.audioSampleRate > 0) { rate = clip.audioSampleRate; break; }
+    const auto number = [](const double value) { return QString::number(value, 'f', 6); };
+    SeriesGraph graph;
+    QString videoSegments, audioSegments;
+    int segments = 0;
+    for (int index = 0; index < clips.size(); ++index) {
+        const MediaInfo &clip = clips[index];
+        const int input = index == 0 ? 0 : firstExtraInput + index - 1;
+        if (gapsBefore[index] >= 0.0005) {
+            graph.video += QStringLiteral("color=c=black:s=%1:r=%2:d=%3,format=pix_fmts=%4,setsar=1[sg%5];")
+                .arg(QString(size).replace(':', 'x'), frameRate, number(gapsBefore[index]), pixelFormat).arg(index);
+            graph.audio += QStringLiteral("anullsrc=r=%1:cl=stereo:d=%2,aformat=sample_fmts=fltp[sga%3];")
+                .arg(rate).arg(number(gapsBefore[index])).arg(index);
+            videoSegments += QStringLiteral("[sg%1]").arg(index);
+            audioSegments += QStringLiteral("[sga%1]").arg(index);
+            ++segments;
+        }
+        graph.video += QStringLiteral("[%1:v]setpts=PTS-STARTPTS,fps=fps=%2:round=near:eof_action=round,"
+                                      "scale=%3:force_original_aspect_ratio=decrease:flags=lanczos,"
+                                      "pad=%3:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=pix_fmts=%4,"
+                                      "trim=duration=%5,setpts=PTS-STARTPTS[sv%6];")
+            .arg(input).arg(frameRate, size, pixelFormat, number(clip.videoDuration)).arg(index);
+        videoSegments += QStringLiteral("[sv%1]").arg(index);
+        if (hasAudio(clip)) {
+            // The audio keeps its delay from the video start: both are measured from the clip's
+            // video start, and first_pts=0 fills any delay with silence.
+            graph.audio += QStringLiteral("[%1:a]asetpts=PTS-(%5)/TB,aresample=%2:async=1:first_pts=0,"
+                                          "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                                          "apad=whole_dur=%3,atrim=duration=%3,asetpts=PTS-STARTPTS[sa%4];")
+                .arg(input).arg(rate).arg(number(clip.videoDuration)).arg(index).arg(number(clip.videoStartTime));
+        } else {
+            graph.audio += QStringLiteral("anullsrc=r=%1:cl=stereo:d=%2,aformat=sample_fmts=fltp[sa%3];")
+                .arg(rate).arg(number(clip.videoDuration)).arg(index);
+        }
+        audioSegments += QStringLiteral("[sa%1]").arg(index);
+        ++segments;
+    }
+    graph.video += QStringLiteral("%1concat=n=%2:v=1:a=0[seriesV];").arg(videoSegments).arg(segments);
+    graph.audio += QStringLiteral("%1concat=n=%2:v=0:a=1[seriesA];").arg(audioSegments).arg(segments);
+    return graph;
+}
+
 QString ChapterSource::concatScript(const QVector<MediaInfo> &chapters, const qint64 seekTicks)
 {
     if (seekTicks < 0) return {};
@@ -218,7 +312,8 @@ QStringList ChapterSource::inputArguments(const QVector<MediaInfo> &chapters, co
 ChapterSource::Probed ChapterSource::probe(const QStringList &paths,
                                            const QVector<qint64> &expectedDurationTicks,
                                            const MediaProbeProgressCallback &progressCallback,
-                                           const MediaProbeCancellationCallback &cancellationCallback)
+                                           const MediaProbeCancellationCallback &cancellationCallback,
+                                           const QVector<double> &gapsBefore)
 {
     if (expectedDurationTicks.size() != paths.size())
         throw std::runtime_error("The export does not list every chapter's video duration.");
@@ -228,6 +323,11 @@ ChapterSource::Probed ChapterSource::probe(const QStringList &paths,
         if (chapters.last().videoDurationTicks != expectedDurationTicks[chapters.size() - 1])
             throw std::runtime_error(QStringLiteral("Chapter %1 (%2) changed after it was loaded; open the recording again.")
                 .arg(chapters.size()).arg(QFileInfo(path).fileName()).toStdString());
+    }
+    if (!gapsBefore.isEmpty()) {
+        const auto series = combineSeries(chapters, gapsBefore);
+        if (!series.info) throw std::runtime_error(series.error.toStdString());
+        return {*series.info, chapters};
     }
     const auto combination = combine(chapters);
     if (!combination.info) throw std::runtime_error(combination.error.toStdString());

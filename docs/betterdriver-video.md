@@ -82,7 +82,7 @@ sync, not an offset the user aligns by hand.
    below 0, never above 3,600 s), so the probed lengths place the clips and the VBO's offsets decide the
    gaps. The sync is set from the first clip's offset (telemetry time = video time + offset, scale 1),
    which is what the owner would otherwise align by hand; it stays editable. Nothing is opened by itself:
-   the user chooses to link (the button comes with KAN-266). Only an MP4 or MOV series can be opened.
+   the user chooses to link with the header button "BetterDriver video (found/total)" (KAN-266). Only an MP4 or MOV series can be opened.
 4. **Preview (step 4, KAN-264: `Main.qml`).** A time inside a recorded gap shows no picture: a black
    panel with a short note covers the main video (extra videos stay), the playhead and telemetry time
    run on a clock of the preview's own while the next clip waits at its first frame, and when the clock
@@ -92,10 +92,15 @@ sync, not an offset the user aligns by hand.
    video's boxes stay but show no picture over the gap; extra cameras are untouched. A chapter switch now also waits
    for the new file's own events: the old file can report "loaded" and frames after the source property
    has moved on, which used to be taken for the new file's and left the preview at the first frame.
-5. **Export (step 5).** The concat demuxer cannot express a gap or a size change, so a series with either
-   is composed in the filter graph: each clip is scaled to the output size (letterboxed, aspect kept),
-   gaps are black of the output size and rate, and audio is silence over a gap. Output size is the
-   first clip's. Stage B remains the one place that reads the media.
+5. **Export (step 5, KAN-265: `ChapterSource::combineSeries` / `seriesGraph`, `ExportSettings::chapterGapSeconds`).** The concat demuxer cannot express a gap or a size change, so a series with recorded gaps
+   is composed in Stage B's filter graph: each clip is retimed to the export rate, scaled to the first
+   clip's size (letterboxed, aspect kept) and cut to its probed length; gaps are black of that size and
+   rate; audio is resampled to stereo at the first sound's rate, and a clip without sound or a gap gets
+   silence. The first clip is FFmpeg input 0, the others follow the overlay and additional videos; the
+   joined `[seriesV]`/`[seriesA]` replace `[0:v]`/`[0:a]` in the usual trim. The combined source starts
+   at zero and lasts every clip and gap, so range, timecodes and telemetry work as for one video. Output
+   size defaults to the first clip's. The whole series is read from its start up to the end of the range
+   (no input seek), so a range late in a long session takes longer. A missing clip file still blocks export.
 6. **Editor and guide (step 6).** The video panel says the clips came from the recording, shows gaps,
    and the user guide and Confluence FEO describe it.
 7. **Owner check (step 7).** With the owner's real BetterDriver video (not in this repository).

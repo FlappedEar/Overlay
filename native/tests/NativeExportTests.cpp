@@ -41,6 +41,7 @@ private slots:
     void workerRefusesPathsOutsideItsManifest();
     void exportsEditListSourceThroughWorker();
     void exportsChapteredSourceThroughWorker();
+    void exportsClipSeriesWithGapsThroughWorker();
     void protectsEveryDaySourceFromExport();
     void keepsOutputSafeWhenTheDestinationFills_data();
     void keepsOutputSafeWhenTheDestinationFills();
@@ -1625,6 +1626,99 @@ void ExportTests::exportsChapteredSourceThroughWorker()
     };
     for (int frame = 0; frame < 80; ++frame)
         QVERIFY2(dominant(frame) == (frame < 10 ? 0 : frame < 70 ? 1 : 2), qPrintable(QString::number(frame)));
+}
+
+// KAN-265: clips of different size, frame rate and audio with recorded gaps
+// between them (a BetterDriver series) export as one video: each clip at the
+// first clip's size, black and silence over each gap, the timeline exact.
+void ExportTests::exportsClipSeriesWithGapsThroughWorker()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    QVERIFY2(!ffmpeg.isEmpty(), "FFmpeg is required for the clip series export regression.");
+    const auto source = directory.filePath("synthetic.rcz");
+    const auto output = directory.filePath("output.mp4");
+    const auto config = directory.filePath("worker.json");
+    QVERIFY(writeBytes(source, RczFixture::zip(RczFixture::members())));
+    const auto runFfmpeg = [&ffmpeg](const QStringList &arguments, QByteArray *standardOutput = nullptr) {
+        QProcess process;
+        process.start(ffmpeg, arguments);
+        QVERIFY2(process.waitForFinished(60'000), qPrintable(process.errorString()));
+        QVERIFY2(process.exitCode() == 0, process.readAllStandardError().constData());
+        if (standardOutput) *standardOutput = process.readAllStandardOutput();
+    };
+    // One second each: red 320x240 at 30 fps with a tone, green 160x120 at 25 fps
+    // without sound, blue 320x240 at 60 fps with a tone. Gaps of 0.5 s between them.
+    struct Clip { const char *colour; const char *size; int fps; bool audio; };
+    const Clip specs[] = {{"red", "320x240", 30, true}, {"green", "160x120", 25, false}, {"blue", "320x240", 60, true}};
+    QStringList clips;
+    QJsonArray ticks;
+    for (int index = 0; index < 3; ++index) {
+        clips.append(directory.filePath(QStringLiteral("BetterDriver-test_%1.MP4").arg(index + 1, 4, 10, QLatin1Char('0'))));
+        QStringList arguments{"-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+            QStringLiteral("color=%1:s=%2:r=%3").arg(specs[index].colour, specs[index].size).arg(specs[index].fps)};
+        if (specs[index].audio) arguments += {"-f", "lavfi", "-t", "1", "-i", "sine=frequency=1000:sample_rate=48000"};
+        arguments += {"-frames:v", QString::number(specs[index].fps), "-c:v", "libx264", "-pix_fmt", "yuv420p"};
+        if (specs[index].audio) arguments += {"-c:a", "aac", "-ac", "1"};
+        arguments.append(clips.last());
+        runFfmpeg(arguments);
+        ticks.append(static_cast<qint64>(MediaProbe::probe(clips.last()).videoDurationTicks));
+    }
+    ExportOutputTransaction transaction;
+    QCOMPARE(transaction.prepare(output, clips[0], {source, clips[1], clips[2]}, false).status,
+             ExportOutputTransaction::PreparationStatus::Ready);
+    const auto id = transaction.transactionId();
+    const auto overlay = QDir::temp().filePath(QStringLiteral("flappedear-overlay-%1.mkv").arg(id));
+    const auto manifestPath = ExportArtifactManifest::manifestPathFor(id);
+    QString error;
+    QVERIFY2(ExportArtifactManifest::create({id, QDateTime::currentMSecsSinceEpoch(), overlay,
+        transaction.stagingPath(), output, QCoreApplication::applicationPid(), "preparing"}, &error), qPrintable(error));
+    const auto cleanup = qScopeGuard([&] { static_cast<void>(ExportArtifactManifest::cleanupOwned(manifestPath)); });
+    WidgetModel widgets;
+    // Timeline: red 0-1 s, gap, green 1.5-2.5 s, gap, blue 3-4 s; 120 frames at 30 fps.
+    const QJsonObject settings{{"vboPath", source}, {"inputPath", clips[0]},
+        {"chapterPaths", QJsonArray::fromStringList(clips)}, {"chapterDurationTicks", ticks},
+        {"chapterGapSeconds", QJsonArray{0.0, 0.5, 0.5}}, {"outputPath", transaction.stagingPath()},
+        {"manifestPath", manifestPath}, {"temporaryOverlayPath", overlay},
+        {"widgets", widgets.toJson()}, {"sync", QJsonObject{{"offset", .1}, {"timeScale", 1.0}}},
+        {"frameRateNumerator", 30}, {"frameRateDenominator", 1}, {"firstFrame", 0}, {"lastFrame", 119},
+        {"audioEnabled", true}, {"encoder", "libx265"}};
+    QVERIFY(writeBytes(config, QJsonDocument(settings).toJson()));
+    QProcess worker;
+    worker.start(QStringLiteral(FLAPPEDEAR_NATIVE_PATH), {"--export-worker", config});
+    QVERIFY(worker.waitForStarted());
+    QVERIFY2(worker.waitForFinished(120'000), qPrintable(worker.errorString()));
+    const auto events = worker.readAllStandardOutput() + worker.readAllStandardError();
+    QCOMPARE(worker.exitStatus(), QProcess::NormalExit);
+    QByteArray failures;
+    for (const auto &line : events.split('\n'))
+        if (line.contains("\"passed\":false") || line.contains("\"state\":\"failed\"")) failures += line + '\n';
+    QVERIFY2(worker.exitCode() == 0, (failures.isEmpty() ? events.right(4000) : failures.left(4000)).constData());
+    QVERIFY2(transaction.commit(&error), qPrintable(error));
+
+    const MediaInfo result = MediaProbe::probe(output, {}, true);
+    QCOMPARE(result.videoFrameCount, qsizetype(120));
+    QCOMPARE(result.videoSize, QSize(320, 240));
+    QVERIFY(!result.audioCodecs.isEmpty());
+    QVERIFY2(std::abs(result.audioDuration - 4.0) < 0.1, qPrintable(QString::number(result.audioDuration)));
+    QByteArray pixels;
+    runFfmpeg({"-hide_banner", "-loglevel", "error", "-i", output, "-vf", "scale=1:1:flags=area",
+               "-f", "rawvideo", "-pix_fmt", "rgb24", "-"}, &pixels);
+    QCOMPARE(pixels.size(), 120 * 3);
+    const auto colourAt = [&pixels](const int frame) {
+        const auto *rgb = reinterpret_cast<const unsigned char *>(pixels.constData()) + frame * 3;
+        return rgb[0] > 150 && rgb[1] < 100 && rgb[2] < 100 ? QStringLiteral("red")
+             : rgb[1] > 80 && rgb[0] < 100 && rgb[2] < 100 ? QStringLiteral("green")
+             : rgb[2] > 150 && rgb[0] < 100 && rgb[1] < 100 ? QStringLiteral("blue")
+             : rgb[0] < 40 && rgb[1] < 40 && rgb[2] < 40 ? QStringLiteral("black") : QStringLiteral("?");
+    };
+    // Frames well inside each part (the joins may move by a frame).
+    for (const int frame : {2, 15, 27}) QCOMPARE(colourAt(frame), QStringLiteral("red"));
+    for (const int frame : {33, 40, 43}) QCOMPARE(colourAt(frame), QStringLiteral("black"));
+    for (const int frame : {48, 60, 72}) QCOMPARE(colourAt(frame), QStringLiteral("green"));
+    for (const int frame : {78, 84, 87}) QCOMPARE(colourAt(frame), QStringLiteral("black"));
+    for (const int frame : {93, 105, 117}) QCOMPARE(colourAt(frame), QStringLiteral("blue"));
 }
 
 void ExportTests::tracksExportStageElapsedTime()

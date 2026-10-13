@@ -2868,3 +2868,12 @@ full list of protected paths for a chaptered event with an additional video.
 `SourceTests::readsTheSavedChaptersOfAProject` checks `SourceLoading::savedChapters`: no chapters for an
 ordinary video, and for a chaptered one the unverified chapters, the saved-duration timeline and the
 chapters after the first.
+
+## KAN-265: clip series export
+
+`ExportTests::exportsClipSeriesWithGapsThroughWorker` makes three generated clips (red 320x240 at 30 fps
+with sound, green 160x120 at 25 fps without, blue 320x240 at 60 fps with sound), exports them with 0.5 s
+gaps through the worker and checks 120 frames at 320x240, about 4 s of audio and the colour of frames well
+inside each clip and each gap (red, black, green, black, blue). `SourceTests::derivesChapterPlaybackAndExportSource`
+checks that a series with a recorded gap gets a combined export source of the first clip's size and the
+full length. Needs FFmpeg 8.1 or newer.

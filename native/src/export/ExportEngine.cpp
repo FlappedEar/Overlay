@@ -929,7 +929,8 @@ ExportResult ExportEngine::exportVideo(
             const auto cancelled = [&settings] { return isCancelled(settings); };
             if (settings.chapterPaths.size() < 2)
                 return MediaProbe::probe(settings.inputPath, {}, false, -1, observations, cancelled);
-            auto chaptered = ChapterSource::probe(settings.chapterPaths, settings.chapterDurationTicks, observations, cancelled);
+            auto chaptered = ChapterSource::probe(settings.chapterPaths, settings.chapterDurationTicks, observations, cancelled,
+                                                  settings.chapterGapSeconds);
             chapters = chaptered.chapters;
             return chaptered.info;
         }();
@@ -1701,13 +1702,28 @@ ExportResult ExportEngine::exportVideo(
             result.error = QStringLiteral("Could not derive exact Stage B source timestamps from the frame range.");
             return result;
         }
-        const QString timeRangeFilter = stageBVideoFilterGraph(
+        const QString timeRangeFilterBase = stageBVideoFilterGraph(
             *sourceAccess, source.videoSize, outputSize, exportFrameRate,
             expectedFrames, result.mediaProfile, composition);
         QStringList compositionArguments = {
             "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-y",
         };
-        if (chapters.isEmpty()) {
+        const bool series = !chapters.isEmpty() && !settings.chapterGapSeconds.isEmpty();
+        // KAN-265: input 0 is the first clip, the others follow the overlay and additional videos.
+        const int firstExtraInput = 2 + static_cast<int>(additionalInputArguments.count(QStringLiteral("-i")));
+        ChapterSource::SeriesGraph seriesFilters;
+        QString timeRangeFilter = timeRangeFilterBase;
+        if (series) {
+            seriesFilters = ChapterSource::seriesGraph(chapters, settings.chapterGapSeconds, rateString(exportFrameRate),
+                                                       firstExtraInput);
+            if (seriesFilters.video.isEmpty()) {
+                result.error = QStringLiteral("Could not build the filter graph for the video clips.");
+                return result;
+            }
+            timeRangeFilter.replace(0, 0, seriesFilters.video);
+            timeRangeFilter.replace(seriesFilters.video.size(), 5, QStringLiteral("[seriesV]"));
+            compositionArguments += QStringList{"-copyts", "-i", settings.inputPath};
+        } else if (chapters.isEmpty()) {
             compositionArguments += stageBInputArguments(*sourceAccess, settings.inputPath);
         } else {
             const QStringList chapterInput = ChapterSource::inputArguments(chapters, sourceAccess->inputSeekTimestamp);
@@ -1719,6 +1735,9 @@ ExportResult ExportEngine::exportVideo(
         }
         compositionArguments += QStringList{"-i", temporaryOverlayPath};
         compositionArguments += additionalInputArguments;
+        if (series)
+            for (qsizetype index = 1; index < chapters.size(); ++index)
+                compositionArguments += QStringList{"-i", chapters[index].path};
         compositionArguments += QStringList{
             "-filter_complex", timeRangeFilter,
             "-map", "[video]", "-fps_mode:v", "cfr", "-c:v", encoder,
@@ -1759,7 +1778,9 @@ ExportResult ExportEngine::exportVideo(
         }
         if (settings.audioEnabled && !source.audioCodecs.isEmpty()
             && audioDurationForRange(source, sourceRangeStart, sourceRangeEnd) > 0.0) {
-            compositionArguments[compositionArguments.indexOf("-filter_complex") + 1] += ";" + stageBAudioFilterGraph(*sourceAccess, !chapters.isEmpty());
+            QString audioFilter = stageBAudioFilterGraph(*sourceAccess, !chapters.isEmpty() && !series);
+            if (series) audioFilter = seriesFilters.audio + audioFilter.replace(0, 5, QStringLiteral("[seriesA]"));
+            compositionArguments[compositionArguments.indexOf("-filter_complex") + 1] += ";" + audioFilter;
             compositionArguments.append({"-map", "[audio]", "-c:a", "aac", "-b:a", QString::number(settings.audioBitrate)});
         } else {
             compositionArguments.append("-an");

@@ -1759,7 +1759,7 @@ void SourceTests::derivesChapterPlaybackAndExportSource()
     QVERIFY(!derived.exportInfo);
 
     // KAN-262: a recorded gap between clips is on the timeline, is not a
-    // missing chapter, and is not exported until the series export exists.
+    // missing chapter. KAN-265: the series is exported through the filter graph.
     auto gappedChapter = chapter("b.mp4", 5.0, true);
     gappedChapter.gapBeforeSeconds = 1.5;
     derived = SourceLoading::deriveChapters({chapter("a.mp4", 10.0, true), gappedChapter});
@@ -1768,7 +1768,24 @@ void SourceTests::derivesChapterPlaybackAndExportSource()
     QCOMPARE(derived.gaps, 0);
     QVERIFY(!derived.gapsBlockExport);
     QVERIFY(derived.exportPaths.isEmpty());
-    QVERIFY(derived.exportProblem.contains("recorded gaps"));
+    QVERIFY(!derived.exportProblem.isEmpty()); // the fixtures carry no probe
+    auto probed = [](const QString &path, const double seconds, const QSize size, const double gap) {
+        VideoChapterState state;
+        state.path = path;
+        state.durationSeconds = seconds;
+        state.available = true;
+        state.gapBeforeSeconds = gap;
+        state.mediaInfo.timeBase = {1, 30000};
+        state.mediaInfo.videoDuration = seconds;
+        state.mediaInfo.videoSize = size; // sizes may differ in a series
+        return state;
+    };
+    derived = SourceLoading::deriveChapters({probed("a.mp4", 10.0, {3840, 2160}, 0.0), probed("b.mp4", 5.0, {1920, 1080}, 1.5)});
+    QVERIFY2(derived.exportProblem.isEmpty(), qPrintable(derived.exportProblem));
+    QCOMPARE(derived.exportPaths, (QStringList{"a.mp4", "b.mp4"}));
+    QVERIFY(derived.exportInfo);
+    QCOMPARE(derived.exportInfo->videoSize, QSize(3840, 2160));
+    QVERIFY(std::abs(derived.exportInfo->videoDuration - 16.5) < 1e-9);
 
     // A chapter without a known duration cannot hold its place: only the first opens.
     derived = SourceLoading::deriveChapters({chapter("a.mp4", 10.0, true), chapter("b.mp4", 0.0, true)});

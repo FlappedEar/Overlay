@@ -179,9 +179,23 @@ ChapterDerivation deriveChapters(const QVector<VideoChapterState> &probed)
         if (derived.gaps > 0) {
             derived.gapsBlockExport = true;
         } else if (derived.timeline.hasRecordedGaps()) {
-            // The concat demuxer joins chapters back to back; a recorded gap
-            // needs the series export of KAN-265.
-            derived.exportProblem = QStringLiteral("The clips have recorded gaps between them, which cannot be exported yet.");
+            // KAN-265: a series with recorded gaps is joined in the export's
+            // filter graph; the clips may differ in size, frame rate and audio.
+            QVector<MediaInfo> infos;
+            QVector<double> gaps;
+            QStringList paths;
+            for (const auto &chapter : derived.chapters) {
+                infos.append(chapter.mediaInfo);
+                gaps.append(chapter.gapBeforeSeconds);
+                paths.append(chapter.path);
+            }
+            const auto combination = ChapterSource::combineSeries(infos, gaps);
+            if (combination.info) {
+                derived.exportInfo = *combination.info;
+                derived.exportPaths = paths;
+            } else {
+                derived.exportProblem = combination.error;
+            }
         } else {
             QVector<MediaInfo> infos;
             QStringList paths;
