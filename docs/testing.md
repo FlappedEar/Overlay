@@ -2491,6 +2491,19 @@ exporter give no UTC start; a start just after UTC midnight takes the next day.
 and `withholdsUnresolvedCoordinates` refuses a suffixed or prefixed BetterDriver line, BetterDriver
 with a `coordinate units = degrees` declaration, and BetterDriver beside RaceChrono.
 
+## KAN-261: BetterDriver video clips
+
+`readsBetterDriverVideoClips` (`flappedear_telemetry_core_tests`) generates a 4 s recording at 25 Hz
+with two clips and a 1.0 s gap (clip 1 from 0.2 s with ±3 ms of jitter, clip 2 from 2.8 s) and asserts
+the series (base name, extension, file names, offsets within 4 ms, spread, first and last time, 40 and 30
+rows), that the columns stay channels, that a recording without them has no series, and that a clip
+placed beyond a float's exact millisecond range (20,000,001 ms) is still exact.
+`rejectsUnusableVideoClipLists` refuses a missing or one-line `[avi]` section, a path, a backslash or `..`
+in the base name, a dotted or 9-character extension, a fractional or zero clip number and a 65th clip,
+each with one warning and the telemetry intact. Checked by hand on the owner's real BetterDriver file
+(session 20261012-103607, 54,797 rows): five clips with offsets -30.846, 386.176, 803.544, 1215.877 and
+2059.276 s, 9,300 / 9,966 / 9,855 / 20,159 / 5,398 rows with video, per-row spread 72 to 90 ms, no warnings.
+
 ## KAN-158: a generated RaceChrono recording in CI
 
 `derivesLapsFromAGeneratedRaceChronoRecording` (`flappedear_telemetry_core_tests`) writes a VBO in
