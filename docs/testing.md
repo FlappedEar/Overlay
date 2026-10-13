@@ -2491,6 +2491,21 @@ exporter give no UTC start; a start just after UTC midnight takes the next day.
 and `withholdsUnresolvedCoordinates` refuses a suffixed or prefixed BetterDriver line, BetterDriver
 with a `coordinate units = degrees` declaration, and BetterDriver beside RaceChrono.
 
+## KAN-264: preview of recorded gaps
+
+`SourceTests::showsNoPictureOverRecordedGaps` (`flappedear_native_tests_sources`, under `xvfb-run` with
+FFmpeg 8.1 or newer) opens `Main.qml` on two generated 3 s clips with a 0.6 s recorded gap: the
+`videoRecordedGap` panel is hidden outside the gap; a seek into the gap shows it, sets telemetry time to
+the requested time, makes the second clip current and leaves playback stopped; starting playback runs the
+gap's own clock into the clip and on past its start; playing off the end of the first clip enters and
+leaves the gap on its own (checked with a signal spy, since loading the next clip can outlast the gap);
+a paused gap keeps its time; a seek out of the gap leaves it. `playsVideoChaptersAcrossBoundaries` still
+covers the ordinary chapter switch and passes with the new rule that a switch waits for the new file's
+own events. A seek into the gap and at once on into the next clip, before it has loaded, stands.
+`runsRecordedGapsBeforeMissingClips` (clips 1 and 2 present, clip 3 missing): playing off the end of clip 2
+runs the gap before the missing clip, then the time stands at the missing clip's start. Like the other
+playback tests they are skipped when media playback is unavailable.
+
 ## KAN-263: linking BetterDriver clips
 
 `SourceTests` (`flappedear_native_tests_sources`, under `xvfb-run` with FFmpeg 8.1 or newer):
