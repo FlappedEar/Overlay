@@ -1,6 +1,6 @@
 # BetterDriver video: a clip series (KAN-260)
 
-Status: plan and step 1 (the parser) in the first PR; later steps are listed at the end.
+Status: plan and step 1 (the parser, KAN-261) merged in #261; step 2 (the model, KAN-262) in progress; later steps are listed at the end.
 
 BetterDriver is the owner's Android recorder. Its "Export VBO + video" writes a `.vbo` and the
 session's video next to it. Overlays reads the VBO's GPS since KAN-259 (see
@@ -66,7 +66,7 @@ sync, not an offset the user aligns by hand.
    outside 1 to 9999, more than 64 clips or a missing section or column leaves no series and adds one
    warning; the telemetry still loads. File names are built from the section and the number, never read
    from a data row.
-2. **Clip series model (step 2).** The main video keeps its first clip as the ordinary `video` and lists
+2. **Clip series model (step 2, KAN-262: `TimelineChapter::gapBeforeSeconds`, `MediaTimeline`, `VideoChaptersCodec`).** The main video keeps its first clip as the ordinary `video` and lists
    the clips as chapters (project format). A chapter may carry `gapBeforeSeconds`: the time without video
    before it, taken from the offsets (`offset(n) - offset(n-1) - duration(n-1)`, since the timeline of
    the video starts at clip 1's media time 0 and the run's sync offset is clip 1's offset). Gaps of a

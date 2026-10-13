@@ -591,7 +591,7 @@ QVector<AppController::VideoChapterInput> AppController::videoChapterInputs() co
     for (qsizetype index = 1; index < m_videoChapterStates.size(); ++index) {
         const auto &chapter = m_videoChapterStates[index];
         inputs.append({chapter.reference, ProjectSourceReferenceCodec::resolve(chapter.reference, m_document.documentPath()),
-            chapter.durationSeconds});
+            chapter.durationSeconds, chapter.gapBeforeSeconds});
     }
     return inputs;
 }

@@ -450,7 +450,25 @@ void EventProjectTests::boundsAndRebasesVideoChapters()
     QVERIFY(VideoChaptersCodec::valid(first)); // an ordinary video
     QCOMPARE(VideoChaptersCodec::read(withChapters(valid)).size(), 3);
     QCOMPARE(VideoChaptersCodec::read(withChapters(valid))[2].durationSeconds, 100.0);
+    // KAN-262: a recorded gap before a later chapter round-trips; the first has none.
+    auto gapped = chapter("GX020123.MP4", 419.2); gapped.insert("gapBeforeSeconds", 1.48);
+    const QJsonArray withGap{firstChapter, gapped, chapter("GX030123.MP4", 100.0)};
+    QVERIFY(VideoChaptersCodec::valid(withChapters(withGap)));
+    const auto readGap = VideoChaptersCodec::read(withChapters(withGap));
+    QCOMPARE(readGap[0].gapBeforeSeconds, 0.0);
+    QCOMPARE(readGap[1].gapBeforeSeconds, 1.48);
+    QCOMPARE(readGap[2].gapBeforeSeconds, 0.0);
+    const auto written = VideoChaptersCodec::write(readGap, [](const ProjectSourceReference &) { return QJsonObject{}; });
+    QVERIFY(!written[0].toObject().contains("gapBeforeSeconds"));
+    QCOMPARE(written[1].toObject().value("gapBeforeSeconds").toDouble(), 1.48);
+    QVERIFY(!written[2].toObject().contains("gapBeforeSeconds"));
     QVector<QJsonObject> bad;
+    for (const QJsonValue &gap : {QJsonValue(-0.5), QJsonValue(3600.5), QJsonValue("1.5"), QJsonValue(true)}) {
+        auto badGap = chapter("GX020123.MP4", 10.0); badGap.insert("gapBeforeSeconds", gap);
+        bad.append(withChapters({firstChapter, badGap}));
+    }
+    auto gapOnFirst = firstChapter; gapOnFirst.insert("gapBeforeSeconds", 0.5);
+    bad.append(withChapters({gapOnFirst, chapter("GX020123.MP4", 10.0)}));
     bad.append(withChapters({firstChapter}));                                   // one chapter is not a list
     bad.append(withChapters({chapter("GX020123.MP4", 530.0), chapter("GX030123.MP4", 100.0)})); // does not start with the video
     bad.append(withChapters({firstChapter, chapter("GX020123.MP4", 0.0)}));

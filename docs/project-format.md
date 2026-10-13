@@ -73,6 +73,8 @@ A video made of GoPro chapter files keeps its first chapter as the ordinary `vid
 - each entry has a relative or an absolute path, and a finite `durationSeconds` in (0, 86 400];
 - the first entry names the same file and fingerprint as `video` itself.
 
+**Recorded gaps (KAN-262).** A chapter after the first may carry `gapBeforeSeconds`, a finite number from 0 to 3,600: recorded time without video before it, as between BetterDriver's clips (see [betterdriver-video.md](betterdriver-video.md)). It is written only when above 0, and the first chapter has none (a value above 0 there makes the list invalid, as does a negative, non-numeric or larger value on any chapter). The timeline places the chapter after the gap, so telemetry time never moves; a time inside the gap shows no picture. Unlike a missing file it is not a gap that blocks export by itself (export of a series follows in KAN-265; until then a chaptered video with a recorded gap is not exported). GoPro chapters follow each other directly and carry none.
+
 **Durations and gaps.** Each duration is the chapter's probed video-stream duration. It keeps the timeline's time when a chapter file is missing, so the missing chapter plays as a gap of that length.
 
 **Rebasing and protection.** Save As rebases every chapter reference by the same rules as the video, including in inactive runs of an event. Export protection covers every chapter path.
