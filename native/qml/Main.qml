@@ -334,10 +334,23 @@ ApplicationWindow {
     // KAN-105: positions are timeline time. For one video that is the
     // player's own position; across chapters it adds the current chapter's
     // start, so telemetry time never resets at a file boundary.
-    readonly property real timelinePosition: appController.videoChapterStartMilliseconds + mediaPlayer.position
+    readonly property real timelinePosition: inRecordedGap ? gapPositionMs
+        : appController.videoChapterStartMilliseconds + mediaPlayer.position
+    // KAN-264: a recorded gap between two clips has no picture. Its time runs on a clock of its
+    // own (telemetry keeps moving) while the clip after it waits at its first frame.
+    property bool inRecordedGap: false
+    property bool gapPlaying: false
+    property real gapPositionMs: 0
+    property real gapEndMs: 0
+    property real gapLastTick: 0
+    readonly property bool previewPlaying: inRecordedGap ? gapPlaying
+        : mediaPlayer.playbackState === MediaPlayer.PlayingState
     property real pendingChapterPosition: -1
     property bool resumeAfterChapter: false
     property bool chapterSeekRetried: false
+    // A chapter switch is only done with events of the new file: the old file can still report
+    // "loaded" or frames after the source property has moved on, and those must not consume it.
+    property bool chapterSourceSeen: true
     readonly property var currentChapter: appController.videoChaptered
         ? appController.videoChapterList[appController.videoChapterIndex] : null
     // A loaded file (or chapter) primes the preview: decode silently and pause once a frame at
@@ -347,6 +360,8 @@ ApplicationWindow {
     // Returns whether the preview was primed.
     function previewMediaLoaded() {
         const chapterSwitch = window.pendingChapterPosition >= 0;
+        if (chapterSwitch && !window.chapterSourceSeen)
+            return false;
         const source = String(mediaPlayer.source);
         if (!chapterSwitch && !window.previewPrimeFramePending && window.previewPrimedSource === source)
             return false;
@@ -365,6 +380,51 @@ ApplicationWindow {
             previewPrimeTimeout.restart();
         return true;
     }
+    // Starts the clip after a gap (or lets it start as soon as it has loaded).
+    function resumeClip(play) {
+        if (!play)
+            return;
+        const status = mediaPlayer.mediaStatus;
+        if (status !== MediaPlayer.LoadedMedia && status !== MediaPlayer.BufferedMedia) {
+            window.resumeAfterChapter = true; // previewMediaLoaded continues playing
+            return;
+        }
+        window.pendingChapterPosition = -1;
+        window.resumeAfterChapter = false;
+        window.previewPrimeFramePending = false;
+        previewPrimeTimeout.stop();
+        mediaPlayer.play();
+    }
+    // Time without picture before `chapter`, from `startMs`. The clip waits at its first frame.
+    function enterRecordedGap(chapter, startMs, play) {
+        const info = appController.videoChapterList[chapter];
+        window.gapEndMs = info.startMilliseconds;
+        window.gapPositionMs = startMs;
+        window.gapPlaying = play;
+        window.gapLastTick = Date.now();
+        window.inRecordedGap = true;
+        window.resumeAfterChapter = false;
+        window.chapterSeekRetried = false;
+        if (mediaPlayer.playbackState === MediaPlayer.PlayingState)
+            mediaPlayer.pause();
+        if (chapter === appController.videoChapterIndex) {
+            window.pendingChapterPosition = -1;
+            mediaPlayer.position = 0;
+        } else {
+            window.pendingChapterPosition = info.available ? 0 : -1;
+            window.chapterSourceSeen = false;
+            appController.setVideoChapter(chapter);
+        }
+        appController.playbackTime = startMs / 1000.0;
+    }
+    function finishRecordedGap() {
+        const play = window.gapPlaying;
+        window.inRecordedGap = false;
+        window.gapPlaying = false;
+        appController.playbackTime = window.gapEndMs / 1000.0;
+        if (window.currentChapter && window.currentChapter.available)
+            window.resumeClip(play);
+    }
     function seekTimeline(milliseconds) {
         const bounded = appController.clampPreviewPositionMilliseconds(milliseconds);
         if (!appController.videoChaptered) {
@@ -374,18 +434,31 @@ ApplicationWindow {
         const target = appController.locateVideoTimeline(bounded);
         if (target.chapter === undefined)
             return;
+        const wasInGap = window.inRecordedGap;
+        const playing = window.previewPlaying && !window.previewPrimeFramePending;
+        // Located in the gap before a clip (its picture starts later), not in a missing clip.
+        if (target.gap && bounded < appController.videoChapterList[target.chapter].startMilliseconds) {
+            window.enterRecordedGap(target.chapter, bounded, playing);
+            return;
+        }
+        window.inRecordedGap = false;
+        window.gapPlaying = false;
         if (target.chapter === appController.videoChapterIndex && !target.gap) {
             window.pendingChapterPosition = -1;
             window.resumeAfterChapter = false;
+            if (wasInGap)
+                window.previewPrimeFramePending = false;
             mediaPlayer.position = target.localMilliseconds;
+            if (wasInGap && playing)
+                mediaPlayer.play();
             return;
         }
         // Another chapter: its file loads, then the position applies there.
         // Silent priming is not playing.
-        window.resumeAfterChapter = !target.gap && mediaPlayer.playbackState === MediaPlayer.PlayingState
-            && !window.previewPrimeFramePending;
+        window.resumeAfterChapter = !target.gap && playing;
         window.chapterSeekRetried = false;
         window.pendingChapterPosition = target.gap ? -1 : target.localMilliseconds;
+        window.chapterSourceSeen = false;
         appController.setVideoChapter(target.chapter);
         if (target.gap)
             appController.playbackTime = bounded / 1000.0; // a missing chapter still has its time
@@ -393,6 +466,11 @@ ApplicationWindow {
     function togglePlayback() {
         if (!appController.videoSource.toString())
             return;
+        if (window.inRecordedGap) {
+            window.gapPlaying = !window.gapPlaying;
+            window.showFullScreenControls();
+            return;
+        }
         if (mediaPlayer.playbackState === MediaPlayer.PlayingState)
             mediaPlayer.pause();
         else {
@@ -412,7 +490,7 @@ ApplicationWindow {
         if (!fullScreenPreview && visibility !== Window.FullScreen)
             return;
         fullScreenControlsVisible = true;
-        if (mediaPlayer.playbackState === MediaPlayer.PlayingState && !fullScreenScrubbing)
+        if (window.previewPlaying && !fullScreenScrubbing)
             fullScreenControlsTimer.restart();
     }
     function deleteSelectedWidget() {
@@ -520,7 +598,7 @@ ApplicationWindow {
         interval: 2600
         repeat: false
         onTriggered: {
-            if (window.fullScreenPreview && mediaPlayer.playbackState === MediaPlayer.PlayingState
+            if (window.fullScreenPreview && window.previewPlaying
                     && !window.fullScreenScrubbing)
                 window.fullScreenControlsVisible = false;
         }
@@ -591,9 +669,11 @@ ApplicationWindow {
                 window.showFullScreenControls();
         }
         onPositionChanged: function(position) {
+            if (window.inRecordedGap)
+                return; // the gap's own clock sets the time
             appController.playbackTime = (appController.videoChapterStartMilliseconds + position) / 1000.0;
         }
-        onSourceChanged: window.previewPrimedSource = ""
+        onSourceChanged: { window.previewPrimedSource = ""; window.chapterSourceSeen = true; }
         onMediaStatusChanged: {
             if (mediaStatus === MediaPlayer.LoadedMedia)
                 window.previewMediaLoaded();
@@ -602,9 +682,16 @@ ApplicationWindow {
                 if (appController.videoChaptered && next < appController.videoChapterList.length) {
                     // Continue into the next chapter at its start (or stop at a gap).
                     const available = appController.videoChapterList[next].available;
+                    const upcoming = appController.videoChapterList[next];
+                    if (available && upcoming.gapBeforeMilliseconds > 0) {
+                        // KAN-264: recorded time without video, then the next clip.
+                        window.enterRecordedGap(next, upcoming.startMilliseconds - upcoming.gapBeforeMilliseconds, true);
+                        return;
+                    }
                     window.pendingChapterPosition = available ? 0 : -1;
                     window.resumeAfterChapter = available;
                     window.chapterSeekRetried = false;
+                    window.chapterSourceSeen = false;
                     appController.setVideoChapter(next);
                     if (!available)
                         appController.playbackTime = appController.videoChapterStartMilliseconds / 1000.0;
@@ -621,6 +708,31 @@ ApplicationWindow {
             pause();
             appController.reportPlaybackError(errorString);
             window.fullScreenControlsVisible = true;
+        }
+    }
+
+    Timer {
+        id: recordedGapClock
+        interval: 33
+        repeat: true
+        running: window.inRecordedGap && window.gapPlaying
+        onRunningChanged: if (running) window.gapLastTick = Date.now()
+        onTriggered: {
+            const now = Date.now();
+            window.gapPositionMs = Math.min(window.gapEndMs, window.gapPositionMs + (now - window.gapLastTick));
+            window.gapLastTick = now;
+            appController.playbackTime = window.gapPositionMs / 1000.0;
+            if (window.gapPositionMs >= window.gapEndMs)
+                window.finishRecordedGap();
+        }
+    }
+
+    // A new video (or project) never starts inside the previous one's gap.
+    Connections {
+        target: appController
+        function onVideoSourceChanged() {
+            window.inRecordedGap = false;
+            window.gapPlaying = false;
         }
     }
 
@@ -1188,11 +1300,29 @@ ApplicationWindow {
                                     height: additionalVideosPreview.mainRect.height
                                     fillMode: VideoOutput.PreserveAspectFit
                                 }
+                                // KAN-264: no picture over a recorded gap between two clips.
+                                Rectangle {
+                                    objectName: "videoRecordedGap"
+                                    x: additionalVideosPreview.mainRect.x
+                                    y: additionalVideosPreview.mainRect.y
+                                    width: additionalVideosPreview.mainRect.width
+                                    height: additionalVideosPreview.mainRect.height
+                                    visible: window.inRecordedGap
+                                    color: "black"
+                                    FeLabel {
+                                        anchors.centerIn: parent
+                                        color: Theme.outline
+                                        text: qsTr("No video here: the recorder was between two clips. The timeline keeps its time.")
+                                        width: Math.min(parent.width - 40, 420)
+                                        horizontalAlignment: Text.AlignHCenter
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
                                 AdditionalVideosPreview {
                                     id: additionalVideosPreview
                                     anchors.fill: parent
                                     mainOutput: videoOutput
-                                    playing: mediaPlayer.playbackState === MediaPlayer.PlayingState
+                                    playing: window.previewPlaying
                                 }
                                 // KAN-105: a missing chapter is an explicit gap, never skipped.
                                 FeLabel {
@@ -1213,7 +1343,7 @@ ApplicationWindow {
                                 target: videoOutput.videoSink
                                 function onVideoFrameChanged(frame) {
                                     // KAN-105: a chapter switch is done once a frame at its position shows.
-                                    if (window.pendingChapterPosition >= 0) {
+                                    if (window.pendingChapterPosition >= 0 && window.chapterSourceSeen) {
                                         if (mediaPlayer.position >= window.pendingChapterPosition - 100) {
                                             window.pendingChapterPosition = -1;
                                             window.resumeAfterChapter = false;
@@ -1344,8 +1474,8 @@ ApplicationWindow {
                                         width: 38
                                         implicitWidth: 38
                                         compact: true
-                                        accent: mediaPlayer.playbackState === MediaPlayer.PlayingState
-                                        text: mediaPlayer.playbackState === MediaPlayer.PlayingState ? "Ⅱ" : "▶"
+                                        accent: window.previewPlaying
+                                        text: window.previewPlaying ? "Ⅱ" : "▶"
                                         onClicked: window.togglePlayback()
                                     }
                                     FeLabel {
@@ -1400,8 +1530,8 @@ ApplicationWindow {
                                 implicitWidth: 40
                                 height: 40
                                 enabled: !!appController.videoSource.toString()
-                                accent: mediaPlayer.playbackState === MediaPlayer.PlayingState
-                                text: mediaPlayer.playbackState === MediaPlayer.PlayingState ? "Ⅱ" : "▶"
+                                accent: window.previewPlaying
+                                text: window.previewPlaying ? "Ⅱ" : "▶"
                                 onClicked: window.togglePlayback()
                             }
                             FeLabel {

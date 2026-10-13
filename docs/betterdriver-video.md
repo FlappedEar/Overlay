@@ -1,6 +1,6 @@
 # BetterDriver video: a clip series (KAN-260)
 
-Status: plan and step 1 (the parser, KAN-261) merged in #261; steps 2 and 3 (the model, KAN-262, and linking, KAN-263) in progress; later steps are listed at the end.
+Status: plan and step 1 (the parser, KAN-261) merged in #261; steps 2 and 3 (the model, KAN-262, and linking, KAN-263) merged in #262 and #263; step 4 (preview, KAN-264) in progress; later steps are listed at the end.
 
 BetterDriver is the owner's Android recorder. Its "Export VBO + video" writes a `.vbo` and the
 session's video next to it. Overlays reads the VBO's GPS since KAN-259 (see
@@ -83,8 +83,14 @@ sync, not an offset the user aligns by hand.
    gaps. The sync is set from the first clip's offset (telemetry time = video time + offset, scale 1),
    which is what the owner would otherwise align by hand; it stays editable. Nothing is opened by itself:
    the user chooses to link (the button comes with KAN-266). Only an MP4 or MOV series can be opened.
-4. **Preview (step 4).** The chapter playback already shows the clip at a time; a gap with `gapBeforeSeconds`
-   shows no picture for its length, and the telemetry keeps running.
+4. **Preview (step 4, KAN-264: `Main.qml`).** A time inside a recorded gap shows no picture: a black
+   panel with a short note covers the main video (extra videos stay), the playhead and telemetry time
+   run on a clock of the preview's own while the next clip waits at its first frame, and when the clock
+   reaches the clip's start the clip plays on (if it was playing). Playing off the end of a clip enters
+   the gap by itself, pausing stops the clock, and a seek out of the gap leaves it. A gap before a missing
+   clip runs the same way and then stops at the missing clip as before. A chapter switch now also waits
+   for the new file's own events: the old file can report "loaded" and frames after the source property
+   has moved on, which used to be taken for the new file's and left the preview at the first frame.
 5. **Export (step 5).** The concat demuxer cannot express a gap or a size change, so a series with either
    is composed in the filter graph: each clip is scaled to the output size (letterboxed, aspect kept),
    gaps are black of the output size and rate, and audio is silence over a gap. Output size is the
@@ -98,6 +104,8 @@ camera in the same session (BetterDriver exports one camera's clips; GoPro foota
 additional-video path of KAN-131 and KAN-245).
 
 ## Tests
+
+Step 4: `SourceTests::showsNoPictureOverRecordedGaps` (two generated clips with a 0.6 s gap in the editor window: a seek into the gap shows the black panel with the requested time and the next clip loaded, playing runs the gap's clock into the clip and on, playing off the end of the first clip enters and leaves the gap, a paused gap keeps its time, a seek out of it leaves it).
 
 Step 3: `SourceTests::plansBetterDriverClipsBesideTheRecording` (own folder only, a directory is not a
 file, clips before the first existing one dropped, later missing ones kept as gaps with expected path and
