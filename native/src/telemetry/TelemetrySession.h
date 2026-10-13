@@ -92,6 +92,26 @@ struct SyncTransform {
     double timeScale = 1.0;
 };
 
+// KAN-261: one video clip a recording names, with where it sits on the
+// recording's own timeline. BetterDriver's VBO export lists its phone video as
+// a numbered clip series (`[avi]` section, `avifileindex` and `avisynctime`
+// columns).
+struct RecordingVideoClip {
+    int index = 0;                   // avifileindex: 1-based, as in the file name
+    QString fileName;                // base name + 4-digit index + "." + extension
+    double offsetSeconds = 0.0;      // recording time at the clip's media time 0 (median over its rows)
+    double offsetSpreadSeconds = 0.0; // largest distance of a row's own offset from the median
+    double firstSeconds = 0.0;       // recording time of the first row with video in this clip
+    double lastSeconds = 0.0;        // and of the last
+    qsizetype rows = 0;              // rows with video in this clip
+};
+
+struct RecordingVideoSeries {
+    QString baseName;
+    QString extension;
+    QVector<RecordingVideoClip> clips; // ascending index, unique
+};
+
 class TelemetrySession {
 public:
     double duration = 0.0;
@@ -102,6 +122,8 @@ public:
     QStringList warnings;
     QVector<TimingGate> timingGates;
     qsizetype sampleCount = 0;
+    // The clip series the recording names, when it has one (KAN-261).
+    std::optional<RecordingVideoSeries> videoSeries;
 
     // Public telemetry semantics are intentionally strict: queries outside a
     // channel's range and internal non-finite samples are no data. Linear

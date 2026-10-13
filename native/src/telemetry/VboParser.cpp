@@ -3,6 +3,7 @@
 #include "telemetry/TelemetryGeometry.h"
 
 #include <QFile>
+#include <QMap>
 #include <QDateTime>
 #include <QTimeZone>
 #include <QRegularExpression>
@@ -13,6 +14,7 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
+#include <optional>
 
 namespace FlappedEar {
 namespace {
@@ -49,6 +51,92 @@ QString normalizeName(QString name)
         name = name.sliced(1, name.size() - 2);
     }
     return name.replace(QRegularExpression("\\s+"), " ");
+}
+
+// KAN-261: BetterDriver's clip series. `base` and `extension` come from the
+// `[avi]` section, one row per recording row from the avifileindex and
+// avisynctime columns (NaN where a cell was not a number). The clip names are
+// built from the section, never read from the data, and must stay a plain file
+// name next to the recording.
+constexpr int kMaximumVideoClips = 64;
+
+bool plainFileNamePart(const QString &text, const qsizetype maximumLength)
+{
+    if (text.isEmpty() || text.size() > maximumLength || text == "." || text == "..") return false;
+    return std::none_of(text.cbegin(), text.cend(), [](const QChar character) {
+        return character.unicode() < 0x20 || QStringLiteral("/\\:*?\"<>|").contains(character);
+    });
+}
+
+std::optional<RecordingVideoSeries> buildVideoSeries(const QStringList &aviLines, const QVector<double> &times,
+    const QVector<double> &indices, const QVector<double> &syncMilliseconds, QString &problem)
+{
+    QStringList lines;
+    for (const QString &line : aviLines)
+        if (!line.isEmpty()) lines.append(line);
+    if (lines.size() < 2) {
+        problem = QStringLiteral("the [avi] section needs a base name and an extension");
+        return std::nullopt;
+    }
+    RecordingVideoSeries series;
+    series.baseName = lines[0];
+    series.extension = lines[1];
+    if (!plainFileNamePart(series.baseName, 128) || !plainFileNamePart(series.extension, 8)
+        || series.extension.contains('.')) {
+        problem = QStringLiteral("the [avi] base name or extension is not a plain file name");
+        return std::nullopt;
+    }
+    struct Accumulated {
+        QVector<double> offsets;
+        double first = 0.0;
+        double last = 0.0;
+    };
+    QMap<int, Accumulated> clips;
+    for (qsizetype row = 0; row < times.size(); ++row) {
+        const double index = indices[row], sync = syncMilliseconds[row];
+        // Row without video: avisynctime -1 (or no number).
+        if (!std::isfinite(index) || !std::isfinite(sync) || sync < 0.0) continue;
+        if (index < 1.0 || index > 9999.0 || index != std::floor(index)) {
+            problem = QStringLiteral("avifileindex must be a whole number from 1 to 9999");
+            return std::nullopt;
+        }
+        auto found = clips.find(static_cast<int>(index));
+        if (found == clips.end()) {
+            if (clips.size() >= kMaximumVideoClips) {
+                problem = QStringLiteral("more than %1 video clips").arg(kMaximumVideoClips);
+                return std::nullopt;
+            }
+            found = clips.insert(static_cast<int>(index), {{}, times[row], times[row]});
+        }
+        found->offsets.append(times[row] - sync / 1000.0);
+        found->last = times[row];
+    }
+    for (auto iterator = clips.begin(); iterator != clips.end(); ++iterator) {
+        auto &offsets = iterator->offsets;
+        const auto middle = offsets.begin() + offsets.size() / 2;
+        std::nth_element(offsets.begin(), middle, offsets.end());
+        double median = *middle;
+        if (offsets.size() % 2 == 0) {
+            median = (median + *std::max_element(offsets.begin(), middle)) / 2.0;
+        }
+        double spread = 0.0;
+        for (const double offset : offsets) spread = std::max(spread, std::abs(offset - median));
+        RecordingVideoClip clip;
+        clip.index = iterator.key();
+        clip.fileName = QStringLiteral("%1%2.%3").arg(series.baseName).arg(clip.index, 4, 10, QLatin1Char('0'))
+            .arg(series.extension);
+        clip.offsetSeconds = median;
+        clip.offsetSpreadSeconds = spread;
+        clip.firstSeconds = iterator->first;
+        clip.lastSeconds = iterator->last;
+        clip.rows = offsets.size();
+        series.clips.append(clip);
+    }
+    if (series.clips.isEmpty()) {
+        problem = QStringLiteral("no row has video");
+        return std::nullopt;
+    }
+    return series;
 }
 
 // Visit the logical row without allocating columnSection.join(' '). Section
@@ -657,6 +745,16 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         throw VboParseError("VBO has no recognised time column (time, timestamp or utc time); "
                             "its sample timing is unknown.");
 
+    // KAN-261: BetterDriver's video columns, read as doubles beside the float
+    // channels (a float holds whole milliseconds exactly only to 4.6 hours).
+    qsizetype aviIndexColumn = -1, aviSyncColumn = -1;
+    for (qsizetype index = 0; index < names.size(); ++index) {
+        if (names[index].compare("avifileindex", Qt::CaseInsensitive) == 0 && aviIndexColumn < 0) aviIndexColumn = index;
+        if (names[index].compare("avisynctime", Qt::CaseInsensitive) == 0 && aviSyncColumn < 0) aviSyncColumn = index;
+    }
+    const bool readVideoColumns = aviIndexColumn >= 0 && aviSyncColumn >= 0;
+    QVector<double> aviIndices, aviSyncs;
+
     // Every load path decodes through here: budget rows x columns before any
     // value vector grows (KAN-147).
     if (static_cast<qint64>(dataSection.size()) * names.size() > kMaximumDecodedValues)
@@ -728,6 +826,10 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
             && parsedTime->seconds - unconfirmedRollover->clock <= maximumRolloverGap) {
             rawTimes.removeLast();
             for (auto &values : rawValues) values.removeLast();
+            if (readVideoColumns) {
+                aviIndices.removeLast();
+                aviSyncs.removeLast();
+            }
             previousAbsoluteTime = unconfirmedRollover->absolute;
             previousClockTime = unconfirmedRollover->clock;
             clockDayOffset = unconfirmedRollover->offset;
@@ -773,6 +875,13 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         if (timestamp < 0.0 || (!rawTimes.isEmpty() && timestamp <= rawTimes.back()))
             throw VboParseError("VBO derived timestamps are not strictly increasing.");
         rawTimes.append(timestamp);
+        if (readVideoColumns) {
+            bool indexValid = false, syncValid = false;
+            const double index = aviIndexColumn < cells.size() ? cells[aviIndexColumn].toDouble(&indexValid) : 0.0;
+            const double sync = aviSyncColumn < cells.size() ? cells[aviSyncColumn].toDouble(&syncValid) : 0.0;
+            aviIndices.append(indexValid ? index : std::numeric_limits<double>::quiet_NaN());
+            aviSyncs.append(syncValid ? sync : std::numeric_limits<double>::quiet_NaN());
+        }
         for (qsizetype column = 0; column < names.size(); ++column) {
             bool valid = false;
             const double parsed = column < cells.size() ? cells[column].toDouble(&valid) : 0.0;
@@ -866,6 +975,22 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         }
     }
     session.sampleCount = rawTimes.size();
+    // KAN-261: the clip series a recording names. A section without the
+    // columns, or columns without a usable section, is reported, not guessed.
+    const bool aviSection = sections.contains(QStringLiteral("avi"));
+    if (aviSection || readVideoColumns) {
+        QString problem;
+        if (!aviSection) {
+            problem = QStringLiteral("the recording has no [avi] section");
+        } else if (!readVideoColumns) {
+            problem = QStringLiteral("the recording has no avifileindex and avisynctime columns");
+        } else {
+            session.videoSeries = buildVideoSeries(sections.value(QStringLiteral("avi")),
+                rawTimes, aviIndices, aviSyncs, problem);
+        }
+        if (!session.videoSeries)
+            session.warnings.append(QStringLiteral("Video clips ignored: %1.").arg(problem));
+    }
     session.aliases = resolveAliases(session);
     preferAcceleratorPedalForThrottle(session);
     markImplausibleHeartRate(session);
