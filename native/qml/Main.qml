@@ -86,6 +86,18 @@ ApplicationWindow {
 
     RecoveryDialog { id: recoveryDialog }
 
+    // BetterDriver clip series named by the loaded VBO (empty when the recording has none).
+    property var betterDriver: ({available: false, found: 0, total: 0, problem: ""})
+    function refreshBetterDriver() {
+        betterDriver = appController.betterDriverVideo()
+    }
+    Connections {
+        target: appController
+        function onTelemetryChanged() { window.refreshBetterDriver() }
+        function onSourceLoadStateChanged() { window.refreshBetterDriver() }
+        function onVideoSourceChanged() { window.refreshBetterDriver() }
+    }
+
     Connections {
         target: appController
         function onDestructiveActionChanged() {
@@ -110,6 +122,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        refreshBetterDriver()
         if (appController.recoveryPending)
             recoveryDialog.open()
         if (appController.startupNotice.length > 0)
@@ -887,6 +900,16 @@ ApplicationWindow {
                     compact: true
                     text: qsTr("Open video")
                     onClicked: fileDialogs.openVideo()
+                }
+                FeButton {
+                    id: betterDriverButton
+                    compact: true
+                    visible: window.betterDriver.total > 0
+                    // Not while telemetry or video is being replaced: the offer would describe the old recording.
+                    enabled: window.betterDriver.available && appController.vboLoadState === "ready"
+                             && appController.videoLoadState !== "loading"
+                    text: qsTr("BetterDriver video (%1/%2)").arg(window.betterDriver.found).arg(window.betterDriver.total)
+                    onClicked: appController.loadBetterDriverVideo()
                 }
                 FeButton {
                     compact: true
