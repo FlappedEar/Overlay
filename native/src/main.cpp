@@ -347,8 +347,10 @@ int exportWorker(const QString &configPath)
         for (const auto &chapter : config.value("chapterPaths").toArray()) chapterPaths.append(chapter.toString());
         QVector<qint64> chapterDurationTicks;
         for (const auto &ticks : config.value("chapterDurationTicks").toArray()) chapterDurationTicks.append(ticks.toInteger(-1));
+        QVector<double> chapterGapSeconds; // KAN-265: a clip series with recorded gaps
+        for (const auto &gap : config.value("chapterGapSeconds").toArray()) chapterGapSeconds.append(gap.toDouble());
         const FlappedEar::MediaInfo input = chapterPaths.size() > 1
-            ? FlappedEar::ChapterSource::probe(chapterPaths, chapterDurationTicks, emitProbeEvent, cancelled).info
+            ? FlappedEar::ChapterSource::probe(chapterPaths, chapterDurationTicks, emitProbeEvent, cancelled, chapterGapSeconds).info
             : FlappedEar::MediaProbe::probe(config.value("inputPath").toString(), {}, false, -1, emitProbeEvent, cancelled);
         emitEvent({{"type", "log"}, {"level", "info"}, {"component", "ffprobe"},
                    {"message", "Input probed"},
@@ -394,6 +396,7 @@ int exportWorker(const QString &configPath)
         settings.inputPath = config.value("inputPath").toString();
         settings.chapterPaths = chapterPaths;
         settings.chapterDurationTicks = chapterDurationTicks;
+        settings.chapterGapSeconds = chapterGapSeconds;
         settings.sync = sync;
         settings.additionalVideos = additionalVideos;
         if (!FlappedEar::AdditionalVideosCodec::validLayout(config.value("videoLayout")))

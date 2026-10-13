@@ -98,6 +98,16 @@ changed destination is preserved and commit fails.
 
 Audio is included only when its source interval overlaps the selected video interval. `atrim` uses absolute source timestamps and `asetpts` subtracts the selected video origin, preserving delayed audio rather than resetting each track independently. Validation compares start against that expected delay and duration against the audio/video-range intersection. The tolerance is one AAC access unit (1024 samples at the reported sample rate, or the audio time base when larger), with floating-point epsilon. Ranges before or after the audio track export without audio.
 
+## Clip series with recorded gaps (KAN-265)
+
+BetterDriver's clips have gaps of about 0.6 to 1.5 s and may differ in size, frame rate and audio, so
+the concat demuxer cannot join them. When the job carries `chapterGapSeconds` (one value per clip, any
+above 0), `ChapterSource::combineSeries` makes one source that starts at zero and lasts every clip and gap,
+and Stage B builds `ChapterSource::seriesGraph` in front of the usual trim: per clip `setpts`, `fps`,
+`scale`+`pad` to the first clip's size, `trim=duration`; `color` for each gap; `concat` to `[seriesV]`.
+Audio is the same with `aresample`, stereo `aformat`, `apad`, `anullsrc` for gaps and sound-less clips.
+The clips are FFmpeg inputs after the overlay and additional videos; the series is read without input seek.
+
 ## Chaptered sources (KAN-106)
 
 A GoPro recording split into chapter files exports as one source on the chapter timeline of

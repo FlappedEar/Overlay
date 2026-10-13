@@ -68,6 +68,10 @@ struct ExportSettings {
     QStringList chapterPaths;
     // Each chapter's video duration_ts as the editor probed it.
     QVector<qint64> chapterDurationTicks;
+    // KAN-265: recorded time without video before each chapter (BetterDriver
+    // clips). Non-empty: the chapters are a series joined in a filter graph,
+    // each normalised to the first clip's picture, instead of one concat source.
+    QVector<double> chapterGapSeconds;
     // The main video's sync and the additional videos (KAN-131).
     SyncTransform sync;
     QVector<ExportAdditionalVideo> additionalVideos;

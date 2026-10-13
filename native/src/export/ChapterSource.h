@@ -32,6 +32,21 @@ public:
     // pixel format, colour, orientation and audio layout, and each must have
     // an exact video duration (duration_ts).
     [[nodiscard]] static ChapterSourceCombination combine(const QVector<MediaInfo> &chapters);
+    // KAN-265: clips with recorded gaps between them, possibly of different size,
+    // frame rate or audio (a BetterDriver series). They cannot go through the
+    // concat demuxer; the export normalises each clip to the first one's picture
+    // and joins them in a filter graph, with black and silence over each gap.
+    // gapsBefore[i] is the recorded time without video before clip i, in seconds.
+    // The combined source starts at zero and lasts every clip and every gap.
+    [[nodiscard]] static ChapterSourceCombination combineSeries(const QVector<MediaInfo> &clips,
+                                                                const QVector<double> &gapsBefore);
+    struct SeriesGraph {
+        QString video; // ends with ';'; produces [seriesV]; empty when it cannot be built
+        QString audio; // ends with ';'; produces [seriesA]
+    };
+    // FFmpeg input 0 is the first clip; clip k >= 1 is input firstExtraInput + k - 1.
+    [[nodiscard]] static SeriesGraph seriesGraph(const QVector<MediaInfo> &clips, const QVector<double> &gapsBefore,
+                                                 const QString &frameRate, int firstExtraInput);
     // The ffconcat script from seekTicks on the chapter timeline (in the
     // chapters' time base) to the end: one entry per chapter, cut to its
     // video stream. Empty when the timing cannot be written exactly.
@@ -54,7 +69,8 @@ public:
     [[nodiscard]] static Probed probe(const QStringList &paths,
                                       const QVector<qint64> &expectedDurationTicks,
                                       const MediaProbeProgressCallback &progressCallback = {},
-                                      const MediaProbeCancellationCallback &cancellationCallback = {});
+                                      const MediaProbeCancellationCallback &cancellationCallback = {},
+                                      const QVector<double> &gapsBefore = {}); // non-empty: a series (KAN-265)
 };
 
 } // namespace FlappedEar
