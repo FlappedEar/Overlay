@@ -905,7 +905,9 @@ ApplicationWindow {
                     id: betterDriverButton
                     compact: true
                     visible: window.betterDriver.total > 0
-                    enabled: window.betterDriver.available
+                    // Not while telemetry or video is being replaced: the offer would describe the old recording.
+                    enabled: window.betterDriver.available && appController.vboLoadState === "ready"
+                             && appController.videoLoadState !== "loading"
                     text: qsTr("BetterDriver video (%1/%2)").arg(window.betterDriver.found).arg(window.betterDriver.total)
                     onClicked: appController.loadBetterDriverVideo()
                 }
