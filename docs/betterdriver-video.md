@@ -27,6 +27,22 @@ The owner's real file (private, not in this repository) has five clips at 25 Hz 
 without video at each switch. Its first row is well into clip 1 (about 30 s), so clip 1's offset is
 negative: the offset is the sync, whatever the first row is.
 
+Checked on the owner's real BetterDriver clips (13 October 2026, a second session of five clips; the files
+are private and not in this repository):
+
+- Every clip is 4K H.264 (High, `yuvj420p`, BT.709) with mono AAC audio, except the last clip, which is
+  1080p: the resolution step-down is real.
+- Nominal frame rates differ between clips (59.94, 60 and 30 fps) and the streams are variable frame rate
+  (average rates a little under nominal). The video stream of a clip starts 0 to 0.13 s after media time 0.
+- A clip's offset plus its video duration lands within 0.1 s of its last row with video, and the next
+  clip's offset minus that end is 1.3 to 1.5 s: the VBO's offsets and the probed durations agree, so the
+  offsets can place the clips and the durations can check them.
+- Per-row spread inside a clip was 15 to 190 ms (the GNSS arrival jitter), so the median over a clip is
+  the sync, not any single row.
+
+Consequence for the chapter model: clips differ in size, frame rate and time base, which
+`ChapterSource::combine` refuses today, so a series cannot ride the concat demuxer unchanged (step 5).
+
 ## What Overlays did before
 
 Overlays read the two columns as ordinary channels and ignored `[avi]`. The video was opened by hand
