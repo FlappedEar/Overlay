@@ -81,8 +81,7 @@ sync, not an offset the user aligns by hand.
    clip's offset, minus where the previous clip ended on the timeline (`applyRecordedGaps`: never
    below 0, never above 3,600 s), so the probed lengths place the clips and the VBO's offsets decide the
    gaps. The sync is set from the first clip's offset (telemetry time = video time + offset, scale 1),
-   which is what the owner would otherwise align by hand; it stays editable. Nothing is opened by itself:
-   the user chooses to link with the header button "BetterDriver video (found/total)" (KAN-266). Only an MP4 or MOV series can be opened.
+   which is what the owner would otherwise align by hand; it stays editable. Since KAN-268 the clips are linked by themselves when the telemetry is opened (no video yet, or the open video is one of the recording's clips, in the same folder) and when one of the recording's clips is opened with Open video; any other video is left alone. The user can also link with the header button "BetterDriver video (found/total)" (KAN-266). Only an MP4 or MOV series can be opened.
 4. **Preview (step 4, KAN-264: `Main.qml`).** A time inside a recorded gap shows no picture: a black
    panel with a short note covers the main video (extra videos stay), the playhead and telemetry time
    run on a clock of the preview's own while the next clip waits at its first frame, and when the clock

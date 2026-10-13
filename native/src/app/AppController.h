@@ -321,6 +321,10 @@ private:
                       const QString &expectedContentSha256 = {});
     void commitVideoProbe(const VideoProbeResult &result, bool markDocumentDirty);
     void commitVboLoad(const VboLoadResult &result, bool markDocumentDirty);
+    // A file that is one of the loaded recording's BetterDriver clips, beside it.
+    [[nodiscard]] bool isRecordingClip(const QString &path) const;
+    // Links the recording's clips by itself when the video is missing or is one of its clips.
+    void autoLinkBetterDriverVideo();
     [[nodiscard]] static QString normalizedSourcePath(const QString &path) { return DocumentController::normalizedSourcePath(path); }
     [[nodiscard]] static QVariantList trackPointsFor(const TrackGeometry &geometry);
 

@@ -515,6 +515,8 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     setStatus(QStringLiteral("Video opened: %1").arg(QFileInfo(result.path).fileName())
         + (m_videoChapterNotice.isEmpty() ? QString() : QStringLiteral(". ") + m_videoChapterNotice));
     m_videoChapterNotice.clear();
+    // The telemetry may have finished first, while this clip was still loading.
+    if (markDocumentDirty && m_vboLoadState == QStringLiteral("ready")) autoLinkBetterDriverVideo();
 }
 
 void AppController::commitVboLoad(const VboLoadResult &result, const bool markDocumentDirty)
@@ -550,6 +552,7 @@ void AppController::commitVboLoad(const VboLoadResult &result, const bool markDo
     if (markDocumentDirty) {
         markPersistentChange();
     }
+    if (markDocumentDirty) autoLinkBetterDriverVideo();
     QString message = QStringLiteral("Telemetry opened: %1 samples, %2 numeric channels.")
         .arg(m_session->sampleCount).arg(m_session->channels.size());
     for (const auto &warning : m_session->warnings) AppLog::warn(warning);
@@ -670,10 +673,39 @@ void AppController::loadVideo(const QUrl &url)
     if (normalizedPath == normalizedSourcePath(m_videoSource.toLocalFile())) {
         return;
     }
+    // KAN-268: one clip of the open BetterDriver recording opens the whole series with its sync.
+    if (isRecordingClip(info.absoluteFilePath()) && betterDriverVideo().value("available").toBool()) {
+        loadBetterDriverVideo();
+        return;
+    }
     const quint64 generation = beginSourceReplacement(true);
     m_pendingVideoPath = normalizedPath;
     startVideoProbe(normalizedPath, generation, true);
     setStatus(QStringLiteral("Loading video metadata: %1").arg(info.fileName()));
+}
+
+bool AppController::isRecordingClip(const QString &path) const
+{
+    if (!m_session || !m_session->videoSeries || m_telemetryPath.isEmpty()) return false;
+    const QFileInfo file(path);
+    if (QFileInfo(m_telemetryPath).absolutePath() != file.absolutePath()) return false;
+    for (const auto &clip : m_session->videoSeries->clips)
+        if (clip.fileName.compare(file.fileName(), Qt::CaseInsensitive) == 0) return true;
+    return false;
+}
+
+void AppController::autoLinkBetterDriverVideo()
+{
+    if (!m_session || !m_session->videoSeries || videoChaptered() || EventProjectCodec::isEvent(m_document.storedProject())) return;
+    // Only when there is no video yet, or the video is one clip of this recording: any other video is the user's choice.
+    const bool noVideo = m_videoSource.isEmpty() && m_videoLoadState != QStringLiteral("loading");
+    if (!noVideo && !isRecordingClip(m_videoSource.toLocalFile())) return;
+    if (!betterDriverVideo().value("available").toBool()) return;
+    // Revalidated when it runs: another telemetry file may have been chosen in between.
+    QMetaObject::invokeMethod(this, [this, path = m_telemetryPath, revision = m_loadedSourceRevision] {
+        if (m_vboLoadState != QStringLiteral("ready") || m_telemetryPath != path || m_loadedSourceRevision != revision) return;
+        loadBetterDriverVideo();
+    }, Qt::QueuedConnection);
 }
 
 QVariantMap AppController::betterDriverVideo() const
