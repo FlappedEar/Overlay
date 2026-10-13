@@ -19,6 +19,7 @@ class MediaTimelineTests : public QObject {
 private slots:
     void mapsTimeAcrossChapters();
     void keepsUnavailableChaptersAsGaps();
+    void keepsRecordedGapsBetweenChapters();
     void rejectsMalformedChapters();
     void combinesChaptersIntoOneExportSource();
     void refusesChaptersThatDiffer();
@@ -69,6 +70,47 @@ void MediaTimelineTests::keepsUnavailableChaptersAsGaps()
     QCOMPARE(timeline.locate(700.0)->chapter, 1);
     QVERIFY(!timeline.locate(1100.0)->gap);
     QCOMPARE(*timeline.timelineSeconds(2, 10.0), 1070.0);
+}
+
+void MediaTimelineTests::keepsRecordedGapsBetweenChapters()
+{
+    // KAN-262: BetterDriver's clips are separated by recorded time without
+    // video. The gap is on the timeline, is not a missing file, and no clip's
+    // time moves.
+    const auto timeline = MediaTimeline::fromChapters({{"/a/0001.MP4", 416.2}, {"/a/0002.MP4", 419.2, true, 1.5}, {"/a/0003.MP4", 100.0, true, 1.25}});
+    QVERIFY(timeline.isValid());
+    QVERIFY(!timeline.hasGaps());
+    QVERIFY(timeline.hasRecordedGaps());
+    QVERIFY(std::abs(timeline.chapterStartSeconds(1) - 417.7) < 1e-9);
+    QVERIFY(std::abs(timeline.chapterStartSeconds(2) - 838.15) < 1e-9);
+    QVERIFY(std::abs(timeline.durationSeconds() - 938.15) < 1e-9);
+    // Inside a clip, and exactly at a clip's end and start.
+    QCOMPARE(timeline.locate(100.0)->chapter, 0);
+    QVERIFY(!timeline.locate(100.0)->gap);
+    QVERIFY(!timeline.locate(416.2)->gap);
+    QCOMPARE(timeline.locate(416.2)->chapter, 0);
+    QCOMPARE(timeline.locate(417.7)->chapter, 1);
+    QCOMPARE(timeline.locate(417.7)->localSeconds, 0.0);
+    // In the gap: the next clip at its start, flagged like a missing file.
+    const auto inGap = timeline.locate(417.0);
+    QVERIFY(inGap);
+    QCOMPARE(inGap->chapter, 1);
+    QCOMPARE(inGap->localSeconds, 0.0);
+    QVERIFY(inGap->gap);
+    QVERIFY(timeline.locate(837.5)->gap);
+    QCOMPARE(timeline.locate(837.5)->chapter, 2);
+    // The end of the timeline stays in the last clip.
+    QCOMPARE(timeline.locate(timeline.durationSeconds())->chapter, 2);
+    QVERIFY(!timeline.locate(timeline.durationSeconds())->gap);
+    // Clip time maps back to the timeline across the gap.
+    QVERIFY(std::abs(*timeline.timelineSeconds(2, 10.0) - 848.15) < 1e-9);
+    // No gap before the first clip, none negative or non-finite.
+    QVERIFY(!MediaTimeline::fromChapters({{"/a", 1.0, true, 0.5}}).isValid());
+    QVERIFY(!MediaTimeline::fromChapters({{"/a", 1.0}, {"/b", 1.0, true, -0.1}}).isValid());
+    QVERIFY(!MediaTimeline::fromChapters({{"/a", 1.0}, {"/b", 1.0, true, std::numeric_limits<double>::quiet_NaN()}}).isValid());
+    QVERIFY(!MediaTimeline::fromChapters({{"/a", 1.0}, {"/b", 1.0, true, std::numeric_limits<double>::infinity()}}).isValid());
+    // Chapters without a gap behave as before.
+    QVERIFY(!MediaTimeline::fromChapters({{"/a", 1.0}, {"/b", 1.0}}).hasRecordedGaps());
 }
 
 void MediaTimelineTests::rejectsMalformedChapters()

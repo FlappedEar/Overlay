@@ -182,7 +182,7 @@ closing the editor clears the active template and keeps the selection.
 
 Step 5 moved the preview timeline into `PreviewTimeline` (`native/src/app/PreviewTimeline.h`):
 the preview viewport, where playback starts and ends, how a seek is clamped and
-the SMPTE timecode for a position. A chaptered video is one timeline of its whole
+the SMPTE timecode for a position. A chapter may carry a recorded gap before it (`TimelineChapter::gapBeforeSeconds`, KAN-262: BetterDriver clips); the timeline includes it and a time inside it locates to the next chapter at local 0, flagged as a gap. A chaptered video is one timeline of its whole
 duration at the first chapter's rate. `AppController` builds one from the opened
 source per call and keeps its QML properties unchanged.
 

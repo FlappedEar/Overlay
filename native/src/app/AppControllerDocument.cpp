@@ -201,7 +201,7 @@ QJsonObject AppController::withEditorState(QJsonObject project, const QString &d
         QJsonObject videoSource = sources.value(QStringLiteral("video")).toObject();
         if (m_videoChapterStates.size() > 1) {
             QVector<VideoChapterReference> chapters;
-            for (const auto &chapter : m_videoChapterStates) chapters.append({chapter.reference, chapter.durationSeconds});
+            for (const auto &chapter : m_videoChapterStates) chapters.append({chapter.reference, chapter.durationSeconds, chapter.gapBeforeSeconds});
             chapters.first().reference = m_videoReference;
             videoSource.insert(QStringLiteral("chapters"), VideoChaptersCodec::write(chapters, [&](const ProjectSourceReference &reference) {
                 return eventProject ? EventProjectCodec::referenceForSave(reference, documentPath, targetPath)

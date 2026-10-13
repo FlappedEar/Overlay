@@ -27,6 +27,7 @@ QVariantList chapterList(const MediaTimeline &timeline, const QVector<ChapterLab
         list.append(QVariantMap{{"index", index},
             {"startMilliseconds", chapterStartMilliseconds(timeline, index)},
             {"durationMilliseconds", qRound64(timeline.chapter(index).durationSeconds * 1000.0)},
+            {"gapBeforeMilliseconds", qRound64(timeline.chapter(index).gapBeforeSeconds * 1000.0)},
             {"available", timeline.chapter(index).available},
             {"url", chapterSource(timeline, index)},
             {"name", label.name}, {"problem", label.problem}});

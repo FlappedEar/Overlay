@@ -36,7 +36,7 @@ VideoProbeResult probeVideo(const QString &path, const quint64 generation, const
                 videoDuration(result.mediaInfo), true, {}, result.mediaInfo});
             for (const auto &input : chapters) {
                 if (cancellation->load()) break;
-                VideoChapterState chapter{input.reference, input.path, input.durationSeconds, false, {}, {}};
+                VideoChapterState chapter{input.reference, input.path, input.durationSeconds, false, {}, {}, input.gapBeforeSeconds};
                 if (input.path.isEmpty()) {
                     chapter.problem = QStringLiteral("missing");
                 } else {
@@ -126,11 +126,12 @@ SavedChapters savedChapters(const QJsonObject &video, const QString &projectPath
     QVector<TimelineChapter> timelineChapters;
     for (qsizetype index = 0; index < chapters.size(); ++index) {
         const auto &chapter = chapters[index];
-        saved.pending.append({chapter.reference, {}, chapter.durationSeconds, false, QStringLiteral("loading"), {}});
-        timelineChapters.append({{}, chapter.durationSeconds, false});
+        saved.pending.append({chapter.reference, {}, chapter.durationSeconds, false, QStringLiteral("loading"), {},
+            chapter.gapBeforeSeconds});
+        timelineChapters.append({{}, chapter.durationSeconds, false, chapter.gapBeforeSeconds});
         if (index > 0) {
             saved.further.append({chapter.reference, ProjectSourceReferenceCodec::resolve(chapter.reference, projectPath),
-                chapter.durationSeconds});
+                chapter.durationSeconds, chapter.gapBeforeSeconds});
         }
     }
     saved.timeline = MediaTimeline::fromChapters(timelineChapters);
@@ -143,7 +144,7 @@ ChapterDerivation deriveChapters(const QVector<VideoChapterState> &probed)
     derived.chapters = probed;
     QVector<TimelineChapter> timelineChapters;
     for (const auto &chapter : derived.chapters)
-        timelineChapters.append({chapter.path, chapter.durationSeconds, chapter.available});
+        timelineChapters.append({chapter.path, chapter.durationSeconds, chapter.available, chapter.gapBeforeSeconds});
     derived.timeline = MediaTimeline::fromChapters(timelineChapters);
     if (!derived.chapters.isEmpty() && !derived.timeline.isValid()) {
         // A chapter without a known duration cannot hold its place in time.
@@ -156,6 +157,10 @@ ChapterDerivation deriveChapters(const QVector<VideoChapterState> &probed)
     if (derived.timeline.chapterCount() > 1) {
         if (derived.gaps > 0) {
             derived.gapsBlockExport = true;
+        } else if (derived.timeline.hasRecordedGaps()) {
+            // The concat demuxer joins chapters back to back; a recorded gap
+            // needs the series export of KAN-265.
+            derived.exportProblem = QStringLiteral("The clips have recorded gaps between them, which cannot be exported yet.");
         } else {
             QVector<MediaInfo> infos;
             QStringList paths;

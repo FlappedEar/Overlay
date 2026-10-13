@@ -48,6 +48,12 @@ bool valid(const QJsonObject &video)
         if (!duration.isDouble() || !std::isfinite(duration.toDouble()) || duration.toDouble() <= 0.0
             || duration.toDouble() > maximumChapterSeconds)
             return false;
+        if (chapter.contains("gapBeforeSeconds")) {
+            const auto gap = chapter.value("gapBeforeSeconds");
+            if (!gap.isDouble() || !std::isfinite(gap.toDouble()) || gap.toDouble() < 0.0
+                || gap.toDouble() > maximumGapSeconds || (index == 0 && gap.toDouble() != 0.0))
+                return false;
+        }
     }
     // The first chapter is the video reference itself.
     const auto first = chapters.first().toObject();
@@ -61,7 +67,8 @@ QVector<VideoChapterReference> read(const QJsonObject &video)
     QVector<VideoChapterReference> chapters;
     if (!valid(video)) return chapters;
     for (const auto &value : video.value("chapters").toArray())
-        chapters.append({referenceOf(value.toObject()), value.toObject().value("durationSeconds").toDouble()});
+        chapters.append({referenceOf(value.toObject()), value.toObject().value("durationSeconds").toDouble(),
+            value.toObject().value("gapBeforeSeconds").toDouble(0.0)});
     return chapters;
 }
 
@@ -72,6 +79,7 @@ QJsonArray write(const QVector<VideoChapterReference> &chapters,
     for (const auto &chapter : chapters) {
         auto object = serialize(chapter.reference);
         object.insert("durationSeconds", chapter.durationSeconds);
+        if (chapter.gapBeforeSeconds > 0.0) object.insert("gapBeforeSeconds", chapter.gapBeforeSeconds);
         array.append(object);
     }
     return array;

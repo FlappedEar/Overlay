@@ -31,6 +31,7 @@ struct VideoChapterInput {
     ProjectSourceReference reference;  // empty for a newly chosen file
     QString path;                      // resolved; empty when missing
     double durationSeconds = 0.0;      // saved duration, kept for a gap
+    double gapBeforeSeconds = 0.0;     // KAN-262: recorded time without video before it
 };
 
 struct VideoChapterState {
@@ -40,6 +41,7 @@ struct VideoChapterState {
     bool available = false;
     QString problem;                   // why it is a gap
     MediaInfo mediaInfo;               // probed, when available (KAN-106)
+    double gapBeforeSeconds = 0.0;     // KAN-262: recorded time without video before it
 };
 
 struct VideoProbeResult {
@@ -81,7 +83,7 @@ struct ChapterDerivation {
     MediaTimeline timeline;                // invalid for one video
     bool unusableDurations = false;        // a chapter without a known duration: only the first opens
     int gaps = 0;
-    bool gapsBlockExport = false;          // a chaptered video with a gap cannot be exported
+    bool gapsBlockExport = false;          // a chaptered video with a missing chapter cannot be exported
     QStringList exportPaths;               // the chapters to export as one source; empty if none
     std::optional<MediaInfo> exportInfo;   // their combined probe
     QString exportProblem;                 // why they cannot be combined; empty if they can

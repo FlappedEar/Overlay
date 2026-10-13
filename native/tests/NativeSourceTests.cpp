@@ -1582,6 +1582,18 @@ void SourceTests::derivesChapterPlaybackAndExportSource()
     QVERIFY(derived.exportPaths.isEmpty());
     QVERIFY(!derived.exportInfo);
 
+    // KAN-262: a recorded gap between clips is on the timeline, is not a
+    // missing chapter, and is not exported until the series export exists.
+    auto gappedChapter = chapter("b.mp4", 5.0, true);
+    gappedChapter.gapBeforeSeconds = 1.5;
+    derived = SourceLoading::deriveChapters({chapter("a.mp4", 10.0, true), gappedChapter});
+    QCOMPARE(derived.timeline.chapterCount(), 2);
+    QCOMPARE(derived.timeline.durationSeconds(), 16.5);
+    QCOMPARE(derived.gaps, 0);
+    QVERIFY(!derived.gapsBlockExport);
+    QVERIFY(derived.exportPaths.isEmpty());
+    QVERIFY(derived.exportProblem.contains("recorded gaps"));
+
     // A chapter without a known duration cannot hold its place: only the first opens.
     derived = SourceLoading::deriveChapters({chapter("a.mp4", 10.0, true), chapter("b.mp4", 0.0, true)});
     QVERIFY(derived.unusableDurations);

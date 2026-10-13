@@ -20,6 +20,9 @@ namespace FlappedEar {
 struct VideoChapterReference {
     ProjectSourceReference reference;
     double durationSeconds = 0.0;
+    // KAN-262: recorded time without video before this chapter; 0 for the
+    // first chapter and for GoPro chapters, which follow each other directly.
+    double gapBeforeSeconds = 0.0;
 };
 
 namespace VideoChaptersCodec {
@@ -27,10 +30,12 @@ namespace VideoChaptersCodec {
 inline constexpr int minimumChapters = 2;
 inline constexpr int maximumChapters = 64;
 inline constexpr double maximumChapterSeconds = 86400.0;
+inline constexpr double maximumGapSeconds = 3600.0;
 
 // Absent is valid (an ordinary video). Present: 2..64 objects, each a
 // reference with a relative or absolute path and a finite duration in
-// (0, 86400] s; the first must name the same file as `video` itself.
+// (0, 86400] s and optionally `gapBeforeSeconds` in [0, 3600] (absent or 0 on
+// the first); the first must name the same file as `video` itself.
 [[nodiscard]] bool valid(const QJsonObject &video);
 [[nodiscard]] QVector<VideoChapterReference> read(const QJsonObject &video);
 // Chapter references written with `serialize` (editor or event rules).

@@ -17,6 +17,10 @@ struct TimelineChapter {
     QString path;              // empty when unavailable
     double durationSeconds = 0.0;
     bool available = true;
+    // KAN-262: recorded time without video before this chapter (BetterDriver
+    // starts a new clip some 0.6 to 1.5 s after the last ends). Unlike an
+    // unavailable chapter it is not a missing file: nothing was recorded.
+    double gapBeforeSeconds = 0.0;
 };
 
 struct TimelinePosition {
@@ -28,8 +32,9 @@ struct TimelinePosition {
 class MediaTimeline {
 public:
     MediaTimeline() = default;
-    // Invalid (empty) when any duration is non-finite or not positive, or
-    // there are more than maximumChapters.
+    // Invalid (empty) when any duration is non-finite or not positive, a gap
+    // before a chapter is negative, non-finite or before the first chapter,
+    // or there are more than maximumChapters.
     static MediaTimeline fromChapters(const QVector<TimelineChapter> &chapters);
     static constexpr int maximumChapters = 64;
 
@@ -39,10 +44,14 @@ public:
     [[nodiscard]] double durationSeconds() const { return m_starts.isEmpty() ? 0.0 : m_starts.last(); }
     [[nodiscard]] double chapterStartSeconds(int index) const;
     [[nodiscard]] bool hasGaps() const;
+    // KAN-262: any chapter has recorded time without video before it.
+    [[nodiscard]] bool hasRecordedGaps() const;
 
     // The chapter and local time for a timeline time in [0, duration]; the
     // exact start of a chapter belongs to it, the end of the timeline to the
-    // last chapter. None outside the timeline or when invalid.
+    // last chapter. A time in the recorded gap before a chapter is that
+    // chapter at local time 0, flagged `gap` like a missing file (no picture).
+    // None outside the timeline or when invalid.
     [[nodiscard]] std::optional<TimelinePosition> locate(double timelineSeconds) const;
     // The timeline time of a chapter's local time (clamped to the chapter).
     [[nodiscard]] std::optional<double> timelineSeconds(int chapter, double localSeconds) const;
