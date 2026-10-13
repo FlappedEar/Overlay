@@ -23,9 +23,9 @@ confirmed by the owner in Circuit Tools). The parts that matter here:
 - If a session has phone video only the phone clips are exported; otherwise the clips of the first other
   camera. A clip cut off by a crash (no MP4 index) is left out, so a series can have a missing number.
 
-A real file (owner, session 20261012-103607, 54,797 rows) has five clips (rows with video 9,300, 9,966,
-9,855, 20,159 and 5,398 at 25 Hz), with 23 to 34 rows without video at each switch. Its first row is
-30.8 s into clip 1, so clip 1's offset is -30.846 s: the offset is the sync, whatever the first row is.
+The owner's real file (private, not in this repository) has five clips at 25 Hz with 23 to 34 rows
+without video at each switch. Its first row is well into clip 1 (about 30 s), so clip 1's offset is
+negative: the offset is the sync, whatever the first row is.
 
 ## What Overlays did before
 

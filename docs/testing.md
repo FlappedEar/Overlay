@@ -2500,9 +2500,8 @@ rows), that the columns stay channels, that a recording without them has no seri
 placed beyond a float's exact millisecond range (20,000,001 ms) is still exact.
 `rejectsUnusableVideoClipLists` refuses a missing or one-line `[avi]` section, a path, a backslash or `..`
 in the base name, a dotted or 9-character extension, a fractional or zero clip number and a 65th clip,
-each with one warning and the telemetry intact. Checked by hand on the owner's real BetterDriver file
-(session 20261012-103607, 54,797 rows): five clips with offsets -30.846, 386.176, 803.544, 1215.877 and
-2059.276 s, 9,300 / 9,966 / 9,855 / 20,159 / 5,398 rows with video, per-row spread 72 to 90 ms, no warnings.
+each with one warning and the telemetry intact. Checked by hand on the owner's real BetterDriver file (private, not in
+this repository): five clips, no warnings, clip gaps of about 1.4 s, per-row spread under 0.1 s.
 
 ## KAN-158: a generated RaceChrono recording in CI
 
