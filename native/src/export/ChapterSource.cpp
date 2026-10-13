@@ -173,6 +173,13 @@ ChapterSourceCombination ChapterSource::combineSeries(const QVector<MediaInfo> &
             return {std::nullopt, QStringLiteral("Clip %1 has no exact video duration.").arg(index + 1)};
         if (!std::isfinite(gapsBefore[index]) || gapsBefore[index] < 0.0)
             return {std::nullopt, QStringLiteral("Clip %1 has an invalid gap before it.").arg(index + 1)};
+        // Size, frame rate and audio may differ, but a clip is never converted between
+        // colour or bit-depth classes the export would handle differently.
+        if (index > 0 && (clip.pixelFormat != first.pixelFormat || clip.bitDepth != first.bitDepth
+                          || clip.colorRange != first.colorRange || clip.colorSpace != first.colorSpace
+                          || clip.colorTransfer != first.colorTransfer || clip.colorPrimaries != first.colorPrimaries
+                          || clip.sourceColorClass != first.sourceColorClass))
+            return {std::nullopt, mismatch(index, QStringLiteral("colour description or pixel format"))};
         total += gapsBefore[index] + clip.videoDuration;
         if (!audioClip && hasAudio(clip)) audioClip = &clip;
     }
@@ -226,9 +233,12 @@ ChapterSource::SeriesGraph ChapterSource::seriesGraph(const QVector<MediaInfo> &
             .arg(input).arg(frameRate, size, pixelFormat, number(clip.videoDuration)).arg(index);
         videoSegments += QStringLiteral("[sv%1]").arg(index);
         if (hasAudio(clip)) {
-            graph.audio += QStringLiteral("[%1:a]asetpts=PTS-STARTPTS,aresample=%2,aformat=sample_fmts=fltp:channel_layouts=stereo,"
+            // The audio keeps its delay from the video start: both are measured from the clip's
+            // video start, and first_pts=0 fills any delay with silence.
+            graph.audio += QStringLiteral("[%1:a]asetpts=PTS-(%5)/TB,aresample=%2:async=1:first_pts=0,"
+                                          "aformat=sample_fmts=fltp:channel_layouts=stereo,"
                                           "apad=whole_dur=%3,atrim=duration=%3,asetpts=PTS-STARTPTS[sa%4];")
-                .arg(input).arg(rate).arg(number(clip.videoDuration)).arg(index);
+                .arg(input).arg(rate).arg(number(clip.videoDuration)).arg(index).arg(number(clip.videoStartTime));
         } else {
             graph.audio += QStringLiteral("anullsrc=r=%1:cl=stereo:d=%2,aformat=sample_fmts=fltp[sa%3];")
                 .arg(rate).arg(number(clip.videoDuration)).arg(index);
