@@ -515,6 +515,8 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     setStatus(QStringLiteral("Video opened: %1").arg(QFileInfo(result.path).fileName())
         + (m_videoChapterNotice.isEmpty() ? QString() : QStringLiteral(". ") + m_videoChapterNotice));
     m_videoChapterNotice.clear();
+    // The telemetry may have finished first, while this clip was still loading.
+    if (markDocumentDirty && m_vboLoadState == QStringLiteral("ready")) autoLinkBetterDriverVideo();
 }
 
 void AppController::commitVboLoad(const VboLoadResult &result, const bool markDocumentDirty)
@@ -699,7 +701,11 @@ void AppController::autoLinkBetterDriverVideo()
     const bool noVideo = m_videoSource.isEmpty() && m_videoLoadState != QStringLiteral("loading");
     if (!noVideo && !isRecordingClip(m_videoSource.toLocalFile())) return;
     if (!betterDriverVideo().value("available").toBool()) return;
-    QMetaObject::invokeMethod(this, [this] { loadBetterDriverVideo(); }, Qt::QueuedConnection);
+    // Revalidated when it runs: another telemetry file may have been chosen in between.
+    QMetaObject::invokeMethod(this, [this, path = m_telemetryPath, revision = m_loadedSourceRevision] {
+        if (m_vboLoadState != QStringLiteral("ready") || m_telemetryPath != path || m_loadedSourceRevision != revision) return;
+        loadBetterDriverVideo();
+    }, Qt::QueuedConnection);
 }
 
 QVariantMap AppController::betterDriverVideo() const

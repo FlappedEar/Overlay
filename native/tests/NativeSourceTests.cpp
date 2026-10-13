@@ -1726,6 +1726,14 @@ void SourceTests::linksBetterDriverClipsAsOneTimeline()
         QTRY_VERIFY_WITH_TIMEOUT(clipFirst.videoChaptered(), 30000);
         QTRY_VERIFY_WITH_TIMEOUT(std::abs(clipFirst.syncController()->offset() - 0.4) < 1e-9, 10000);
     }
+    // Both loads in flight at once, whichever finishes first: the series ends up linked.
+    {
+        AppController both(nullptr, directory.filePath("recovery-5.json"));
+        both.loadVideo(QUrl::fromLocalFile(directory.filePath("BetterDriver-test_0002.MP4")));
+        both.loadVbo(QUrl::fromLocalFile(vbo.fileName()));
+        QTRY_VERIFY_WITH_TIMEOUT(both.videoChaptered(), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(std::abs(both.syncController()->offset() - 0.4) < 1e-9, 10000);
+    }
     // A clip opened after the recording (auto-link off after replacing the video by another file) opens the series too.
     {
         AppController other(nullptr, directory.filePath("recovery-4.json"));
