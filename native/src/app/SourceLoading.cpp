@@ -8,15 +8,19 @@
 
 #include <QFileInfo>
 
+#include <algorithm>
+#include <cmath>
 #include <exception>
 #include <stdexcept>
 
 namespace FlappedEar::SourceLoading {
 
 VideoProbeResult probeVideo(const QString &path, const quint64 generation, const Cancellation &cancellation,
-    const QJsonObject &expectedFingerprint, const bool relink, const QVector<VideoChapterInput> &chapters)
+    const QJsonObject &expectedFingerprint, const bool relink, const QVector<VideoChapterInput> &chapters,
+    const std::optional<double> recordingOffsetSeconds)
 {
     VideoProbeResult result;
+    result.recordingOffsetSeconds = recordingOffsetSeconds;
     result.path = path;
     result.generation = generation;
     result.expectedFingerprint = expectedFingerprint;
@@ -33,10 +37,11 @@ VideoProbeResult probeVideo(const QString &path, const quint64 generation, const
                 return info.videoDuration > 0.0 ? info.videoDuration : info.duration;
             };
             result.chapters.append({ProjectSourceReferenceCodec::forLoadedSource(path, result.fingerprint), path,
-                videoDuration(result.mediaInfo), true, {}, result.mediaInfo});
+                videoDuration(result.mediaInfo), true, {}, result.mediaInfo, 0.0, recordingOffsetSeconds});
             for (const auto &input : chapters) {
                 if (cancellation->load()) break;
-                VideoChapterState chapter{input.reference, input.path, input.durationSeconds, false, {}, {}, input.gapBeforeSeconds};
+                VideoChapterState chapter{input.reference, input.path, input.durationSeconds, false, {}, {}, input.gapBeforeSeconds,
+                    input.recordingOffsetSeconds};
                 if (input.path.isEmpty()) {
                     chapter.problem = QStringLiteral("missing");
                 } else {
@@ -62,6 +67,7 @@ VideoProbeResult probeVideo(const QString &path, const quint64 generation, const
                 if (!chapter.available) chapter.path.clear();
                 result.chapters.append(chapter);
             }
+            applyRecordedGaps(result.chapters);
         }
         result.success = !cancellation->load();
         if (!result.success) {
@@ -117,6 +123,21 @@ VboLoadResult loadTelemetry(const QString &path, const quint64 generation, const
         result.error = QString::fromUtf8(error.what());
     }
     return result;
+}
+
+void applyRecordedGaps(QVector<VideoChapterState> &chapters)
+{
+    if (chapters.size() < 2 || !chapters.first().recordingOffsetSeconds) return;
+    const double origin = *chapters.first().recordingOffsetSeconds;
+    double end = chapters.first().durationSeconds; // where the previous chapter ended on the timeline
+    for (qsizetype index = 1; index < chapters.size(); ++index) {
+        auto &chapter = chapters[index];
+        if (chapter.recordingOffsetSeconds && std::isfinite(origin) && std::isfinite(*chapter.recordingOffsetSeconds)) {
+            const double gap = *chapter.recordingOffsetSeconds - origin - end;
+            chapter.gapBeforeSeconds = std::clamp(std::isfinite(gap) ? gap : 0.0, 0.0, VideoChaptersCodec::maximumGapSeconds);
+        }
+        end += chapter.gapBeforeSeconds + chapter.durationSeconds;
+    }
 }
 
 SavedChapters savedChapters(const QJsonObject &video, const QString &projectPath)

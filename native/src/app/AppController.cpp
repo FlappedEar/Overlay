@@ -1,4 +1,5 @@
 #include "app/AppController.h"
+#include "app/BetterDriverClips.h"
 #include "export/VideoComposition.h"
 #include "app/PreviewTimeline.h"
 #include "app/ExportSourceOptions.h"
@@ -331,7 +332,7 @@ quint64 AppController::beginSourceReplacement(const bool replacingVideo)
         if (replacingVideo) startVboLoad(request.path, generation, request.markDocumentDirty,
                                         request.expectedFingerprint, request.relink, request.expectedContentSha256);
         else startVideoProbe(request.path, generation, request.markDocumentDirty,
-                             request.expectedFingerprint, request.relink, request.chapters);
+                             request.expectedFingerprint, request.relink, request.chapters, request.recordingOffsetSeconds);
     }
     return generation;
 }
@@ -374,7 +375,7 @@ void AppController::resumeInterruptedSources()
     if (video) {
         const auto request = m_videoLoadRequest;
         startVideoProbe(request.path, generation, request.markDocumentDirty,
-                        request.expectedFingerprint, request.relink, request.chapters);
+                        request.expectedFingerprint, request.relink, request.chapters, request.recordingOffsetSeconds);
     }
     if (vbo) {
         const auto request = m_vboLoadRequest;
@@ -397,20 +398,22 @@ void AppController::cancelSourceJobs()
 
 void AppController::startVideoProbe(
     const QString &path, const quint64 generation, const bool markDocumentDirty,
-    QJsonObject expectedFingerprint, const bool relink, QVector<VideoChapterInput> chapters)
+    QJsonObject expectedFingerprint, const bool relink, QVector<VideoChapterInput> chapters,
+    const std::optional<double> recordingOffsetSeconds)
 {
     AppLog::info(QStringLiteral("Video load/probe started: %1").arg(path));
     m_videoProbeCancellation = std::make_shared<std::atomic_bool>(false);
     const std::shared_ptr<std::atomic_bool> cancellation = m_videoProbeCancellation;
-    m_videoLoadRequest = {path, markDocumentDirty, expectedFingerprint, relink, chapters};
+    m_videoLoadRequest = {path, markDocumentDirty, expectedFingerprint, relink, chapters, {}, recordingOffsetSeconds};
     m_pendingVideoPath = path;
     m_videoLoadMarksDocumentDirty = markDocumentDirty;
     m_videoLoadState = QStringLiteral("loading");
     emit sourceLoadStateChanged();
     m_videoProbeWatcher.setFuture(QtConcurrent::run(
         [path, generation, cancellation, expectedFingerprint = std::move(expectedFingerprint), relink,
-         chapters = std::move(chapters)] {
-        return SourceLoading::probeVideo(path, generation, cancellation, expectedFingerprint, relink, chapters);
+         chapters = std::move(chapters), recordingOffsetSeconds] {
+        return SourceLoading::probeVideo(path, generation, cancellation, expectedFingerprint, relink, chapters,
+                                         recordingOffsetSeconds);
     }));
 }
 
@@ -491,6 +494,12 @@ void AppController::commitVideoProbe(const VideoProbeResult &result, const bool 
     if (!m_exportChapterProblem.isEmpty())
         AppLog::warn(QStringLiteral("Chaptered video cannot be exported: %1").arg(m_exportChapterProblem));
     emit videoChaptersChanged();
+    // KAN-263: BetterDriver's clips carry their own sync: the first clip's
+    // media time 0 is at this recording time (telemetry = video + offset).
+    if (markDocumentDirty && result.recordingOffsetSeconds) {
+        m_syncController.setTimeScale(1.0);
+        m_syncController.setOffset(*result.recordingOffsetSeconds);
+    }
     m_videoLoadState = QStringLiteral("ready");
     m_pendingVideoPath.clear();
     m_syncController.clearCandidate();
@@ -665,6 +674,44 @@ void AppController::loadVideo(const QUrl &url)
     m_pendingVideoPath = normalizedPath;
     startVideoProbe(normalizedPath, generation, true);
     setStatus(QStringLiteral("Loading video metadata: %1").arg(info.fileName()));
+}
+
+QVariantMap AppController::betterDriverVideo() const
+{
+    if (!m_session || !m_session->videoSeries || m_telemetryPath.isEmpty())
+        return {{"available", false}, {"found", 0}, {"total", 0}, {"problem", QString()}};
+    const auto plan = BetterDriverClips::plan(*m_session->videoSeries, m_telemetryPath);
+    return {{"available", plan.problem.isEmpty()}, {"found", plan.found}, {"total", plan.total},
+            {"problem", plan.problem}};
+}
+
+void AppController::loadBetterDriverVideo()
+{
+    if (!m_session || !m_session->videoSeries || m_telemetryPath.isEmpty()) {
+        setStatus(QStringLiteral("Open a BetterDriver recording with video first."));
+        return;
+    }
+    const auto plan = BetterDriverClips::plan(*m_session->videoSeries, m_telemetryPath);
+    if (!plan.problem.isEmpty()) {
+        setStatus(plan.problem);
+        return;
+    }
+    const auto &first = plan.clips.first();
+    QVector<VideoChapterInput> chapters;
+    for (qsizetype index = 1; index < plan.clips.size(); ++index) {
+        const auto &clip = plan.clips[index];
+        // A clip file that is not there plays as a gap of its estimated length.
+        // The saved project keeps where the file should be, so it can be found later.
+        ProjectSourceReference reference;
+        if (clip.path.isEmpty()) reference.absolutePath = normalizedSourcePath(clip.expectedPath);
+        chapters.append({reference, clip.path.isEmpty() ? QString() : normalizedSourcePath(clip.path),
+                         clip.estimatedDurationSeconds, 0.0, clip.offsetSeconds});
+    }
+    const quint64 generation = beginSourceReplacement(true);
+    const QString firstPath = normalizedSourcePath(first.path);
+    m_pendingVideoPath = firstPath;
+    startVideoProbe(firstPath, generation, true, {}, false, chapters, first.offsetSeconds);
+    setStatus(QStringLiteral("Loading %1 BetterDriver video clip(s)").arg(plan.found));
 }
 
 void AppController::loadVbo(const QUrl &url)

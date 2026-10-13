@@ -2491,6 +2491,17 @@ exporter give no UTC start; a start just after UTC midnight takes the next day.
 and `withholdsUnresolvedCoordinates` refuses a suffixed or prefixed BetterDriver line, BetterDriver
 with a `coordinate units = degrees` declaration, and BetterDriver beside RaceChrono.
 
+## KAN-263: linking BetterDriver clips
+
+`SourceTests` (`flappedear_native_tests_sources`, under `xvfb-run` with FFmpeg 8.1 or newer):
+`plansBetterDriverClipsBesideTheRecording`, `placesRecordedGapsFromRecordingOffsets` and
+`linksBetterDriverClipsAsOneTimeline` (see [betterdriver-video.md](betterdriver-video.md)). The last
+writes a 110-row recording with four named clips, encodes three 3 s, 2 s and 2 s test clips, leaves clip 3
+out, and checks the chapter list (starts about 0, 3.6, 6.1 and 8.6 s, gaps 0.6, 0.5 and 0.6 s), the sync
+offset 0.4 s, the gap flag, the project round trip and the reopened timeline. Checked by hand on the
+owner's real clips (private, not in this repository): the five clips' offsets and probed lengths agree
+within 0.1 s, as described in [betterdriver-video.md](betterdriver-video.md).
+
 ## KAN-262: recorded gaps between chapters
 
 `MediaTimelineTests::keepsRecordedGapsBetweenChapters` (three clips with 1.5 s and 1.25 s gaps: chapter

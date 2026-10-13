@@ -32,6 +32,9 @@ struct VideoChapterInput {
     QString path;                      // resolved; empty when missing
     double durationSeconds = 0.0;      // saved duration, kept for a gap
     double gapBeforeSeconds = 0.0;     // KAN-262: recorded time without video before it
+    // KAN-263: recording time at the clip's media time 0 (BetterDriver); the
+    // gap before it is then worked out from the offsets and the probed lengths.
+    std::optional<double> recordingOffsetSeconds = std::nullopt;
 };
 
 struct VideoChapterState {
@@ -42,6 +45,7 @@ struct VideoChapterState {
     QString problem;                   // why it is a gap
     MediaInfo mediaInfo;               // probed, when available (KAN-106)
     double gapBeforeSeconds = 0.0;     // KAN-262: recorded time without video before it
+    std::optional<double> recordingOffsetSeconds = std::nullopt; // KAN-263, as in VideoChapterInput
 };
 
 struct VideoProbeResult {
@@ -55,6 +59,8 @@ struct VideoProbeResult {
     QJsonObject fingerprint;
     QJsonObject expectedFingerprint;
     bool relink = false;
+    // KAN-263: the first clip's recording offset; the video's sync when set.
+    std::optional<double> recordingOffsetSeconds = std::nullopt;
 };
 
 struct VboLoadResult {
@@ -110,7 +116,15 @@ struct SavedChapters {
 // duration (KAN-105).
 [[nodiscard]] VideoProbeResult probeVideo(const QString &path, quint64 generation,
     const Cancellation &cancellation, const QJsonObject &expectedFingerprint, bool relink,
-    const QVector<VideoChapterInput> &chapters);
+    const QVector<VideoChapterInput> &chapters, std::optional<double> recordingOffsetSeconds = std::nullopt);
+
+// KAN-263: sets each chapter's gapBeforeSeconds from the recording offsets of
+// the chapters that have one. The first chapter's offset is the origin of the
+// chapter timeline; a later chapter starts at its offset minus that, so the
+// gap is that start minus where the previous chapter ended (never below 0:
+// clips are not overlapped, and never above the project format's limit).
+// Chapters without an offset keep the gap they have.
+void applyRecordedGaps(QVector<VideoChapterState> &chapters);
 
 // Hashes, parses and analyses the recording (track and laps). The recording
 // is hashed again at the end; one that changed meanwhile fails. A recording
