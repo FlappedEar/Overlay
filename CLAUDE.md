@@ -10,7 +10,7 @@ and check `origin/main` and Jira project KAN before starting; other sessions may
 - Status records: [docs/product-delivery.md](docs/product-delivery.md) and Jira KAN.
 - Editor look: FlappedEar Telemetry's design language. Editor QML takes colours, fonts and
   corners from `native/qml/Theme.js` and the `Fe*` controls ([docs/ui-theme.md](docs/ui-theme.md)).
-- BetterDriver (owner's Android recorder) writes its video as a numbered clip series named by the VBO's `[avi]` section and `avifileindex`/`avisynctime` columns; epic KAN-260, plan in [docs/betterdriver-video.md](docs/betterdriver-video.md). The parser reads the clip list, the clips link as one timeline with recorded gaps (controller functions) and the preview shows no picture over a gap; export of gaps and mixed sizes and the editor button follow in later steps.
+- BetterDriver (owner's Android recorder) writes its video as a numbered clip series named by the VBO's `[avi]` section and `avifileindex`/`avisynctime` columns; epic KAN-260, plan in [docs/betterdriver-video.md](docs/betterdriver-video.md). The parser reads the clip list, the clips link as one timeline with recorded gaps (controller functions) and the preview shows no picture over a gap; the editor header has a "BetterDriver video" button; export of gaps and mixed sizes follows in a later step.
 - Private sample recordings: `FlappedEar/refdata` (read-only for agents: never push, branch or
   open PRs there). It holds the owner's Jastrząb day of 29 August 2026, six RaceChrono sessions
   each as `.vbo` and `.rcz`; expected results are in
