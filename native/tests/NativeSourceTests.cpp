@@ -67,6 +67,7 @@ private slots:
     void placesRecordedGapsFromRecordingOffsets();
     void linksBetterDriverClipsAsOneTimeline();
     void showsNoPictureOverRecordedGaps();
+    void runsRecordedGapsBeforeMissingClips();
     void loadsSourcesInTheBackgroundWorker();
     void derivesChapterPlaybackAndExportSource();
     void readsTheSavedChaptersOfAProject();
@@ -2118,6 +2119,14 @@ void SourceTests::showsNoPictureOverRecordedGaps()
     const auto blank = [&] { return find(window->contentItem()); };
     QVERIFY(blank());
     QVERIFY(!blank()->isVisible());
+    // Into the gap and at once on into the next clip, before that clip has loaded: the seek stands.
+    QVERIFY(QMetaObject::invokeMethod(window, "seekTimeline", Q_ARG(QVariant, double(gapStart + 200))));
+    QVERIFY(QMetaObject::invokeMethod(window, "seekTimeline", Q_ARG(QVariant, double(gapEnd + 500))));
+    QVERIFY(!window->property("inRecordedGap").toBool());
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(controller.playbackTime() - double(gapEnd + 500) / 1000.0) < 0.15, 15000);
+    QTest::qWait(500);
+    QVERIFY(std::abs(controller.playbackTime() - double(gapEnd + 500) / 1000.0) < 0.15);
+    QVERIFY(!window->property("previewPlaying").toBool());
     // A seek into the gap: no picture, the time is the requested one, the next clip is ready.
     QVERIFY(QMetaObject::invokeMethod(window, "seekTimeline", Q_ARG(QVariant, double(gapStart + 200))));
     QVERIFY(window->property("inRecordedGap").toBool());
@@ -2157,6 +2166,52 @@ void SourceTests::showsNoPictureOverRecordedGaps()
     QVERIFY(!window->property("inRecordedGap").toBool());
     QCOMPARE(controller.videoChapterIndex(), 1);
     QTRY_VERIFY_WITH_TIMEOUT(std::abs(controller.playbackTime() - double(gapEnd + 500) / 1000.0) < 0.15, 15000);
+}
+
+void SourceTests::runsRecordedGapsBeforeMissingClips()
+{
+    // KAN-264: the gap before a clip that is not there still runs (time moves on and no picture
+    // shows), and playback then stops at the missing clip with the time at its start.
+    const QString ffmpeg = FfmpegTools::ffmpegPath();
+    if (ffmpeg.isEmpty()) QSKIP("FFmpeg is unavailable for the recorded gap preview test.");
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    QSettings settings; settings.clear(); settings.sync();
+    QVERIFY(encodeChapter(ffmpeg, directory.filePath("BetterDriver-test_0001.MP4"), 3));
+    QVERIFY(encodeChapter(ffmpeg, directory.filePath("BetterDriver-test_0002.MP4"), 3));
+    QFile vbo(directory.filePath("BetterDriver-test.vbo"));
+    QVERIFY(vbo.open(QIODevice::WriteOnly));
+    vbo.write(betterDriverRecording({{1, 0.4, 0.4, 3.3}, {2, 4.0, 4.0, 6.9}, {3, 7.5, 7.5, 9.4}}));
+    vbo.close();
+    AppController controller(nullptr, directory.filePath("recovery.json"));
+    controller.loadVbo(QUrl::fromLocalFile(vbo.fileName()));
+    QTRY_COMPARE_WITH_TIMEOUT(controller.vboLoadState(), QString("ready"), 30000);
+    controller.loadBetterDriverVideo();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 30000);
+    const auto chapters = controller.videoChapterList();
+    QCOMPARE(chapters.size(), 3);
+    QVERIFY(!chapters[2].toMap().value("available").toBool());
+    const qint64 missingStart = chapters[2].toMap().value("startMilliseconds").toLongLong();
+    const qint64 secondEnd = missingStart - chapters[2].toMap().value("gapBeforeMilliseconds").toLongLong();
+    QQmlEngine engine; engine.rootContext()->setContextProperty("appController", &controller);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(qmlSourcePath("Main.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.create());
+    QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window));
+    if (!QTest::qWaitFor([&] { return controller.playbackTime() > 0.0; }, 15000))
+        QSKIP("Media playback is unavailable here.");
+    QVERIFY(QMetaObject::invokeMethod(window, "seekTimeline", Q_ARG(QVariant, double(secondEnd - 500))));
+    QCOMPARE(controller.videoChapterIndex(), 1);
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(controller.playbackTime() - double(secondEnd - 500) / 1000.0) < 0.15, 15000);
+    QTRY_VERIFY_WITH_TIMEOUT(!window->property("previewPrimeFramePending").toBool(), 15000);
+    QSignalSpy gapChanges(window, SIGNAL(inRecordedGapChanged()));
+    QVERIFY(QMetaObject::invokeMethod(window, "togglePlayback"));
+    QTRY_VERIFY_WITH_TIMEOUT(gapChanges.count() >= 2, 15000); // in, then out
+    QCOMPARE(controller.videoChapterIndex(), 2);
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(controller.playbackTime() - double(missingStart) / 1000.0) < 0.05, 5000);
+    QTest::qWait(300);
+    QVERIFY(std::abs(controller.playbackTime() - double(missingStart) / 1000.0) < 0.05); // the time stands at the missing clip
 }
 
 void SourceTests::persistsAndInvalidatesRunTrackConfiguration()

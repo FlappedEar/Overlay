@@ -88,7 +88,8 @@ sync, not an offset the user aligns by hand.
    run on a clock of the preview's own while the next clip waits at its first frame, and when the clock
    reaches the clip's start the clip plays on (if it was playing). Playing off the end of a clip enters
    the gap by itself, pausing stops the clock, and a seek out of the gap leaves it. A gap before a missing
-   clip runs the same way and then stops at the missing clip as before. A chapter switch now also waits
+   clip runs the same way and then stops at the missing clip. In picture-in-picture layouts the main
+   video's boxes stay but show no picture over the gap; extra cameras are untouched. A chapter switch now also waits
    for the new file's own events: the old file can report "loaded" and frames after the source property
    has moved on, which used to be taken for the new file's and left the preview at the first frame.
 5. **Export (step 5).** The concat demuxer cannot express a gap or a size change, so a series with either
@@ -105,7 +106,7 @@ additional-video path of KAN-131 and KAN-245).
 
 ## Tests
 
-Step 4: `SourceTests::showsNoPictureOverRecordedGaps` (two generated clips with a 0.6 s gap in the editor window: a seek into the gap shows the black panel with the requested time and the next clip loaded, playing runs the gap's clock into the clip and on, playing off the end of the first clip enters and leaves the gap, a paused gap keeps its time, a seek out of it leaves it).
+Step 4: `SourceTests::showsNoPictureOverRecordedGaps` (two generated clips with a 0.6 s gap in the editor window: a seek into the gap shows the black panel with the requested time and the next clip loaded, playing runs the gap's clock into the clip and on, playing off the end of the first clip enters and leaves the gap, a paused gap keeps its time, a seek out of it leaves it, a seek into the gap and at once on into the next clip stands) and `runsRecordedGapsBeforeMissingClips` (the gap before a missing clip runs, then the time stands at the missing clip).
 
 Step 3: `SourceTests::plansBetterDriverClipsBesideTheRecording` (own folder only, a directory is not a
 file, clips before the first existing one dropped, later missing ones kept as gaps with expected path and

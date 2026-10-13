@@ -2501,7 +2501,10 @@ gap's own clock into the clip and on past its start; playing off the end of the 
 leaves the gap on its own (checked with a signal spy, since loading the next clip can outlast the gap);
 a paused gap keeps its time; a seek out of the gap leaves it. `playsVideoChaptersAcrossBoundaries` still
 covers the ordinary chapter switch and passes with the new rule that a switch waits for the new file's
-own events. Like the other playback tests it is skipped when media playback is unavailable.
+own events. A seek into the gap and at once on into the next clip, before it has loaded, stands.
+`runsRecordedGapsBeforeMissingClips` (clips 1 and 2 present, clip 3 missing): playing off the end of clip 2
+runs the gap before the missing clip, then the time stands at the missing clip's start. Like the other
+playback tests they are skipped when media playback is unavailable.
 
 ## KAN-263: linking BetterDriver clips
 

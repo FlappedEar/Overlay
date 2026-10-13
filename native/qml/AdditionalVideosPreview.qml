@@ -16,6 +16,8 @@ Item {
     objectName: "additionalVideosPreview"
     readonly property var controller: appController.additionalVideos
     property bool playing: false
+    // KAN-264: the main video has no picture (a recorded gap); its boxes stay, empty.
+    property bool mainBlank: false
     // The main video's output, for its boxes and fades (picture in picture).
     property Item mainOutput: null
     readonly property real time: appController.playbackTime
@@ -105,6 +107,7 @@ Item {
                 width: copy.modelData.contentWidth
                 height: copy.modelData.contentHeight
                 sourceItem: root.mainOutput
+                visible: !root.mainBlank
                 // A camera box set to fill shows the middle of the picture that covers the box.
                 sourceRect: copy.modelData.crop ? copy.coverRect : Qt.rect(0, 0, 0, 0)
                 live: copy.visible

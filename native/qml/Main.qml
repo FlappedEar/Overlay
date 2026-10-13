@@ -425,6 +425,34 @@ ApplicationWindow {
         if (window.currentChapter && window.currentChapter.available)
             window.resumeClip(play);
     }
+    // A seek out of a gap into the clip that waited there: while that clip is still loading or
+    // priming, keep the request pending for it instead of treating it as settled.
+    function retargetSettlingClip(localMs, playing) {
+        const status = mediaPlayer.mediaStatus;
+        const loaded = status === MediaPlayer.LoadedMedia || status === MediaPlayer.BufferedMedia;
+        if (loaded && window.pendingChapterPosition < 0 && !window.previewPrimeFramePending)
+            return false;
+        if (!loaded) {
+            window.pendingChapterPosition = localMs;
+            window.resumeAfterChapter = playing; // previewMediaLoaded targets it and continues
+            window.chapterSeekRetried = false;
+            return true;
+        }
+        if (playing) {
+            window.pendingChapterPosition = -1;
+            window.resumeAfterChapter = false;
+            window.previewPrimeFramePending = false;
+            previewPrimeTimeout.stop();
+            mediaPlayer.position = localMs;
+            mediaPlayer.play();
+            return true;
+        }
+        window.previewPrimeTargetPosition = localMs; // it pauses at the new position
+        if (window.pendingChapterPosition >= 0)
+            window.pendingChapterPosition = localMs;
+        mediaPlayer.position = localMs;
+        return true;
+    }
     function seekTimeline(milliseconds) {
         const bounded = appController.clampPreviewPositionMilliseconds(milliseconds);
         if (!appController.videoChaptered) {
@@ -444,10 +472,10 @@ ApplicationWindow {
         window.inRecordedGap = false;
         window.gapPlaying = false;
         if (target.chapter === appController.videoChapterIndex && !target.gap) {
+            if (wasInGap && window.retargetSettlingClip(target.localMilliseconds, playing))
+                return;
             window.pendingChapterPosition = -1;
             window.resumeAfterChapter = false;
-            if (wasInGap)
-                window.previewPrimeFramePending = false;
             mediaPlayer.position = target.localMilliseconds;
             if (wasInGap && playing)
                 mediaPlayer.play();
@@ -683,7 +711,7 @@ ApplicationWindow {
                     // Continue into the next chapter at its start (or stop at a gap).
                     const available = appController.videoChapterList[next].available;
                     const upcoming = appController.videoChapterList[next];
-                    if (available && upcoming.gapBeforeMilliseconds > 0) {
+                    if (upcoming.gapBeforeMilliseconds > 0) {
                         // KAN-264: recorded time without video, then the next clip.
                         window.enterRecordedGap(next, upcoming.startMilliseconds - upcoming.gapBeforeMilliseconds, true);
                         return;
@@ -1323,6 +1351,7 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     mainOutput: videoOutput
                                     playing: window.previewPlaying
+                                    mainBlank: window.inRecordedGap
                                 }
                                 // KAN-105: a missing chapter is an explicit gap, never skipped.
                                 FeLabel {
