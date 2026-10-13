@@ -1686,9 +1686,9 @@ void SourceTests::linksBetterDriverClipsAsOneTimeline()
         QVERIFY(offer.value("available").toBool());
         QCOMPARE(offer.value("found").toInt(), 3);
         QCOMPARE(offer.value("total").toInt(), 4);
-        controller.loadBetterDriverVideo();
+        // KAN-268: nothing to press; opening the recording links its clips and sets the sync.
         QTRY_COMPARE_WITH_TIMEOUT(controller.videoLoadState(), QString("ready"), 30000);
-        QVERIFY(controller.videoChaptered());
+        QTRY_VERIFY_WITH_TIMEOUT(controller.videoChaptered(), 30000);
         const auto chapters = controller.videoChapterList();
         QCOMPARE(chapters.size(), 4);
         QVERIFY(!chapters[2].toMap().value("available").toBool());
@@ -1716,6 +1716,26 @@ void SourceTests::linksBetterDriverClipsAsOneTimeline()
     QCOMPARE(savedChapters.size(), 4);
     QVERIFY(std::abs(savedChapters[1].toObject().value("gapBeforeSeconds").toDouble() - 0.6) < 0.06);
     QVERIFY(!savedChapters[2].toObject().value("absolutePath").toString().isEmpty()); // where the missing clip belongs
+    // KAN-268: a clip of the recording opened first, then the recording: the whole series is linked.
+    {
+        AppController clipFirst(nullptr, directory.filePath("recovery-3.json"));
+        clipFirst.loadVideo(QUrl::fromLocalFile(directory.filePath("BetterDriver-test_0002.MP4")));
+        QTRY_COMPARE_WITH_TIMEOUT(clipFirst.videoLoadState(), QString("ready"), 30000);
+        QVERIFY(!clipFirst.videoChaptered());
+        clipFirst.loadVbo(QUrl::fromLocalFile(vbo.fileName()));
+        QTRY_VERIFY_WITH_TIMEOUT(clipFirst.videoChaptered(), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(std::abs(clipFirst.syncController()->offset() - 0.4) < 1e-9, 10000);
+    }
+    // A clip opened after the recording (auto-link off after replacing the video by another file) opens the series too.
+    {
+        AppController other(nullptr, directory.filePath("recovery-4.json"));
+        other.loadVbo(QUrl::fromLocalFile(vbo.fileName()));
+        QTRY_VERIFY_WITH_TIMEOUT(other.videoChaptered(), 30000);
+        other.loadVideo(QUrl::fromLocalFile(directory.filePath("BetterDriver-test_0002.MP4")));
+        QTRY_COMPARE_WITH_TIMEOUT(other.videoLoadState(), QString("ready"), 30000);
+        QVERIFY(other.videoChaptered());
+        QCOMPARE(other.videoChapterList().size(), 4);
+    }
     // Reopened: the same timeline, the gaps and the sync.
     AppController reopened(nullptr, directory.filePath("recovery-2.json"));
     reopened.requestOpenProject(QUrl::fromLocalFile(projectPath));
