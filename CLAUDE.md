@@ -11,6 +11,7 @@ and check `origin/main` and Jira project KAN before starting; other sessions may
 - Editor look: FlappedEar Telemetry's design language. Editor QML takes colours, fonts and
   corners from `native/qml/Theme.js` and the `Fe*` controls ([docs/ui-theme.md](docs/ui-theme.md)).
 - BetterDriver (owner's Android recorder) writes its video as a numbered clip series named by the VBO's `[avi]` section and `avifileindex`/`avisynctime` columns; epic KAN-260, plan in [docs/betterdriver-video.md](docs/betterdriver-video.md). The parser reads the clip list, the clips link as one timeline with recorded gaps (controller functions) and the preview shows no picture over a gap; opening the telemetry (or one of its clips) links the clips and sets the sync by itself (KAN-268), and the editor header has a "BetterDriver video" button; export joins the clips with black and silence over each gap (KAN-265).
+- Steering wheel (KAN-270): BetterDriver 1.12+ writes `obd_steering_angle` (deg, positive = left); alias `steeringAngle`, widget `steeringWheel` (hidden without the channel); test file `native/tests/fixtures/jastrzab-frs-steering-test.vbo`.
 - Private sample recordings: `FlappedEar/refdata` (read-only for agents: never push, branch or
   open PRs there). It holds the owner's Jastrząb day of 29 August 2026, six RaceChrono sessions
   each as `.vbo` and `.rcz`; expected results are in

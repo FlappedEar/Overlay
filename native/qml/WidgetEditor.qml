@@ -627,7 +627,7 @@ Dialog {
                                 visible: parent.item.kind === "value" || parent.item.kind === "bar"
                                 Layout.fillWidth: true
                                 readonly property var aliases: ["speed", "rpm", "throttle", "brake", "heartRate",
-                                    "lateralAcceleration", "longitudinalAcceleration"]
+                                    "lateralAcceleration", "longitudinalAcceleration", "steeringAngle"]
                                 model: {
                                     const names = aliases.slice();
                                     const channels = appController.channelNames;

@@ -35,6 +35,9 @@ const QList<AliasPattern> aliasPatterns = {
     {"throttle", {expression("throttle"), expression("accelerator.?pedal")}},
     {"brake", {expression("^brake(?:[-_].*)?$"), expression("brake.?pressure"), expression("brake.?pedal")}},
     {"heartRate", {expression("heart.?rate"), expression("^hr$"), expression("^bpm$")}},
+    // KAN-269: BetterDriver 1.12+ writes obd_steering_angle (degrees, positive = left); other loggers
+    // fall back to the first column with "steer" in its name. resolveAliases prefers the exact name.
+    {"steeringAngle", {expression("^obd_steering_angle$"), expression("steer")}},
     {"latitude", {expression("^latitude$"), expression("^lat$")}},
     {"longitude", {expression("^longitude$"), expression("^lon(?:g)?$")}},
     {"lateralAcceleration", {expression("^latacc$"), expression("lat(?:eral)?.?(?:accel|acceleration|g)"), expression("^g.?x$")}},
@@ -490,6 +493,26 @@ qsizetype finiteSampleCount(const TelemetrySession &session, const QString &name
     return std::count_if(values.cbegin(), values.cend(), [](const float value) { return std::isfinite(value); });
 }
 
+// KAN-269: [channel units] has one line per custom column, in column order, after the standard
+// channels. The units are used only when the line count equals the custom column count; a
+// mismatch assigns none rather than guess which column a line belongs to.
+QHash<qsizetype, QString> customColumnUnits(const QStringList &names, const QStringList &unitLines)
+{
+    static const QSet<QString> standard = {
+        "sats", "satellites", "time", "lat", "latitude", "long", "longitude", "velocity", "velocity kmh",
+        "heading", "height", "avifileindex", "avisynctime"};
+    QStringList units;
+    for (const QString &line : unitLines)
+        if (!line.isEmpty()) units.append(line);
+    QList<qsizetype> custom;
+    for (qsizetype column = 0; column < names.size(); ++column)
+        if (!standard.contains(names[column].toLower())) custom.append(column);
+    QHash<qsizetype, QString> result;
+    if (units.isEmpty() || units.size() != custom.size()) return result;
+    for (qsizetype index = 0; index < custom.size(); ++index) result.insert(custom[index], units[index]);
+    return result;
+}
+
 // The first matching column by name wins, unless a later match has more than
 // twice its finite samples (KAN-230, Telemetry FET-207): a mostly empty first
 // column must not hide a full one.
@@ -503,7 +526,8 @@ QHash<QString, QString> resolveAliases(const TelemetrySession &session)
         const QString calculated = aliasPattern.alias == QStringLiteral("lateralAcceleration")
             ? QStringLiteral("latacc-calc")
             : aliasPattern.alias == QStringLiteral("longitudinalAcceleration")
-                ? QStringLiteral("longacc-calc") : QString();
+                ? QStringLiteral("longacc-calc")
+                : aliasPattern.alias == QStringLiteral("steeringAngle") ? QStringLiteral("obd_steering_angle") : QString();
         if (!calculated.isEmpty()) {
             const auto found = std::find_if(names.cbegin(), names.cend(), [&calculated](const QString &name) {
                 return name.compare(calculated, Qt::CaseInsensitive) == 0;
@@ -912,6 +936,7 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         }
     }
 
+    const QHash<qsizetype, QString> columnUnits = customColumnUnits(names, sections.value(QStringLiteral("channel units")));
     for (qsizetype column = 0; column < names.size(); ++column) {
         if ((column & 0x1f) == 0) throwIfCancelled(cancelled);
         if (column == timeIndex) {
@@ -931,6 +956,7 @@ TelemetrySession VboParser::parse(QStringView text, const CancellationCheck &can
         }
         TelemetryChannel channel;
         channel.name = names[column];
+        channel.unit = columnUnits.value(column);
         channel.setSamples(rawTimes, std::move(rawValues[column]));
         session.channels.insert(channel.name, std::move(channel));
     }

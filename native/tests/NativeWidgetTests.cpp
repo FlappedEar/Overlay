@@ -559,7 +559,7 @@ void WidgetTests::describesEachWidgetTypeOnce()
     WidgetModel model;
     QStringList offered;
     for (const QVariant &entry : model.widgetCatalog()) offered.append(entry.toMap().value("type").toString());
-    QCOMPARE(offered, (QStringList{"speed", "heartRate", "pedals", "f1GForceRadar", "gForceMagnitudeBar", "tyres",
+    QCOMPARE(offered, (QStringList{"speed", "heartRate", "steeringWheel", "pedals", "f1GForceRadar", "gForceMagnitudeBar", "tyres",
                                    "retroCustomValue", "lapCurrent", "retroTachometer", "cameraBox"}));
 
     QSet<QString> seen;

@@ -9,6 +9,10 @@ const QList<WidgetTypeDescriptor> &widgetTypeDescriptors()
          "widgets/SpeedWidget.qml", "widgets/tech/TechSpeed.qml"},
         {"heartRate", "Heart rate", "♥", 0.12, 0.13, {}, {"label", "showUnit"},
          "widgets/HeartRateWidget.qml", "widgets/tech/TechHeartRate.qml"},
+        // KAN-269: hidden by the scene when the recording has no steering channel.
+        {"steeringWheel", "Steering wheel", "◎", 0.14, 0.24, {"unit", "decimals", "prefix", "suffix", "showUnit"},
+         {"unit", "decimals", "prefix", "suffix", "showUnit"},
+         "widgets/SteeringWheelWidget.qml", {}},
         {"pedals", "Pedals", "▥", 0.25, 0.13, {"accentColor", "fontWeight", "valueFontScale"}, {"barRadius"},
          "widgets/PedalsWidget.qml", "widgets/tech/TechPedals.qml"},
         {"f1GForceRadar", "F1 G-Force Radar", "G+", 0.15, 0.20,

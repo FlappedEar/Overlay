@@ -15,7 +15,7 @@ Rectangle {
     readonly property bool isLapTimeTile: selectedWidget.type === "lapCurrent"
     readonly property bool isTech: settings.style === "tech"
     // Widgets that read one channel through the shared value settings.
-    readonly property bool hasValueSource: ["speed", "heartRate", "retroCustomValue", "retroTachometer"].includes(selectedWidget.type)
+    readonly property bool hasValueSource: ["speed", "heartRate", "steeringWheel", "retroCustomValue", "retroTachometer"].includes(selectedWidget.type)
     // KAN-139: shared controls a widget's renderer does not read, per style, so
     // the inspector never offers a control that changes nothing. KAN-217: the
     // lists live in the widget type descriptors (src/widgets/WidgetTypes.cpp).
@@ -1302,6 +1302,33 @@ Rectangle {
                             text: qsTr("Show heart icon")
                             checked: root.settings.showIcon ?? true
                             onToggled: root.setSetting("showIcon", checked)
+                        }
+                        // KAN-269: steering wheel.
+                        FeCheckBox {
+                            visible: root.selectedWidget.type === "steeringWheel"
+                            text: qsTr("Show label")
+                            checked: root.settings.showLabel ?? true
+                            onToggled: root.setSetting("showLabel", checked)
+                        }
+                        FeCheckBox {
+                            visible: root.selectedWidget.type === "steeringWheel"
+                            text: qsTr("Show angle (degrees and side)")
+                            checked: root.settings.showValue ?? true
+                            onToggled: root.setSetting("showValue", checked)
+                        }
+                        RowLayout {
+                            visible: root.selectedWidget.type === "steeringWheel"
+                            Layout.fillWidth: true
+                            FeLabel {
+                                text: qsTr("Wheel color")
+                                color: Theme.onSurfaceVariant
+                                font.pixelSize: Theme.labelMedium
+                            }
+                            ColorField {
+                                Layout.fillWidth: true
+                                colorValue: root.settings.wheelColor || "#f2f5f7"
+                                onEdited: value => root.setSetting("wheelColor", value)
+                            }
                         }
                         // KAN-193: settings only the Tech style uses.
                         FeCheckBox {

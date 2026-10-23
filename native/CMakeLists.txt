@@ -449,6 +449,7 @@ qt_add_qml_module(flappedear_native
         qml/widgets/GForceMagnitudeBarWidget.qml
         qml/widgets/TyresWidget.qml
         qml/widgets/HeartRateWidget.qml
+        qml/widgets/SteeringWheelWidget.qml
         qml/widgets/LapTimeWidget.qml
         qml/widgets/PedalsWidget.qml
         qml/widgets/RetroCustomValueWidget.qml

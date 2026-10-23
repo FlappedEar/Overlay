@@ -2476,6 +2476,15 @@ for each VBO with its RCZ beside it, the lap times detected from the VBO must ma
 list in the RCZ's `session.json` (RaceChrono's own timing) to within 50 ms. It needs `unzip`
 and skips without it. The owner's Jastrząb day: all 25 laps agree to within 16 ms.
 
+## KAN-270: steering angle
+
+`readsBetterDriverSteeringAngle` (`flappedear_telemetry_core_tests`) parses `fixtures/jastrzab-frs-steering-test.vbo`
+(BetterDriver's own writer, one Autodrom Jastrząb lap with 5 s either side, 25 Hz; the angle is worked out from the
+driving line, not measured). It asserts the alias, the `deg` unit (and `bar`, `%`, `rpm` for the other custom columns),
+the range -181 to +183 deg, about -24 deg on the first row (14:19:54.11), about -88 deg at 14:20:34.07, and that the
+smoothed display value stays within 1.5 deg. `findsTheSteeringChannelByName` covers the exact name before `steer`,
+the fallback, a file without the column (no alias, no warning, widget hidden) and a mismatched units list.
+
 ## KAN-259: a generated BetterDriver recording
 
 `readsAGeneratedBetterDriverRecording` (`flappedear_telemetry_core_tests`) writes the same synthetic

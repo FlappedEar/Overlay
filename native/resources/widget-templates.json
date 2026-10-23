@@ -36,6 +36,9 @@
     },
     "speed": { "label": "Speed", "unit": "km/h", "maxValue": 300 },
     "heartRate": { "label": "HR", "unit": "bpm", "accentColor": "#e14b4b", "maxValue": 220, "showIcon": true },
+    "steeringWheel": {
+      "label": "STEER", "showLabel": true, "showValue": true, "wheelColor": "#f2f5f7", "accentColor": "#e14b4b"
+    },
     "pedals": {
       "acceleratorSource": "", "brakeSource": "", "acceleratorLabel": "Throttle", "brakeLabel": "Brake",
       "acceleratorColor": "#55d76a", "brakeColor": "#e14b4b", "acceleratorMin": 0, "acceleratorMax": 100,

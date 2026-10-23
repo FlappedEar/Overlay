@@ -168,10 +168,13 @@ QJsonObject ProjectSourceReferenceCodec::telemetryFingerprint(
     QStringList names = session.channelNames();
     std::sort(names.begin(), names.end());
     QJsonArray channels;
+    // KAN-270: a VBO's [channel units] are read since then; the fingerprint keeps VBO units empty so a
+    // project saved earlier still matches its recording.
+    const bool vbo = path.endsWith(QStringLiteral(".vbo"), Qt::CaseInsensitive);
     for (const QString &name : names) {
         const TelemetryChannel channel = session.channels.value(name);
         channels.append(QJsonObject{{QStringLiteral("name"), name},
-                                    {QStringLiteral("unit"), channel.unit},
+                                    {QStringLiteral("unit"), vbo ? QString() : channel.unit},
                                     {QStringLiteral("samples"), channel.values().size()}});
     }
     return {

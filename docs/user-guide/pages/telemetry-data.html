@@ -21,6 +21,7 @@
 
 <h3 id="betterdriver">BetterDriver</h3>
 <p>A BetterDriver VBO gives GPS position, the track map, the start/finish line it recorded, laps and the recording's UTC start time. Its <code>longacc</code> and <code>latacc</code> columns, when present, are used as longitudinal and lateral G. BetterDriver's video is a numbered series of clip files. The application reads the clip list from the VBO (the <code>[avi]</code> section and the <code>avifileindex</code> and <code>avisynctime</code> columns) and works out where each clip starts on the recording's timeline, but it does not yet open the clips by itself: until the clip linking arrives, open and sync the video by hand.</p>
+<p>BetterDriver 1.12 and newer also records, on a gen-1 FR-S, GT86 or BRZ with the CAN adapter, the steering wheel angle as the <code>obd_steering_angle</code> column (degrees, positive = left, about -450 to +450 lock to lock) next to optional <code>obd_brake_pressure</code>, <code>obd_brake</code>, <code>obd_accelerator</code>, <code>obd_throttle</code>, <code>obd_rpm</code>, <code>obd_oil_temp</code> and <code>obd_coolant_temp</code> columns. The <a href="widgets.html#w-steering-wheel">Steering wheel</a> widget draws the angle; a file without that column simply has no steering wheel.</p>
 <h3 id="racechrono-g">RaceChrono G channels</h3>
 <p>For lateral and longitudinal G, export <strong>VBO</strong> from RaceChrono with the calculated acceleration channels (<code>latacc-calc</code>, <code>longacc-calc</code>) enabled. These are preferred automatically. RCZ archives contain only the phone's raw accelerometer axes, which are not aligned with the car, and no calculated G.</p>
 
@@ -53,6 +54,7 @@
   <tr><td>Throttle</td><td>names containing <code>throttle</code> or <code>accelerator pedal</code>; an accelerator-position channel takes priority when it has at least half as many readings as the throttle channel</td></tr>
   <tr><td>Brake</td><td><code>brake</code>, <code>brake-…</code>, names containing <code>brake pressure</code> or <code>brake pedal</code></td></tr>
   <tr><td>Heart rate</td><td>names containing <code>heart rate</code>, or exactly <code>hr</code> or <code>bpm</code></td></tr>
+  <tr><td>Steering angle</td><td><code>obd_steering_angle</code> first, then the first column whose name contains <code>steer</code></td></tr>
   <tr><td>Latitude / longitude</td><td><code>lat</code>, <code>latitude</code> / <code>lon</code>, <code>long</code>, <code>longitude</code></td></tr>
   <tr><td>Lateral G</td><td><code>latacc-calc</code> first, then <code>latacc</code>, <code>lateral accel…</code>, <code>lateral g</code>, <code>gx</code></td></tr>
   <tr><td>Longitudinal G</td><td><code>longacc-calc</code> first, then <code>longacc</code>, <code>longitudinal accel…</code>, <code>longitudinal g</code>, <code>gy</code></td></tr>
@@ -65,7 +67,7 @@
 <p>By default the Tyres widget finds channels whose name contains <code>tyre</code> or <code>tire</code>, either <code>temp</code>/<code>temperature</code> or <code>pressure</code>/<code>press</code>, and one corner: <code>fl</code>, <code>fr</code>, <code>rl</code> or <code>rr</code> (also <code>lf</code>, <code>rf</code>, <code>lr</code>). Example: <code>tyre_temp_fl</code>. Any channel can instead be chosen per corner in the Tyres inspector; a chosen channel's pressure unit is judged the same way.</p>
 <ul>
   <li>Tyre channels are read from VBO files and, for RaceChrono's CAN-bus tyre channels, from RCZ files under the same names. Other CAN-bus channels in an RCZ are not imported.</li>
-  <li>Temperature is shown in °C. VBO files do not declare units, so a VBO tyre temperature is always treated as °C; a channel declared in °F is converted.</li>
+  <li>Temperature is shown in °C. Most VBO files do not declare units (the application reads a <code>[channel units]</code> section only for the custom columns, as BetterDriver writes it), so a VBO tyre temperature is treated as °C unless declared in °F.</li>
   <li>Pressure in bar, psi or kPa is converted to the chosen display unit. If the unit is not declared (always the case for VBO files), it is judged from typical values.</li>
   <li>An exact 0 is treated as "no reading yet", because tyre-pressure sensors report 0 before their first reading.</li>
 </ul>
@@ -84,7 +86,7 @@
 <p>Lap timing needs exactly one valid start gate and usable GPS. Laps run in the direction most start-line crossings share, so a single crossing the other way (leaving the paddock, for example) is ignored rather than deciding the direction. Manual start/finish placement is not available. If laps are missing, see <a href="troubleshooting.html#laps">No laps found</a>.</p>
 
 <h2 id="display">Display smoothing</h2>
-<p>To keep the overlay readable, displayed values are averaged over a short time window (about 0.1 to 0.25 seconds, depending on the channel; gear is not smoothed) and the last value is held for up to 0.75 seconds (2 seconds for heart rate) across a missing sample. Lap timing always uses the raw samples.</p>
+<p>To keep the overlay readable, displayed values are averaged over a short time window (about 0.1 to 0.25 seconds, depending on the channel; gear is not smoothed; the steering angle is averaged over 0.1 seconds centred on the moment shown, so it is not late against the video) and the last value is held for up to 0.75 seconds (2 seconds for heart rate) across a missing sample. Lap timing always uses the raw samples.</p>
 
 <h2 id="data-limits">File limits</h2>
 <table>
