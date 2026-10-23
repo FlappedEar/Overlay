@@ -12,6 +12,7 @@
 #include "telemetry/TelemetryFolderScan.h"
 #include "telemetry/TelemetryGeometry.h"
 #include "telemetry/TelemetryImportPlan.h"
+#include "telemetry/TelemetryRenderContext.h"
 #include "telemetry/TelemetrySession.h"
 #include "telemetry/TelemetrySource.h"
 #include "telemetry/TelemetrySyncEngine.h"
@@ -177,6 +178,8 @@ private slots:
     void derivesLapsFromAGeneratedRaceChronoRecording();
     void readsAGeneratedBetterDriverRecording();
     void readsBetterDriverVideoClips();
+    void readsBetterDriverSteeringAngle();
+    void findsTheSteeringChannelByName();
     void rejectsUnusableVideoClipLists_data();
     void rejectsUnusableVideoClipLists();
     void matchesRaceChronoLapList();
@@ -2871,6 +2874,90 @@ void TelemetryCoreTests::rejectsUnusableVideoClipLists()
     for (int clip = 1; clip <= 65; ++clip)
         many += QString::asprintf("00%02d%02d.000 %04d 000000000\r\n", clip / 60, clip % 60, clip);
     QVERIFY(!VboParser::parse(many).videoSeries.has_value());
+}
+
+// KAN-269: BetterDriver 1.12+ writes the steering wheel angle as obd_steering_angle (degrees,
+// positive = left). The recording is BetterDriver's public Jastrząb test lap; its angle is worked
+// out from the driving line (wheelbase 2.57 m, ratio 13.1:1), so it is realistic, not measured.
+void TelemetryCoreTests::readsBetterDriverSteeringAngle()
+{
+    const TelemetrySession session = VboParser::parseFile(QStringLiteral(STEERING_FIXTURE_PATH));
+    QVERIFY2(session.warnings.isEmpty(), qPrintable(session.warnings.join('\n')));
+    QCOMPARE(session.aliases.value("steeringAngle"), QStringLiteral("obd_steering_angle"));
+    const auto channel = session.channels.constFind(QStringLiteral("obd_steering_angle"));
+    QVERIFY(channel != session.channels.cend());
+    QCOMPARE(channel->unit, QStringLiteral("deg"));
+    // The other custom columns take the following units lines in order; the standard ones none.
+    QCOMPARE(session.channels.value("obd_brake_pressure").unit, QStringLiteral("bar"));
+    QCOMPARE(session.channels.value("obd_accelerator").unit, QStringLiteral("%"));
+    QCOMPARE(session.channels.value("obd_rpm").unit, QStringLiteral("rpm"));
+    QVERIFY(session.channels.value("velocity").unit.isEmpty());
+
+    // Range -181 to +183 degrees; left-handers are positive.
+    const auto &values = channel->values();
+    const auto [lowest, highest] = std::minmax_element(values.cbegin(), values.cend());
+    QVERIFY2(std::abs(*lowest + 181.0) <= 1.0, qPrintable(QString::number(*lowest)));
+    QVERIFY2(std::abs(*highest - 183.0) <= 1.0, qPrintable(QString::number(*highest)));
+
+    // File time 14:19:54.11 is the first row: the car turns right, about -24 degrees.
+    QCOMPARE(channel->timestamps().first(), 0.0);
+    QVERIFY2(std::abs(values.first() + 24.0) <= 1.0, qPrintable(QString::number(values.first())));
+    // 14:20:34.07 is 39.96 s in: a right-hander, about -88 degrees.
+    const auto rightHander = session.valueAt("steeringAngle", 39.96);
+    QVERIFY(rightHander);
+    QVERIFY2(std::abs(*rightHander + 88.0) <= 1.0, qPrintable(QString::number(*rightHander)));
+
+    // Every sample taken from the rows is positive in a left-hander and negative in a right-hander.
+    qsizetype positive = 0, negative = 0;
+    for (const float value : values) (value > 0 ? positive : negative) += 1;
+    QVERIFY(positive > 100 && negative > 100);
+
+    // The display value stays within a degree or two of the recorded one (smoothing is for display
+    // only) and is the recorded one when the car holds the wheel still.
+    TelemetryRenderContext context;
+    context.setSession(&session);
+    QVERIFY(!context.channelMissing("steeringAngle"));
+    context.setTime(39.96);
+    const QVariant shown = context.telemetryValue("steeringAngle");
+    QVERIFY(shown.isValid());
+    QVERIFY2(std::abs(shown.toDouble() - *rightHander) <= 1.5, qPrintable(QString::number(shown.toDouble())));
+}
+
+void TelemetryCoreTests::findsTheSteeringChannelByName()
+{
+    const auto vbo = [](const QString &columns, const QString &units, const QString &row) {
+        return QStringLiteral("File created on 29/08/2026 @ 14:19:54\n\n[column names]\ntime %1\n\n"
+                              "[channel units]\n%2\n\n[data]\n%3\n").arg(columns, units, row);
+    };
+    // The exact BetterDriver name wins over an earlier column that only contains "steer".
+    {
+        const TelemetrySession session = VboParser::parse(vbo("steer_rate obd_steering_angle", "deg/s\ndeg",
+            "141954.110 1.0 -24.0\n141954.150 2.0 -25.0"));
+        QCOMPARE(session.aliases.value("steeringAngle"), QStringLiteral("obd_steering_angle"));
+        QCOMPARE(session.channels.value("steer_rate").unit, QStringLiteral("deg/s"));
+    }
+    // Another logger: the first column with "steer" in its name, in any case.
+    {
+        const TelemetrySession session = VboParser::parse(vbo("Steering_Wheel_Pos", "deg",
+            "141954.110 3.0\n141954.150 4.0"));
+        QCOMPARE(session.aliases.value("steeringAngle"), QStringLiteral("Steering_Wheel_Pos"));
+    }
+    // A recording without the column: no alias, no error, and the widget has nothing to draw.
+    {
+        const TelemetrySession session = VboParser::parse(vbo("obd_rpm", "rpm", "141954.110 4867\n141954.150 4884"));
+        QVERIFY(!session.aliases.contains("steeringAngle"));
+        QVERIFY(session.warnings.isEmpty());
+        TelemetryRenderContext context;
+        context.setSession(&session);
+        QVERIFY(context.channelMissing("steeringAngle"));
+        QVERIFY(!context.channelMissing("rpm") || !session.aliases.contains("rpm"));
+    }
+    // A units list that does not match the custom columns is not guessed at.
+    {
+        const TelemetrySession session = VboParser::parse(vbo("obd_steering_angle obd_rpm", "deg",
+            "141954.110 -24.0 4867\n141954.150 -25.0 4884"));
+        QVERIFY(session.channels.value("obd_steering_angle").unit.isEmpty());
+    }
 }
 
 #include "TelemetryCoreTests.moc"

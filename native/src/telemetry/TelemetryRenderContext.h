@@ -63,6 +63,9 @@ public:
     // A recording is loaded and none of its channels is a tyre temperature
     // or pressure, so the tyres widget can only show dashes.
     [[nodiscard]] bool tyreChannelsMissing() const;
+    // KAN-269: a recording is loaded and has no channel by this name or alias,
+    // so a widget that needs it (steering wheel) hides instead of showing dashes.
+    Q_INVOKABLE bool channelMissing(const QString &channelName) const;
     // KAN-149: lap times for the tiles, rounded before minutes are split.
     Q_INVOKABLE QString formatLapTime(double seconds, int decimals) const { return FlappedEar::formatLapTime(seconds, decimals); }
     Q_INVOKABLE QString formatLapDelta(double seconds, int decimals) const { return FlappedEar::formatLapDelta(seconds, decimals); }

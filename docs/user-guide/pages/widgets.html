@@ -17,7 +17,7 @@
 <p>A whole arrangement can be stored and reused as a <a href="templates.html">layout template</a>. To build a widget of your own from text, values, bars, lap times and shapes, use <strong>New widget…</strong> and the <a href="widget-editor.html">widget editor</a>; widgets you save to <strong>My widgets</strong> appear under <strong>Add widget</strong> in every project.</p>
 
 <h2 id="data">How widgets read telemetry</h2>
-<p>Most widgets have a <strong>Source channel</strong> selector. Its first entry, <strong>Automatic</strong>, uses the channel the application recognised for that purpose, such as speed, RPM, throttle, brake, heart rate or G. The other entries are the channel names of the loaded file, so you can bind any recorded channel. How channels are recognised is described in <a href="telemetry-data.html#channels">Telemetry data</a>.</p>
+<p>Most widgets have a <strong>Source channel</strong> selector. Its first entry, <strong>Automatic</strong>, uses the channel the application recognised for that purpose, such as speed, RPM, throttle, brake, heart rate, steering angle or G. The other entries are the channel names of the loaded file, so you can bind any recorded channel. How channels are recognised is described in <a href="telemetry-data.html#channels">Telemetry data</a>.</p>
 <ul>
   <li>Values follow the playhead in time, not in frames. Preview and export look up telemetry at the exact time of each frame.</li>
   <li>Displayed values are lightly smoothed so numbers do not flicker. Recorded data is never changed.</li>
@@ -41,6 +41,9 @@
   <figcaption>Heart rate from <code>heart_rate-hrm</code>.</figcaption>
 </figure>
 <p>Heart icon, label, value and unit (default <code>bpm</code>). Heart rate comes from the imported VBO or RCZ recording; there is no separate heart-rate source. Option: <strong>Show heart icon</strong>.</p>
+
+<h3 id="w-steering-wheel">Steering wheel</h3>
+<p>A steering wheel that turns with the driver's steering wheel angle, with the angle in whole degrees and the side under it: <code>90° L</code>, <code>45° R</code> or <code>0°</code>. A positive angle is the wheel turned left (anticlockwise as the driver sees it): at +90 the top of the wheel has turned to the left. The red mark on the rim is the top of the wheel. Automatic source: the <code>obd_steering_angle</code> column that BetterDriver 1.12 and newer writes for a gen-1 FR-S, GT86 or BRZ with the CAN adapter (in degrees); for other loggers, the first column whose name contains <code>steer</code>. A recording without such a column hides the widget, without an error. If your logger counts the other way, set <strong>Multiplier</strong> to <code>-1</code>. Options: <strong>Show label</strong>, <strong>Show angle</strong>, the wheel colour and the red mark (<strong>Accent colour</strong>). The Tech style draws it the same way as Classic.</p>
 
 <h3 id="w-pedals">Pedals</h3>
 <figure class="inline-widget">

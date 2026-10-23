@@ -257,6 +257,7 @@ target_compile_features(flappedear_telemetry_core_tests PRIVATE cxx_std_20)
 target_link_libraries(flappedear_telemetry_core_tests PRIVATE flappedear_telemetry_core Qt6::Test)
 target_compile_definitions(flappedear_telemetry_core_tests PRIVATE
     TEST_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/basic.vbo"
+    STEERING_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/jastrzab-frs-steering-test.vbo"
 )
 flappedear_enable_warnings(flappedear_telemetry_core_tests)
 add_test(NAME flappedear_telemetry_core_tests COMMAND flappedear_telemetry_core_tests)

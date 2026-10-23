@@ -15,6 +15,9 @@ struct PresentationPolicy {
     double smoothingSeconds;
     double staleSeconds;
     InterpolationMode interpolation;
+    // The smoothing window reaches as far after the time as before it, so the
+    // smoothed value is not late against the video (steering, KAN-269).
+    bool centered = false;
 };
 
 struct ReferenceMatch {
@@ -77,6 +80,8 @@ PresentationPolicy presentationPolicy(const QString &channelName)
     if (name.contains(QStringLiteral("heart")) || name.contains(QStringLiteral("hr"))
         || name.contains(QStringLiteral("bpm")))
         return {0.25, 2.0, InterpolationMode::Linear};
+    if (name.contains(QStringLiteral("steer")))
+        return {0.05, 0.75, InterpolationMode::Linear, true};
     if (name.contains(QStringLiteral("gear")))
         return {0.0, 0.75, InterpolationMode::Previous};
     if (name.contains(QStringLiteral("speed")) || name.contains(QStringLiteral("rpm")))
@@ -118,11 +123,12 @@ std::optional<double> presentationValueAt(
     double weightedTotal = *presented;
     double totalWeight = 1.0;
     const double windowStart = time - policy.smoothingSeconds;
+    const double windowEnd = policy.centered ? time + policy.smoothingSeconds : time;
     auto iterator = std::lower_bound(channel.timestamps().cbegin(), channel.timestamps().cend(), windowStart);
-    for (; iterator != channel.timestamps().cend() && *iterator <= time; ++iterator) {
+    for (; iterator != channel.timestamps().cend() && *iterator <= windowEnd; ++iterator) {
         const qsizetype index = std::distance(channel.timestamps().cbegin(), iterator);
         if (qFuzzyCompare(*iterator, time) || !std::isfinite(channel.values()[index])) continue;
-        const double weight = std::max(0.0, 1.0 - (time - *iterator) / policy.smoothingSeconds);
+        const double weight = std::max(0.0, 1.0 - std::abs(time - *iterator) / policy.smoothingSeconds);
         weightedTotal += channel.values()[index] * weight;
         totalWeight += weight;
     }
@@ -409,6 +415,12 @@ QVariantMap TelemetryRenderContext::tyreValues(const QVariantMap &settings) cons
 }
 
 bool TelemetryRenderContext::tyreChannelsMissing() const { return m_session && !m_tyreChannels.hasAny(); }
+
+bool TelemetryRenderContext::channelMissing(const QString &channelName) const
+{
+    if (!m_session || channelName.isEmpty()) return false;
+    return !m_session->channels.contains(m_session->aliases.value(channelName, channelName));
+}
 
 QVariant TelemetryRenderContext::telemetryTime() const
 {
