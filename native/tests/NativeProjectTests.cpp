@@ -33,6 +33,7 @@ private slots:
     void refusesSaveWhileProjectOpens();
     void surfacesAndRetriesRecoveryPersistenceFailure();
     void savesProjectsAtomically();
+    void keepsVboUnitsOutOfTheFingerprint();
     void writesRecoverySnapshotsAtomically();
     void guardsGuiRecoveryAcrossProcesses_data();
     void guardsGuiRecoveryAcrossProcesses();
@@ -105,6 +106,18 @@ private:
 };
 
 } // namespace
+
+// KAN-270: a VBO's [channel units] are read now, but projects saved before still match their recording.
+void ProjectTests::keepsVboUnitsOutOfTheFingerprint()
+{
+    const QString path = QFINDTESTDATA("fixtures/jastrzab-frs-steering-test.vbo");
+    QVERIFY(!path.isEmpty());
+    const auto session = TelemetrySource::load(path);
+    QCOMPARE(session.channels.value("obd_steering_angle").unit, QStringLiteral("deg"));
+    const auto fingerprint = ProjectSourceReferenceCodec::telemetryFingerprint(path, session);
+    for (const QJsonValue &channel : fingerprint.value("channels").toArray())
+        QVERIFY2(channel.toObject().value("unit").toString().isEmpty(), qPrintable(channel.toObject().value("name").toString()));
+}
 
 void ProjectTests::usesOverlaysIdentityWithItsOwnStorage()
 {

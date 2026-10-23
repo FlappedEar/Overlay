@@ -1316,6 +1316,20 @@ Rectangle {
                             checked: root.settings.showValue ?? true
                             onToggled: root.setSetting("showValue", checked)
                         }
+                        RowLayout {
+                            visible: root.selectedWidget.type === "steeringWheel"
+                            Layout.fillWidth: true
+                            FeLabel {
+                                text: qsTr("Wheel color")
+                                color: Theme.onSurfaceVariant
+                                font.pixelSize: Theme.labelMedium
+                            }
+                            ColorField {
+                                Layout.fillWidth: true
+                                colorValue: root.settings.wheelColor || "#f2f5f7"
+                                onEdited: value => root.setSetting("wheelColor", value)
+                            }
+                        }
                         // KAN-193: settings only the Tech style uses.
                         FeCheckBox {
                             visible: root.isTech && root.selectedWidget.type === "heartRate"
