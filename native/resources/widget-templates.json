@@ -123,15 +123,16 @@
       "description": "Bottom-strip HUD over the bonnet in the Tech style (KAN-193)",
       "widgets": [
         { "type": "retroTachometer", "x": 0.012, "y": 0.732, "width": 0.146, "height": 0.26, "settings": { "style": "tech", "source": "rpm", "label": "RPM", "speedSource": "speed", "showSpeed": true } },
-        { "type": "lapCurrent", "x": 0.166, "y": 0.829, "width": 0.153, "height": 0.16, "settings": { "style": "tech", "timingDecimals": 3, "showBest": true } },
-        { "type": "pedals", "x": 0.325, "y": 0.829, "width": 0.161, "height": 0.16, "settings": { "style": "tech", "acceleratorSource": "throttle", "brakeSource": "brake" } },
-        { "type": "retroCustomValue", "x": 0.492, "y": 0.829, "width": 0.175, "height": 0.0533, "settings": { "style": "tech", "source": "engine_oil_temp-obd", "label": "OIL", "unit": "\u00b0C", "decimals": 0, "stackPosition": "top", "showRange": true, "minValue": 60, "maxValue": 150, "normalLow": 90, "normalHigh": 125, "warningValue": 128 } },
-        { "type": "retroCustomValue", "x": 0.492, "y": 0.8823, "width": 0.175, "height": 0.0533, "settings": { "style": "tech", "source": "gearbox_temp-obd", "label": "ATF", "unit": "\u00b0C", "decimals": 0, "stackPosition": "middle", "showRange": true, "minValue": 40, "maxValue": 140, "normalLow": 70, "normalHigh": 110, "warningValue": 118 } },
-        { "type": "retroCustomValue", "x": 0.492, "y": 0.9356, "width": 0.175, "height": 0.0533, "settings": { "style": "tech", "source": "coolant_temp-obd", "label": "COOLANT", "unit": "\u00b0C", "decimals": 0, "stackPosition": "bottom", "showRange": true, "minValue": 60, "maxValue": 120, "normalLow": 85, "normalHigh": 104, "warningValue": 105 } },
-        { "type": "tyres", "x": 0.673, "y": 0.829, "width": 0.161, "height": 0.16, "settings": { "style": "tech" } },
+        { "type": "lapCurrent", "x": 0.166, "y": 0.829, "width": 0.12, "height": 0.16, "settings": { "style": "tech", "timingDecimals": 3, "showBest": true } },
+        { "type": "pedals", "x": 0.292, "y": 0.829, "width": 0.13, "height": 0.16, "settings": { "style": "tech", "acceleratorSource": "throttle", "brakeSource": "brake" } },
+        { "type": "retroCustomValue", "x": 0.428, "y": 0.829, "width": 0.15, "height": 0.0533, "settings": { "style": "tech", "source": "engine_oil_temp-obd", "label": "OIL", "unit": "\u00b0C", "decimals": 0, "stackPosition": "top", "showRange": true, "minValue": 60, "maxValue": 150, "normalLow": 90, "normalHigh": 125, "warningValue": 128 } },
+        { "type": "retroCustomValue", "x": 0.428, "y": 0.8823, "width": 0.15, "height": 0.0533, "settings": { "style": "tech", "source": "gearbox_temp-obd", "label": "ATF", "unit": "\u00b0C", "decimals": 0, "stackPosition": "middle", "showRange": true, "minValue": 40, "maxValue": 140, "normalLow": 70, "normalHigh": 110, "warningValue": 118 } },
+        { "type": "retroCustomValue", "x": 0.428, "y": 0.9356, "width": 0.15, "height": 0.0533, "settings": { "style": "tech", "source": "coolant_temp-obd", "label": "COOLANT", "unit": "\u00b0C", "decimals": 0, "stackPosition": "bottom", "showRange": true, "minValue": 60, "maxValue": 120, "normalLow": 85, "normalHigh": 104, "warningValue": 105 } },
+        { "type": "tyres", "x": 0.584, "y": 0.829, "width": 0.13, "height": 0.16, "settings": { "style": "tech" } },
         { "type": "heartRate", "x": 0.89, "y": 0.015, "width": 0.1, "height": 0.16, "settings": { "style": "tech", "source": "heartRate", "unit": "bpm" } },
         { "type": "f1GForceRadar", "x": 0.852, "y": 0.603, "width": 0.14, "height": 0.249, "settings": { "style": "tech", "lateralSource": "", "longitudinalSource": "", "maxG": 1.5, "ringStepG": 0.5, "trailSeconds": 1 } },
-        { "type": "gForceMagnitudeBar", "x": 0.854, "y": 0.876, "width": 0.14, "height": 0.114, "settings": { "style": "tech", "lateralSource": "", "longitudinalSource": "", "labelText": "G" } }
+        { "type": "gForceMagnitudeBar", "x": 0.854, "y": 0.876, "width": 0.14, "height": 0.114, "settings": { "style": "tech", "lateralSource": "", "longitudinalSource": "", "labelText": "G" } },
+        { "type": "steeringWheel", "x": 0.72, "y": 0.829, "width": 0.13, "height": 0.16, "settings": { "style": "tech" } }
       ]
     }
   ]

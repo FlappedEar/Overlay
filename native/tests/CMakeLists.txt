@@ -58,6 +58,7 @@ function(flappedear_add_native_test_suite name)
             ../qml/widgets/tech/TechLapTime.qml
             ../qml/widgets/tech/TechPanel.qml
             ../qml/widgets/tech/TechPedals.qml
+            ../qml/widgets/tech/TechSteeringWheel.qml
             ../qml/widgets/tech/TechRadar.qml
             ../qml/widgets/tech/TechSpeed.qml
             ../qml/widgets/tech/TechTachometer.qml
