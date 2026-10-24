@@ -18,3 +18,7 @@ __MACOSX/
 
 __pycache__/
 docs/user-guide/_site/
+
+# Local BetterDriver session recordings.
+/aaa/
+/betterdriver-mock/
