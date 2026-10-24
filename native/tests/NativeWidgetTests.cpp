@@ -381,9 +381,12 @@ void WidgetTests::loadsVisualTemplates()
         QCOMPARE(model.widget(index).value("settings").toMap().value("style").toString(), QString("classic"));
     // KAN-193: the Tech HUD is the same widget set in the Tech style.
     QVERIFY(model.applyTemplate("tech-hud"));
-    QCOMPARE(model.count(), 10);
+    QCOMPARE(model.count(), 11);
     for (int index = 0; index < model.count(); ++index)
         QCOMPARE(model.widget(index).value("settings").toMap().value("style").toString(), QString("tech"));
+    // KAN-270: the steering wheel sits in the bottom row with the other data widgets.
+    QCOMPARE(model.widget(10).value("type").toString(), QString("steeringWheel"));
+    QCOMPARE(model.widget(10).value("y").toDouble(), model.widget(1).value("y").toDouble());
     QCOMPARE(model.widget(0).value("type").toString(), QString("retroTachometer"));
     QCOMPARE(model.widget(8).value("settings").toMap().value("trailSeconds").toDouble(), 1.0);
     QVERIFY(!model.applyTemplate("missing-template"));

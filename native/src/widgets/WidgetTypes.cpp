@@ -12,7 +12,7 @@ const QList<WidgetTypeDescriptor> &widgetTypeDescriptors()
         // KAN-269: hidden by the scene when the recording has no steering channel.
         {"steeringWheel", "Steering wheel", "◎", 0.14, 0.24, {"unit", "decimals", "prefix", "suffix", "showUnit"},
          {"unit", "decimals", "prefix", "suffix", "showUnit"},
-         "widgets/SteeringWheelWidget.qml", {}},
+         "widgets/SteeringWheelWidget.qml", "widgets/tech/TechSteeringWheel.qml"},
         {"pedals", "Pedals", "▥", 0.25, 0.13, {"accentColor", "fontWeight", "valueFontScale"}, {"barRadius"},
          "widgets/PedalsWidget.qml", "widgets/tech/TechPedals.qml"},
         {"f1GForceRadar", "F1 G-Force Radar", "G+", 0.15, 0.20,
