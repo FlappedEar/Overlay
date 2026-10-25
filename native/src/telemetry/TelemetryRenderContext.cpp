@@ -164,6 +164,59 @@ QVariantMap TelemetryRenderContext::currentTrackPoint() const
     return point ? QVariantMap{{"x", point->x()}, {"y", point->y()}} : QVariantMap();
 }
 
+QVariantList TelemetryRenderContext::trackGaps() const { return m_trackGaps; }
+
+double TelemetryRenderContext::trackScaleMeters() const
+{
+    return m_geometry && m_geometry->valid ? m_geometry->normalizationScale : 0.0;
+}
+
+QVariantList TelemetryRenderContext::trackTrail() const
+{
+    QVariantList trail;
+    if (!m_session || !m_geometry || !m_geometry->valid) return trail;
+    const auto now = videoToTelemetryTime(m_time, m_sync);
+    if (!now || !std::isfinite(*now)) return trail;
+    constexpr double kFallbackSeconds = 30.0;
+    constexpr double kLongestSeconds = 600.0;
+    constexpr double kMostPoints = 600.0;
+    double start = *now - kFallbackSeconds;
+    for (const auto &lap : m_lapSession.timedLaps) {
+        if (*now >= lap.startTelemetryTime && *now < lap.endTelemetryTime) {
+            start = lap.startTelemetryTime;
+            break;
+        }
+    }
+    start = std::max(start, *now - kLongestSeconds);
+    const double step = std::max(0.1, (*now - start) / kMostPoints);
+    bool open = false;
+    const auto append = [&](const double time) {
+        const auto point = FlappedEar::currentTrackPoint(*m_session, time, *m_geometry);
+        if (point) {
+            trail.append(*point);
+            open = true;
+        } else if (open) {
+            trail.append(QVariant());
+            open = false;
+        }
+    };
+    for (double time = start; time < *now; time += step) append(time);
+    append(*now);
+    while (!trail.isEmpty() && !trail.last().isValid()) trail.removeLast();
+    return trail;
+}
+
+QVariantMap TelemetryRenderContext::trackStartLine() const
+{
+    if (!m_geometry || !m_geometry->valid || !m_lapSession.selectedStartGate) return {};
+    const TimingGate &gate = *m_lapSession.selectedStartGate;
+    const auto a = trackPointForCoordinate(gate.endpointA, *m_geometry);
+    const auto b = trackPointForCoordinate(gate.endpointB, *m_geometry);
+    if (!a || !b) return {};
+    return {{QStringLiteral("ax"), a->x()}, {QStringLiteral("ay"), a->y()},
+            {QStringLiteral("bx"), b->x()}, {QStringLiteral("by"), b->y()}};
+}
+
 QVariantMap TelemetryRenderContext::fixedLapTiming(const int lapNumber) const
 {
     QVariantMap result{{QStringLiteral("state"), QStringLiteral("unavailable")}};
@@ -318,7 +371,9 @@ void TelemetryRenderContext::setTrackGeometry(const TrackGeometry *geometry)
 {
     m_geometry = geometry;
     m_trackPoints.clear();
+    m_trackGaps.clear();
     if (m_geometry) {
+        for (const qsizetype index : m_geometry->gapBefore) m_trackGaps.append(static_cast<qlonglong>(index));
         m_trackPoints.reserve(m_geometry->points.size());
         for (const QPointF &point : m_geometry->points) {
             m_trackPoints.append(point);

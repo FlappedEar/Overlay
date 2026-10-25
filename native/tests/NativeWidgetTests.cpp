@@ -71,6 +71,9 @@ private slots:
     void cachesStaticTrackGeometry();
     void rendersCanvasWidgetsInFirstOffscreenFrames_data();
     void rendersCanvasWidgetsInFirstOffscreenFrames();
+    void rendersTrackMapInBothExtents_data();
+    void rendersTrackMapInBothExtents();
+    void tracesTheLapSoFarAcrossGpsGaps();
     void boundsWidgetAndTemplateCardinality();
 };
 
@@ -381,9 +384,11 @@ void WidgetTests::loadsVisualTemplates()
         QCOMPARE(model.widget(index).value("settings").toMap().value("style").toString(), QString("classic"));
     // KAN-193: the Tech HUD is the same widget set in the Tech style.
     QVERIFY(model.applyTemplate("tech-hud"));
-    QCOMPARE(model.count(), 11);
+    QCOMPARE(model.count(), 12);
     for (int index = 0; index < model.count(); ++index)
         QCOMPARE(model.widget(index).value("settings").toMap().value("style").toString(), QString("tech"));
+    // KAN-271: the track map has the top left corner.
+    QCOMPARE(model.widget(11).value("type").toString(), QString("trackMap"));
     // KAN-270: the steering wheel sits in the bottom row with the other data widgets.
     QCOMPARE(model.widget(10).value("type").toString(), QString("steeringWheel"));
     QCOMPARE(model.widget(10).value("y").toDouble(), model.widget(1).value("y").toDouble());
@@ -563,7 +568,7 @@ void WidgetTests::describesEachWidgetTypeOnce()
     QStringList offered;
     for (const QVariant &entry : model.widgetCatalog()) offered.append(entry.toMap().value("type").toString());
     QCOMPARE(offered, (QStringList{"speed", "heartRate", "steeringWheel", "pedals", "f1GForceRadar", "gForceMagnitudeBar", "tyres",
-                                   "retroCustomValue", "lapCurrent", "retroTachometer", "cameraBox"}));
+                                   "trackMap", "retroCustomValue", "lapCurrent", "retroTachometer", "cameraBox"}));
 
     QSet<QString> seen;
     for (const WidgetTypeDescriptor &descriptor : widgetTypeDescriptors()) {
@@ -2050,6 +2055,158 @@ void WidgetTests::rendersLapTimeTileInProductionScene()
                  qPrintable(QStringLiteral("%1 did not create an opaque lap time tile at %2,%3")
                                 .arg(types[index]).arg(x).arg(y)));
     }
+}
+
+namespace {
+
+// KAN-271: a closed lap of about 2.5 km with a few bends, 60 s at 5 Hz, as latitude/longitude.
+// Samples between `gapStart` and `gapEnd` are left out when `gapEnd > gapStart`.
+TelemetrySession trackMapSession(const double gapStart = 0.0, const double gapEnd = 0.0)
+{
+    TelemetrySession session = speedSession(0.0, 60.0, 0.0);
+    TelemetryChannel latitude;
+    latitude.name = QStringLiteral("latitude");
+    TelemetryChannel longitude;
+    longitude.name = QStringLiteral("longitude");
+    for (double time = 0.0; time <= 60.0; time += 0.2) {
+        if (gapEnd > gapStart && time > gapStart && time < gapEnd) continue;
+        const double angle = time / 60.0 * 2.0 * std::numbers::pi;
+        const double radius = 400.0 * (1.0 + 0.25 * std::sin(2.0 * angle) + 0.15 * std::cos(3.0 * angle));
+        const double east = radius * std::cos(angle);
+        const double north = radius * std::sin(angle);
+        latitude.appendSample(time, static_cast<float>(50.0 + north / 111320.0));
+        longitude.appendSample(time, static_cast<float>(19.0 + east / (111320.0 * std::cos(50.0 * std::numbers::pi / 180.0))));
+    }
+    session.channels.insert(latitude.name, latitude);
+    session.channels.insert(longitude.name, longitude);
+    session.aliases.insert(QStringLiteral("latitude"), latitude.name);
+    session.aliases.insert(QStringLiteral("longitude"), longitude.name);
+    return session;
+}
+
+} // namespace
+
+void WidgetTests::rendersTrackMapInBothExtents_data()
+{
+    QTest::addColumn<QString>("style");
+    QTest::addColumn<QString>("mode");
+    QTest::addColumn<QString>("orientation");
+    QTest::newRow("tech whole") << "tech" << "whole" << "north";
+    QTest::newRow("tech window") << "tech" << "window" << "north";
+    QTest::newRow("tech window heading up") << "tech" << "window" << "heading";
+    QTest::newRow("classic whole") << "classic" << "whole" << "north";
+    QTest::newRow("classic window") << "classic" << "window" << "north";
+}
+
+void WidgetTests::rendersTrackMapInBothExtents()
+{
+    // KAN-271: the track map loads in the production scene without QML warnings, draws its
+    // plate and outline, and the car moves between frames. The whole-track outline is a static
+    // layer: it does not repaint while the time runs.
+    QFETCH(QString, style);
+    QFETCH(QString, mode);
+    QFETCH(QString, orientation);
+    QVERIFY(FlappedEar::registerBundledFonts());
+    TelemetrySession session = trackMapSession();
+    const TrackGeometry geometry = buildTrackGeometry(session);
+    QVERIFY(geometry.valid);
+    WidgetModel widgets;
+    const int index = widgets.addWidget(QStringLiteral("trackMap"));
+    QVERIFY(index >= 0);
+    widgets.moveWidget(index, 0.05, 0.05);
+    widgets.resizeWidget(index, 0.3, 0.5);
+    widgets.setSetting(index, QStringLiteral("style"), style);
+    widgets.setSetting(index, QStringLiteral("mapMode"), mode);
+    widgets.setSetting(index, QStringLiteral("orientation"), orientation);
+
+    QStringList warnings;
+    capturedSceneWarnings = &warnings;
+    const auto previous = qInstallMessageHandler(captureSceneWarning);
+    QImage early;
+    QImage late;
+    qsizetype outlinePaints = -1;
+    {
+        TelemetryFrameRenderer renderer;
+        QVERIFY2(renderer.initialize(&widgets, &session, &geometry, SyncTransform{}, QSize(1280, 720)),
+                 qPrintable(renderer.errorString()));
+        early = renderer.renderFrame(20.0);
+        const std::function<QQuickItem *(QQuickItem *)> search = [&](QQuickItem *item) -> QQuickItem * {
+            if (item->objectName() == QStringLiteral("trackMapOutline")) return item;
+            for (QQuickItem *child : item->childItems())
+                if (QQuickItem *found = search(child)) return found;
+            return nullptr;
+        };
+        QQuickItem *outline = search(renderer.m_rootItem);
+        QVERIFY2(outline, qPrintable(warnings.join('\n')));
+        QSignalSpy painted(outline, SIGNAL(painted()));
+        for (int frame = 1; frame <= 4; ++frame) QVERIFY(!renderer.renderFrame(20.0 + frame * 2.0).isNull());
+        late = renderer.renderFrame(40.0);
+        outlinePaints = painted.count();
+    }
+    qInstallMessageHandler(previous);
+    capturedSceneWarnings = nullptr;
+    QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
+    QVERIFY(!early.isNull() && !late.isNull());
+
+    const QRect box(static_cast<int>(0.05 * 1280), static_cast<int>(0.05 * 720),
+                    static_cast<int>(0.3 * 1280), static_cast<int>(0.5 * 720));
+    int drawn = 0;
+    int moved = 0;
+    for (int y = box.top(); y < box.bottom(); ++y) {
+        for (int x = box.left(); x < box.right(); ++x) {
+            if (early.pixelColor(x, y).alpha() > 0) ++drawn;
+            if (early.pixelColor(x, y) != late.pixelColor(x, y)) ++moved;
+        }
+    }
+    QVERIFY2(drawn > box.width() * box.height() / 2, "the plate is drawn");
+    QVERIFY2(moved > 20, "the car and the trail move between frames");
+    if (mode == QStringLiteral("whole")) QCOMPARE(outlinePaints, qsizetype(0));
+    else QVERIFY2(outlinePaints >= 5, "the window map moves under the car");
+}
+
+void WidgetTests::tracesTheLapSoFarAcrossGpsGaps()
+{
+    // KAN-271: the trail ends at the car, grows through the lap, and a stretch without a fix
+    // leaves the line open (a null entry) instead of a straight bridge.
+    TelemetrySession session = trackMapSession(24.0, 27.0);
+    const TrackGeometry geometry = buildTrackGeometry(session);
+    QVERIFY(geometry.valid);
+    TelemetryRenderContext context;
+    context.setSession(&session);
+    QCOMPARE(context.trackScaleMeters(), 0.0);
+    context.setTrackGeometry(&geometry);
+    QVERIFY(context.trackScaleMeters() > 100.0);
+
+    context.setTime(10.0);
+    const QVariantList shortTrail = context.trackTrail();
+    context.setTime(20.0);
+    const QVariantList longTrail = context.trackTrail();
+    QVERIFY(!shortTrail.isEmpty());
+    QVERIFY(longTrail.size() > shortTrail.size());
+    QVERIFY(longTrail.constLast().isValid());
+    const QPointF last = longTrail.constLast().toPointF();
+    const QVariantMap now = context.currentTrackPoint();
+    QVERIFY(qAbs(last.x() - now.value("x").toDouble()) < 1e-9);
+    QVERIFY(qAbs(last.y() - now.value("y").toDouble()) < 1e-9);
+
+    // The outline is open at the hole too, and the car has no position inside it.
+    QCOMPARE(context.trackGaps().size(), 1);
+    QCOMPARE(geometry.gapBefore.size(), qsizetype(1));
+    context.setTime(25.5);
+    QVERIFY(context.currentTrackPoint().isEmpty());
+    context.setTime(40.0);
+    const QVariantList gapped = context.trackTrail();
+    int breaks = 0;
+    for (const QVariant &entry : gapped) if (!entry.isValid()) ++breaks;
+    QCOMPARE(breaks, 1);
+    QVERIFY(gapped.constFirst().isValid() && gapped.constLast().isValid());
+
+    QVERIFY(context.currentTrackPoint().contains(QStringLiteral("x")));
+
+    // No gate without a lap session; none before the source has geometry.
+    QVERIFY(context.trackStartLine().isEmpty());
+    context.setTrackGeometry(nullptr);
+    QVERIFY(context.trackTrail().isEmpty());
 }
 
 #define main nativeTestMain
