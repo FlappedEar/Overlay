@@ -2886,3 +2886,14 @@ gaps through the worker and checks 120 frames at 320x240, about 4 s of audio and
 inside each clip and each gap (red, black, green, black, blue). `SourceTests::derivesChapterPlaybackAndExportSource`
 checks that a series with a recorded gap gets a combined export source of the first clip's size and the
 full length. Needs FFmpeg 8.1 or newer.
+
+## KAN-271: track map
+
+`WidgetTests::rendersTrackMapInBothExtents` renders the `trackMap` widget through the production scene on a synthetic
+2.5 km lap (60 s at 5 Hz, `trackMapSession`) in five cases: Tech whole track, Tech window, Tech window heading up,
+Classic whole track and Classic window. It requires no QML warnings, a drawn plate, a car and trail that move between
+frames, and the paint counter of the `trackMapOutline` canvas: 0 while the time runs in whole-track mode (the static
+layer rule), at least 5 in window mode. `tracesTheLapSoFarAcrossGpsGaps` checks `trackScaleMeters`, that `trackTrail()`
+grows through the lap and ends at `currentTrackPoint()`, that a GPS gap is one `null` entry, and that there is no
+start line without a lap session. `loadsVisualTemplates` and `describesEachWidgetTypeOnce` cover the Tech HUD slot and
+the descriptor. Not covered: a real recording or the start/finish tick (the synthetic session has no timing gate).

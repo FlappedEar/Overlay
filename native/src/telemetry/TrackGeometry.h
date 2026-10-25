@@ -27,6 +27,10 @@ struct TrackGeometry {
     const TelemetrySession &session, const CancellationCheck &cancelled = {});
 [[nodiscard]] std::optional<QPointF> currentTrackPoint(
     const TelemetrySession &session, double time, const TrackGeometry &geometry);
+// A coordinate in the geometry's normalized map space (the space of `points`);
+// empty for an invalid coordinate or a geometry without a valid frame.
+[[nodiscard]] std::optional<QPointF> trackPointForCoordinate(
+    const GeoCoordinate &coordinate, const TrackGeometry &geometry);
 
 // One normalization shared by two laps' GPS traces, so both can be drawn
 // overlaid on the same map to scale instead of each filling the frame on

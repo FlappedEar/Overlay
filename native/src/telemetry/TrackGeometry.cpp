@@ -86,19 +86,14 @@ TrackGeometry buildTrackGeometry(const TelemetrySession &session, const Cancella
     return geometry;
 }
 
-std::optional<QPointF> currentTrackPoint(
-    const TelemetrySession &session, const double time, const TrackGeometry &geometry)
+std::optional<QPointF> trackPointForCoordinate(const GeoCoordinate &coordinate, const TrackGeometry &geometry)
 {
-    if (!geometry.valid) {
-        return std::nullopt;
-    }
-    const auto latitude = session.valueAt("latitude", time);
-    const auto longitude = session.valueAt("longitude", time, InterpolationMode::Longitude);
-    if (!latitude || !longitude || !isValidCoordinate({*latitude, *longitude})) {
+    if (!geometry.valid || !isValidCoordinate(coordinate)) {
         return std::nullopt;
     }
     const QPointF local = toLocal(
-        *latitude, *longitude, geometry.originLatitude, geometry.originLongitude, geometry.longitudeIsWestPositive);
+        coordinate.latitudeDegrees, coordinate.longitudeDegrees, geometry.originLatitude,
+        geometry.originLongitude, geometry.longitudeIsWestPositive);
     if (!std::isfinite(local.x()) || !std::isfinite(local.y())
         || !std::isfinite(geometry.normalizationScale) || geometry.normalizationScale <= 0.0) {
         return std::nullopt;
@@ -108,6 +103,20 @@ std::optional<QPointF> currentTrackPoint(
         (local.y() - geometry.localCenter.y()) / geometry.normalizationScale + 0.5);
     return std::isfinite(normalized.x()) && std::isfinite(normalized.y())
         ? std::optional<QPointF>(normalized) : std::nullopt;
+}
+
+std::optional<QPointF> currentTrackPoint(
+    const TelemetrySession &session, const double time, const TrackGeometry &geometry)
+{
+    if (!geometry.valid) {
+        return std::nullopt;
+    }
+    const auto latitude = session.valueAt("latitude", time);
+    const auto longitude = session.valueAt("longitude", time, InterpolationMode::Longitude);
+    if (!latitude || !longitude) {
+        return std::nullopt;
+    }
+    return trackPointForCoordinate({*latitude, *longitude}, geometry);
 }
 
 namespace {

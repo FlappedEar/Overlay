@@ -50,6 +50,9 @@ function(flappedear_add_native_test_suite name)
             ../qml/widgets/PedalsWidget.qml
             ../qml/widgets/TelemetryPanel.qml
             ../qml/widgets/TyresWidget.qml
+            ../qml/widgets/TrackMapWidget.qml
+            ../qml/widgets/TrackMapCore.qml
+            ../qml/widgets/TrackMapDefaults.js
             ../qml/widgets/GForceData.qml
             ../qml/widgets/tech/TechCustomValue.qml
             ../qml/widgets/tech/TechGForce.qml
@@ -59,6 +62,7 @@ function(flappedear_add_native_test_suite name)
             ../qml/widgets/tech/TechPanel.qml
             ../qml/widgets/tech/TechPedals.qml
             ../qml/widgets/tech/TechSteeringWheel.qml
+            ../qml/widgets/tech/TechTrackMap.qml
             ../qml/widgets/tech/TechRadar.qml
             ../qml/widgets/tech/TechSpeed.qml
             ../qml/widgets/tech/TechTachometer.qml

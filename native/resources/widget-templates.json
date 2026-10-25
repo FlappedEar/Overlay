@@ -39,6 +39,10 @@
     "steeringWheel": {
       "label": "STEER", "showLabel": true, "showValue": true, "wheelColor": "#f2f5f7", "accentColor": "#e14b4b"
     },
+    "trackMap": {
+      "label": "TRACK", "showLabel": true, "mapMode": "whole", "windowMeters": 300, "orientation": "north",
+      "showTrail": true, "showStartLine": true, "lineColor": "", "trailColor": ""
+    },
     "pedals": {
       "acceleratorSource": "", "brakeSource": "", "acceleratorLabel": "Throttle", "brakeLabel": "Brake",
       "acceleratorColor": "#55d76a", "brakeColor": "#e14b4b", "acceleratorMin": 0, "acceleratorMax": 100,
@@ -132,7 +136,8 @@
         { "type": "heartRate", "x": 0.89, "y": 0.015, "width": 0.1, "height": 0.16, "settings": { "style": "tech", "source": "heartRate", "unit": "bpm" } },
         { "type": "f1GForceRadar", "x": 0.852, "y": 0.603, "width": 0.14, "height": 0.249, "settings": { "style": "tech", "lateralSource": "", "longitudinalSource": "", "maxG": 1.5, "ringStepG": 0.5, "trailSeconds": 1 } },
         { "type": "gForceMagnitudeBar", "x": 0.854, "y": 0.876, "width": 0.14, "height": 0.114, "settings": { "style": "tech", "lateralSource": "", "longitudinalSource": "", "labelText": "G" } },
-        { "type": "steeringWheel", "x": 0.72, "y": 0.829, "width": 0.13, "height": 0.16, "settings": { "style": "tech" } }
+        { "type": "steeringWheel", "x": 0.72, "y": 0.829, "width": 0.13, "height": 0.16, "settings": { "style": "tech" } },
+        { "type": "trackMap", "x": 0.012, "y": 0.015, "width": 0.17, "height": 0.30, "settings": { "style": "tech" } }
       ]
     }
   ]

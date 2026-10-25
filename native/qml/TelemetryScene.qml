@@ -44,11 +44,13 @@ Item {
             opacity: widgetOpacity * cueOpacity
             property bool hasCues: widgetCues !== undefined && widgetCues !== null && widgetCues.length > 0
             // KAN-269: the steering wheel is hidden, without an error, when the
-            // recording has no steering channel.
+            // recording has no steering channel. KAN-271: the track map likewise
+            // without GPS.
             readonly property bool channelAbsent: {
                 root.renderContext.time;
-                return widgetType === "steeringWheel"
-                    && root.renderContext.channelMissing(widgetSettings.source || "steeringAngle");
+                return (widgetType === "steeringWheel"
+                        && root.renderContext.channelMissing(widgetSettings.source || "steeringAngle"))
+                    || (widgetType === "trackMap" && root.renderContext.channelMissing("latitude"));
             }
             visible: widgetVisible && !channelAbsent && (!hasCues || cueOpacity > 0)
 
@@ -113,7 +115,7 @@ Item {
             property bool rendererOwnsPanel: ["speed", "pedals", "heartRate",
                                                "retroCustomValue", "gForceMagnitudeBar",
                                                "f1GForceRadar", "retroTachometer",
-                                               "lapCurrent", "designed", "cameraBox", "steeringWheel"].indexOf(widgetType) >= 0
+                                               "lapCurrent", "designed", "cameraBox", "steeringWheel", "trackMap"].indexOf(widgetType) >= 0
                                            || (widgetType === "tyres" && widgetSettings.style === "tech")
 
             function configuredFontSize() {

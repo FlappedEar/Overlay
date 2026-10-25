@@ -450,6 +450,9 @@ qt_add_qml_module(flappedear_native
         qml/widgets/TyresWidget.qml
         qml/widgets/HeartRateWidget.qml
         qml/widgets/SteeringWheelWidget.qml
+        qml/widgets/TrackMapWidget.qml
+        qml/widgets/TrackMapCore.qml
+        qml/widgets/TrackMapDefaults.js
         qml/widgets/LapTimeWidget.qml
         qml/widgets/PedalsWidget.qml
         qml/widgets/RetroCustomValueWidget.qml
@@ -464,6 +467,7 @@ qt_add_qml_module(flappedear_native
         qml/widgets/tech/TechPanel.qml
         qml/widgets/tech/TechPedals.qml
         qml/widgets/tech/TechSteeringWheel.qml
+        qml/widgets/tech/TechTrackMap.qml
         qml/widgets/tech/TechRadar.qml
         qml/widgets/tech/TechSpeed.qml
         qml/widgets/tech/TechTachometer.qml

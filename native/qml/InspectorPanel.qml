@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "Theme.js" as Theme
+import "widgets/TrackMapDefaults.js" as TrackMapDefaults
 
 Rectangle {
     id: root
@@ -1328,6 +1329,94 @@ Rectangle {
                                 Layout.fillWidth: true
                                 colorValue: root.settings.wheelColor || "#f2f5f7"
                                 onEdited: value => root.setSetting("wheelColor", value)
+                            }
+                        }
+                        // KAN-271: track map.
+                        ColumnLayout {
+                            visible: root.selectedWidget.type === "trackMap"
+                            Layout.fillWidth: true
+                            spacing: 6
+                            FeLabel {
+                                text: qsTr("Extent")
+                                color: Theme.onSurfaceVariant
+                                font.pixelSize: Theme.labelMedium
+                            }
+                            FeComboBox {
+                                Layout.fillWidth: true
+                                model: [qsTr("Whole track"), qsTr("Part of the track, around the car")]
+                                currentIndex: root.settings.mapMode === "window" ? 1 : 0
+                                onActivated: root.setSetting("mapMode", currentIndex === 1 ? "window" : "whole")
+                            }
+                            FeLabel {
+                                visible: root.settings.mapMode === "window"
+                                text: qsTr("Window (metres, 100 to 2000)")
+                                color: Theme.onSurfaceVariant
+                                font.pixelSize: Theme.labelMedium
+                            }
+                            FeSpinBox {
+                                visible: root.settings.mapMode === "window"
+                                Layout.fillWidth: true
+                                from: 100
+                                to: 2000
+                                stepSize: 50
+                                editable: true
+                                value: Math.max(100, Math.min(2000, Number(root.settings.windowMeters ?? 300)))
+                                onValueModified: root.setSetting("windowMeters", value)
+                            }
+                            FeLabel {
+                                visible: root.settings.mapMode === "window"
+                                text: qsTr("Orientation")
+                                color: Theme.onSurfaceVariant
+                                font.pixelSize: Theme.labelMedium
+                            }
+                            FeComboBox {
+                                visible: root.settings.mapMode === "window"
+                                Layout.fillWidth: true
+                                model: [qsTr("North up"), qsTr("Heading up (the map turns with the car)")]
+                                currentIndex: root.settings.orientation === "heading" ? 1 : 0
+                                onActivated: root.setSetting("orientation", currentIndex === 1 ? "heading" : "north")
+                            }
+                            FeCheckBox {
+                                text: qsTr("Show label and lap number")
+                                checked: root.settings.showLabel ?? true
+                                onToggled: root.setSetting("showLabel", checked)
+                            }
+                            FeCheckBox {
+                                text: qsTr("Show the lap so far")
+                                checked: root.settings.showTrail ?? true
+                                onToggled: root.setSetting("showTrail", checked)
+                            }
+                            FeCheckBox {
+                                text: qsTr("Show the start/finish line")
+                                checked: root.settings.showStartLine ?? true
+                                onToggled: root.setSetting("showStartLine", checked)
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                FeLabel {
+                                    text: qsTr("Line color (clear to reset)")
+                                    color: Theme.onSurfaceVariant
+                                    font.pixelSize: Theme.labelMedium
+                                }
+                                ColorField {
+                                    Layout.fillWidth: true
+                                    colorValue: root.settings.lineColor
+                                        || TrackMapDefaults.lineColor(root.isTech, root.settings.mapMode === "window")
+                                    onEdited: value => root.setSetting("lineColor", value)
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                FeLabel {
+                                    text: qsTr("Trail color (clear to reset)")
+                                    color: Theme.onSurfaceVariant
+                                    font.pixelSize: Theme.labelMedium
+                                }
+                                ColorField {
+                                    Layout.fillWidth: true
+                                    colorValue: root.settings.trailColor || TrackMapDefaults.trailColor(root.isTech)
+                                    onEdited: value => root.setSetting("trailColor", value)
+                                }
                             }
                         }
                         // KAN-193: settings only the Tech style uses.

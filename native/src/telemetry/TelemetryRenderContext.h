@@ -20,6 +20,7 @@ class TelemetryRenderContext final : public QObject {
     Q_PROPERTY(QVariantList trackPoints READ trackPoints NOTIFY trackGeometryChanged)
     Q_PROPERTY(quint64 trackRevision READ trackRevision NOTIFY trackGeometryChanged)
     Q_PROPERTY(QVariantMap currentTrackPoint READ currentTrackPoint NOTIFY timeChanged)
+    Q_PROPERTY(double trackScaleMeters READ trackScaleMeters NOTIFY trackGeometryChanged)
     Q_PROPERTY(QVariantMap lapTiming READ lapTiming NOTIFY timeChanged)
     Q_PROPERTY(bool tyreChannelsMissing READ tyreChannelsMissing NOTIFY sourceChanged)
 
@@ -31,6 +32,9 @@ public:
     [[nodiscard]] quint64 trackRevision() const;
     [[nodiscard]] quint64 trackConversionCount() const;
     [[nodiscard]] QVariantMap currentTrackPoint() const;
+    // Metres that one unit of the normalized track space (trackPoints, currentTrackPoint)
+    // spans; 0 without a valid track.
+    [[nodiscard]] double trackScaleMeters() const;
     [[nodiscard]] QVariantMap lapTiming() const;
     [[nodiscard]] const TelemetrySession *session() const;
     [[nodiscard]] SyncTransform syncTransform() const;
@@ -52,6 +56,13 @@ public:
     // before the lap's start-line crossing the elapsed time is 0, during it
     // runs, and after the lap ends it stays at the lap's final time.
     Q_INVOKABLE QVariantMap fixedLapTiming(int lapNumber) const;
+    // KAN-271: where the car has been on the current lap, in the normalized track space, oldest
+    // first, ending at the current position. Outside a timed lap, the last 30 s. A stretch
+    // without a GPS fix is a `null` entry between two runs of points, so the line stays open.
+    Q_INVOKABLE QVariantList trackTrail() const;
+    // KAN-271: the start/finish gate as {ax, ay, bx, by} in the normalized track space; empty
+    // when the recording has no resolved start gate.
+    Q_INVOKABLE QVariantMap trackStartLine() const;
     // KAN-132: {available, corners: [{corner: "FL", hasTemperature,
     // hasPressure, temperature (°C), pressure (bar), pressureSourceUnit}]}
     // at the current time, FL, FR, RL, RR in order. A value is present only

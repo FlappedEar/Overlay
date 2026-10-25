@@ -28,6 +28,11 @@ const QList<WidgetTypeDescriptor> &widgetTypeDescriptors()
          "widgets/GForceMagnitudeBarWidget.qml", "widgets/tech/TechGForce.qml"},
         {"tyres", "Tyres", "◫", 0.17, 0.20, {}, {"fontSize"},
          "widgets/TyresWidget.qml", "widgets/tech/TechTyres.qml"},
+        // KAN-271: hidden by the scene when the recording has no GPS.
+        {"trackMap", "Track map", "◌", 0.17, 0.30,
+         {"accentColor", "unit", "decimals", "prefix", "suffix", "showUnit", "valueFontScale"},
+         {"unit", "decimals", "prefix", "suffix", "showUnit", "fontSize"},
+         "widgets/TrackMapWidget.qml", "widgets/tech/TechTrackMap.qml"},
         {"retroCustomValue", "Retro Custom", "R+", 0.20, 0.13,
          {"accentColor", "backgroundColor", "fontWeight", "textColor", "secondaryTextColor"},
          {"panelColor", "valueColor", "labelColor"},
