@@ -39,11 +39,16 @@ TrackGeometry buildTrackGeometry(const TelemetrySession &session, const Cancella
     const qsizetype count = std::min(latitude->values().size(), longitude->values().size());
     QVector<QPointF> localPoints;
     localPoints.reserve(count);
+    // A gap is a stretch of invalid fixes or, by the shared telemetry gap rule, a hole in time
+    // between two valid fixes.
+    bool afterGap = false;
+    double previousTime = 0.0;
     for (qsizetype index = 0; index < count; ++index) {
         if ((index & 0xff) == 0) throwIfCancelled(cancelled);
         const double lat = latitude->values()[index];
         const double lon = longitude->values()[index];
         if (!isValidCoordinate({lat, lon})) {
+            afterGap = geometry.valid;
             continue;
         }
         if (!geometry.valid) {
@@ -51,6 +56,14 @@ TrackGeometry buildTrackGeometry(const TelemetrySession &session, const Cancella
             geometry.originLongitude = lon;
             geometry.valid = true;
         }
+        const double time = latitude->timestamps()[index];
+        if (geometry.valid && localPoints.size() > 0 && !afterGap
+            && telemetryIsGap(*latitude, previousTime, time)) {
+            afterGap = true;
+        }
+        if (afterGap) geometry.gapBefore.append(localPoints.size());
+        afterGap = false;
+        previousTime = time;
         localPoints.append(
             toLocal(lat, lon, geometry.originLatitude, geometry.originLongitude, geometry.longitudeIsWestPositive));
     }

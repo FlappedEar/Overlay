@@ -35,7 +35,7 @@ Item {
     // bounds, and a grid of segment indices for the window's lookups. Rebuilt with the geometry.
     readonly property var outline: {
         rc.trackRevision;
-        return buildOutline(rc.trackPoints, rc.trackScaleMeters);
+        return buildOutline(rc.trackPoints, rc.trackScaleMeters, rc.trackGaps);
     }
     readonly property bool hasOutline: outline.count > 1
 
@@ -48,16 +48,21 @@ Item {
         rc.trackRevision;
         return rc.trackStartLine();
     }
+    // The car is where the recording has a fix now; in a GPS gap or past the end there is no dot,
+    // and the window map shows the whole track.
     readonly property var car: {
+        rc.time;
+        const now = rc.currentTrackPoint;
+        if (now.x === undefined)
+            return null;
         const metres = rc.trackScaleMeters;
-        for (let i = trail.length - 1; i >= 0; --i)
-            if (trail[i])
-                return { x: trail[i].x * metres, y: trail[i].y * metres };
-        return null;
+        return { x: now.x * metres, y: now.y * metres };
     }
     // Where the line of travel points, from the last 8 m of the trail; null while standing still,
     // when the map stays north-up.
     readonly property var heading: {
+        if (car === null)
+            return null;
         const metres = rc.trackScaleMeters;
         let walked = 0;
         let last = null;
@@ -91,7 +96,8 @@ Item {
     readonly property real viewX: windowActive ? car.x : hasOutline ? (outline.bounds.minX + outline.bounds.maxX) / 2 : 0
     readonly property real viewY: windowActive ? car.y : hasOutline ? (outline.bounds.minY + outline.bounds.maxY) / 2 : 0
 
-    function buildOutline(points, metres) {
+    function buildOutline(points, metres, gaps) {
+        const gapBefore = new Set(gaps);
         const xs = [];
         const ys = [];
         const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
@@ -112,7 +118,9 @@ Item {
             const y = points[i].y * metres;
             if (!Number.isFinite(x) || !Number.isFinite(y))
                 continue;
-            if (!Number.isNaN(lastX)) {
+            if (gapBefore.has(i)) {
+                open();
+            } else if (!Number.isNaN(lastX)) {
                 const step = Math.hypot(x - lastX, y - lastY);
                 if (step < 2)
                     continue;

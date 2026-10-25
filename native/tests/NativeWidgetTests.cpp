@@ -2189,12 +2189,19 @@ void WidgetTests::tracesTheLapSoFarAcrossGpsGaps()
     QVERIFY(qAbs(last.x() - now.value("x").toDouble()) < 1e-9);
     QVERIFY(qAbs(last.y() - now.value("y").toDouble()) < 1e-9);
 
+    // The outline is open at the hole too, and the car has no position inside it.
+    QCOMPARE(context.trackGaps().size(), 1);
+    QCOMPARE(geometry.gapBefore.size(), qsizetype(1));
+    context.setTime(25.5);
+    QVERIFY(context.currentTrackPoint().isEmpty());
     context.setTime(40.0);
     const QVariantList gapped = context.trackTrail();
     int breaks = 0;
     for (const QVariant &entry : gapped) if (!entry.isValid()) ++breaks;
     QCOMPARE(breaks, 1);
     QVERIFY(gapped.constFirst().isValid() && gapped.constLast().isValid());
+
+    QVERIFY(context.currentTrackPoint().contains(QStringLiteral("x")));
 
     // No gate without a lap session; none before the source has geometry.
     QVERIFY(context.trackStartLine().isEmpty());

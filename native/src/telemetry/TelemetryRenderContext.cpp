@@ -164,6 +164,8 @@ QVariantMap TelemetryRenderContext::currentTrackPoint() const
     return point ? QVariantMap{{"x", point->x()}, {"y", point->y()}} : QVariantMap();
 }
 
+QVariantList TelemetryRenderContext::trackGaps() const { return m_trackGaps; }
+
 double TelemetryRenderContext::trackScaleMeters() const
 {
     return m_geometry && m_geometry->valid ? m_geometry->normalizationScale : 0.0;
@@ -369,7 +371,9 @@ void TelemetryRenderContext::setTrackGeometry(const TrackGeometry *geometry)
 {
     m_geometry = geometry;
     m_trackPoints.clear();
+    m_trackGaps.clear();
     if (m_geometry) {
+        for (const qsizetype index : m_geometry->gapBefore) m_trackGaps.append(static_cast<qlonglong>(index));
         m_trackPoints.reserve(m_geometry->points.size());
         for (const QPointF &point : m_geometry->points) {
             m_trackPoints.append(point);

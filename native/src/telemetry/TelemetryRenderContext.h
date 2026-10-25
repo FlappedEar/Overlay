@@ -21,6 +21,7 @@ class TelemetryRenderContext final : public QObject {
     Q_PROPERTY(quint64 trackRevision READ trackRevision NOTIFY trackGeometryChanged)
     Q_PROPERTY(QVariantMap currentTrackPoint READ currentTrackPoint NOTIFY timeChanged)
     Q_PROPERTY(double trackScaleMeters READ trackScaleMeters NOTIFY trackGeometryChanged)
+    Q_PROPERTY(QVariantList trackGaps READ trackGaps NOTIFY trackGeometryChanged)
     Q_PROPERTY(QVariantMap lapTiming READ lapTiming NOTIFY timeChanged)
     Q_PROPERTY(bool tyreChannelsMissing READ tyreChannelsMissing NOTIFY sourceChanged)
 
@@ -35,6 +36,8 @@ public:
     // Metres that one unit of the normalized track space (trackPoints, currentTrackPoint)
     // spans; 0 without a valid track.
     [[nodiscard]] double trackScaleMeters() const;
+    // Indices into trackPoints that follow a stretch without a valid fix (the line is open there).
+    [[nodiscard]] QVariantList trackGaps() const;
     [[nodiscard]] QVariantMap lapTiming() const;
     [[nodiscard]] const TelemetrySession *session() const;
     [[nodiscard]] SyncTransform syncTransform() const;
@@ -97,6 +100,7 @@ private:
     TyreChannelMap m_tyreChannels;
     mutable QHash<QString, PressureUnit> m_pressureUnits; // chosen pressure channels, per session
     QVariantList m_trackPoints;
+    QVariantList m_trackGaps;
     SyncTransform m_sync;
     double m_time = 0.0;
     quint64 m_trackRevision = 0;

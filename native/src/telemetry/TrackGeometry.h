@@ -13,6 +13,9 @@ namespace FlappedEar {
 
 struct TrackGeometry {
     QVector<QPointF> points;
+    // Indices into `points` that follow a stretch of samples without a valid fix, so a map draws
+    // the line open there instead of bridging the gap (KAN-271). Sorted; empty when none.
+    QVector<qsizetype> gapBefore;
     QRectF localBounds;
     QPointF localCenter;
     double normalizationScale = 1.0;
